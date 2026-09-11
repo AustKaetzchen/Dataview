@@ -12,6 +12,7 @@ interface ColorBarLegendProps {
   logSigma: number
   currentVal?: number | null
   breaks?: number[]
+  countryName?: string | null
 }
 
 // Inverse transform for pseudo-log: y = asinh(x / (2 * sigma)) / ln(10)
@@ -53,6 +54,7 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
   logSigma,
   currentVal,
   breaks,
+  countryName,
 }) => {
   const gradient = getPaletteCssGradient(palette)
 
@@ -110,11 +112,17 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
     <div className="rounded-[4px] border border-border bg-card/95 backdrop-blur-md p-3.5 shadow-lg text-xs text-card-foreground w-84 select-none font-sans">
       {/* Legend Title & Hover Value Readout */}
       <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <span className="font-bold text-foreground text-xs">{legendTitle}</span>
           <span className="text-[10px] text-muted-foreground capitalize bg-muted px-1.5 py-0.5 rounded-[2px]">
             {scaleType}
           </span>
+          {countryName && (
+            <span className="text-[10px] font-semibold text-white bg-primary/20 border border-primary/40 px-1.5 py-0.5 rounded-[2px] flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+              {countryName}
+            </span>
+          )}
         </div>
 
         {currentVal !== null && currentVal !== undefined && Number.isFinite(currentVal) ? (

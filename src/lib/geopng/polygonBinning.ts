@@ -60,8 +60,10 @@ export async function loadCountriesGeoJson(): Promise<CountryFeature[]> {
       const p = feat.properties
       p.name = p.name || p.NAME || p.ADMIN || p.NAME_LONG || p.name_long || 'Unknown'
       p.name_long = p.name_long || p.NAME_LONG || p.name
-      p.iso_a3 = p.iso_a3 || p.ISO_A3 || p.ADM0_A3 || p.SOV_A3 || ''
-      p.adm0_a3 = p.adm0_a3 || p.ADM0_A3 || p.iso_a3 || ''
+      const rawAdm = p.ADM0_A3 || p.adm0_a3 || ''
+      const rawIso = p.ISO_A3 || p.iso_a3 || ''
+      p.adm0_a3 = rawAdm || (rawIso && rawIso !== '-99' ? rawIso : '') || p.name
+      p.iso_a3 = (rawIso && rawIso !== '-99') ? rawIso : p.adm0_a3
     }
 
     cachedCountriesGeoJson = data
@@ -344,7 +346,7 @@ export function binRasterByCountryMemoized(
     statsCache.clear()
     lastCachedRaster = raster
   }
-  const key = feature.properties.iso_a3 || feature.properties.adm0_a3 || feature.properties.name
+  const key = feature.properties.adm0_a3 || feature.properties.iso_a3 || feature.properties.name
   const cached = statsCache.get(key)
   if (cached) return cached
 

@@ -5,7 +5,7 @@ import { BitmapLayer, PathLayer, PolygonLayer, GeoJsonLayer } from '@deck.gl/lay
 import { TileLayer, _Tileset2D as Tileset2D } from '@deck.gl/geo-layers'
 import { lngLatToWorld } from '@math.gl/web-mercator'
 import { DecodedRaster, InspectionData, ProjectionType } from '@/lib/geopng/types'
-import { CountryFeature, loadCountriesGeoJson, findCountryAtLngLat } from '@/lib/geopng/polygonBinning'
+import { CountryFeature, CountryStats, loadCountriesGeoJson, findCountryAtLngLat } from '@/lib/geopng/polygonBinning'
 import { ClickInfoPanel } from './ClickInfoPanel'
 import { ColorBarLegend } from './ColorBarLegend'
 import { Button } from '../ui/button'
@@ -36,6 +36,7 @@ interface MapViewerProps {
   countriesMode?: boolean
   hoveredCountry?: CountryFeature | null
   onHoverCountry?: (country: CountryFeature | null) => void
+  countryStats?: CountryStats | null
   onInspect?: (data: InspectionData | null) => void
 }
 
@@ -222,6 +223,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   countriesMode,
   hoveredCountry,
   onHoverCountry,
+  countryStats,
   onInspect,
 }) => {
   const [projViewStates, setProjViewStates] = useState<Record<ProjectionType, any>>({
@@ -693,20 +695,36 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       <ClickInfoPanel info={inspectData} pos={cursorPos} />
 
       {/* Color Ramp Legend (Top Left by Sidebar) */}
-      {renderedCanvas && (
-        <div className="absolute top-4 left-4 z-20">
-          <ColorBarLegend
-            palette={palette}
-            minVal={minVal}
-            maxVal={maxVal}
-            legendTitle={legendTitle}
-            scaleType={scaleType}
-            logSigma={logSigma}
-            currentVal={inspectData?.value ?? null}
-            breaks={breaks}
-          />
-        </div>
-      )}
+      {/* Automatically adjusts to individual country when in Countries Mode */}
+      {renderedCanvas && (() => {
+        const isCountryRelative = Boolean(
+          countriesMode &&
+            countryStats &&
+            countryStats.validCount > 0 &&
+            Number.isFinite(countryStats.min) &&
+            Number.isFinite(countryStats.max)
+        )
+        const legendMin = isCountryRelative ? countryStats!.min : minVal
+        const legendMax = isCountryRelative ? countryStats!.max : maxVal
+        const legendBreaks = isCountryRelative ? undefined : breaks
+        const legendCountryName = isCountryRelative ? countryStats!.name : null
+
+        return (
+          <div className="absolute top-4 left-4 z-20">
+            <ColorBarLegend
+              palette={palette}
+              minVal={legendMin}
+              maxVal={legendMax}
+              legendTitle={legendTitle}
+              scaleType={scaleType}
+              logSigma={logSigma}
+              currentVal={inspectData?.value ?? null}
+              breaks={legendBreaks}
+              countryName={legendCountryName}
+            />
+          </div>
+        )
+      })()}
 
       {/* Map Control Tools Toolbar (Top Right) */}
       <TooltipProvider delayDuration={150}>

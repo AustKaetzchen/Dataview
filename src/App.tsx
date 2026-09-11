@@ -244,6 +244,7 @@ export const App: React.FC = () => {
           countriesMode={countriesMode}
           hoveredCountry={hoveredCountry}
           onHoverCountry={setHoveredCountry}
+          countryStats={countryStats}
         />
 
         {/* ECharts Analytical Drawer */}

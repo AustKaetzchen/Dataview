@@ -141,8 +141,8 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
             </div>
           )}
 
-          {/* If Countries Mode is OFF: show manual Country Dropdown & Clear Pill */}
-          {isOpen && !countriesMode && (
+          {/* Country Selection Dropdown & Clear Pill */}
+          {isOpen && (
             <div className="flex items-center gap-1.5 min-w-0">
               <select
                 aria-label="Filter raster statistics by country"
