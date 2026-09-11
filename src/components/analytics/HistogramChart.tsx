@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useRef, useEffect } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { DecodedRaster, ScaleType } from '@/lib/geopng/types'
 
@@ -27,6 +27,50 @@ export const HistogramChart: React.FC<HistogramChartProps> = ({
   const [scaleMode, setScaleMode] = useState<'log' | 'linear'>('log')
   // Steepness adjustment factor for logarithmic mode (default 1.0x)
   const [steepness, setSteepness] = useState<number>(1.0)
+
+  const containerRef = useRef<HTMLDivElement>(null)
+  const echartRef = useRef<any>(null)
+
+  // Robust resize listener using ResizeObserver and animation frame dispatching
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const triggerResize = () => {
+      if (echartRef.current) {
+        const instance = echartRef.current.getEchartsInstance?.()
+        if (instance && !instance.isDisposed?.()) {
+          instance.resize()
+        }
+      }
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect.width > 0 && entry.contentRect.height > 0) {
+          requestAnimationFrame(triggerResize)
+        }
+      }
+    })
+
+    observer.observe(container)
+
+    // Fire immediately and at staggered intervals to catch CSS transition settling
+    triggerResize()
+    const t1 = setTimeout(triggerResize, 60)
+    const t2 = setTimeout(triggerResize, 220)
+    const t3 = setTimeout(triggerResize, 350)
+
+    window.addEventListener('resize', triggerResize)
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', triggerResize)
+      clearTimeout(t1)
+      clearTimeout(t2)
+      clearTimeout(t3)
+    }
+  }, [])
 
   const option = useMemo(() => {
     const activeHistogram = countryStats ? countryStats.histogram : raster?.histogram
@@ -349,10 +393,13 @@ export const HistogramChart: React.FC<HistogramChartProps> = ({
       </div>
 
       {/* Chart Canvas */}
-      <div className="flex-1 w-full min-h-0">
+      <div ref={containerRef} className="flex-1 w-full min-h-0 relative">
         <ReactECharts
+          ref={echartRef}
           option={option}
-          style={{ height: '100%', width: '100%' }}
+          notMerge={true}
+          lazyUpdate={true}
+          style={{ height: '100%', width: '100%', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
           opts={{ renderer: 'canvas' }}
         />
       </div>

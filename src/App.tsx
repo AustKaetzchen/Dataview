@@ -221,6 +221,12 @@ export const App: React.FC = () => {
         activeFileName={activeFileName}
         diffNameA={diffNameA}
         diffNameB={diffNameB}
+        countriesMode={countriesMode}
+        onToggleCountriesMode={setCountriesMode}
+        selectedCountry={selectedCountry}
+        onSelectCountry={setSelectedCountry}
+        hoveredCountry={hoveredCountry}
+        countryStats={countryStats}
       />
 
       {/* Main Map Viewer & Analytics Drawer */}
@@ -242,6 +248,7 @@ export const App: React.FC = () => {
           selectedCountry={selectedCountry}
           onSelectCountry={setSelectedCountry}
           countriesMode={countriesMode}
+          onToggleCountriesMode={setCountriesMode}
           hoveredCountry={hoveredCountry}
           onHoverCountry={setHoveredCountry}
           countryStats={countryStats}

@@ -34,6 +34,7 @@ interface MapViewerProps {
   selectedCountry?: CountryFeature | null
   onSelectCountry?: (country: CountryFeature | null) => void
   countriesMode?: boolean
+  onToggleCountriesMode?: (enabled: boolean) => void
   hoveredCountry?: CountryFeature | null
   onHoverCountry?: (country: CountryFeature | null) => void
   countryStats?: CountryStats | null
@@ -221,6 +222,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   selectedCountry,
   onSelectCountry,
   countriesMode,
+  onToggleCountriesMode,
   hoveredCountry,
   onHoverCountry,
   countryStats,
@@ -726,9 +728,55 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         )
       })()}
 
+      {/* Floating Status Pill when Countries Mode is Active */}
+      {countriesMode && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-card/95 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-border shadow-xl text-xs font-sans animate-in fade-in-0 zoom-in-95 duration-150">
+          <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+          <span className="font-semibold text-foreground">Countries Mode Active</span>
+          <span className="text-muted-foreground">•</span>
+          {hoveredCountry ? (
+            <span className="text-primary font-medium truncate max-w-[220px]">
+              Inspecting: {hoveredCountry.properties.name}
+            </span>
+          ) : (
+            <span className="text-muted-foreground italic">Hover over any country on map</span>
+          )}
+          {onToggleCountriesMode && (
+            <button
+              type="button"
+              onClick={() => onToggleCountriesMode(false)}
+              className="ml-1 text-muted-foreground hover:text-foreground text-[11px] cursor-pointer"
+              title="Exit Countries Mode"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Map Control Tools Toolbar (Top Right) */}
       <TooltipProvider delayDuration={150}>
         <div className="absolute top-4 right-4 z-20 flex flex-col gap-1.5 bg-card/95 backdrop-blur-md p-1 rounded-[3px] border border-border shadow-md">
+          {/* Toggle Countries Mode */}
+          {onToggleCountriesMode && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={countriesMode ? 'secondary' : 'ghost'}
+                  size="icon"
+                  onClick={() => onToggleCountriesMode(!countriesMode)}
+                  className={`h-7 w-7 ${countriesMode ? 'text-primary' : 'text-white'}`}
+                  aria-label="Toggle Countries Mode"
+                >
+                  <Icon name="public" className={countriesMode ? 'text-primary' : 'text-white'} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="left">
+                <span>Toggle Countries Mode (Inspect on hover)</span>
+              </TooltipContent>
+            </Tooltip>
+          )}
+
           {/* Toggle Graticule */}
           <Tooltip>
             <TooltipTrigger asChild>
