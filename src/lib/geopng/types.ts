@@ -61,9 +61,10 @@ export interface BinningConfig {
 export interface HeightmapConfig {
   enabled: boolean
   elevationScale: number // height multiplier in meters
+  opacity?: number // 0.0 to 1.0 (defaults to 0.9)
 }
 
-export type MapModeId = 'default' | 'country_analysis'
+export type MapModeId = 'default' | 'country_analysis' | 'spike_map' | 'circle_sizing'
 
 export interface MapModeItem {
   id: MapModeId

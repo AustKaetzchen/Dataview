@@ -6,11 +6,8 @@ import {
   ColorPalette,
   BoundsMode,
   BinningConfig,
-  HeightmapConfig,
-  CircleOverlayConfig,
   DownsampleMethod,
 } from '@/lib/geopng/types'
-import { CountryFeature, CountryStats, loadCountriesGeoJson } from '@/lib/geopng/polygonBinning'
 import { D3_COLOR_SCHEMES, getPaletteCssGradient } from '@/lib/geopng/palettes'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select'
 import { Slider } from '../ui/slider'
@@ -52,18 +49,6 @@ interface SidebarControlsProps {
   diffNameB?: string
   binningConfig: BinningConfig
   setBinningConfig: React.Dispatch<React.SetStateAction<BinningConfig>>
-  heightmapConfig: HeightmapConfig
-  setHeightmapConfig: React.Dispatch<React.SetStateAction<HeightmapConfig>>
-  circleOverlayConfig: CircleOverlayConfig
-  setCircleOverlayConfig: React.Dispatch<React.SetStateAction<CircleOverlayConfig>>
-  countriesMode?: boolean
-  onToggleCountriesMode?: (enabled: boolean) => void
-  selectedCountries: CountryFeature[]
-  onToggleCountry: (country: CountryFeature) => void
-  onClearCountries: () => void
-  onSelectAllCountries?: () => void
-  hoveredCountry?: CountryFeature | null
-  countryStats?: CountryStats | null
 }
 
 export const SidebarControls: React.FC<SidebarControlsProps> = ({
@@ -99,46 +84,20 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
   diffNameB,
   binningConfig,
   setBinningConfig,
-  heightmapConfig,
-  setHeightmapConfig,
-  circleOverlayConfig,
-  setCircleOverlayConfig,
-  countriesMode = false,
-  onToggleCountriesMode,
-  selectedCountries,
-  onToggleCountry,
-  onClearCountries,
-  onSelectAllCountries,
-  hoveredCountry,
-  countryStats,
 }) => {
   // Collapsible Folders State
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({
     image: true,
     legend: true,
-    heightmap: true,
-    country: true,
   })
 
   const toggleFolder = (folderKey: string) => {
     setOpenFolders((prev) => ({ ...prev, [folderKey]: !prev[folderKey] }))
   }
 
-  const [allCountries, setAllCountries] = useState<CountryFeature[]>([])
   const [paletteSearch, setPaletteSearch] = useState('')
   const [paletteOpen, setPaletteOpen] = useState(false)
   const palettePickerRef = useRef<HTMLDivElement>(null)
-
-  const [countrySearch, setCountrySearch] = useState('')
-
-  useEffect(() => {
-    loadCountriesGeoJson().then((feats) => {
-      const sorted = [...feats].sort((a, b) =>
-        (a.properties.name || '').localeCompare(b.properties.name || '')
-      )
-      setAllCountries(sorted)
-    })
-  }, [])
 
   // Close palette picker when clicking outside
   useEffect(() => {
@@ -153,11 +112,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [paletteOpen])
 
-  const getCountryCode = (c: CountryFeature) => {
-    const iso = c.properties.iso_a3
-    if (iso && iso !== '-99') return iso
-    return c.properties.adm0_a3 || c.properties.name || ''
-  }
+
 
   // Filtered D3 palettes
   const filteredPalettes = useMemo(() => {
@@ -167,21 +122,6 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
       (s) => s.name.toLowerCase().includes(q) || s.category.toLowerCase().includes(q)
     )
   }, [paletteSearch])
-
-  // Filtered countries for checklist
-  const filteredCountries = useMemo(() => {
-    const q = countrySearch.toLowerCase().trim()
-    if (!q) return allCountries
-    return allCountries.filter((c) => {
-      const name = (c.properties.name || '').toLowerCase()
-      const code = getCountryCode(c).toLowerCase()
-      return name.includes(q) || code.includes(q)
-    })
-  }, [allCountries, countrySearch])
-
-  const selectedCountryCodeSet = useMemo(() => {
-    return new Set(selectedCountries.map(getCountryCode))
-  }, [selectedCountries])
 
   // Common binning presets
   const BINNING_PRESETS = [
@@ -199,10 +139,10 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
         <div className="flex items-center justify-between">
           <h1 className="text-sm font-bold tracking-tight text-foreground flex items-center gap-1.5">
             <Icon name="layers" size="1.1rem" />
-            <span>GeoPNG Dataview</span>
+            <span>Confoederatio Dataview</span>
           </h1>
-          <span className="text-[10px] px-1.5 py-0.5 rounded-none bg-muted text-muted-foreground font-mono">
-            v2.1
+          <span className="text-[10px] px-1.5 py-0.5 rounded-none bg-primary/20 text-primary border border-primary/40 font-mono font-bold">
+            BETA
           </span>
         </div>
         <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -736,388 +676,6 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                   className="rounded-none h-7"
                 />
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* ========================================================================= */}
-        {/* FOLDER 3: 3D HEIGHTMAP & SIZING */}
-        {/* ========================================================================= */}
-        <div className="border border-border bg-card/50">
-          <button
-            type="button"
-            onClick={() => toggleFolder('heightmap')}
-            className="w-full h-8 px-2.5 flex items-center justify-between text-xs font-semibold text-foreground bg-muted/40 hover:bg-muted/70 transition-colors cursor-pointer"
-          >
-            <div className="flex items-center gap-1.5">
-              <Icon name="view_in_ar" size="0.9rem" />
-              <span>3D Spike Map & Sizing</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              {heightmapConfig.enabled && (
-                <span className="text-[9px] px-1 py-0.2 bg-primary/20 text-primary font-bold border border-primary/40">
-                  SPIKES ON
-                </span>
-              )}
-              {circleOverlayConfig.enabled && (
-                <span className="text-[9px] px-1 py-0.2 bg-primary/20 text-primary font-bold border border-primary/40">
-                  P{circleOverlayConfig.percentileCutoff}
-                </span>
-              )}
-              <Icon
-                name={openFolders.heightmap ? 'expand_less' : 'expand_more'}
-                size="1rem"
-              />
-            </div>
-          </button>
-
-          {openFolders.heightmap && (
-            <div className="p-2.5 space-y-3 text-xs border-t border-border">
-              {/* 3D Elevation Spike Map Toggle */}
-              <div className="space-y-2 border border-border/80 bg-background/50 p-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 font-medium text-foreground text-[11px]">
-                    <Icon name="landscape" size="0.9rem" />
-                    <span>3D Spike Map</span>
-                  </div>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={heightmapConfig.enabled}
-                      onChange={(e) =>
-                        setHeightmapConfig((prev) => ({ ...prev, enabled: e.target.checked }))
-                      }
-                      className="w-3.5 h-3.5 rounded-none accent-emerald-500 cursor-pointer"
-                    />
-                    <span
-                      className={`text-[10px] font-semibold uppercase ${
-                        heightmapConfig.enabled ? 'text-emerald-400 font-bold' : 'text-muted-foreground'
-                      }`}
-                    >
-                      {heightmapConfig.enabled ? 'ON' : 'OFF'}
-                    </span>
-                  </label>
-                </div>
-
-                {heightmapConfig.enabled && (
-                  <div className="space-y-2 pt-1.5 border-t border-border/60">
-                    <div className="flex justify-between items-center text-[10px]">
-                      <span className="text-muted-foreground">Spike Height Scale</span>
-                      <span className="text-foreground font-mono font-bold">
-                        {(heightmapConfig.elevationScale / 1000).toFixed(0)} km
-                      </span>
-                    </div>
-                    <Slider
-                      value={[heightmapConfig.elevationScale]}
-                      min={50000}
-                      max={2500000}
-                      step={25000}
-                      onValueChange={(vals) =>
-                        setHeightmapConfig((prev) => ({ ...prev, elevationScale: vals[0] }))
-                      }
-                    />
-                    <p className="text-[10px] text-muted-foreground leading-tight">
-                      Right-click / Ctrl+Drag on map to orbit in 3D perspective.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Proportional Circle Sizing (P99) */}
-              <div className="space-y-2 border border-border/80 bg-background/50 p-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 font-medium text-foreground text-[11px]">
-                    <Icon name="scatter_plot" size="0.9rem" />
-                    <span>Equal-Area Circle Sizing</span>
-                  </div>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={circleOverlayConfig.enabled}
-                      onChange={(e) =>
-                        setCircleOverlayConfig((prev) => ({ ...prev, enabled: e.target.checked }))
-                      }
-                      className="w-3.5 h-3.5 rounded-none accent-emerald-500 cursor-pointer"
-                    />
-                    <span
-                      className={`text-[10px] font-semibold uppercase ${
-                        circleOverlayConfig.enabled ? 'text-emerald-400 font-bold' : 'text-muted-foreground'
-                      }`}
-                    >
-                      {circleOverlayConfig.enabled ? 'ON' : 'OFF'}
-                    </span>
-                  </label>
-                </div>
-
-                {circleOverlayConfig.enabled && (
-                  <div className="space-y-2 pt-1.5 border-t border-border/60">
-                    <div className="flex justify-between items-center text-[10px]">
-                      <span className="text-muted-foreground">Percentile Cutoff</span>
-                      <span className="text-foreground font-mono font-bold">
-                        P{circleOverlayConfig.percentileCutoff}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-4 gap-1">
-                      {[90, 95, 98, 99].map((p) => (
-                        <button
-                          key={p}
-                          type="button"
-                          onClick={() =>
-                            setCircleOverlayConfig((prev) => ({ ...prev, percentileCutoff: p }))
-                          }
-                          className={`px-1 py-0.5 text-[10px] border rounded-none text-center cursor-pointer transition-colors ${
-                            circleOverlayConfig.percentileCutoff === p
-                              ? 'bg-primary text-white font-bold border-accent shadow-sm'
-                              : 'bg-background hover:bg-muted text-muted-foreground border-border'
-                          }`}
-                        >
-                          P{p}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="flex justify-between items-center text-[10px] pt-1">
-                      <span className="text-muted-foreground">Circle Base Scale</span>
-                      <span className="text-foreground font-mono font-bold">
-                        {circleOverlayConfig.baseRadius.toFixed(1)}×
-                      </span>
-                    </div>
-                    <Slider
-                      value={[circleOverlayConfig.baseRadius * 10]}
-                      min={5}
-                      max={30}
-                      step={1}
-                      onValueChange={(vals) =>
-                        setCircleOverlayConfig((prev) => ({
-                          ...prev,
-                          baseRadius: vals[0] / 10,
-                        }))
-                      }
-                    />
-
-                    {/* Coloured Outline Stroke Width */}
-                    <div className="flex justify-between items-center text-[10px] pt-1">
-                      <span className="text-muted-foreground">Coloured Outline Stroke</span>
-                      <span className="text-foreground font-mono font-bold">
-                        {circleOverlayConfig.strokeWidth} px
-                      </span>
-                    </div>
-                    <Slider
-                      value={[circleOverlayConfig.strokeWidth]}
-                      min={1}
-                      max={6}
-                      step={1}
-                      onValueChange={(vals) =>
-                        setCircleOverlayConfig((prev) => ({
-                          ...prev,
-                          strokeWidth: vals[0],
-                        }))
-                      }
-                    />
-
-                    {/* Black Halo Width */}
-                    <div className="flex justify-between items-center text-[10px] pt-1">
-                      <span className="text-muted-foreground">Black Halo Thickness</span>
-                      <span className="text-foreground font-mono font-bold">
-                        {circleOverlayConfig.haloWidth} px
-                      </span>
-                    </div>
-                    <Slider
-                      value={[circleOverlayConfig.haloWidth]}
-                      min={1}
-                      max={6}
-                      step={1}
-                      onValueChange={(vals) =>
-                        setCircleOverlayConfig((prev) => ({
-                          ...prev,
-                          haloWidth: vals[0],
-                        }))
-                      }
-                    />
-
-                    <p className="text-[10px] text-muted-foreground leading-tight pt-0.5">
-                      Hollow circles with coloured outline and adjustable black halo border. Area linearly scales with value (A ∝ Value).
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ========================================================================= */}
-        {/* FOLDER 4: COUNTRY ANALYSIS */}
-        {/* ========================================================================= */}
-        <div className="border border-border bg-card/50">
-          <button
-            type="button"
-            onClick={() => toggleFolder('country')}
-            className="w-full h-8 px-2.5 flex items-center justify-between text-xs font-semibold text-foreground bg-muted/40 hover:bg-muted/70 transition-colors cursor-pointer"
-          >
-            <div className="flex items-center gap-1.5">
-              <Icon name="flag" size="0.9rem" />
-              <span>Country Analysis</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              {selectedCountries.length > 0 && (
-                <span className="text-[9px] px-1 py-0.2 bg-primary/20 text-primary font-bold border border-primary/40">
-                  {selectedCountries.length}
-                </span>
-              )}
-              <Icon
-                name={openFolders.country ? 'expand_less' : 'expand_more'}
-                size="1rem"
-              />
-            </div>
-          </button>
-
-          {openFolders.country && (
-            <div className="p-2.5 space-y-2.5 text-xs border-t border-border">
-              {/* Countries Mode Toggle Button */}
-              <button
-                type="button"
-                onClick={() => onToggleCountriesMode && onToggleCountriesMode(!countriesMode)}
-                className={`w-full h-7 px-2 text-xs font-medium rounded-none transition-colors flex items-center justify-between cursor-pointer border ${
-                  countriesMode
-                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50 shadow-sm font-semibold'
-                    : 'bg-background hover:bg-muted text-muted-foreground hover:text-foreground border-input'
-                }`}
-                title="When active, the bitmap isolates to active countries, and clicking countries toggles selection"
-              >
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className={`w-1.5 h-1.5 rounded-none ${
-                      countriesMode ? 'bg-emerald-400 animate-pulse' : 'bg-muted-foreground/60'
-                    }`}
-                  />
-                  <span className="text-[11px]">Bitmap Isolation Mode</span>
-                </div>
-                <span
-                  className={`text-[10px] font-semibold uppercase tracking-wider ${
-                    countriesMode ? 'text-emerald-400' : 'text-muted-foreground'
-                  }`}
-                >
-                  {countriesMode ? 'ON' : 'OFF'}
-                </span>
-              </button>
-
-              {/* Real-time Hover Feedback */}
-              {countriesMode && hoveredCountry && (
-                <div className="p-1.5 rounded-none bg-muted/40 border border-border text-[11px] space-y-0.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground text-[9px] uppercase font-medium">Map Cursor Hover</span>
-                    <span className="text-primary font-bold text-[9px]">Click to toggle</span>
-                  </div>
-                  <div className="font-semibold text-foreground truncate text-xs">
-                    {hoveredCountry.properties.name}
-                  </div>
-                </div>
-              )}
-
-              {/* Checklist */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-muted-foreground">Select Countries</span>
-                  <div className="flex items-center gap-2 text-[10px]">
-                    {onSelectAllCountries && (
-                      <button
-                        type="button"
-                        onClick={onSelectAllCountries}
-                        className="text-muted-foreground hover:text-foreground cursor-pointer"
-                      >
-                        All
-                      </button>
-                    )}
-                    {selectedCountries.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={onClearCountries}
-                        className="text-primary hover:underline cursor-pointer font-semibold"
-                      >
-                        Clear ({selectedCountries.length})
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <input
-                  type="text"
-                  placeholder="Search countries..."
-                  value={countrySearch}
-                  onChange={(e) => setCountrySearch(e.target.value)}
-                  className="w-full h-7 px-2 border border-input rounded-none bg-background text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-
-                <div className="max-h-32 overflow-y-auto border border-input rounded-none bg-background/80 p-1 space-y-0.5">
-                  {filteredCountries.length === 0 ? (
-                    <div className="p-2 text-center text-muted-foreground text-[11px]">No countries found</div>
-                  ) : (
-                    filteredCountries.map((c) => {
-                      const code = getCountryCode(c)
-                      const isSelected = selectedCountryCodeSet.has(code)
-                      return (
-                        <label
-                          key={code}
-                          className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded-none text-xs cursor-pointer select-none transition-colors ${
-                            isSelected ? 'bg-primary/20 text-primary font-semibold' : 'hover:bg-muted text-foreground'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => onToggleCountry(c)}
-                            className="w-3.5 h-3.5 rounded-none accent-emerald-500 cursor-pointer"
-                          />
-                          <span className="truncate text-[11px]">{c.properties.name}</span>
-                        </label>
-                      )
-                    })
-                  )}
-                </div>
-
-                {/* Selected Countries Chips */}
-                {selectedCountries.length > 0 && (
-                  <div className="flex flex-wrap gap-1 pt-1 max-h-20 overflow-y-auto">
-                    {selectedCountries.map((c) => (
-                      <span
-                        key={getCountryCode(c)}
-                        className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] bg-primary/20 text-primary border border-primary/40 rounded-none font-medium"
-                      >
-                        <span className="truncate max-w-[80px]">{c.properties.name}</span>
-                        <button
-                          type="button"
-                          onClick={() => onToggleCountry(c)}
-                          className="hover:text-foreground opacity-70 hover:opacity-100 cursor-pointer text-[10px]"
-                        >
-                          ✕
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Aggregated Country Stats */}
-              {countryStats && countryStats.validCount > 0 && (
-                <div className="p-2 rounded-none bg-background border border-border text-[11px] space-y-1">
-                  <div className="flex justify-between items-center text-muted-foreground text-[10px]">
-                    <span className="truncate font-medium">{countryStats.name}:</span>
-                    <span className="text-foreground font-semibold shrink-0">
-                      {countryStats.validCount.toLocaleString()} cells
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center text-muted-foreground text-[10px]">
-                    <span>Range:</span>
-                    <span className="text-foreground font-mono">
-                      {countryStats.min.toFixed(2)} → {countryStats.max.toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center text-muted-foreground text-[10px]">
-                    <span>Mean:</span>
-                    <span className="text-foreground font-mono">{countryStats.mean.toFixed(2)}</span>
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </div>

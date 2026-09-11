@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import DeckGL from '@deck.gl/react'
 import { MapView, _GlobeView as GlobeView, OrthographicView, COORDINATE_SYSTEM } from '@deck.gl/core'
-import { BitmapLayer, PathLayer, PolygonLayer, GeoJsonLayer, ScatterplotLayer, ColumnLayer } from '@deck.gl/layers'
+import { BitmapLayer, PathLayer, PolygonLayer, GeoJsonLayer, ScatterplotLayer, ColumnLayer, SolidPolygonLayer } from '@deck.gl/layers'
 import { TileLayer, _Tileset2D as Tileset2D } from '@deck.gl/geo-layers'
 import { lngLatToWorld } from '@math.gl/web-mercator'
 import {
@@ -39,6 +39,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '../ui/tooltip'
+import { MapmodesTray } from './MapmodesTray'
 
 interface MapViewerProps {
   raster: DecodedRaster | null
@@ -59,13 +60,16 @@ interface MapViewerProps {
   onToggleMapMode: (id: MapModeId) => void
   onReorderMapModes: (newModes: MapModeItem[]) => void
   heightmapConfig: HeightmapConfig
+  setHeightmapConfig?: React.Dispatch<React.SetStateAction<HeightmapConfig>>
   circleOverlayConfig: CircleOverlayConfig
+  setCircleOverlayConfig?: React.Dispatch<React.SetStateAction<CircleOverlayConfig>>
   analyticsOpen: boolean
   onToggleAnalytics: () => void
   selectedCountry?: CountryFeature | null
   selectedCountries?: CountryFeature[]
   onSelectCountry?: (country: CountryFeature | null) => void
   onToggleCountry?: (country: CountryFeature) => void
+  onClearCountries?: () => void
   countriesMode?: boolean
   onToggleCountriesMode?: (enabled: boolean) => void
   hoveredCountry?: CountryFeature | null
@@ -271,13 +275,16 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   onToggleMapMode,
   onReorderMapModes,
   heightmapConfig,
+  setHeightmapConfig,
   circleOverlayConfig,
+  setCircleOverlayConfig,
   analyticsOpen,
   onToggleAnalytics,
   selectedCountry,
   selectedCountries,
   onSelectCountry,
   onToggleCountry,
+  onClearCountries,
   countriesMode,
   onToggleCountriesMode,
   hoveredCountry,
@@ -544,10 +551,10 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     })
   }, [projection])
 
-  // 3D Elevation Spike Map Data Generator (deck.gl ColumnLayer with Hexagonal Honeycomb Geometry)
+  // 3D Elevation Spike Map Data Generator (deck.gl SolidPolygonLayer with Flat-Facing Uniform Rectangular Geometry)
   const elevationSpikesData = useMemo(() => {
     if (!heightmapConfig.enabled || !raster || !raster.data) {
-      return { points: [] as any[], radius: 10000, radiusUnits: 'meters' as const }
+      return { points: [] as any[] }
     }
 
     const W = raster.width
@@ -567,9 +574,10 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     const cellLngWidth = 360 / gridW
     const cellLatHeight = 180 / gridH
 
-    // Hexagon radius tailored to cell spacing with 0.88 coverage for crisp honeycomb packing
-    const hexRadiusMeters = Math.max(1500, ((cellLatHeight * 111320) / Math.sqrt(3)) * 0.88)
-    const hexRadiusCommon = Math.max(0.05, (cellLatHeight / Math.sqrt(3)) * 0.88)
+    // Uniform parent pixel sizing with 0.93 coverage for a subtle clean margin
+    const cov = 0.93
+    const halfW = (cellLngWidth / 2) * cov
+    const halfH = (cellLatHeight / 2) * cov
 
     const points: any[] = []
 
@@ -583,13 +591,15 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     const maxScale = heightmapConfig.elevationScale || 800000
     // Continuous base pedestal so all valid grid cells form a cohesive terrain carpet without empty holes
     const baseElevation = isCartesian ? (maxScale / 111000) * 0.35 : maxScale * 0.035
+    const opacityVal = heightmapConfig.opacity ?? 0.9
+    const alpha = Math.round(255 * opacityVal)
 
     for (let gr = 0; gr < gridH; gr++) {
       const startR = gr * step
       const endR = Math.min(H, startR + step)
-      const lat = 90 - ((gr + 0.5) / gridH) * 180
-      // Alternate row stagger for true honeycomb hexagon packing
-      const rowOffset = gr % 2 === 1 ? cellLngWidth * 0.5 : 0
+      const centerLat = 90 - ((gr + 0.5) / gridH) * 180
+      const minLat = centerLat - halfH
+      const maxLat = centerLat + halfH
 
       for (let gc = 0; gc < gridW; gc++) {
         const startC = gc * step
@@ -618,8 +628,10 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         // Blend mean & max so needle spikes are prominently rendered while maintaining smooth coverage
         const v = countVal > 1 ? (sumVal / countVal) * 0.4 + maxBlockVal * 0.6 : maxBlockVal
 
-        const lng = -180 + ((gc + 0.5) / gridW) * 360 + rowOffset
-        const wrappedLng = lng > 180 ? lng - 360 : lng
+        // Uniform rectangular parent pixel center and bounds
+        const centerLng = -180 + ((gc + 0.5) / gridW) * 360
+        const minLng = centerLng - halfW
+        const maxLng = centerLng + halfW
 
         // Respect bitmap isolation mode in Country Analysis
         if (countriesMode && effectiveSelected.length > 0) {
@@ -627,9 +639,9 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           for (const country of effectiveSelected) {
             if (country.bbox) {
               const [bMinX, bMinY, bMaxX, bMaxY] = country.bbox
-              if (wrappedLng < bMinX || wrappedLng > bMaxX || lat < bMinY || lat > bMaxY) continue
+              if (centerLng < bMinX || centerLng > bMaxX || centerLat < bMinY || centerLat > bMaxY) continue
             }
-            if (isPointInGeometry(wrappedLng, lat, country.geometry)) {
+            if (isPointInGeometry(centerLng, centerLat, country.geometry)) {
               isInside = true
               break
             }
@@ -637,53 +649,59 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           if (!isInside) continue
         }
 
-        let px = wrappedLng
-        let py = lat
+        // 4 corners strictly flat-facing North: SW -> SE -> NE -> NW
+        let polygon: [number, number][]
         if (projection === 'EqualEarth') {
-          const [eqX, eqY] = projectEqualEarth(wrappedLng, lat)
-          px = eqX
-          py = eqY
+          polygon = [
+            projectEqualEarth(minLng, minLat),
+            projectEqualEarth(maxLng, minLat),
+            projectEqualEarth(maxLng, maxLat),
+            projectEqualEarth(minLng, maxLat),
+          ]
+        } else {
+          polygon = [
+            [minLng, minLat],
+            [maxLng, minLat],
+            [maxLng, maxLat],
+            [minLng, maxLat],
+          ]
         }
 
         const tVal = transformValue(v, scaleType as any, logSigma)
         const norm = Math.max(0, Math.min(1, (tVal - tMin) / tRange))
 
         // Needle spike elevation: baseline pedestal + dynamic exponential scale
-        // peaks soar high into slender towers matching deck.gl HexagonLayer docs
         const spikeHeight = isCartesian
           ? Math.pow(norm, 1.25) * ((maxScale / 111000) * 12)
           : Math.pow(norm, 1.25) * maxScale
 
         const elev = baseElevation + spikeHeight
 
-        // Palette color from LUT
+        // Palette color from LUT with transparency alpha
         const lutIdx = Math.floor(norm * 255) * 3
         const color: [number, number, number, number] = [
           lut[lutIdx],
           lut[lutIdx + 1],
           lut[lutIdx + 2],
-          245,
+          alpha,
         ]
 
         points.push({
-          position: [px, py, 0],
+          polygon,
           elevation: elev,
           color,
           value: v,
-          lng: wrappedLng,
-          lat,
+          lng: centerLng,
+          lat: centerLat,
         })
       }
     }
 
-    return {
-      points,
-      radius: isCartesian ? hexRadiusCommon : hexRadiusMeters,
-      radiusUnits: (isCartesian ? 'common' : 'meters') as 'common' | 'meters',
-    }
+    return { points }
   }, [
     heightmapConfig.enabled,
     heightmapConfig.elevationScale,
+    heightmapConfig.opacity,
     raster,
     minVal,
     maxVal,
@@ -980,20 +998,18 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       )
     }
 
-    // 3.5. 3D Elevation Spike Map Layer (ColumnLayer)
+    // 3.5. 3D Elevation Spike Map Layer (Uniform Rectangular Parent-Pixel SolidPolygonLayer)
     if (heightmapConfig.enabled && elevationSpikesData.points && elevationSpikesData.points.length > 0) {
       list.push(
-        new ColumnLayer({
+        new SolidPolygonLayer({
           id: `elevation-spikes-${projection}`,
           data: elevationSpikesData.points,
-          getPosition: (d: any) => d.position,
+          getPolygon: (d: any) => d.polygon,
           getElevation: (d: any) => d.elevation,
           getFillColor: (d: any) => d.color,
-          radius: elevationSpikesData.radius,
-          radiusUnits: elevationSpikesData.radiusUnits,
-          diskResolution: 6, // Hexagonal prism geometry matching HexagonLayer
           extruded: true,
           flatShading: true,
+          opacity: heightmapConfig.opacity ?? 0.9,
           elevationScale: 1,
           coordinateSystem: isCartesian ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
           pickable: true,
@@ -1010,7 +1026,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     // 4. High-Value Equal-Area Circle Pixels (Hollow interior, coloured outline, adjustable black halo)
     if (circlePixelData.length > 0) {
       const strokeW = circleOverlayConfig.strokeWidth || 2
-      const haloW = circleOverlayConfig.haloWidth || 2
+      const haloW = circleOverlayConfig.haloWidth ?? 1
 
       // Outer black halo outline
       list.push(
@@ -1225,6 +1241,24 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       {/* Map Control Tools Toolbar (Top Right) */}
       <TooltipProvider delayDuration={150}>
         <div className="absolute top-4 right-4 z-20 flex flex-col gap-1.5 bg-card/95 backdrop-blur-md p-1 rounded-none border border-border shadow-md">
+          {/* Map Display Settings Toggle (Basemaps & Projections) - ALWAYS AT TOP with GEAR ICON */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={flyoutOpen ? 'secondary' : 'ghost'}
+                size="icon"
+                onClick={() => setFlyoutOpen(!flyoutOpen)}
+                className="h-7 w-7 rounded-none text-white"
+                aria-label="Map Display Settings"
+              >
+                <Icon name="settings" className="text-white" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="left">
+              <span>Map Display Settings (Basemap & Projection)</span>
+            </TooltipContent>
+          </Tooltip>
+
           {/* Toggle Raster Analytics View Panel */}
           <Tooltip>
             <TooltipTrigger asChild>
@@ -1243,26 +1277,6 @@ export const MapViewer: React.FC<MapViewerProps> = ({
             </TooltipContent>
           </Tooltip>
 
-          {/* Toggle Country Analysis Mode */}
-          {onToggleCountriesMode && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={countriesMode ? 'secondary' : 'ghost'}
-                  size="icon"
-                  onClick={() => onToggleCountriesMode(!countriesMode)}
-                  className="h-7 w-7 rounded-none text-white"
-                  aria-label="Toggle Country Analysis"
-                >
-                  <Icon name="flag" className="text-white" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="left">
-                <span>Toggle Country Analysis (Inspect on hover)</span>
-              </TooltipContent>
-            </Tooltip>
-          )}
-
           {/* Toggle Graticule Grid Lines */}
           <Tooltip>
             <TooltipTrigger asChild>
@@ -1278,24 +1292,6 @@ export const MapViewer: React.FC<MapViewerProps> = ({
             </TooltipTrigger>
             <TooltipContent side="left">
               <span>Toggle Graticule Grid (Parallels & Meridians)</span>
-            </TooltipContent>
-          </Tooltip>
-
-          {/* Map Display Settings Toggle (Basemaps & Projections) */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={flyoutOpen ? 'secondary' : 'ghost'}
-                size="icon"
-                onClick={() => setFlyoutOpen(!flyoutOpen)}
-                className="h-7 w-7 rounded-none text-white"
-                aria-label="Map Display Settings"
-              >
-                <Icon name="layers" className="text-white" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="left">
-              <span>Basemap & Spatial Projection Settings</span>
             </TooltipContent>
           </Tooltip>
 
@@ -1384,84 +1380,23 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         )}
       </TooltipProvider>
 
-      {/* Bottom Right Tray: Composable & Reorderable Mapmodes */}
-      <div className="absolute bottom-4 right-4 z-20 w-64 bg-card/95 backdrop-blur-md p-2.5 border border-border shadow-2xl text-xs select-none space-y-2 font-sans">
-        <div className="flex items-center justify-between border-b border-border pb-1">
-          <span className="font-bold text-foreground text-xs flex items-center gap-1.5">
-            <Icon name="layers" size="0.9rem" />
-            <span>Mapmodes</span>
-          </span>
-          <span className="text-[10px] text-muted-foreground font-mono">
-            {mapModes.filter((m) => m.active).length} Active
-          </span>
-        </div>
-
-        <div className="space-y-1">
-          {mapModes.map((mode, index) => (
-            <div
-              key={mode.id}
-              className={`flex items-center justify-between px-2 py-1.5 border transition-colors ${
-                mode.active
-                  ? 'bg-muted/70 border-primary/40 text-foreground'
-                  : 'bg-background/40 border-border/80 text-muted-foreground'
-              }`}
-            >
-              <label className="flex items-center gap-2 cursor-pointer min-w-0">
-                <input
-                  type="checkbox"
-                  checked={mode.active}
-                  onChange={() => onToggleMapMode(mode.id)}
-                  className="w-3.5 h-3.5 rounded-none accent-emerald-500 cursor-pointer shrink-0"
-                />
-                <span className={`truncate text-xs ${mode.active ? 'font-semibold text-foreground' : ''}`}>
-                  {mode.label}
-                </span>
-              </label>
-
-              <div className="flex items-center gap-0.5 shrink-0">
-                <button
-                  type="button"
-                  disabled={index === 0}
-                  onClick={() => {
-                    if (index > 0) {
-                      const updated = [...mapModes]
-                      const temp = updated[index]
-                      updated[index] = updated[index - 1]
-                      updated[index - 1] = temp
-                      onReorderMapModes(updated)
-                    }
-                  }}
-                  className="w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
-                  title="Move up"
-                >
-                  <Icon name="arrow_upward" size="0.75rem" />
-                </button>
-                <button
-                  type="button"
-                  disabled={index === mapModes.length - 1}
-                  onClick={() => {
-                    if (index < mapModes.length - 1) {
-                      const updated = [...mapModes]
-                      const temp = updated[index]
-                      updated[index] = updated[index + 1]
-                      updated[index + 1] = temp
-                      onReorderMapModes(updated)
-                    }
-                  }}
-                  className="w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
-                  title="Move down"
-                >
-                  <Icon name="arrow_downward" size="0.75rem" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <p className="text-[10px] text-muted-foreground leading-tight">
-          Compose multiple modes at once. Top layer renders above bottom layer.
-        </p>
-      </div>
+      {/* Bottom Right Tray: Unified Mapmodes with Inline Settings */}
+      <MapmodesTray
+        mapModes={mapModes}
+        onToggleMapMode={onToggleMapMode}
+        onReorderMapModes={onReorderMapModes}
+        countriesMode={Boolean(countriesMode)}
+        onToggleCountriesMode={onToggleCountriesMode}
+        selectedCountries={selectedCountries || []}
+        onToggleCountry={onToggleCountry || (() => {})}
+        onClearCountries={onClearCountries || (() => {})}
+        countryStats={countryStats}
+        heightmapConfig={heightmapConfig}
+        setHeightmapConfig={setHeightmapConfig || (() => {})}
+        circleOverlayConfig={circleOverlayConfig}
+        setCircleOverlayConfig={setCircleOverlayConfig || (() => {})}
+        allCountries={countryFeatures}
+      />
     </div>
   )
 }

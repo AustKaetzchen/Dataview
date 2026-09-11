@@ -59,19 +59,22 @@ export const App: React.FC = () => {
   const [heightmapConfig, setHeightmapConfig] = useState<HeightmapConfig>({
     enabled: false,
     elevationScale: 800000,
+    opacity: 0.9,
   })
   const [circleOverlayConfig, setCircleOverlayConfig] = useState<CircleOverlayConfig>({
     enabled: false,
     percentileCutoff: 99,
     baseRadius: 1.0,
     strokeWidth: 2,
-    haloWidth: 2,
+    haloWidth: 1,
   })
 
   // Composable & Reorderable Mapmodes stack
   const [mapModes, setMapModes] = useState<MapModeItem[]>([
     { id: 'default', label: 'Default Raster', active: true },
     { id: 'country_analysis', label: 'Country Analysis', active: false },
+    { id: 'spike_map', label: '3D Spike Map', active: false },
+    { id: 'circle_sizing', label: 'Equal-Area Circle Sizing', active: false },
   ])
 
   // Top right view panel for analytics & settings drawer
@@ -247,7 +250,7 @@ export const App: React.FC = () => {
     [handleToggleCountry]
   )
 
-  // Synchronize countriesMode with mapModes stack
+  // Synchronize countriesMode, heightmapConfig, circleOverlayConfig with mapModes stack
   const handleToggleCountriesMode = useCallback((enabled: boolean) => {
     setCountriesMode(enabled)
     setMapModes((prev) =>
@@ -258,8 +261,12 @@ export const App: React.FC = () => {
   const handleToggleMapMode = useCallback((id: MapModeId) => {
     setMapModes((prev) => {
       const updated = prev.map((m) => (m.id === id ? { ...m, active: !m.active } : m))
-      const countryModeActive = updated.find((m) => m.id === 'country_analysis')?.active ?? false
-      setCountriesMode(countryModeActive)
+      const countryActive = updated.find((m) => m.id === 'country_analysis')?.active ?? false
+      const spikeActive = updated.find((m) => m.id === 'spike_map')?.active ?? false
+      const circleActive = updated.find((m) => m.id === 'circle_sizing')?.active ?? false
+      setCountriesMode(countryActive)
+      setHeightmapConfig((h) => ({ ...h, enabled: spikeActive }))
+      setCircleOverlayConfig((c) => ({ ...c, enabled: circleActive }))
       return updated
     })
   }, [])
@@ -397,17 +404,6 @@ export const App: React.FC = () => {
         setAppMode={setAppMode}
         binningConfig={binningConfig}
         setBinningConfig={setBinningConfig}
-        heightmapConfig={heightmapConfig}
-        setHeightmapConfig={setHeightmapConfig}
-        circleOverlayConfig={circleOverlayConfig}
-        setCircleOverlayConfig={setCircleOverlayConfig}
-        countriesMode={countriesMode}
-        onToggleCountriesMode={handleToggleCountriesMode}
-        selectedCountries={selectedCountries}
-        onToggleCountry={handleToggleCountry}
-        onClearCountries={handleClearCountries}
-        hoveredCountry={hoveredCountry}
-        countryStats={countryStats}
       />
 
       {/* Main Map Viewer */}
@@ -431,13 +427,16 @@ export const App: React.FC = () => {
           onToggleMapMode={handleToggleMapMode}
           onReorderMapModes={handleReorderMapModes}
           heightmapConfig={heightmapConfig}
+          setHeightmapConfig={setHeightmapConfig}
           circleOverlayConfig={circleOverlayConfig}
+          setCircleOverlayConfig={setCircleOverlayConfig}
           analyticsOpen={analyticsOpen}
           onToggleAnalytics={() => setAnalyticsOpen((prev) => !prev)}
           selectedCountry={deferredSelectedCountries[0] || null}
           selectedCountries={deferredSelectedCountries}
           onSelectCountry={handleSelectCountry}
           onToggleCountry={handleToggleCountry}
+          onClearCountries={handleClearCountries}
           countriesMode={countriesMode}
           onToggleCountriesMode={handleToggleCountriesMode}
           hoveredCountry={hoveredCountry}

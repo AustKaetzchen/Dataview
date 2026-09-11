@@ -1,0 +1,533 @@
+import React, { useState, useMemo } from 'react'
+import {
+  MapModeItem,
+  MapModeId,
+  HeightmapConfig,
+  CircleOverlayConfig,
+} from '@/lib/geopng/types'
+import { CountryFeature, CountryStats } from '@/lib/geopng/polygonBinning'
+import { Icon } from '@/components/ui/icon'
+import { Slider } from '@/components/ui/slider'
+
+interface MapmodesTrayProps {
+  mapModes: MapModeItem[]
+  onToggleMapMode: (id: MapModeId) => void
+  onReorderMapModes: (newModes: MapModeItem[]) => void
+  countriesMode: boolean
+  onToggleCountriesMode?: (enabled: boolean) => void
+  selectedCountries: CountryFeature[]
+  onToggleCountry: (country: CountryFeature) => void
+  onClearCountries: () => void
+  countryStats?: CountryStats | null
+  heightmapConfig: HeightmapConfig
+  setHeightmapConfig: React.Dispatch<React.SetStateAction<HeightmapConfig>>
+  circleOverlayConfig: CircleOverlayConfig
+  setCircleOverlayConfig: React.Dispatch<React.SetStateAction<CircleOverlayConfig>>
+  allCountries: CountryFeature[]
+}
+
+export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
+  mapModes,
+  onToggleMapMode,
+  onReorderMapModes,
+  countriesMode,
+  onToggleCountriesMode,
+  selectedCountries,
+  onToggleCountry,
+  onClearCountries,
+  countryStats,
+  heightmapConfig,
+  setHeightmapConfig,
+  circleOverlayConfig,
+  setCircleOverlayConfig,
+  allCountries,
+}) => {
+  // Currently expanded mapmode settings panel (null if all collapsed)
+  const [expandedMode, setExpandedMode] = useState<MapModeId | null>(null)
+  const [countrySearch, setCountrySearch] = useState('')
+
+  const getCountryCode = (c: CountryFeature) => {
+    const iso = c.properties.iso_a3
+    if (iso && iso !== '-99') return iso
+    return c.properties.adm0_a3 || c.properties.name || ''
+  }
+
+  // Filtered countries for checklist
+  const filteredCountries = useMemo(() => {
+    const q = countrySearch.toLowerCase().trim()
+    if (!q) return allCountries
+    return allCountries.filter((c) => {
+      const name = (c.properties.name || '').toLowerCase()
+      const code = getCountryCode(c).toLowerCase()
+      return name.includes(q) || code.includes(q)
+    })
+  }, [allCountries, countrySearch])
+
+  const selectedCountryCodeSet = useMemo(() => {
+    return new Set(selectedCountries.map(getCountryCode))
+  }, [selectedCountries])
+
+  const toggleExpand = (id: MapModeId) => {
+    setExpandedMode((prev) => (prev === id ? null : id))
+  }
+
+  return (
+    <div className="absolute bottom-4 right-4 z-20 w-80 max-h-[calc(100vh-140px)] flex flex-col bg-card/98 backdrop-blur-md border border-border shadow-2xl p-2.5 space-y-2 text-xs select-none font-sans overflow-hidden">
+      {/* Tray Header */}
+      <div className="flex items-center justify-between border-b border-border pb-1.5 shrink-0">
+        <span className="font-bold text-foreground text-xs flex items-center gap-1.5">
+          <Icon name="layers" size="0.95rem" />
+          <span>Mapmodes</span>
+        </span>
+        <span className="text-[10px] px-1.5 py-0.2 bg-primary/20 text-primary border border-primary/40 font-mono font-bold">
+          {mapModes.filter((m) => m.active).length} Active
+        </span>
+      </div>
+
+      {/* Composable Mode Items Stack */}
+      <div className="space-y-1 overflow-y-auto max-h-[50vh] pr-0.5">
+        {mapModes.map((mode, index) => {
+          const isExpanded = expandedMode === mode.id
+          const hasSettings = mode.id !== 'default'
+
+          return (
+            <div key={mode.id} className="border border-border/80 bg-background/50">
+              {/* Row Header */}
+              <div
+                className={`flex items-center justify-between px-2 py-1.5 transition-colors ${
+                  mode.active
+                    ? 'bg-muted/60 text-foreground'
+                    : 'bg-background/40 text-muted-foreground'
+                }`}
+              >
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <input
+                    type="checkbox"
+                    checked={mode.active}
+                    onChange={() => onToggleMapMode(mode.id)}
+                    className="w-3.5 h-3.5 rounded-none accent-emerald-500 cursor-pointer shrink-0"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => hasSettings && toggleExpand(mode.id)}
+                    className="truncate text-xs text-left cursor-pointer flex-1 flex items-center gap-1.5 hover:text-foreground"
+                  >
+                    <span className={mode.active ? 'font-semibold text-foreground' : ''}>
+                      {mode.label}
+                    </span>
+                    {mode.id === 'country_analysis' && selectedCountries.length > 0 && (
+                      <span className="text-[9px] px-1 py-0.2 bg-primary/20 text-primary border border-primary/40 font-bold shrink-0">
+                        {selectedCountries.length}
+                      </span>
+                    )}
+                    {mode.id === 'spike_map' && mode.active && (
+                      <span className="text-[9px] px-1 py-0.2 bg-primary/20 text-primary border border-primary/40 font-bold shrink-0">
+                        3D
+                      </span>
+                    )}
+                    {mode.id === 'circle_sizing' && mode.active && (
+                      <span className="text-[9px] px-1 py-0.2 bg-primary/20 text-primary border border-primary/40 font-bold shrink-0">
+                        P{circleOverlayConfig.percentileCutoff}
+                      </span>
+                    )}
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-0.5 shrink-0 ml-1">
+                  {hasSettings && (
+                    <button
+                      type="button"
+                      onClick={() => toggleExpand(mode.id)}
+                      className="w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
+                      title="Toggle Settings"
+                    >
+                      <Icon
+                        name={isExpanded ? 'expand_less' : 'tune'}
+                        size="0.8rem"
+                      />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    disabled={index === 0}
+                    onClick={() => {
+                      if (index > 0) {
+                        const updated = [...mapModes]
+                        const temp = updated[index]
+                        updated[index] = updated[index - 1]
+                        updated[index - 1] = temp
+                        onReorderMapModes(updated)
+                      }
+                    }}
+                    className="w-4 h-4 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
+                    title="Move up"
+                  >
+                    <Icon name="arrow_upward" size="0.7rem" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={index === mapModes.length - 1}
+                    onClick={() => {
+                      if (index < mapModes.length - 1) {
+                        const updated = [...mapModes]
+                        const temp = updated[index]
+                        updated[index] = updated[index + 1]
+                        updated[index + 1] = temp
+                        onReorderMapModes(updated)
+                      }
+                    }}
+                    className="w-4 h-4 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
+                    title="Move down"
+                  >
+                    <Icon name="arrow_downward" size="0.7rem" />
+                  </button>
+                </div>
+              </div>
+
+              {/* ========================================================================= */}
+              {/* SETTINGS: COUNTRY ANALYSIS */}
+              {/* ========================================================================= */}
+              {isExpanded && mode.id === 'country_analysis' && (
+                <div className="p-2.5 border-t border-border space-y-2 bg-card/80 animate-in fade-in-0 duration-100">
+                  <div className="flex items-center justify-between pb-1 border-b border-border/60">
+                    <span className="text-[11px] font-semibold text-foreground flex items-center gap-1">
+                      <Icon name="flag" size="0.85rem" />
+                      <span>Country Analysis Settings</span>
+                    </span>
+                    {selectedCountries.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={onClearCountries}
+                        className="text-[10px] text-primary hover:underline cursor-pointer"
+                      >
+                        Clear all ({selectedCountries.length})
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Bitmap Isolation Mode Toggle */}
+                  <div className="flex items-center justify-between p-1.5 bg-background border border-border">
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-foreground text-[11px]">
+                        Bitmap Isolation Mode
+                      </span>
+                      <span className="text-[9px] text-muted-foreground">
+                        Clip raster pixels strictly to selected countries
+                      </span>
+                    </div>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={countriesMode}
+                        onChange={(e) => onToggleCountriesMode && onToggleCountriesMode(e.target.checked)}
+                        className="w-3.5 h-3.5 rounded-none accent-emerald-500 cursor-pointer"
+                      />
+                      <span
+                        className={`text-[10px] font-semibold uppercase ${
+                          countriesMode ? 'text-emerald-400 font-bold' : 'text-muted-foreground'
+                        }`}
+                      >
+                        {countriesMode ? 'ON' : 'OFF'}
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* Country Search */}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Filter country by name or ISO..."
+                      value={countrySearch}
+                      onChange={(e) => setCountrySearch(e.target.value)}
+                      className="w-full h-7 px-2 text-[11px] bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+                    />
+                    {countrySearch && (
+                      <button
+                        type="button"
+                        onClick={() => setCountrySearch('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-[11px] cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Scrollable Checklist */}
+                  <div className="h-32 overflow-y-auto border border-border bg-background/50 divide-y divide-border/40 text-[11px]">
+                    {filteredCountries.length === 0 ? (
+                      <div className="p-2 text-center text-muted-foreground text-[10px]">
+                        No matching countries
+                      </div>
+                    ) : (
+                      filteredCountries.map((c) => {
+                        const code = getCountryCode(c)
+                        const isChecked = selectedCountryCodeSet.has(code)
+                        return (
+                          <label
+                            key={code || c.properties.name}
+                            className="flex items-center gap-2 px-2 py-1 hover:bg-muted/50 cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => onToggleCountry(c)}
+                              className="w-3.5 h-3.5 rounded-none accent-emerald-500 cursor-pointer shrink-0"
+                            />
+                            <span className="truncate flex-1 text-foreground">
+                              {c.properties.name}
+                            </span>
+                            {c.properties.iso_a3 && c.properties.iso_a3 !== '-99' && (
+                              <span className="text-[9px] font-mono text-muted-foreground">
+                                {c.properties.iso_a3}
+                              </span>
+                            )}
+                          </label>
+                        )
+                      })
+                    )}
+                  </div>
+
+                  {/* Selected Country Pills */}
+                  {selectedCountries.length > 0 && (
+                    <div className="flex flex-wrap gap-1 max-h-16 overflow-y-auto pt-1">
+                      {selectedCountries.map((c) => (
+                        <span
+                          key={getCountryCode(c)}
+                          className="inline-flex items-center gap-1 px-1.5 py-0.2 text-[9px] bg-primary/20 text-primary border border-primary/40 rounded-none font-medium"
+                        >
+                          <span className="truncate max-w-[90px]">{c.properties.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => onToggleCountry(c)}
+                            className="hover:text-foreground opacity-70 hover:opacity-100 cursor-pointer"
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Country Stats Summary */}
+                  {countryStats && countryStats.validCount > 0 && (
+                    <div className="p-2 bg-background border border-border text-[10px] space-y-1">
+                      <div className="flex justify-between items-center text-muted-foreground">
+                        <span className="truncate font-medium">{countryStats.name}:</span>
+                        <span className="text-foreground font-semibold">
+                          {countryStats.validCount.toLocaleString()} cells
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center text-muted-foreground">
+                        <span>Range:</span>
+                        <span className="text-foreground font-mono">
+                          {countryStats.min.toFixed(2)} → {countryStats.max.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center text-muted-foreground">
+                        <span>Mean:</span>
+                        <span className="text-foreground font-mono">{countryStats.mean.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ========================================================================= */}
+              {/* SETTINGS: 3D SPIKE MAP */}
+              {/* ========================================================================= */}
+              {isExpanded && mode.id === 'spike_map' && (
+                <div className="p-2.5 border-t border-border space-y-2.5 bg-card/80 animate-in fade-in-0 duration-100">
+                  <div className="flex items-center justify-between pb-1 border-b border-border/60">
+                    <span className="text-[11px] font-semibold text-foreground flex items-center gap-1">
+                      <Icon name="view_in_ar" size="0.85rem" />
+                      <span>3D Spike Map Settings</span>
+                    </span>
+                  </div>
+
+                  {/* Spike Height Scale */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="text-muted-foreground">Spike Height Scale</span>
+                      <span className="text-foreground font-mono font-bold">
+                        {(heightmapConfig.elevationScale / 1000).toFixed(0)} km
+                      </span>
+                    </div>
+                    <Slider
+                      value={[heightmapConfig.elevationScale]}
+                      min={50000}
+                      max={2500000}
+                      step={25000}
+                      onValueChange={(vals) =>
+                        setHeightmapConfig((prev) => ({ ...prev, elevationScale: vals[0] }))
+                      }
+                    />
+                  </div>
+
+                  {/* Spikes Transparency / Opacity */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="text-muted-foreground">Spikes Opacity</span>
+                      <span className="text-foreground font-mono font-bold">
+                        {Math.round((heightmapConfig.opacity ?? 0.9) * 100)}%
+                      </span>
+                    </div>
+                    <Slider
+                      value={[Math.round((heightmapConfig.opacity ?? 0.9) * 100)]}
+                      min={10}
+                      max={100}
+                      step={5}
+                      onValueChange={(vals) =>
+                        setHeightmapConfig((prev) => ({ ...prev, opacity: vals[0] / 100 }))
+                      }
+                    />
+                  </div>
+
+                  <p className="text-[9px] text-muted-foreground leading-tight">
+                    • Right-click / Ctrl+Drag on map to orbit in 3D perspective.
+                  </p>
+                </div>
+              )}
+
+              {/* ========================================================================= */}
+              {/* SETTINGS: EQUAL-AREA CIRCLE SIZING */}
+              {/* ========================================================================= */}
+              {isExpanded && mode.id === 'circle_sizing' && (
+                <div className="p-2.5 border-t border-border space-y-2.5 bg-card/80 animate-in fade-in-0 duration-100">
+                  <div className="flex items-center justify-between pb-1 border-b border-border/60">
+                    <span className="text-[11px] font-semibold text-foreground flex items-center gap-1">
+                      <Icon name="scatter_plot" size="0.85rem" />
+                      <span>Circle Sizing Settings</span>
+                    </span>
+                  </div>
+
+                  {/* Custom Percentile Cutoff */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="text-muted-foreground">Custom Percentile Cutoff</span>
+                      <div className="flex items-center gap-1">
+                        <span className="font-mono text-muted-foreground">P</span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={0.1}
+                          value={circleOverlayConfig.percentileCutoff}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value)
+                            if (Number.isFinite(val)) {
+                              setCircleOverlayConfig((prev) => ({
+                                ...prev,
+                                percentileCutoff: Math.max(0, Math.min(100, val)),
+                              }))
+                            }
+                          }}
+                          className="w-14 h-5 px-1 font-mono font-bold text-center bg-background border border-border text-foreground focus:outline-none focus:border-primary text-[10px]"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Presets */}
+                    <div className="grid grid-cols-5 gap-1">
+                      {[90, 95, 98, 99, 99.5].map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() =>
+                            setCircleOverlayConfig((prev) => ({ ...prev, percentileCutoff: p }))
+                          }
+                          className={`px-1 py-0.5 text-[9px] border rounded-none text-center cursor-pointer transition-colors ${
+                            circleOverlayConfig.percentileCutoff === p
+                              ? 'bg-primary text-white font-bold border-accent shadow-sm'
+                              : 'bg-background hover:bg-muted text-muted-foreground border-border'
+                          }`}
+                        >
+                          P{p}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Circle Base Scale */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="text-muted-foreground">Circle Base Scale</span>
+                      <span className="text-foreground font-mono font-bold">
+                        {circleOverlayConfig.baseRadius.toFixed(1)}×
+                      </span>
+                    </div>
+                    <Slider
+                      value={[circleOverlayConfig.baseRadius * 10]}
+                      min={5}
+                      max={30}
+                      step={1}
+                      onValueChange={(vals) =>
+                        setCircleOverlayConfig((prev) => ({
+                          ...prev,
+                          baseRadius: vals[0] / 10,
+                        }))
+                      }
+                    />
+                  </div>
+
+                  {/* Outline Stroke Width */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="text-muted-foreground">Coloured Outline Stroke</span>
+                      <span className="text-foreground font-mono font-bold">
+                        {circleOverlayConfig.strokeWidth || 2} px
+                      </span>
+                    </div>
+                    <Slider
+                      value={[circleOverlayConfig.strokeWidth || 2]}
+                      min={1}
+                      max={6}
+                      step={1}
+                      onValueChange={(vals) =>
+                        setCircleOverlayConfig((prev) => ({
+                          ...prev,
+                          strokeWidth: vals[0],
+                        }))
+                      }
+                    />
+                  </div>
+
+                  {/* Black Halo Thickness (Default 1px) */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="text-muted-foreground">Black Halo Thickness</span>
+                      <span className="text-foreground font-mono font-bold">
+                        {circleOverlayConfig.haloWidth ?? 1} px
+                      </span>
+                    </div>
+                    <Slider
+                      value={[circleOverlayConfig.haloWidth ?? 1]}
+                      min={0}
+                      max={6}
+                      step={1}
+                      onValueChange={(vals) =>
+                        setCircleOverlayConfig((prev) => ({
+                          ...prev,
+                          haloWidth: vals[0],
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <p className="text-[9px] text-muted-foreground leading-tight">
+                    • Hollow circles with coloured outline and adjustable black halo border. Area linearly scales with value (A ∝ Value).
+                  </p>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Tray Footer */}
+      <div className="pt-1 border-t border-border/80 text-[9px] text-muted-foreground flex justify-between items-center shrink-0">
+        <span>Click mode name to configure</span>
+        <span>Drag / Arrow to reorder</span>
+      </div>
+    </div>
+  )
+}
