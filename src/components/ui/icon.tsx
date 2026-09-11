@@ -10,7 +10,7 @@ export const Icon: React.FC<IconProps> = ({ name, className, style, size, ...pro
   return (
     <span
       className={cn(
-        'material-icons inline-flex items-center justify-center select-none shrink-0 leading-none align-middle font-normal',
+        'material-icons text-white inline-flex items-center justify-center select-none shrink-0 leading-none align-middle font-normal',
         className
       )}
       style={{

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import DeckGL from '@deck.gl/react'
 import { MapView, _GlobeView as GlobeView, OrthographicView, COORDINATE_SYSTEM } from '@deck.gl/core'
-import { BitmapLayer, PathLayer, PolygonLayer, GeoJsonLayer, ScatterplotLayer } from '@deck.gl/layers'
+import { BitmapLayer, PathLayer, PolygonLayer, GeoJsonLayer, ScatterplotLayer, ColumnLayer } from '@deck.gl/layers'
 import { TileLayer, _Tileset2D as Tileset2D } from '@deck.gl/geo-layers'
 import { lngLatToWorld } from '@math.gl/web-mercator'
 import {
@@ -17,7 +17,7 @@ import {
   transformGeometryToEqualEarth,
   generateEqualEarthGraticule,
 } from '@/lib/geopng/equalEarth'
-import { computeQuantiles } from '@/lib/geopng/scales'
+import { computeQuantiles, transformValue } from '@/lib/geopng/scales'
 import { getPaletteLUT } from '@/lib/geopng/palettes'
 import {
   DecodedRaster,
@@ -72,6 +72,8 @@ interface MapViewerProps {
   onHoverCountry?: (country: CountryFeature | null) => void
   countryStats?: CountryStats | null
   onInspect?: (data: InspectionData | null) => void
+  settingsDrawerOpen?: boolean
+  onToggleSettingsDrawer?: (open: boolean) => void
 }
 
 // Basemaps driven by MAP_CONFIG (config/map.json5)
@@ -186,17 +188,7 @@ class TesselatedBitmapLayer extends BitmapLayer<TesselatedBitmapLayerProps> {
   static layerName = 'TesselatedBitmapLayer'
 
   _createMesh() {
-    const {
-      bounds,
-      projection,
-      heightmapEnabled,
-      elevationScale,
-      rasterData,
-      rasterWidth,
-      rasterHeight,
-      minVal,
-      maxVal,
-    } = this.props as any
+    const { bounds, projection, heightmapEnabled } = this.props as any
 
     let minX = -180, minY = -90, maxX = 180, maxY = 90
     if (bounds && Number.isFinite(bounds[0])) {
@@ -218,9 +210,6 @@ class TesselatedBitmapLayer extends BitmapLayer<TesselatedBitmapLayerProps> {
     const texCoords = new Float32Array(uCount * vCount * 2)
     const positions = new Float64Array(uCount * vCount * 3)
 
-    const valRange = maxVal - minVal || 1
-    const hasRaster = Boolean(rasterData && rasterWidth && rasterHeight)
-
     let vertex = 0
     let index = 0
     for (let u = 0; u < uCount; u++) {
@@ -240,26 +229,9 @@ class TesselatedBitmapLayer extends BitmapLayer<TesselatedBitmapLayerProps> {
           py = eqY
         }
 
-        // Calculate 3D elevation if heightmap enabled
-        let altitude = 0
-        if (heightmapEnabled && hasRaster) {
-          const rX = Math.max(0, Math.min(rasterWidth - 1, Math.floor(((lng + 180) / 360) * rasterWidth)))
-          const rY = Math.max(0, Math.min(rasterHeight - 1, Math.floor(((90 - lat) / 180) * rasterHeight)))
-          const v = rasterData[rY * rasterWidth + rX]
-          if (Number.isFinite(v) && v > minVal) {
-            const norm = Math.max(0, Math.min(1, (v - minVal) / valRange))
-            if (projection === 'Mercator' || projection === 'Globe') {
-              altitude = norm * (elevationScale || 250000)
-            } else {
-              // In Cartesian space, 1 deg ~ 111km; scale altitude to prominent Cartesian Z units
-              altitude = norm * ((elevationScale || 250000) / 111000) * 12
-            }
-          }
-        }
-
         positions[vertex * 3 + 0] = px
         positions[vertex * 3 + 1] = py
-        positions[vertex * 3 + 2] = altitude
+        positions[vertex * 3 + 2] = 0
 
         texCoords[vertex * 2 + 0] = ut
         texCoords[vertex * 2 + 1] = 1 - vt
@@ -312,7 +284,13 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   onHoverCountry,
   countryStats,
   onInspect,
+  settingsDrawerOpen,
+  onToggleSettingsDrawer,
 }) => {
+  const [internalFlyoutOpen, setInternalFlyoutOpen] = useState(false)
+  const flyoutOpen = settingsDrawerOpen !== undefined ? settingsDrawerOpen : internalFlyoutOpen
+  const setFlyoutOpen = onToggleSettingsDrawer || setInternalFlyoutOpen
+
   const [projViewStates, setProjViewStates] = useState<Record<ProjectionType, any>>({
     Mercator: MAP_CONFIG.mapDefines?.initialMercator || {
       longitude: 0,
@@ -358,7 +336,6 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
   const [basemap, setBasemap] = useState<string>(MAP_CONFIG.basemapLayers[0]?.id || 'dark')
   const [showGraticule, setShowGraticule] = useState(true)
-  const [flyoutOpen, setFlyoutOpen] = useState(false)
 
   const [inspectData, setInspectData] = useState<InspectionData | null>(null)
   const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null)
@@ -566,6 +543,159 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       controller: { doubleClickZoom: false, dragRotate: true },
     })
   }, [projection])
+
+  // 3D Elevation Spike Map Data Generator (deck.gl ColumnLayer with Hexagonal Honeycomb Geometry)
+  const elevationSpikesData = useMemo(() => {
+    if (!heightmapConfig.enabled || !raster || !raster.data) {
+      return { points: [] as any[], radius: 10000, radiusUnits: 'meters' as const }
+    }
+
+    const W = raster.width
+    const H = raster.height
+    const tMin = transformValue(minVal, scaleType as any, logSigma)
+    const tMax = transformValue(maxVal, scaleType as any, logSigma)
+    const tRange = tMax - tMin || 1
+    const lut = getPaletteLUT(palette, Boolean(invertPalette))
+    const isCartesian = projection === 'Equirectangular' || projection === 'EqualEarth'
+
+    // Target grid resolution to cover all grid cells smoothly (~50k to 65k cells max for 60fps)
+    const maxDim = 360
+    const step = Math.max(1, Math.ceil(Math.max(W, H) / maxDim))
+    const gridW = Math.ceil(W / step)
+    const gridH = Math.ceil(H / step)
+
+    const cellLngWidth = 360 / gridW
+    const cellLatHeight = 180 / gridH
+
+    // Hexagon radius tailored to cell spacing with 0.88 coverage for crisp honeycomb packing
+    const hexRadiusMeters = Math.max(1500, ((cellLatHeight * 111320) / Math.sqrt(3)) * 0.88)
+    const hexRadiusCommon = Math.max(0.05, (cellLatHeight / Math.sqrt(3)) * 0.88)
+
+    const points: any[] = []
+
+    const effectiveSelected =
+      selectedCountries && selectedCountries.length > 0
+        ? selectedCountries
+        : selectedCountry
+        ? [selectedCountry]
+        : []
+
+    const maxScale = heightmapConfig.elevationScale || 800000
+    // Continuous base pedestal so all valid grid cells form a cohesive terrain carpet without empty holes
+    const baseElevation = isCartesian ? (maxScale / 111000) * 0.35 : maxScale * 0.035
+
+    for (let gr = 0; gr < gridH; gr++) {
+      const startR = gr * step
+      const endR = Math.min(H, startR + step)
+      const lat = 90 - ((gr + 0.5) / gridH) * 180
+      // Alternate row stagger for true honeycomb hexagon packing
+      const rowOffset = gr % 2 === 1 ? cellLngWidth * 0.5 : 0
+
+      for (let gc = 0; gc < gridW; gc++) {
+        const startC = gc * step
+        const endC = Math.min(W, startC + step)
+
+        // Area-aggregate block pixels: preserve fine spikes via blended mean + peak
+        let sumVal = 0
+        let countVal = 0
+        let maxBlockVal = -Infinity
+
+        for (let r = startR; r < endR; r++) {
+          const rowOffset = r * W
+          for (let c = startC; c < endC; c++) {
+            const v = raster.data[rowOffset + c]
+            if (Number.isFinite(v)) {
+              sumVal += v
+              countVal++
+              if (v > maxBlockVal) maxBlockVal = v
+            }
+          }
+        }
+
+        // Only skip if cell has no finite data (ocean / NaN)
+        if (countVal === 0) continue
+
+        // Blend mean & max so needle spikes are prominently rendered while maintaining smooth coverage
+        const v = countVal > 1 ? (sumVal / countVal) * 0.4 + maxBlockVal * 0.6 : maxBlockVal
+
+        const lng = -180 + ((gc + 0.5) / gridW) * 360 + rowOffset
+        const wrappedLng = lng > 180 ? lng - 360 : lng
+
+        // Respect bitmap isolation mode in Country Analysis
+        if (countriesMode && effectiveSelected.length > 0) {
+          let isInside = false
+          for (const country of effectiveSelected) {
+            if (country.bbox) {
+              const [bMinX, bMinY, bMaxX, bMaxY] = country.bbox
+              if (wrappedLng < bMinX || wrappedLng > bMaxX || lat < bMinY || lat > bMaxY) continue
+            }
+            if (isPointInGeometry(wrappedLng, lat, country.geometry)) {
+              isInside = true
+              break
+            }
+          }
+          if (!isInside) continue
+        }
+
+        let px = wrappedLng
+        let py = lat
+        if (projection === 'EqualEarth') {
+          const [eqX, eqY] = projectEqualEarth(wrappedLng, lat)
+          px = eqX
+          py = eqY
+        }
+
+        const tVal = transformValue(v, scaleType as any, logSigma)
+        const norm = Math.max(0, Math.min(1, (tVal - tMin) / tRange))
+
+        // Needle spike elevation: baseline pedestal + dynamic exponential scale
+        // peaks soar high into slender towers matching deck.gl HexagonLayer docs
+        const spikeHeight = isCartesian
+          ? Math.pow(norm, 1.25) * ((maxScale / 111000) * 12)
+          : Math.pow(norm, 1.25) * maxScale
+
+        const elev = baseElevation + spikeHeight
+
+        // Palette color from LUT
+        const lutIdx = Math.floor(norm * 255) * 3
+        const color: [number, number, number, number] = [
+          lut[lutIdx],
+          lut[lutIdx + 1],
+          lut[lutIdx + 2],
+          245,
+        ]
+
+        points.push({
+          position: [px, py, 0],
+          elevation: elev,
+          color,
+          value: v,
+          lng: wrappedLng,
+          lat,
+        })
+      }
+    }
+
+    return {
+      points,
+      radius: isCartesian ? hexRadiusCommon : hexRadiusMeters,
+      radiusUnits: (isCartesian ? 'common' : 'meters') as 'common' | 'meters',
+    }
+  }, [
+    heightmapConfig.enabled,
+    heightmapConfig.elevationScale,
+    raster,
+    minVal,
+    maxVal,
+    scaleType,
+    logSigma,
+    palette,
+    invertPalette,
+    projection,
+    countriesMode,
+    selectedCountries,
+    selectedCountry,
+  ])
 
   // Extract high-value proportional circles (equal area: A ∝ Value => r ∝ sqrt(Value))
   const circlePixelData = useMemo(() => {
@@ -850,6 +980,33 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       )
     }
 
+    // 3.5. 3D Elevation Spike Map Layer (ColumnLayer)
+    if (heightmapConfig.enabled && elevationSpikesData.points && elevationSpikesData.points.length > 0) {
+      list.push(
+        new ColumnLayer({
+          id: `elevation-spikes-${projection}`,
+          data: elevationSpikesData.points,
+          getPosition: (d: any) => d.position,
+          getElevation: (d: any) => d.elevation,
+          getFillColor: (d: any) => d.color,
+          radius: elevationSpikesData.radius,
+          radiusUnits: elevationSpikesData.radiusUnits,
+          diskResolution: 6, // Hexagonal prism geometry matching HexagonLayer
+          extruded: true,
+          flatShading: true,
+          elevationScale: 1,
+          coordinateSystem: isCartesian ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
+          pickable: true,
+          material: {
+            ambient: 0.35,
+            diffuse: 0.7,
+            shininess: 40,
+            specularColor: [85, 90, 100],
+          },
+        })
+      )
+    }
+
     // 4. High-Value Equal-Area Circle Pixels (Hollow interior, coloured outline, adjustable black halo)
     if (circlePixelData.length > 0) {
       const strokeW = circleOverlayConfig.strokeWidth || 2
@@ -973,6 +1130,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     rasterBounds,
     opacity,
     heightmapConfig,
+    elevationSpikesData,
     circleOverlayConfig,
     circlePixelData,
     raster,
@@ -1074,10 +1232,10 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                 variant={analyticsOpen ? 'secondary' : 'ghost'}
                 size="icon"
                 onClick={onToggleAnalytics}
-                className={`h-7 w-7 rounded-none ${analyticsOpen ? 'text-primary' : 'text-white'}`}
+                className="h-7 w-7 rounded-none text-white"
                 aria-label="Toggle Raster Analytics"
               >
-                <Icon name="bar_chart" className={analyticsOpen ? 'text-primary' : 'text-white'} />
+                <Icon name="analytics" className="text-white" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="left">
@@ -1085,7 +1243,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
             </TooltipContent>
           </Tooltip>
 
-          {/* Toggle Countries Mode */}
+          {/* Toggle Country Analysis Mode */}
           {onToggleCountriesMode && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -1093,19 +1251,19 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                   variant={countriesMode ? 'secondary' : 'ghost'}
                   size="icon"
                   onClick={() => onToggleCountriesMode(!countriesMode)}
-                  className={`h-7 w-7 rounded-none ${countriesMode ? 'text-primary' : 'text-white'}`}
-                  aria-label="Toggle Countries Mode"
+                  className="h-7 w-7 rounded-none text-white"
+                  aria-label="Toggle Country Analysis"
                 >
-                  <Icon name="public" className={countriesMode ? 'text-primary' : 'text-white'} />
+                  <Icon name="flag" className="text-white" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="left">
-                <span>Toggle Countries Mode (Inspect on hover)</span>
+                <span>Toggle Country Analysis (Inspect on hover)</span>
               </TooltipContent>
             </Tooltip>
           )}
 
-          {/* Toggle Graticule */}
+          {/* Toggle Graticule Grid Lines */}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -1115,7 +1273,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                 className="h-7 w-7 rounded-none text-white"
                 aria-label="Toggle Graticule Grid"
               >
-                <Icon name="grid_4x4" className="text-white" />
+                <Icon name="grid_on" className="text-white" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="left">
@@ -1123,7 +1281,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
             </TooltipContent>
           </Tooltip>
 
-          {/* Map Display Settings Toggle (Changed to Settings Gear Logo) */}
+          {/* Map Display Settings Toggle (Basemaps & Projections) */}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -1133,7 +1291,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                 className="h-7 w-7 rounded-none text-white"
                 aria-label="Map Display Settings"
               >
-                <Icon name="settings" className="text-white" />
+                <Icon name="layers" className="text-white" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="left">
@@ -1141,7 +1299,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
             </TooltipContent>
           </Tooltip>
 
-          {/* Reset Map View */}
+          {/* Reset Map View (Center & Zoom) */}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -1151,7 +1309,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                 className="h-7 w-7 rounded-none text-white"
                 aria-label="Reset View"
               >
-                <Icon name="fullscreen" className="text-white" />
+                <Icon name="restart_alt" className="text-white" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="left">
@@ -1165,7 +1323,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           <div className="absolute top-4 right-14 z-30 w-72 bg-card/98 backdrop-blur-md border border-border rounded-none p-3 shadow-2xl text-xs text-card-foreground animate-in fade-in-0 zoom-in-95 duration-100 font-sans space-y-3">
             <div className="flex items-center justify-between pb-1.5 border-b border-border">
               <span className="font-bold text-foreground text-xs flex items-center gap-1.5">
-                <Icon name="settings" size="0.9rem" className="text-white" />
+                <Icon name="layers" size="0.9rem" className="text-white" />
                 Map Display Settings
               </span>
               <button
@@ -1230,7 +1388,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       <div className="absolute bottom-4 right-4 z-20 w-64 bg-card/95 backdrop-blur-md p-2.5 border border-border shadow-2xl text-xs select-none space-y-2 font-sans">
         <div className="flex items-center justify-between border-b border-border pb-1">
           <span className="font-bold text-foreground text-xs flex items-center gap-1.5">
-            <Icon name="layers" size="0.9rem" className="text-primary" />
+            <Icon name="layers" size="0.9rem" />
             <span>Mapmodes</span>
           </span>
           <span className="text-[10px] text-muted-foreground font-mono">
@@ -1253,7 +1411,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                   type="checkbox"
                   checked={mode.active}
                   onChange={() => onToggleMapMode(mode.id)}
-                  className="w-3.5 h-3.5 rounded-none accent-primary cursor-pointer shrink-0"
+                  className="w-3.5 h-3.5 rounded-none accent-emerald-500 cursor-pointer shrink-0"
                 />
                 <span className={`truncate text-xs ${mode.active ? 'font-semibold text-foreground' : ''}`}>
                   {mode.label}

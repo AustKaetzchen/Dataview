@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { DecodedRaster, ScaleType } from '@/lib/geopng/types'
 import { CountryFeature, CountryStats } from '@/lib/geopng/polygonBinning'
+import { getAnalyticsPanelRightOffset } from '@/lib/uiLayout'
 import { HistogramChart } from './HistogramChart'
 import { StatsSummary } from './StatsSummary'
 import { Button } from '../ui/button'
@@ -19,6 +20,7 @@ interface AnalyticsDrawerProps {
   onSelectCountry?: (country: CountryFeature | null) => void
   onClearCountries?: () => void
   countryStats?: CountryStats | null
+  isSettingsDrawerOpen?: boolean
 }
 
 export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
@@ -34,8 +36,10 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
   onSelectCountry,
   onClearCountries,
   countryStats,
+  isSettingsDrawerOpen = false,
 }) => {
   const [activeTab, setActiveTab] = useState<'histogram' | 'stats'>('histogram')
+  const rightOffset = getAnalyticsPanelRightOffset(isSettingsDrawerOpen)
 
   // Staggered resize events when opening panel to notify ECharts
   useEffect(() => {
@@ -47,7 +51,7 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
         clearTimeout(t2)
       }
     }
-  }, [isOpen])
+  }, [isOpen, rightOffset])
 
   if (!isOpen) return null
 
@@ -71,13 +75,14 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
       onTransitionEnd={() => {
         window.dispatchEvent(new Event('resize'))
       }}
-      className="absolute top-4 right-[360px] z-30 w-[620px] max-w-[calc(100vw-720px)] h-[320px] bg-card/95 backdrop-blur-md border border-border rounded-none text-card-foreground shadow-2xl flex flex-col font-sans animate-in fade-in-0 zoom-in-95 duration-150"
+      style={{ right: `${rightOffset}px` }}
+      className="absolute top-4 z-30 w-[620px] max-w-[calc(100vw-720px)] h-[320px] bg-card/95 backdrop-blur-md border border-border rounded-none text-card-foreground shadow-2xl flex flex-col font-sans transition-all duration-200 ease-out animate-in fade-in-0 zoom-in-95 duration-150"
     >
       {/* Panel Header */}
       <div className="h-8 px-3 flex items-center justify-between border-b border-border select-none gap-2 bg-card/90">
         <div className="flex items-center gap-2.5 min-w-0">
           <span className="text-xs font-semibold text-foreground flex items-center gap-1.5 shrink-0">
-            <Icon name="bar_chart" size="0.95rem" className="text-primary" />
+            <Icon name="bar_chart" size="0.95rem" />
             <span>Raster Analytics</span>
           </span>
 

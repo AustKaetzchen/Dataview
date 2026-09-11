@@ -198,7 +198,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
       <div className="p-3.5 pb-2.5 border-b border-border bg-card/60">
         <div className="flex items-center justify-between">
           <h1 className="text-sm font-bold tracking-tight text-foreground flex items-center gap-1.5">
-            <Icon name="layers" size="1.1rem" className="text-primary" />
+            <Icon name="layers" size="1.1rem" />
             <span>GeoPNG Dataview</span>
           </h1>
           <span className="text-[10px] px-1.5 py-0.5 rounded-none bg-muted text-muted-foreground font-mono">
@@ -221,19 +221,18 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
             className="w-full h-8 px-2.5 flex items-center justify-between text-xs font-semibold text-foreground bg-muted/40 hover:bg-muted/70 transition-colors cursor-pointer"
           >
             <div className="flex items-center gap-1.5">
-              <Icon name="folder" size="0.9rem" className="text-primary" />
+              <Icon name="folder" size="0.9rem" />
               <span>Image Settings</span>
             </div>
             <div className="flex items-center gap-1.5">
               {binningConfig.enabled && (
-                <span className="text-[9px] px-1 py-0.2 bg-primary/20 text-primary font-mono">
+                <span className="text-[9px] px-1 py-0.2 bg-primary/20 text-primary font-mono border border-primary/40">
                   {binningConfig.width}×{binningConfig.height}
                 </span>
               )}
               <Icon
                 name={openFolders.image ? 'expand_less' : 'expand_more'}
                 size="1rem"
-                className="text-muted-foreground"
               />
             </div>
           </button>
@@ -356,7 +355,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
               <div className="space-y-2 border border-border/80 bg-background/50 p-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 font-medium text-foreground text-[11px]">
-                    <Icon name="grid_view" size="0.85rem" className="text-primary" />
+                    <Icon name="grid_view" size="0.85rem" />
                     <span>Binning / Downsampling</span>
                   </div>
                   <label className="flex items-center gap-1.5 cursor-pointer">
@@ -366,9 +365,13 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                       onChange={(e) =>
                         setBinningConfig((prev) => ({ ...prev, enabled: e.target.checked }))
                       }
-                      className="w-3.5 h-3.5 rounded-none accent-primary cursor-pointer"
+                      className="w-3.5 h-3.5 rounded-none accent-emerald-500 cursor-pointer"
                     />
-                    <span className="text-[10px] text-muted-foreground font-semibold uppercase">
+                    <span
+                      className={`text-[10px] font-semibold uppercase ${
+                        binningConfig.enabled ? 'text-emerald-400 font-bold' : 'text-muted-foreground'
+                      }`}
+                    >
                       {binningConfig.enabled ? 'ON' : 'OFF'}
                     </span>
                   </label>
@@ -495,7 +498,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
             className="w-full h-8 px-2.5 flex items-center justify-between text-xs font-semibold text-foreground bg-muted/40 hover:bg-muted/70 transition-colors cursor-pointer"
           >
             <div className="flex items-center gap-1.5">
-              <Icon name="palette" size="0.9rem" className="text-primary" />
+              <Icon name="palette" size="0.9rem" />
               <span>Legend Settings</span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -505,7 +508,6 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
               <Icon
                 name={openFolders.legend ? 'expand_less' : 'expand_more'}
                 size="1rem"
-                className="text-muted-foreground"
               />
             </div>
           </button>
@@ -582,7 +584,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                       type="checkbox"
                       checked={invertPalette}
                       onChange={(e) => setInvertPalette(e.target.checked)}
-                      className="w-3.5 h-3.5 rounded-none accent-primary cursor-pointer"
+                      className="w-3.5 h-3.5 rounded-none accent-emerald-500 cursor-pointer"
                     />
                     <span className="text-[11px] text-muted-foreground">Invert</span>
                   </label>
@@ -601,7 +603,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                       />
                       <span className="truncate font-medium">{colorPalette}</span>
                     </div>
-                    <Icon name={paletteOpen ? 'expand_less' : 'expand_more'} className="text-muted-foreground text-xs ml-1" />
+                    <Icon name={paletteOpen ? 'expand_less' : 'expand_more'} className="text-xs ml-1" />
                   </button>
 
                   {/* Dropdown Popover */}
@@ -748,36 +750,35 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
             className="w-full h-8 px-2.5 flex items-center justify-between text-xs font-semibold text-foreground bg-muted/40 hover:bg-muted/70 transition-colors cursor-pointer"
           >
             <div className="flex items-center gap-1.5">
-              <Icon name="view_in_ar" size="0.9rem" className="text-primary" />
-              <span>3D Heightmap & Sizing</span>
+              <Icon name="view_in_ar" size="0.9rem" />
+              <span>3D Spike Map & Sizing</span>
             </div>
             <div className="flex items-center gap-1.5">
               {heightmapConfig.enabled && (
-                <span className="text-[9px] px-1 py-0.2 bg-primary/20 text-primary font-bold">
-                  3D ON
+                <span className="text-[9px] px-1 py-0.2 bg-primary/20 text-primary font-bold border border-primary/40">
+                  SPIKES ON
                 </span>
               )}
               {circleOverlayConfig.enabled && (
-                <span className="text-[9px] px-1 py-0.2 bg-amber-500/20 text-amber-400 font-bold">
+                <span className="text-[9px] px-1 py-0.2 bg-primary/20 text-primary font-bold border border-primary/40">
                   P{circleOverlayConfig.percentileCutoff}
                 </span>
               )}
               <Icon
                 name={openFolders.heightmap ? 'expand_less' : 'expand_more'}
                 size="1rem"
-                className="text-muted-foreground"
               />
             </div>
           </button>
 
           {openFolders.heightmap && (
             <div className="p-2.5 space-y-3 text-xs border-t border-border">
-              {/* 3D Elevation Heightmap Toggle */}
+              {/* 3D Elevation Spike Map Toggle */}
               <div className="space-y-2 border border-border/80 bg-background/50 p-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 font-medium text-foreground text-[11px]">
-                    <Icon name="landscape" size="0.9rem" className="text-primary" />
-                    <span>3D Elevation Surface</span>
+                    <Icon name="landscape" size="0.9rem" />
+                    <span>3D Spike Map</span>
                   </div>
                   <label className="flex items-center gap-1.5 cursor-pointer">
                     <input
@@ -786,9 +787,13 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                       onChange={(e) =>
                         setHeightmapConfig((prev) => ({ ...prev, enabled: e.target.checked }))
                       }
-                      className="w-3.5 h-3.5 rounded-none accent-primary cursor-pointer"
+                      className="w-3.5 h-3.5 rounded-none accent-emerald-500 cursor-pointer"
                     />
-                    <span className="text-[10px] text-muted-foreground font-semibold uppercase">
+                    <span
+                      className={`text-[10px] font-semibold uppercase ${
+                        heightmapConfig.enabled ? 'text-emerald-400 font-bold' : 'text-muted-foreground'
+                      }`}
+                    >
                       {heightmapConfig.enabled ? 'ON' : 'OFF'}
                     </span>
                   </label>
@@ -797,16 +802,16 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                 {heightmapConfig.enabled && (
                   <div className="space-y-2 pt-1.5 border-t border-border/60">
                     <div className="flex justify-between items-center text-[10px]">
-                      <span className="text-muted-foreground">Elevation Relief Scale</span>
+                      <span className="text-muted-foreground">Spike Height Scale</span>
                       <span className="text-foreground font-mono font-bold">
                         {(heightmapConfig.elevationScale / 1000).toFixed(0)} km
                       </span>
                     </div>
                     <Slider
                       value={[heightmapConfig.elevationScale]}
-                      min={10000}
-                      max={1500000}
-                      step={10000}
+                      min={50000}
+                      max={2500000}
+                      step={25000}
                       onValueChange={(vals) =>
                         setHeightmapConfig((prev) => ({ ...prev, elevationScale: vals[0] }))
                       }
@@ -822,7 +827,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
               <div className="space-y-2 border border-border/80 bg-background/50 p-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 font-medium text-foreground text-[11px]">
-                    <Icon name="scatter_plot" size="0.9rem" className="text-amber-400" />
+                    <Icon name="scatter_plot" size="0.9rem" />
                     <span>Equal-Area Circle Sizing</span>
                   </div>
                   <label className="flex items-center gap-1.5 cursor-pointer">
@@ -832,9 +837,13 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                       onChange={(e) =>
                         setCircleOverlayConfig((prev) => ({ ...prev, enabled: e.target.checked }))
                       }
-                      className="w-3.5 h-3.5 rounded-none accent-primary cursor-pointer"
+                      className="w-3.5 h-3.5 rounded-none accent-emerald-500 cursor-pointer"
                     />
-                    <span className="text-[10px] text-muted-foreground font-semibold uppercase">
+                    <span
+                      className={`text-[10px] font-semibold uppercase ${
+                        circleOverlayConfig.enabled ? 'text-emerald-400 font-bold' : 'text-muted-foreground'
+                      }`}
+                    >
                       {circleOverlayConfig.enabled ? 'ON' : 'OFF'}
                     </span>
                   </label>
@@ -858,7 +867,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                           }
                           className={`px-1 py-0.5 text-[10px] border rounded-none text-center cursor-pointer transition-colors ${
                             circleOverlayConfig.percentileCutoff === p
-                              ? 'bg-amber-500 text-black font-bold border-amber-500'
+                              ? 'bg-primary text-white font-bold border-accent shadow-sm'
                               : 'bg-background hover:bg-muted text-muted-foreground border-border'
                           }`}
                         >
@@ -946,19 +955,18 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
             className="w-full h-8 px-2.5 flex items-center justify-between text-xs font-semibold text-foreground bg-muted/40 hover:bg-muted/70 transition-colors cursor-pointer"
           >
             <div className="flex items-center gap-1.5">
-              <Icon name="public" size="0.9rem" className="text-primary" />
+              <Icon name="flag" size="0.9rem" />
               <span>Country Analysis</span>
             </div>
             <div className="flex items-center gap-1.5">
               {selectedCountries.length > 0 && (
-                <span className="text-[9px] px-1 py-0.2 bg-primary/20 text-primary font-bold">
+                <span className="text-[9px] px-1 py-0.2 bg-primary/20 text-primary font-bold border border-primary/40">
                   {selectedCountries.length}
                 </span>
               )}
               <Icon
                 name={openFolders.country ? 'expand_less' : 'expand_more'}
                 size="1rem"
-                className="text-muted-foreground"
               />
             </div>
           </button>
@@ -971,7 +979,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                 onClick={() => onToggleCountriesMode && onToggleCountriesMode(!countriesMode)}
                 className={`w-full h-7 px-2 text-xs font-medium rounded-none transition-colors flex items-center justify-between cursor-pointer border ${
                   countriesMode
-                    ? 'bg-primary/20 text-primary border-primary/50 shadow-sm font-semibold'
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50 shadow-sm font-semibold'
                     : 'bg-background hover:bg-muted text-muted-foreground hover:text-foreground border-input'
                 }`}
                 title="When active, the bitmap isolates to active countries, and clicking countries toggles selection"
@@ -979,12 +987,16 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                 <div className="flex items-center gap-1.5">
                   <span
                     className={`w-1.5 h-1.5 rounded-none ${
-                      countriesMode ? 'bg-primary animate-pulse' : 'bg-muted-foreground/60'
+                      countriesMode ? 'bg-emerald-400 animate-pulse' : 'bg-muted-foreground/60'
                     }`}
                   />
                   <span className="text-[11px]">Bitmap Isolation Mode</span>
                 </div>
-                <span className="text-[10px] font-semibold uppercase tracking-wider opacity-80">
+                <span
+                  className={`text-[10px] font-semibold uppercase tracking-wider ${
+                    countriesMode ? 'text-emerald-400' : 'text-muted-foreground'
+                  }`}
+                >
                   {countriesMode ? 'ON' : 'OFF'}
                 </span>
               </button>
@@ -1054,7 +1066,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => onToggleCountry(c)}
-                            className="w-3.5 h-3.5 rounded-none accent-primary cursor-pointer"
+                            className="w-3.5 h-3.5 rounded-none accent-emerald-500 cursor-pointer"
                           />
                           <span className="truncate text-[11px]">{c.properties.name}</span>
                         </label>

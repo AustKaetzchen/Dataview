@@ -58,7 +58,7 @@ export const App: React.FC = () => {
   })
   const [heightmapConfig, setHeightmapConfig] = useState<HeightmapConfig>({
     enabled: false,
-    elevationScale: 250000,
+    elevationScale: 800000,
   })
   const [circleOverlayConfig, setCircleOverlayConfig] = useState<CircleOverlayConfig>({
     enabled: false,
@@ -74,8 +74,9 @@ export const App: React.FC = () => {
     { id: 'country_analysis', label: 'Country Analysis', active: false },
   ])
 
-  // Top right view panel for analytics
+  // Top right view panel for analytics & settings drawer
   const [analyticsOpen, setAnalyticsOpen] = useState<boolean>(false)
+  const [settingsDrawerOpen, setSettingsDrawerOpen] = useState<boolean>(false)
 
   // Raw Uint8Arrays for fast format re-decoding
   const [rawBytesA, setRawBytesA] = useState<Uint8Array | null>(null)
@@ -442,6 +443,8 @@ export const App: React.FC = () => {
           hoveredCountry={hoveredCountry}
           onHoverCountry={setHoveredCountry}
           countryStats={countryStats}
+          settingsDrawerOpen={settingsDrawerOpen}
+          onToggleSettingsDrawer={setSettingsDrawerOpen}
         />
 
         {/* ECharts Analytical View Panel (Top Right) */}
@@ -458,6 +461,7 @@ export const App: React.FC = () => {
           onSelectCountry={handleSelectCountry}
           onClearCountries={handleClearCountries}
           countryStats={countryStats}
+          isSettingsDrawerOpen={settingsDrawerOpen}
         />
       </div>
     </div>
