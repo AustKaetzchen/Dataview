@@ -19,6 +19,7 @@
     /* Path alias */
     "paths": {
       "@/*": ["./src/*"],
+      "@config": ["./config/index.ts"],
       "@config/*": ["./config/*"],
       "config/*": ["./config/*"],
       "config": ["./config/index.ts"]

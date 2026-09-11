@@ -69,11 +69,26 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
     if (currentVal === null || currentVal === undefined || !Number.isFinite(currentVal)) {
       return null
     }
+
+    if (breaks && breaks.length >= 2) {
+      const sorted = [...breaks].sort((a, b) => a - b)
+      const n = sorted.length - 1
+      if (currentVal <= sorted[0]) return 0
+      if (currentVal >= sorted[n]) return 100
+      let seg = 0
+      while (seg < n - 1 && currentVal >= sorted[seg + 1]) {
+        seg++
+      }
+      const segRange = sorted[seg + 1] - sorted[seg]
+      const segT = segRange > 0 ? (currentVal - sorted[seg]) / segRange : 0
+      return Math.max(0, Math.min(100, ((seg + segT) / n) * 100))
+    }
+
     const tVal = transformValue(currentVal, scaleType as ScaleType, logSigma)
     if (range <= 0) return 50
     const normalized = (tVal - tMin) / range
     return Math.max(0, Math.min(100, normalized * 100))
-  }, [currentVal, tMin, range, scaleType, logSigma])
+  }, [currentVal, breaks, tMin, range, scaleType, logSigma])
 
   // Compute break points and their percentage positions along the colourbar
   const breakPoints = useMemo(() => {
@@ -85,9 +100,9 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
     }
 
     if (breaks && breaks.length >= 2) {
-      return breaks.map((b) => {
-        const tb = transformValue(b, scaleType as ScaleType, logSigma)
-        const pct = Math.max(0, Math.min(100, ((tb - tMin) / range) * 100))
+      const sorted = [...breaks].sort((a, b) => a - b)
+      return sorted.map((b, idx) => {
+        const pct = (idx / (sorted.length - 1)) * 100
         return {
           val: b,
           pct,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useDeferredValue } from 'react'
 import {
   AppMode,
   DataFormat,
@@ -7,6 +7,11 @@ import {
   BoundsMode,
   ProjectionType,
   DecodedRaster,
+  BinningConfig,
+  HeightmapConfig,
+  CircleOverlayConfig,
+  MapModeItem,
+  MapModeId,
 } from './lib/geopng/types'
 import {
   decodeRawGeoPngBuffer,
@@ -14,6 +19,7 @@ import {
 } from './lib/geopng/decoder'
 import { renderRasterToCanvas } from './lib/geopng/palettes'
 import { computeQuantiles } from './lib/geopng/scales'
+import { createBinnedRaster } from './lib/geopng/downsampling'
 import {
   CountryFeature,
   CountryStats,
@@ -39,24 +45,57 @@ export const App: React.FC = () => {
   const [percentileList, setPercentileList] = useState<string>(
     MAP_CONFIG.defaultPercentileBreaks || '0, 1, 5, 25, 50, 75, 95, 99, 100'
   )
+  const [absoluteBreaks, setAbsoluteBreaks] = useState<string>('0, 10, 50, 100, 500, 1000')
   const [legendTitle, setLegendTitle] = useState<string>('Value')
   const [opacity, setOpacity] = useState<number>(0.85)
 
-  // Keep raw Uint8Arrays for fast format re-decoding
+  // 3D Heightmap, Proportional Circles & Binning
+  const [binningConfig, setBinningConfig] = useState<BinningConfig>({
+    enabled: false,
+    width: 720,
+    height: 360,
+    method: 'average',
+  })
+  const [heightmapConfig, setHeightmapConfig] = useState<HeightmapConfig>({
+    enabled: false,
+    elevationScale: 250000,
+  })
+  const [circleOverlayConfig, setCircleOverlayConfig] = useState<CircleOverlayConfig>({
+    enabled: false,
+    percentileCutoff: 99,
+    baseRadius: 1.0,
+    strokeWidth: 2,
+    haloWidth: 2,
+  })
+
+  // Composable & Reorderable Mapmodes stack
+  const [mapModes, setMapModes] = useState<MapModeItem[]>([
+    { id: 'default', label: 'Default Raster', active: true },
+    { id: 'country_analysis', label: 'Country Analysis', active: false },
+  ])
+
+  // Top right view panel for analytics
+  const [analyticsOpen, setAnalyticsOpen] = useState<boolean>(false)
+
+  // Raw Uint8Arrays for fast format re-decoding
   const [rawBytesA, setRawBytesA] = useState<Uint8Array | null>(null)
   const [rawBytesB, setRawBytesB] = useState<Uint8Array | null>(null)
 
-  // Loaded Raster States (null by default until user uploads a GeoPNG)
+  // Loaded Raster States
   const [rasterA, setRasterA] = useState<DecodedRaster | null>(null)
   const [rasterB, setRasterB] = useState<DecodedRaster | null>(null)
   const [activeFileName, setActiveFileName] = useState<string>('')
   const [diffNameA, setDiffNameA] = useState<string>('')
   const [diffNameB, setDiffNameB] = useState<string>('')
 
-  // Multi-Country Selection and Countries Mode for Polygon Binning
+  // Multi-Country Selection and Countries Mode
   const [selectedCountries, setSelectedCountries] = useState<CountryFeature[]>([])
   const [hoveredCountry, setHoveredCountry] = useState<CountryFeature | null>(null)
   const [countriesMode, setCountriesMode] = useState<boolean>(false)
+
+  // Asynchronous / deferred values for non-blocking UI reflows
+  const deferredSelectedCountries = useDeferredValue(selectedCountries)
+  const deferredHoveredCountry = useDeferredValue(hoveredCountry)
 
   // Re-decode when user changes format (float32 <-> int32)
   useEffect(() => {
@@ -70,7 +109,7 @@ export const App: React.FC = () => {
     }
   }, [dataFormat])
 
-  // Handle User File Uploads with pure fast-png (zero canvas corruption)
+  // File Uploads
   const handleFileUpload = useCallback(
     async (file: File, target: 'single' | 'diff_a' | 'diff_b') => {
       try {
@@ -99,7 +138,7 @@ export const App: React.FC = () => {
     [dataFormat]
   )
 
-  // Determine the active raster to display
+  // Determine active raw raster
   const activeRaster = useMemo<DecodedRaster | null>(() => {
     if (appMode === 'Single Image') {
       return rasterA
@@ -111,9 +150,27 @@ export const App: React.FC = () => {
     }
   }, [appMode, rasterA, rasterB])
 
-  // Calculate visual bounds (Manual or Percentile)
+  // Downsampled / Binned raster if binning enabled
+  const displayRaster = useMemo<DecodedRaster | null>(() => {
+    if (!activeRaster) return null
+    if (!binningConfig.enabled) return activeRaster
+    try {
+      return createBinnedRaster(
+        activeRaster,
+        binningConfig.width,
+        binningConfig.height,
+        binningConfig.method
+      )
+    } catch (e) {
+      console.error('Failed to bin raster:', e)
+      return activeRaster
+    }
+  }, [activeRaster, binningConfig])
+
+  // Visual Bounds Calculation (Manual, Percentile, or Absolute)
   const { minVal, maxVal, breaks } = useMemo(() => {
-    if (!activeRaster) {
+    const r = displayRaster || activeRaster
+    if (!r) {
       return { minVal: 0, maxVal: 1, breaks: [] }
     }
 
@@ -125,23 +182,37 @@ export const App: React.FC = () => {
         .map((p) => p / 100)
 
       if (parts.length > 0) {
-        const qBreaks = computeQuantiles(activeRaster.data, parts)
+        const qBreaks = computeQuantiles(r.data, parts)
         const pMin = Math.min(...qBreaks)
         const pMax = Math.max(...qBreaks)
         return { minVal: pMin, maxVal: pMax, breaks: qBreaks }
       }
+    } else if (boundsMode === 'Absolute') {
+      const parts = absoluteBreaks
+        .split(',')
+        .map((s) => parseFloat(s.trim()))
+        .filter((n) => !Number.isNaN(n))
+        .sort((a, b) => a - b)
+
+      if (parts.length >= 2) {
+        return {
+          minVal: parts[0],
+          maxVal: parts[parts.length - 1],
+          breaks: parts,
+        }
+      }
     }
 
-    const parsedMin = minValOverride !== '' ? parseFloat(minValOverride) : activeRaster.min
-    const parsedMax = maxValOverride !== '' ? parseFloat(maxValOverride) : activeRaster.max
+    const parsedMin = minValOverride !== '' ? parseFloat(minValOverride) : r.min
+    const parsedMax = maxValOverride !== '' ? parseFloat(maxValOverride) : r.max
 
-    const safeMin = Number.isFinite(parsedMin) ? parsedMin : activeRaster.min
-    const safeMax = Number.isFinite(parsedMax) ? parsedMax : activeRaster.max
+    const safeMin = Number.isFinite(parsedMin) ? parsedMin : r.min
+    const safeMax = Number.isFinite(parsedMax) ? parsedMax : r.max
 
     return { minVal: safeMin, maxVal: safeMax, breaks: [] }
-  }, [activeRaster, boundsMode, percentileList, minValOverride, maxValOverride])
+  }, [displayRaster, activeRaster, boundsMode, percentileList, absoluteBreaks, minValOverride, maxValOverride])
 
-  // Multi-country toggle handler
+  // Multi-country toggle handler (immediate UI response)
   const handleToggleCountry = useCallback((c: CountryFeature) => {
     setSelectedCountries((prev) => {
       const exists = prev.some(
@@ -169,36 +240,55 @@ export const App: React.FC = () => {
 
   const handleSelectCountry = useCallback(
     (c: CountryFeature | null) => {
-      if (!c) {
-        setSelectedCountries([])
-      } else {
-        handleToggleCountry(c)
-      }
+      if (!c) setSelectedCountries([])
+      else handleToggleCountry(c)
     },
     [handleToggleCountry]
   )
 
-  // Active countries for statistics (selected countries if any, or hovered country in Countries Mode)
-  const activeCountries = useMemo<CountryFeature[]>(() => {
-    if (selectedCountries.length > 0) return selectedCountries
-    if (countriesMode && hoveredCountry) return [hoveredCountry]
-    return []
-  }, [countriesMode, selectedCountries, hoveredCountry])
+  // Synchronize countriesMode with mapModes stack
+  const handleToggleCountriesMode = useCallback((enabled: boolean) => {
+    setCountriesMode(enabled)
+    setMapModes((prev) =>
+      prev.map((m) => (m.id === 'country_analysis' ? { ...m, active: enabled } : m))
+    )
+  }, [])
 
-  // Compute Country Polygon Binning statistics when active raster or active countries change
+  const handleToggleMapMode = useCallback((id: MapModeId) => {
+    setMapModes((prev) => {
+      const updated = prev.map((m) => (m.id === id ? { ...m, active: !m.active } : m))
+      const countryModeActive = updated.find((m) => m.id === 'country_analysis')?.active ?? false
+      setCountriesMode(countryModeActive)
+      return updated
+    })
+  }, [])
+
+  const handleReorderMapModes = useCallback((newModes: MapModeItem[]) => {
+    setMapModes(newModes)
+  }, [])
+
+  // Active countries for deferred background calculations
+  const deferredActiveCountries = useMemo<CountryFeature[]>(() => {
+    if (deferredSelectedCountries.length > 0) return deferredSelectedCountries
+    if (countriesMode && deferredHoveredCountry) return [deferredHoveredCountry]
+    return []
+  }, [countriesMode, deferredSelectedCountries, deferredHoveredCountry])
+
+  // Deferred Country Polygon Binning statistics
   const countryStats = useMemo<CountryStats | null>(() => {
-    if (!activeRaster || activeCountries.length === 0) return null
+    if (!activeRaster || deferredActiveCountries.length === 0) return null
     try {
-      return binRasterByMultipleCountries(activeRaster, activeCountries)
+      return binRasterByMultipleCountries(activeRaster, deferredActiveCountries)
     } catch (err) {
       console.error('Failed to bin raster by countries:', err)
       return null
     }
-  }, [activeRaster, activeCountries])
+  }, [activeRaster, deferredActiveCountries])
 
-  // Render raster canvas synchronously with parameters to guarantee 100% projection sync
+  // Render raster canvas (uses downsampled raster if binning enabled)
   const { renderedCanvas, rasterBounds } = useMemo(() => {
-    if (!activeRaster) {
+    const r = displayRaster || activeRaster
+    if (!r) {
       return {
         renderedCanvas: null,
         rasterBounds: (projection === 'Mercator'
@@ -210,10 +300,9 @@ export const App: React.FC = () => {
     }
 
     // In Countries Mode with active countries, isolate the raster pixels to the country outline
-    // and restrict visual color ramp to the country's data range
     const isCountryIsolated = Boolean(
       countriesMode &&
-        activeCountries.length > 0 &&
+        deferredActiveCountries.length > 0 &&
         countryStats &&
         countryStats.validCount > 0 &&
         Number.isFinite(countryStats.min) &&
@@ -223,11 +312,10 @@ export const App: React.FC = () => {
     const effectiveMin = isCountryIsolated ? countryStats!.min : minVal
     const effectiveMax = isCountryIsolated ? countryStats!.max : maxVal
 
-    // Render directly into canvas without downsampling
     const { canvas, bounds } = renderRasterToCanvas(
-      activeRaster.data,
-      activeRaster.width,
-      activeRaster.height,
+      r.data,
+      r.width,
+      r.height,
       {
         palette: colorPalette,
         invertPalette,
@@ -235,13 +323,14 @@ export const App: React.FC = () => {
         logSigma,
         minVal: effectiveMin,
         maxVal: effectiveMax,
+        breaks,
         projection,
-        activeCountries: countriesMode && activeCountries.length > 0 ? activeCountries : null,
+        activeCountries: countriesMode && deferredActiveCountries.length > 0 ? deferredActiveCountries : null,
       }
     )
 
-    // Calculate bounds with pixel offset corrections from MAP_CONFIG (config/map.json5)
-    const pixelHeight = 180 / activeRaster.height
+    // Bounds with pixel offset corrections
+    const pixelHeight = 180 / r.height
     let finalBounds: [number, number, number, number] = bounds
 
     if (projection === 'Equirectangular') {
@@ -250,10 +339,13 @@ export const App: React.FC = () => {
     } else if (projection === 'Mercator') {
       const offset = (MAP_CONFIG.mercatorPixelOffset ?? -1) * pixelHeight
       finalBounds = [-180, -90 + offset, 180, 90 + offset]
+    } else if (projection === 'EqualEarth') {
+      finalBounds = [-180, -90, 180, 90]
     }
 
     return { renderedCanvas: canvas, rasterBounds: finalBounds }
   }, [
+    displayRaster,
     activeRaster,
     colorPalette,
     invertPalette,
@@ -261,9 +353,10 @@ export const App: React.FC = () => {
     logSigma,
     minVal,
     maxVal,
+    breaks,
     projection,
     countriesMode,
-    activeCountries,
+    deferredActiveCountries,
     countryStats,
   ])
 
@@ -272,11 +365,8 @@ export const App: React.FC = () => {
       {/* Sidebar Controls Dock */}
       <SidebarControls
         appMode={appMode}
-        setAppMode={setAppMode}
         dataFormat={dataFormat}
         setDataFormat={setDataFormat}
-        projection={projection}
-        setProjection={setProjection}
         scaleType={scaleType}
         setScaleType={setScaleType}
         logSigma={logSigma}
@@ -293,6 +383,8 @@ export const App: React.FC = () => {
         setMaxValOverride={setMaxValOverride}
         percentileList={percentileList}
         setPercentileList={setPercentileList}
+        absoluteBreaks={absoluteBreaks}
+        setAbsoluteBreaks={setAbsoluteBreaks}
         legendTitle={legendTitle}
         setLegendTitle={setLegendTitle}
         opacity={opacity}
@@ -301,8 +393,15 @@ export const App: React.FC = () => {
         activeFileName={activeFileName}
         diffNameA={diffNameA}
         diffNameB={diffNameB}
+        setAppMode={setAppMode}
+        binningConfig={binningConfig}
+        setBinningConfig={setBinningConfig}
+        heightmapConfig={heightmapConfig}
+        setHeightmapConfig={setHeightmapConfig}
+        circleOverlayConfig={circleOverlayConfig}
+        setCircleOverlayConfig={setCircleOverlayConfig}
         countriesMode={countriesMode}
-        onToggleCountriesMode={setCountriesMode}
+        onToggleCountriesMode={handleToggleCountriesMode}
         selectedCountries={selectedCountries}
         onToggleCountry={handleToggleCountry}
         onClearCountries={handleClearCountries}
@@ -310,10 +409,10 @@ export const App: React.FC = () => {
         countryStats={countryStats}
       />
 
-      {/* Main Map Viewer & Analytics Drawer */}
+      {/* Main Map Viewer */}
       <div className="relative flex-1 h-full overflow-hidden">
         <MapViewer
-          raster={activeRaster}
+          raster={displayRaster || activeRaster}
           renderedCanvas={renderedCanvas}
           rasterBounds={rasterBounds}
           projection={projection}
@@ -327,31 +426,37 @@ export const App: React.FC = () => {
           scaleType={scaleType}
           logSigma={logSigma}
           breaks={breaks}
-          selectedCountry={selectedCountries[0] || null}
-          selectedCountries={selectedCountries}
+          mapModes={mapModes}
+          onToggleMapMode={handleToggleMapMode}
+          onReorderMapModes={handleReorderMapModes}
+          heightmapConfig={heightmapConfig}
+          circleOverlayConfig={circleOverlayConfig}
+          analyticsOpen={analyticsOpen}
+          onToggleAnalytics={() => setAnalyticsOpen((prev) => !prev)}
+          selectedCountry={deferredSelectedCountries[0] || null}
+          selectedCountries={deferredSelectedCountries}
           onSelectCountry={handleSelectCountry}
           onToggleCountry={handleToggleCountry}
           countriesMode={countriesMode}
-          onToggleCountriesMode={setCountriesMode}
+          onToggleCountriesMode={handleToggleCountriesMode}
           hoveredCountry={hoveredCountry}
           onHoverCountry={setHoveredCountry}
           countryStats={countryStats}
         />
 
-        {/* ECharts Analytical Drawer */}
+        {/* ECharts Analytical View Panel (Top Right) */}
         <AnalyticsDrawer
-          raster={activeRaster}
+          isOpen={analyticsOpen}
+          onToggleOpen={() => setAnalyticsOpen(false)}
+          raster={displayRaster || activeRaster}
           scaleType={scaleType}
           logSigma={logSigma}
           minOverride={minValOverride !== '' ? parseFloat(minValOverride) : undefined}
           maxOverride={maxValOverride !== '' ? parseFloat(maxValOverride) : undefined}
-          selectedCountry={selectedCountries[0] || null}
-          selectedCountries={selectedCountries}
+          selectedCountry={deferredSelectedCountries[0] || null}
+          selectedCountries={deferredSelectedCountries}
           onSelectCountry={handleSelectCountry}
           onClearCountries={handleClearCountries}
-          countriesMode={countriesMode}
-          onToggleCountriesMode={setCountriesMode}
-          hoveredCountry={hoveredCountry}
           countryStats={countryStats}
         />
       </div>

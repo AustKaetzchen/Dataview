@@ -1,6 +1,6 @@
 export type DataFormat = 'float32' | 'int32'
 export type AppMode = 'Single Image' | 'Image Difference'
-export type ProjectionType = 'Equirectangular' | 'Mercator' | 'Globe'
+export type ProjectionType = 'Equirectangular' | 'Mercator' | 'Globe' | 'EqualEarth'
 export type ScaleType = 'linear' | 'pseudo-log'
 export type ColorPalette =
   | 'Viridis'
@@ -47,7 +47,37 @@ export interface ColorSchemeInfo {
   name: string
   category: 'Sequential (Multi-Hue)' | 'Sequential (Single-Hue)' | 'Diverging' | 'Cyclical'
 }
-export type BoundsMode = 'Manual' | 'Percentile'
+export type BoundsMode = 'Manual' | 'Percentile' | 'Absolute'
+
+export type DownsampleMethod = 'average' | 'minimum' | 'maximum' | 'near'
+
+export interface BinningConfig {
+  enabled: boolean
+  width: number
+  height: number
+  method: DownsampleMethod
+}
+
+export interface HeightmapConfig {
+  enabled: boolean
+  elevationScale: number // height multiplier in meters
+}
+
+export type MapModeId = 'default' | 'country_analysis'
+
+export interface MapModeItem {
+  id: MapModeId
+  label: string
+  active: boolean
+}
+
+export interface CircleOverlayConfig {
+  enabled: boolean
+  percentileCutoff: number // e.g. 99 for P99
+  baseRadius: number // base size scale
+  strokeWidth: number // coloured stroke width in pixels
+  haloWidth: number // black halo width in pixels
+}
 
 export interface DecodedRaster {
   data: Float32Array

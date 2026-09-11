@@ -5,17 +5,18 @@ import {
   ScaleType,
   ColorPalette,
   BoundsMode,
-  ProjectionType,
+  BinningConfig,
+  HeightmapConfig,
+  CircleOverlayConfig,
+  DownsampleMethod,
 } from '@/lib/geopng/types'
 import { CountryFeature, CountryStats, loadCountriesGeoJson } from '@/lib/geopng/polygonBinning'
 import { D3_COLOR_SCHEMES, getPaletteCssGradient } from '@/lib/geopng/palettes'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select'
 import { Slider } from '../ui/slider'
 import { Input } from '../ui/input'
 import { NumberInput } from '../ui/number-input'
 import { Label } from '../ui/label'
-import { Separator } from '../ui/separator'
 import { Icon } from '../ui/icon'
 
 interface SidebarControlsProps {
@@ -23,8 +24,6 @@ interface SidebarControlsProps {
   setAppMode: (mode: AppMode) => void
   dataFormat: DataFormat
   setDataFormat: (fmt: DataFormat) => void
-  projection: ProjectionType
-  setProjection: (p: ProjectionType) => void
   scaleType: ScaleType
   setScaleType: (st: ScaleType) => void
   logSigma: number
@@ -41,6 +40,8 @@ interface SidebarControlsProps {
   setMaxValOverride: (v: string) => void
   percentileList: string
   setPercentileList: (p: string) => void
+  absoluteBreaks: string
+  setAbsoluteBreaks: (p: string) => void
   legendTitle: string
   setLegendTitle: (t: string) => void
   opacity: number
@@ -49,6 +50,12 @@ interface SidebarControlsProps {
   activeFileName?: string
   diffNameA?: string
   diffNameB?: string
+  binningConfig: BinningConfig
+  setBinningConfig: React.Dispatch<React.SetStateAction<BinningConfig>>
+  heightmapConfig: HeightmapConfig
+  setHeightmapConfig: React.Dispatch<React.SetStateAction<HeightmapConfig>>
+  circleOverlayConfig: CircleOverlayConfig
+  setCircleOverlayConfig: React.Dispatch<React.SetStateAction<CircleOverlayConfig>>
   countriesMode?: boolean
   onToggleCountriesMode?: (enabled: boolean) => void
   selectedCountries: CountryFeature[]
@@ -64,8 +71,6 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
   setAppMode,
   dataFormat,
   setDataFormat,
-  projection,
-  setProjection,
   scaleType,
   setScaleType,
   logSigma,
@@ -82,6 +87,8 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
   setMaxValOverride,
   percentileList,
   setPercentileList,
+  absoluteBreaks,
+  setAbsoluteBreaks,
   legendTitle,
   setLegendTitle,
   opacity,
@@ -90,6 +97,12 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
   activeFileName,
   diffNameA,
   diffNameB,
+  binningConfig,
+  setBinningConfig,
+  heightmapConfig,
+  setHeightmapConfig,
+  circleOverlayConfig,
+  setCircleOverlayConfig,
   countriesMode = false,
   onToggleCountriesMode,
   selectedCountries,
@@ -99,6 +112,18 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
   hoveredCountry,
   countryStats,
 }) => {
+  // Collapsible Folders State
+  const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({
+    image: true,
+    legend: true,
+    heightmap: true,
+    country: true,
+  })
+
+  const toggleFolder = (folderKey: string) => {
+    setOpenFolders((prev) => ({ ...prev, [folderKey]: !prev[folderKey] }))
+  }
+
   const [allCountries, setAllCountries] = useState<CountryFeature[]>([])
   const [paletteSearch, setPaletteSearch] = useState('')
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -158,528 +183,942 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
     return new Set(selectedCountries.map(getCountryCode))
   }, [selectedCountries])
 
+  // Common binning presets
+  const BINNING_PRESETS = [
+    { label: 'Native (4320×2160)', w: 4320, h: 2160 },
+    { label: '2× (2160×1080)', w: 2160, h: 1080 },
+    { label: '4× (1080×540)', w: 1080, h: 540 },
+    { label: '6× (720×360)', w: 720, h: 360 },
+    { label: '12× (360×180)', w: 360, h: 180 },
+  ]
+
   return (
-    <div className="w-80 h-full flex flex-col bg-card border-r border-border text-card-foreground overflow-y-auto p-4 space-y-4 select-none">
+    <div className="w-84 h-full flex flex-col bg-card border-r border-border text-card-foreground overflow-y-auto select-none font-sans">
       {/* App Header */}
-      <div>
-        <h1 className="text-base font-bold tracking-tight text-foreground">GeoPNG Viewer</h1>
-        <p className="text-xs text-muted-foreground">4320×2160 • Equirectangular WGS84</p>
+      <div className="p-3.5 pb-2.5 border-b border-border bg-card/60">
+        <div className="flex items-center justify-between">
+          <h1 className="text-sm font-bold tracking-tight text-foreground flex items-center gap-1.5">
+            <Icon name="layers" size="1.1rem" className="text-primary" />
+            <span>GeoPNG Dataview</span>
+          </h1>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-none bg-muted text-muted-foreground font-mono">
+            v2.1
+          </span>
+        </div>
+        <p className="text-[11px] text-muted-foreground mt-0.5">
+          Equirectangular WGS84 • 3D Surface & Analytics
+        </p>
       </div>
 
-      <Separator />
-
-      {/* App Mode Tabs (Single Image vs Image Difference) */}
-      <Tabs value={appMode} onValueChange={(v) => setAppMode(v as AppMode)}>
-        <TabsList className="grid grid-cols-2 w-full rounded-none">
-          <TabsTrigger value="Single Image" className="rounded-none">Single Image</TabsTrigger>
-          <TabsTrigger value="Image Difference" className="rounded-none">Image Difference</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="Single Image" className="space-y-2 pt-2">
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Select GeoPNG File (.png)</Label>
-            <input
-              type="file"
-              accept=".png"
-              id="single-file-upload"
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files?.[0]) onFileUpload(e.target.files[0], 'single')
-              }}
-            />
-            <label
-              htmlFor="single-file-upload"
-              className="flex items-center justify-between w-full h-9 px-2.5 border border-input rounded-none bg-background text-foreground hover:bg-muted/40 cursor-pointer transition-colors"
-            >
-              <span className="truncate text-xs">
-                {activeFileName || 'Upload GeoPNG (.png)...'}
-              </span>
-              <Icon name="folder_open" className="text-white/80 shrink-0 ml-1.5" />
-            </label>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="Image Difference" className="space-y-2.5 pt-2">
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Select First GeoPNG (A)</Label>
-            <input
-              type="file"
-              accept=".png"
-              id="diff-file-a"
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files?.[0]) onFileUpload(e.target.files[0], 'diff_a')
-              }}
-            />
-            <label
-              htmlFor="diff-file-a"
-              className="flex items-center justify-between w-full h-8 px-2.5 border border-input rounded-none bg-background text-foreground hover:bg-muted/40 cursor-pointer transition-colors"
-            >
-              <span className="truncate text-xs">{diffNameA || 'Choose Image A...'}</span>
-              <Icon name="file_upload" className="text-white/80 shrink-0 ml-1.5" />
-            </label>
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Select Second GeoPNG (B)</Label>
-            <input
-              type="file"
-              accept=".png"
-              id="diff-file-b"
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files?.[0]) onFileUpload(e.target.files[0], 'diff_b')
-              }}
-            />
-            <label
-              htmlFor="diff-file-b"
-              className="flex items-center justify-between w-full h-8 px-2.5 border border-input rounded-none bg-background text-foreground hover:bg-muted/40 cursor-pointer transition-colors"
-            >
-              <span className="truncate text-xs">{diffNameB || 'Choose Image B...'}</span>
-              <Icon name="file_upload" className="text-white/80 shrink-0 ml-1.5" />
-            </label>
-          </div>
-        </TabsContent>
-      </Tabs>
-
-      <Separator />
-
-      {/* Format & Projection */}
-      <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Encoding Format</Label>
-            <Select value={dataFormat} onValueChange={(v) => setDataFormat(v as DataFormat)}>
-              <SelectTrigger className="rounded-none">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="rounded-none">
-                <SelectItem value="float32" className="rounded-none">float32</SelectItem>
-                <SelectItem value="int32" className="rounded-none">int32</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Spatial Projection</Label>
-            <Select value={projection} onValueChange={(v) => setProjection(v as ProjectionType)}>
-              <SelectTrigger className="rounded-none">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="rounded-none">
-                <SelectItem value="Mercator" className="rounded-none">Mercator (ESRI)</SelectItem>
-                <SelectItem value="Equirectangular" className="rounded-none">Equirectangular</SelectItem>
-                <SelectItem value="Globe" className="rounded-none">Globe</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Scale Transform */}
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Scale Transformation</Label>
-          <Select value={scaleType} onValueChange={(v) => setScaleType(v as ScaleType)}>
-            <SelectTrigger className="rounded-none">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="rounded-none">
-              <SelectItem value="pseudo-log" className="rounded-none">pseudo-log</SelectItem>
-              <SelectItem value="linear" className="rounded-none">linear</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Steepness (Pseudo-log Sigma) */}
-        {scaleType === 'pseudo-log' && (
-          <div className="space-y-2 rounded-none border border-border p-2 bg-muted/20">
-            <div className="flex justify-between items-center text-xs">
-              <Label htmlFor="steepness-input" className="text-muted-foreground text-xs font-medium cursor-pointer">
-                Steepness (Sigma)
-              </Label>
-              <div className="flex items-center gap-1">
-                <NumberInput
-                  id="steepness-input"
-                  value={logSigma}
-                  min={0.0001}
-                  step={logSigma >= 100 ? 5 : logSigma >= 10 ? 1 : logSigma >= 1 ? 0.1 : 0.01}
-                  onChange={(val) => {
-                    const parsed = parseFloat(val)
-                    if (!Number.isNaN(parsed) && parsed > 0) {
-                      setLogSigma(parsed)
-                    }
-                  }}
-                  containerClassName="h-6 w-24 rounded-none"
-                />
-              </div>
+      <div className="flex-1 p-3 space-y-3">
+        {/* ========================================================================= */}
+        {/* FOLDER 1: IMAGE SETTINGS */}
+        {/* ========================================================================= */}
+        <div className="border border-border bg-card/50">
+          <button
+            type="button"
+            onClick={() => toggleFolder('image')}
+            className="w-full h-8 px-2.5 flex items-center justify-between text-xs font-semibold text-foreground bg-muted/40 hover:bg-muted/70 transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-1.5">
+              <Icon name="folder" size="0.9rem" className="text-primary" />
+              <span>Image Settings</span>
             </div>
-
-            <Slider
-              value={[logSigma]}
-              min={0.01}
-              max={Math.max(1000, Math.ceil(logSigma * 1.5))}
-              step={logSigma >= 100 ? 5 : logSigma >= 10 ? 1 : logSigma >= 1 ? 0.1 : 0.01}
-              onValueChange={(vals) => setLogSigma(vals[0])}
-            />
-
-            {/* Quick preset pills */}
-            <div className="flex items-center justify-between gap-1 pt-0.5">
-              {[0.1, 1, 10, 100, 1000].map((preset) => (
-                <button
-                  key={preset}
-                  type="button"
-                  onClick={() => setLogSigma(preset)}
-                  className={`px-1.5 py-0.5 text-[10px] rounded-none border transition-colors ${
-                    Math.abs(logSigma - preset) < 0.001
-                      ? 'bg-primary text-primary-foreground border-primary font-bold'
-                      : 'bg-background hover:bg-muted text-muted-foreground border-border'
-                  }`}
-                >
-                  {preset}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Searchable D3 Color Palette Selector with Gradient Preview & Invert Checkbox */}
-        <div className="space-y-1.5" ref={palettePickerRef}>
-          <div className="flex items-center justify-between">
-            <Label className="text-xs text-muted-foreground">Color Palette (D3)</Label>
-            <label className="flex items-center gap-1.5 text-xs text-foreground cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={invertPalette}
-                onChange={(e) => setInvertPalette(e.target.checked)}
-                className="w-3.5 h-3.5 rounded-none accent-primary cursor-pointer"
+            <div className="flex items-center gap-1.5">
+              {binningConfig.enabled && (
+                <span className="text-[9px] px-1 py-0.2 bg-primary/20 text-primary font-mono">
+                  {binningConfig.width}×{binningConfig.height}
+                </span>
+              )}
+              <Icon
+                name={openFolders.image ? 'expand_less' : 'expand_more'}
+                size="1rem"
+                className="text-muted-foreground"
               />
-              <span className="text-[11px] text-muted-foreground">Invert</span>
-            </label>
-          </div>
+            </div>
+          </button>
 
-          <div className="relative">
-            {/* Palette Trigger Button */}
-            <button
-              type="button"
-              onClick={() => setPaletteOpen(!paletteOpen)}
-              className="w-full h-8 px-2.5 flex items-center justify-between border border-input rounded-none bg-background text-foreground hover:bg-muted/40 cursor-pointer transition-colors text-xs"
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <div
-                  className="w-16 h-3 rounded-none border border-border/80 shrink-0"
-                  style={{ background: getPaletteCssGradient(colorPalette, invertPalette) }}
-                />
-                <span className="truncate font-medium">{colorPalette}</span>
+          {openFolders.image && (
+            <div className="p-2.5 space-y-3 text-xs border-t border-border">
+              {/* File Input Mode Selector (Single Image vs Image Difference) */}
+              <div className="space-y-1">
+                <Label className="text-[11px] text-muted-foreground">File Input Mode</Label>
+                <div className="grid grid-cols-2 gap-1 bg-muted/50 p-0.5 border border-border">
+                  <button
+                    type="button"
+                    onClick={() => setAppMode('Single Image')}
+                    className={`h-6 text-[11px] font-medium transition-colors cursor-pointer flex items-center justify-center gap-1 ${
+                      appMode === 'Single Image'
+                        ? 'bg-primary text-primary-foreground font-semibold shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <Icon name="image" size="0.75rem" />
+                    <span>Single Image</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAppMode('Image Difference')}
+                    className={`h-6 text-[11px] font-medium transition-colors cursor-pointer flex items-center justify-center gap-1 ${
+                      appMode === 'Image Difference'
+                        ? 'bg-primary text-primary-foreground font-semibold shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <Icon name="compare_arrows" size="0.75rem" />
+                    <span>Difference</span>
+                  </button>
+                </div>
               </div>
-              <Icon name={paletteOpen ? 'expand_less' : 'expand_more'} className="text-muted-foreground text-xs ml-1" />
-            </button>
 
-            {/* Dropdown Popover */}
-            {paletteOpen && (
-              <div className="absolute top-9 left-0 right-0 z-50 bg-card border border-border shadow-2xl rounded-none p-2 space-y-2 text-xs">
-                {/* Search Input */}
-                <input
-                  type="text"
-                  placeholder="Search 38 D3 schemes..."
-                  value={paletteSearch}
-                  onChange={(e) => setPaletteSearch(e.target.value)}
-                  className="w-full h-7 px-2 border border-input rounded-none bg-background text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-                  autoFocus
+              {/* File Upload based on active AppMode */}
+              {appMode === 'Single Image' ? (
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground">Select GeoPNG File (.png)</Label>
+                  <input
+                    type="file"
+                    accept=".png"
+                    id="single-file-upload"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) onFileUpload(e.target.files[0], 'single')
+                    }}
+                  />
+                  <label
+                    htmlFor="single-file-upload"
+                    className="flex items-center justify-between w-full h-8 px-2 border border-input rounded-none bg-background text-foreground hover:bg-muted/40 cursor-pointer transition-colors"
+                  >
+                    <span className="truncate text-xs">
+                      {activeFileName || 'Upload GeoPNG (.png)...'}
+                    </span>
+                    <Icon name="folder_open" size="0.95rem" className="text-white/80 shrink-0 ml-1" />
+                  </label>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="space-y-1">
+                    <Label className="text-[11px] text-muted-foreground">First GeoPNG (A)</Label>
+                    <input
+                      type="file"
+                      accept=".png"
+                      id="diff-file-a"
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files?.[0]) onFileUpload(e.target.files[0], 'diff_a')
+                      }}
+                    />
+                    <label
+                      htmlFor="diff-file-a"
+                      className="flex items-center justify-between w-full h-8 px-2 border border-input rounded-none bg-background text-foreground hover:bg-muted/40 cursor-pointer transition-colors"
+                    >
+                      <span className="truncate text-xs">{diffNameA || 'Choose Image A...'}</span>
+                      <Icon name="file_upload" size="0.95rem" className="text-white/80 shrink-0 ml-1" />
+                    </label>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-[11px] text-muted-foreground">Second GeoPNG (B)</Label>
+                    <input
+                      type="file"
+                      accept=".png"
+                      id="diff-file-b"
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files?.[0]) onFileUpload(e.target.files[0], 'diff_b')
+                      }}
+                    />
+                    <label
+                      htmlFor="diff-file-b"
+                      className="flex items-center justify-between w-full h-8 px-2 border border-input rounded-none bg-background text-foreground hover:bg-muted/40 cursor-pointer transition-colors"
+                    >
+                      <span className="truncate text-xs">{diffNameB || 'Choose Image B...'}</span>
+                      <Icon name="file_upload" size="0.95rem" className="text-white/80 shrink-0 ml-1" />
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {/* Encoding Format */}
+              <div className="space-y-1">
+                <Label className="text-[11px] text-muted-foreground">Encoding Format</Label>
+                <Select value={dataFormat} onValueChange={(v) => setDataFormat(v as DataFormat)}>
+                  <SelectTrigger className="rounded-none h-7">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-none">
+                    <SelectItem value="float32" className="rounded-none">float32 (IEEE 754)</SelectItem>
+                    <SelectItem value="int32" className="rounded-none">int32 (Signed Integer)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Binning & Downsampling */}
+              <div className="space-y-2 border border-border/80 bg-background/50 p-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-medium text-foreground text-[11px]">
+                    <Icon name="grid_view" size="0.85rem" className="text-primary" />
+                    <span>Binning / Downsampling</span>
+                  </div>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={binningConfig.enabled}
+                      onChange={(e) =>
+                        setBinningConfig((prev) => ({ ...prev, enabled: e.target.checked }))
+                      }
+                      className="w-3.5 h-3.5 rounded-none accent-primary cursor-pointer"
+                    />
+                    <span className="text-[10px] text-muted-foreground font-semibold uppercase">
+                      {binningConfig.enabled ? 'ON' : 'OFF'}
+                    </span>
+                  </label>
+                </div>
+
+                {binningConfig.enabled && (
+                  <div className="space-y-2 pt-1 border-t border-border/60">
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div className="space-y-1">
+                        <span className="text-[10px] text-muted-foreground">Width</span>
+                        <NumberInput
+                          value={binningConfig.width}
+                          min={60}
+                          max={4320}
+                          step={60}
+                          onChange={(val) => {
+                            const parsed = parseInt(val, 10)
+                            if (parsed > 0) {
+                              setBinningConfig((prev) => ({ ...prev, width: parsed }))
+                            }
+                          }}
+                          containerClassName="h-6 rounded-none font-mono text-[11px]"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-[10px] text-muted-foreground">Height</span>
+                        <NumberInput
+                          value={binningConfig.height}
+                          min={30}
+                          max={2160}
+                          step={30}
+                          onChange={(val) => {
+                            const parsed = parseInt(val, 10)
+                            if (parsed > 0) {
+                              setBinningConfig((prev) => ({ ...prev, height: parsed }))
+                            }
+                          }}
+                          containerClassName="h-6 rounded-none font-mono text-[11px]"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Presets */}
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-muted-foreground">Presets</span>
+                      <div className="grid grid-cols-3 gap-1">
+                        {BINNING_PRESETS.slice(1).map((pr) => (
+                          <button
+                            key={pr.label}
+                            type="button"
+                            onClick={() =>
+                              setBinningConfig((prev) => ({
+                                ...prev,
+                                width: pr.w,
+                                height: pr.h,
+                              }))
+                            }
+                            className={`px-1 py-0.5 text-[10px] border rounded-none text-center truncate transition-colors cursor-pointer ${
+                              binningConfig.width === pr.w && binningConfig.height === pr.h
+                                ? 'bg-primary text-primary-foreground border-primary font-bold'
+                                : 'bg-background hover:bg-muted text-muted-foreground border-border'
+                            }`}
+                          >
+                            {pr.w}×{pr.h}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Method */}
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-muted-foreground">Downsample Method</span>
+                      <Select
+                        value={binningConfig.method}
+                        onValueChange={(v) =>
+                          setBinningConfig((prev) => ({
+                            ...prev,
+                            method: v as DownsampleMethod,
+                          }))
+                        }
+                      >
+                        <SelectTrigger className="rounded-none h-6 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-none">
+                          <SelectItem value="average" className="rounded-none">Average (Mean)</SelectItem>
+                          <SelectItem value="minimum" className="rounded-none">Minimum</SelectItem>
+                          <SelectItem value="maximum" className="rounded-none">Maximum</SelectItem>
+                          <SelectItem value="near" className="rounded-none">Near (Nearest Neighbor)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Layer Opacity */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center text-xs">
+                  <Label className="text-[11px] text-muted-foreground">Layer Opacity</Label>
+                  <span className="text-foreground font-bold font-mono text-xs">
+                    {Math.round(opacity * 100)}%
+                  </span>
+                </div>
+                <Slider
+                  value={[opacity * 100]}
+                  min={10}
+                  max={100}
+                  step={1}
+                  onValueChange={(vals) => setOpacity(vals[0] / 100)}
                 />
+              </div>
+            </div>
+          )}
+        </div>
 
-                {/* Schemes List */}
-                <div className="max-h-48 overflow-y-auto space-y-0.5 pr-1">
-                  {filteredPalettes.length === 0 ? (
-                    <div className="p-2 text-center text-muted-foreground text-xs">No matching schemes</div>
-                  ) : (
-                    filteredPalettes.map((scheme) => (
+        {/* ========================================================================= */}
+        {/* FOLDER 2: LEGEND SETTINGS */}
+        {/* ========================================================================= */}
+        <div className="border border-border bg-card/50">
+          <button
+            type="button"
+            onClick={() => toggleFolder('legend')}
+            className="w-full h-8 px-2.5 flex items-center justify-between text-xs font-semibold text-foreground bg-muted/40 hover:bg-muted/70 transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-1.5">
+              <Icon name="palette" size="0.9rem" className="text-primary" />
+              <span>Legend Settings</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[80px]">
+                {colorPalette}
+              </span>
+              <Icon
+                name={openFolders.legend ? 'expand_less' : 'expand_more'}
+                size="1rem"
+                className="text-muted-foreground"
+              />
+            </div>
+          </button>
+
+          {openFolders.legend && (
+            <div className="p-2.5 space-y-3 text-xs border-t border-border">
+              {/* Scale Transformation */}
+              <div className="space-y-1">
+                <Label className="text-[11px] text-muted-foreground">Scale Transformation</Label>
+                <Select value={scaleType} onValueChange={(v) => setScaleType(v as ScaleType)}>
+                  <SelectTrigger className="rounded-none h-7">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-none">
+                    <SelectItem value="pseudo-log" className="rounded-none">pseudo-log</SelectItem>
+                    <SelectItem value="linear" className="rounded-none">linear</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Steepness (Sigma) */}
+              {scaleType === 'pseudo-log' && (
+                <div className="space-y-2 rounded-none border border-border p-2 bg-muted/20">
+                  <div className="flex justify-between items-center text-xs">
+                    <Label className="text-muted-foreground text-[11px] font-medium">
+                      Steepness (Sigma)
+                    </Label>
+                    <NumberInput
+                      value={logSigma}
+                      min={0.0001}
+                      step={logSigma >= 100 ? 5 : logSigma >= 10 ? 1 : logSigma >= 1 ? 0.1 : 0.01}
+                      onChange={(val) => {
+                        const parsed = parseFloat(val)
+                        if (!Number.isNaN(parsed) && parsed > 0) setLogSigma(parsed)
+                      }}
+                      containerClassName="h-6 w-20 rounded-none text-xs font-mono"
+                    />
+                  </div>
+
+                  <Slider
+                    value={[logSigma]}
+                    min={0.01}
+                    max={Math.max(1000, Math.ceil(logSigma * 1.5))}
+                    step={logSigma >= 100 ? 5 : logSigma >= 10 ? 1 : logSigma >= 1 ? 0.1 : 0.01}
+                    onValueChange={(vals) => setLogSigma(vals[0])}
+                  />
+
+                  {/* Preset buttons */}
+                  <div className="flex items-center justify-between gap-1 pt-0.5">
+                    {[0.1, 1, 10, 100, 1000].map((preset) => (
                       <button
-                        key={scheme.id}
+                        key={preset}
                         type="button"
-                        onClick={() => {
-                          setColorPalette(scheme.id)
-                          setPaletteOpen(false)
-                        }}
-                        className={`w-full flex items-center justify-between px-2 py-1.5 rounded-none cursor-pointer text-left text-xs transition-colors ${
-                          colorPalette === scheme.id
-                            ? 'bg-primary text-primary-foreground font-semibold'
-                            : 'hover:bg-muted text-foreground'
+                        onClick={() => setLogSigma(preset)}
+                        className={`px-1.5 py-0.5 text-[10px] rounded-none border transition-colors ${
+                          Math.abs(logSigma - preset) < 0.001
+                            ? 'bg-primary text-primary-foreground border-primary font-bold'
+                            : 'bg-background hover:bg-muted text-muted-foreground border-border'
                         }`}
                       >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div
-                            className="w-14 h-3 rounded-none border border-black/20 shrink-0"
-                            style={{ background: getPaletteCssGradient(scheme.id, invertPalette) }}
-                          />
-                          <span className="truncate">{scheme.name}</span>
-                        </div>
-                        <span className="text-[9px] opacity-60 ml-1 shrink-0">{scheme.category.split(' ')[0]}</span>
+                        {preset}
                       </button>
-                    ))
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Color Palette (D3) */}
+              <div className="space-y-1.5" ref={palettePickerRef}>
+                <div className="flex items-center justify-between">
+                  <Label className="text-[11px] text-muted-foreground">Color Palette (D3)</Label>
+                  <label className="flex items-center gap-1.5 text-xs text-foreground cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={invertPalette}
+                      onChange={(e) => setInvertPalette(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded-none accent-primary cursor-pointer"
+                    />
+                    <span className="text-[11px] text-muted-foreground">Invert</span>
+                  </label>
+                </div>
+
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setPaletteOpen(!paletteOpen)}
+                    className="w-full h-8 px-2.5 flex items-center justify-between border border-input rounded-none bg-background text-foreground hover:bg-muted/40 cursor-pointer transition-colors text-xs"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div
+                        className="w-16 h-3 rounded-none border border-border/80 shrink-0"
+                        style={{ background: getPaletteCssGradient(colorPalette, invertPalette) }}
+                      />
+                      <span className="truncate font-medium">{colorPalette}</span>
+                    </div>
+                    <Icon name={paletteOpen ? 'expand_less' : 'expand_more'} className="text-muted-foreground text-xs ml-1" />
+                  </button>
+
+                  {/* Dropdown Popover */}
+                  {paletteOpen && (
+                    <div className="absolute top-9 left-0 right-0 z-50 bg-card border border-border shadow-2xl rounded-none p-2 space-y-2 text-xs">
+                      <input
+                        type="text"
+                        placeholder="Search schemes..."
+                        value={paletteSearch}
+                        onChange={(e) => setPaletteSearch(e.target.value)}
+                        className="w-full h-7 px-2 border border-input rounded-none bg-background text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                        autoFocus
+                      />
+
+                      <div className="max-h-48 overflow-y-auto space-y-0.5 pr-1">
+                        {filteredPalettes.map((scheme) => (
+                          <button
+                            key={scheme.id}
+                            type="button"
+                            onClick={() => {
+                              setColorPalette(scheme.id)
+                              setPaletteOpen(false)
+                            }}
+                            className={`w-full flex items-center justify-between px-2 py-1.5 rounded-none cursor-pointer text-left text-xs transition-colors ${
+                              colorPalette === scheme.id
+                                ? 'bg-primary text-primary-foreground font-semibold'
+                                : 'hover:bg-muted text-foreground'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div
+                                className="w-14 h-3 rounded-none border border-black/20 shrink-0"
+                                style={{ background: getPaletteCssGradient(scheme.id, invertPalette) }}
+                              />
+                              <span className="truncate">{scheme.name}</span>
+                            </div>
+                            <span className="text-[9px] opacity-60 ml-1 shrink-0">{scheme.category.split(' ')[0]}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
-            )}
-          </div>
-        </div>
 
-        {/* Layer Opacity */}
-        <div className="space-y-1.5">
-          <div className="flex justify-between items-center text-xs">
-            <Label className="text-xs text-muted-foreground">Layer Opacity</Label>
-            <span className="text-foreground font-bold">
-              {Math.round(opacity * 100)}%
-            </span>
-          </div>
-          <Slider
-            value={[opacity * 100]}
-            min={10}
-            max={100}
-            step={1}
-            onValueChange={(vals) => setOpacity(vals[0] / 100)}
-          />
-        </div>
-      </div>
+              {/* Visual Bounds Mode */}
+              <div className="space-y-2">
+                <Label className="text-[11px] font-semibold text-foreground">Visual Bounds</Label>
+                <Select value={boundsMode} onValueChange={(v) => setBoundsMode(v as BoundsMode)}>
+                  <SelectTrigger className="rounded-none h-7">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-none">
+                    <SelectItem value="Manual" className="rounded-none">Manual (Min / Max)</SelectItem>
+                    <SelectItem value="Percentile" className="rounded-none">Percentile Breaks</SelectItem>
+                    <SelectItem value="Absolute" className="rounded-none">Absolute Number Ramps</SelectItem>
+                  </SelectContent>
+                </Select>
 
-      <Separator />
+                {boundsMode === 'Manual' && (
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-muted-foreground">Min Override</span>
+                      <NumberInput
+                        placeholder="Auto"
+                        value={minValOverride}
+                        step="any"
+                        onChange={(val) => setMinValOverride(val)}
+                        containerClassName="rounded-none h-7 text-xs font-mono"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-muted-foreground">Max Override</span>
+                      <NumberInput
+                        placeholder="Auto"
+                        value={maxValOverride}
+                        step="any"
+                        onChange={(val) => setMaxValOverride(val)}
+                        containerClassName="rounded-none h-7 text-xs font-mono"
+                      />
+                    </div>
+                  </div>
+                )}
 
-      {/* Visual Bounds Mode */}
-      <div className="space-y-2">
-        <Label className="text-xs font-semibold text-foreground">Visual Bounds</Label>
-        <Select value={boundsMode} onValueChange={(v) => setBoundsMode(v as BoundsMode)}>
-          <SelectTrigger className="rounded-none">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent className="rounded-none">
-            <SelectItem value="Manual" className="rounded-none">Manual</SelectItem>
-            <SelectItem value="Percentile" className="rounded-none">Percentile</SelectItem>
-          </SelectContent>
-        </Select>
+                {boundsMode === 'Percentile' && (
+                  <div className="space-y-1 pt-1">
+                    <span className="text-[10px] text-muted-foreground">Percentile Breaks (0-100)</span>
+                    <Input
+                      type="text"
+                      value={percentileList}
+                      onChange={(e) => setPercentileList(e.target.value)}
+                      className="rounded-none h-7 font-mono text-xs"
+                    />
+                  </div>
+                )}
 
-        {boundsMode === 'Manual' ? (
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            <div className="space-y-1">
-              <span className="text-[11px] text-muted-foreground">Min Override</span>
-              <NumberInput
-                placeholder="Auto"
-                value={minValOverride}
-                step="any"
-                onChange={(val) => setMinValOverride(val)}
-                containerClassName="rounded-none"
-              />
+                {boundsMode === 'Absolute' && (
+                  <div className="space-y-1 pt-1">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] text-muted-foreground">Absolute Numeric Breaks</span>
+                      <button
+                        type="button"
+                        onClick={() => setAbsoluteBreaks('0, 10, 50, 100, 500, 1000')}
+                        className="text-[10px] text-primary hover:underline cursor-pointer"
+                      >
+                        Reset Defaults
+                      </button>
+                    </div>
+                    <Input
+                      type="text"
+                      placeholder="e.g. 0, 10, 50, 100, 500, 1000"
+                      value={absoluteBreaks}
+                      onChange={(e) => setAbsoluteBreaks(e.target.value)}
+                      className="rounded-none h-7 font-mono text-xs"
+                    />
+                    <span className="text-[10px] text-muted-foreground leading-tight block">
+                      Color ramp stretches across these discrete absolute values.
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Legend Title */}
+              <div className="space-y-1">
+                <Label className="text-[11px] text-muted-foreground">Legend Label</Label>
+                <Input
+                  type="text"
+                  value={legendTitle}
+                  onChange={(e) => setLegendTitle(e.target.value)}
+                  className="rounded-none h-7"
+                />
+              </div>
             </div>
-            <div className="space-y-1">
-              <span className="text-[11px] text-muted-foreground">Max Override</span>
-              <NumberInput
-                placeholder="Auto"
-                value={maxValOverride}
-                step="any"
-                onChange={(val) => setMaxValOverride(val)}
-                containerClassName="rounded-none"
-              />
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-1 pt-1">
-            <span className="text-[11px] text-muted-foreground">Percentile Breaks (0-100)</span>
-            <Input
-              type="text"
-              value={percentileList}
-              onChange={(e) => setPercentileList(e.target.value)}
-              className="rounded-none font-mono text-xs"
-            />
-          </div>
-        )}
-      </div>
-
-      <Separator />
-
-      {/* Legend Label */}
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Legend Label</Label>
-        <Input
-          type="text"
-          value={legendTitle}
-          onChange={(e) => setLegendTitle(e.target.value)}
-          className="rounded-none"
-        />
-      </div>
-
-      <Separator />
-
-      {/* Country Analysis (Multi-Country Polygon Binning & Isolation) */}
-      <div className="space-y-2.5">
-        <div className="flex items-center justify-between">
-          <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-            <Icon name="public" className="text-primary" />
-            <span>Country Analysis</span>
-          </Label>
-
-          {/* Quick status count */}
-          {selectedCountries.length > 0 && (
-            <span className="text-[10px] px-1.5 py-0.2 rounded-none bg-primary/20 text-primary font-bold border border-primary/40">
-              {selectedCountries.length} Selected
-            </span>
           )}
         </div>
 
-        {/* Countries Mode Toggle Button */}
-        <button
-          type="button"
-          onClick={() => onToggleCountriesMode && onToggleCountriesMode(!countriesMode)}
-          className={`w-full h-8 px-2.5 text-xs font-medium rounded-none transition-colors flex items-center justify-between cursor-pointer border ${
-            countriesMode
-              ? 'bg-primary/20 text-primary border-primary/50 shadow-sm font-semibold'
-              : 'bg-background hover:bg-muted text-muted-foreground hover:text-foreground border-input'
-          }`}
-          title="When active, the bitmap isolates to active countries, and clicking countries toggles selection"
-        >
-          <div className="flex items-center gap-2">
-            <span
-              className={`w-2 h-2 rounded-none ${
-                countriesMode ? 'bg-primary animate-pulse' : 'bg-muted-foreground/60'
-              }`}
-            />
-            <span>Countries Mode (Bitmap Isolation)</span>
-          </div>
-          <span className="text-[10px] font-semibold uppercase tracking-wider opacity-80">
-            {countriesMode ? 'ON' : 'OFF'}
-          </span>
-        </button>
-
-        <p className="text-[11px] text-muted-foreground leading-tight">
-          When active, the raster isolates strictly to selected country outlines, and clicking countries toggles selection.
-        </p>
-
-        {/* Real-time Hover Feedback */}
-        {countriesMode && hoveredCountry && (
-          <div className="p-2 rounded-none bg-muted/40 border border-border text-[11px] space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground text-[10px] uppercase font-medium">Map Cursor Hover</span>
-              <span className="text-primary font-bold text-[10px]">Click to toggle</span>
+        {/* ========================================================================= */}
+        {/* FOLDER 3: 3D HEIGHTMAP & SIZING */}
+        {/* ========================================================================= */}
+        <div className="border border-border bg-card/50">
+          <button
+            type="button"
+            onClick={() => toggleFolder('heightmap')}
+            className="w-full h-8 px-2.5 flex items-center justify-between text-xs font-semibold text-foreground bg-muted/40 hover:bg-muted/70 transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-1.5">
+              <Icon name="view_in_ar" size="0.9rem" className="text-primary" />
+              <span>3D Heightmap & Sizing</span>
             </div>
-            <div className="font-semibold text-foreground truncate">
-              {hoveredCountry.properties.name}
-            </div>
-          </div>
-        )}
-
-        {/* Multi-Country Selection Checklist */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] text-muted-foreground">Select Multiple Countries</span>
-            <div className="flex items-center gap-2 text-[10px]">
-              {onSelectAllCountries && (
-                <button
-                  type="button"
-                  onClick={onSelectAllCountries}
-                  className="text-muted-foreground hover:text-foreground cursor-pointer"
-                >
-                  All
-                </button>
+            <div className="flex items-center gap-1.5">
+              {heightmapConfig.enabled && (
+                <span className="text-[9px] px-1 py-0.2 bg-primary/20 text-primary font-bold">
+                  3D ON
+                </span>
               )}
-              {selectedCountries.length > 0 && (
-                <button
-                  type="button"
-                  onClick={onClearCountries}
-                  className="text-primary hover:underline cursor-pointer font-semibold"
-                >
-                  Clear ({selectedCountries.length})
-                </button>
+              {circleOverlayConfig.enabled && (
+                <span className="text-[9px] px-1 py-0.2 bg-amber-500/20 text-amber-400 font-bold">
+                  P{circleOverlayConfig.percentileCutoff}
+                </span>
               )}
+              <Icon
+                name={openFolders.heightmap ? 'expand_less' : 'expand_more'}
+                size="1rem"
+                className="text-muted-foreground"
+              />
             </div>
-          </div>
+          </button>
 
-          {/* Search Countries */}
-          <input
-            type="text"
-            placeholder="Search countries..."
-            value={countrySearch}
-            onChange={(e) => setCountrySearch(e.target.value)}
-            className="w-full h-7 px-2 border border-input rounded-none bg-background text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-          />
-
-          {/* Scrollable Checklist */}
-          <div className="max-h-36 overflow-y-auto border border-input rounded-none bg-background/80 p-1 space-y-0.5">
-            {filteredCountries.length === 0 ? (
-              <div className="p-2 text-center text-muted-foreground text-xs">No countries found</div>
-            ) : (
-              filteredCountries.map((c) => {
-                const code = getCountryCode(c)
-                const isSelected = selectedCountryCodeSet.has(code)
-                return (
-                  <label
-                    key={code}
-                    className={`flex items-center gap-2 px-2 py-1 rounded-none text-xs cursor-pointer select-none transition-colors ${
-                      isSelected ? 'bg-primary/20 text-primary font-semibold' : 'hover:bg-muted text-foreground'
-                    }`}
-                  >
+          {openFolders.heightmap && (
+            <div className="p-2.5 space-y-3 text-xs border-t border-border">
+              {/* 3D Elevation Heightmap Toggle */}
+              <div className="space-y-2 border border-border/80 bg-background/50 p-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-medium text-foreground text-[11px]">
+                    <Icon name="landscape" size="0.9rem" className="text-primary" />
+                    <span>3D Elevation Surface</span>
+                  </div>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={isSelected}
-                      onChange={() => onToggleCountry(c)}
+                      checked={heightmapConfig.enabled}
+                      onChange={(e) =>
+                        setHeightmapConfig((prev) => ({ ...prev, enabled: e.target.checked }))
+                      }
                       className="w-3.5 h-3.5 rounded-none accent-primary cursor-pointer"
                     />
-                    <span className="truncate">{c.properties.name}</span>
+                    <span className="text-[10px] text-muted-foreground font-semibold uppercase">
+                      {heightmapConfig.enabled ? 'ON' : 'OFF'}
+                    </span>
                   </label>
-                )
-              })
-            )}
-          </div>
+                </div>
 
-          {/* Selected Countries Chips */}
-          {selectedCountries.length > 0 && (
-            <div className="flex flex-wrap gap-1 pt-1 max-h-24 overflow-y-auto">
-              {selectedCountries.map((c) => (
-                <span
-                  key={getCountryCode(c)}
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] bg-primary/20 text-primary border border-primary/40 rounded-none font-medium"
-                >
-                  <span className="truncate max-w-[90px]">{c.properties.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => onToggleCountry(c)}
-                    className="hover:text-foreground opacity-70 hover:opacity-100 cursor-pointer text-[10px]"
-                  >
-                    ✕
-                  </button>
-                </span>
-              ))}
+                {heightmapConfig.enabled && (
+                  <div className="space-y-2 pt-1.5 border-t border-border/60">
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="text-muted-foreground">Elevation Relief Scale</span>
+                      <span className="text-foreground font-mono font-bold">
+                        {(heightmapConfig.elevationScale / 1000).toFixed(0)} km
+                      </span>
+                    </div>
+                    <Slider
+                      value={[heightmapConfig.elevationScale]}
+                      min={10000}
+                      max={1500000}
+                      step={10000}
+                      onValueChange={(vals) =>
+                        setHeightmapConfig((prev) => ({ ...prev, elevationScale: vals[0] }))
+                      }
+                    />
+                    <p className="text-[10px] text-muted-foreground leading-tight">
+                      Right-click / Ctrl+Drag on map to orbit in 3D perspective.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Proportional Circle Sizing (P99) */}
+              <div className="space-y-2 border border-border/80 bg-background/50 p-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-medium text-foreground text-[11px]">
+                    <Icon name="scatter_plot" size="0.9rem" className="text-amber-400" />
+                    <span>Equal-Area Circle Sizing</span>
+                  </div>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={circleOverlayConfig.enabled}
+                      onChange={(e) =>
+                        setCircleOverlayConfig((prev) => ({ ...prev, enabled: e.target.checked }))
+                      }
+                      className="w-3.5 h-3.5 rounded-none accent-primary cursor-pointer"
+                    />
+                    <span className="text-[10px] text-muted-foreground font-semibold uppercase">
+                      {circleOverlayConfig.enabled ? 'ON' : 'OFF'}
+                    </span>
+                  </label>
+                </div>
+
+                {circleOverlayConfig.enabled && (
+                  <div className="space-y-2 pt-1.5 border-t border-border/60">
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="text-muted-foreground">Percentile Cutoff</span>
+                      <span className="text-foreground font-mono font-bold">
+                        P{circleOverlayConfig.percentileCutoff}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1">
+                      {[90, 95, 98, 99].map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() =>
+                            setCircleOverlayConfig((prev) => ({ ...prev, percentileCutoff: p }))
+                          }
+                          className={`px-1 py-0.5 text-[10px] border rounded-none text-center cursor-pointer transition-colors ${
+                            circleOverlayConfig.percentileCutoff === p
+                              ? 'bg-amber-500 text-black font-bold border-amber-500'
+                              : 'bg-background hover:bg-muted text-muted-foreground border-border'
+                          }`}
+                        >
+                          P{p}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex justify-between items-center text-[10px] pt-1">
+                      <span className="text-muted-foreground">Circle Base Scale</span>
+                      <span className="text-foreground font-mono font-bold">
+                        {circleOverlayConfig.baseRadius.toFixed(1)}×
+                      </span>
+                    </div>
+                    <Slider
+                      value={[circleOverlayConfig.baseRadius * 10]}
+                      min={5}
+                      max={30}
+                      step={1}
+                      onValueChange={(vals) =>
+                        setCircleOverlayConfig((prev) => ({
+                          ...prev,
+                          baseRadius: vals[0] / 10,
+                        }))
+                      }
+                    />
+
+                    {/* Coloured Outline Stroke Width */}
+                    <div className="flex justify-between items-center text-[10px] pt-1">
+                      <span className="text-muted-foreground">Coloured Outline Stroke</span>
+                      <span className="text-foreground font-mono font-bold">
+                        {circleOverlayConfig.strokeWidth} px
+                      </span>
+                    </div>
+                    <Slider
+                      value={[circleOverlayConfig.strokeWidth]}
+                      min={1}
+                      max={6}
+                      step={1}
+                      onValueChange={(vals) =>
+                        setCircleOverlayConfig((prev) => ({
+                          ...prev,
+                          strokeWidth: vals[0],
+                        }))
+                      }
+                    />
+
+                    {/* Black Halo Width */}
+                    <div className="flex justify-between items-center text-[10px] pt-1">
+                      <span className="text-muted-foreground">Black Halo Thickness</span>
+                      <span className="text-foreground font-mono font-bold">
+                        {circleOverlayConfig.haloWidth} px
+                      </span>
+                    </div>
+                    <Slider
+                      value={[circleOverlayConfig.haloWidth]}
+                      min={1}
+                      max={6}
+                      step={1}
+                      onValueChange={(vals) =>
+                        setCircleOverlayConfig((prev) => ({
+                          ...prev,
+                          haloWidth: vals[0],
+                        }))
+                      }
+                    />
+
+                    <p className="text-[10px] text-muted-foreground leading-tight pt-0.5">
+                      Hollow circles with coloured outline and adjustable black halo border. Area linearly scales with value (A ∝ Value).
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
 
-        {/* Aggregated Country Stats Summary */}
-        {countryStats && countryStats.validCount > 0 && (
-          <div className="p-2 rounded-none bg-background border border-border text-[11px] space-y-1">
-            <div className="flex justify-between items-center text-muted-foreground text-[10px]">
-              <span className="truncate font-medium">{countryStats.name}:</span>
-              <span className="text-foreground font-semibold shrink-0">
-                {countryStats.validCount.toLocaleString()} cells
-              </span>
+        {/* ========================================================================= */}
+        {/* FOLDER 4: COUNTRY ANALYSIS */}
+        {/* ========================================================================= */}
+        <div className="border border-border bg-card/50">
+          <button
+            type="button"
+            onClick={() => toggleFolder('country')}
+            className="w-full h-8 px-2.5 flex items-center justify-between text-xs font-semibold text-foreground bg-muted/40 hover:bg-muted/70 transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-1.5">
+              <Icon name="public" size="0.9rem" className="text-primary" />
+              <span>Country Analysis</span>
             </div>
-            <div className="flex justify-between items-center text-muted-foreground text-[10px]">
-              <span>Range:</span>
-              <span className="text-foreground font-mono">
-                {countryStats.min.toFixed(2)} → {countryStats.max.toFixed(2)}
-              </span>
+            <div className="flex items-center gap-1.5">
+              {selectedCountries.length > 0 && (
+                <span className="text-[9px] px-1 py-0.2 bg-primary/20 text-primary font-bold">
+                  {selectedCountries.length}
+                </span>
+              )}
+              <Icon
+                name={openFolders.country ? 'expand_less' : 'expand_more'}
+                size="1rem"
+                className="text-muted-foreground"
+              />
             </div>
-            <div className="flex justify-between items-center text-muted-foreground text-[10px]">
-              <span>Mean:</span>
-              <span className="text-foreground font-mono">{countryStats.mean.toFixed(2)}</span>
+          </button>
+
+          {openFolders.country && (
+            <div className="p-2.5 space-y-2.5 text-xs border-t border-border">
+              {/* Countries Mode Toggle Button */}
+              <button
+                type="button"
+                onClick={() => onToggleCountriesMode && onToggleCountriesMode(!countriesMode)}
+                className={`w-full h-7 px-2 text-xs font-medium rounded-none transition-colors flex items-center justify-between cursor-pointer border ${
+                  countriesMode
+                    ? 'bg-primary/20 text-primary border-primary/50 shadow-sm font-semibold'
+                    : 'bg-background hover:bg-muted text-muted-foreground hover:text-foreground border-input'
+                }`}
+                title="When active, the bitmap isolates to active countries, and clicking countries toggles selection"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className={`w-1.5 h-1.5 rounded-none ${
+                      countriesMode ? 'bg-primary animate-pulse' : 'bg-muted-foreground/60'
+                    }`}
+                  />
+                  <span className="text-[11px]">Bitmap Isolation Mode</span>
+                </div>
+                <span className="text-[10px] font-semibold uppercase tracking-wider opacity-80">
+                  {countriesMode ? 'ON' : 'OFF'}
+                </span>
+              </button>
+
+              {/* Real-time Hover Feedback */}
+              {countriesMode && hoveredCountry && (
+                <div className="p-1.5 rounded-none bg-muted/40 border border-border text-[11px] space-y-0.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground text-[9px] uppercase font-medium">Map Cursor Hover</span>
+                    <span className="text-primary font-bold text-[9px]">Click to toggle</span>
+                  </div>
+                  <div className="font-semibold text-foreground truncate text-xs">
+                    {hoveredCountry.properties.name}
+                  </div>
+                </div>
+              )}
+
+              {/* Checklist */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-muted-foreground">Select Countries</span>
+                  <div className="flex items-center gap-2 text-[10px]">
+                    {onSelectAllCountries && (
+                      <button
+                        type="button"
+                        onClick={onSelectAllCountries}
+                        className="text-muted-foreground hover:text-foreground cursor-pointer"
+                      >
+                        All
+                      </button>
+                    )}
+                    {selectedCountries.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={onClearCountries}
+                        className="text-primary hover:underline cursor-pointer font-semibold"
+                      >
+                        Clear ({selectedCountries.length})
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <input
+                  type="text"
+                  placeholder="Search countries..."
+                  value={countrySearch}
+                  onChange={(e) => setCountrySearch(e.target.value)}
+                  className="w-full h-7 px-2 border border-input rounded-none bg-background text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+
+                <div className="max-h-32 overflow-y-auto border border-input rounded-none bg-background/80 p-1 space-y-0.5">
+                  {filteredCountries.length === 0 ? (
+                    <div className="p-2 text-center text-muted-foreground text-[11px]">No countries found</div>
+                  ) : (
+                    filteredCountries.map((c) => {
+                      const code = getCountryCode(c)
+                      const isSelected = selectedCountryCodeSet.has(code)
+                      return (
+                        <label
+                          key={code}
+                          className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded-none text-xs cursor-pointer select-none transition-colors ${
+                            isSelected ? 'bg-primary/20 text-primary font-semibold' : 'hover:bg-muted text-foreground'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => onToggleCountry(c)}
+                            className="w-3.5 h-3.5 rounded-none accent-primary cursor-pointer"
+                          />
+                          <span className="truncate text-[11px]">{c.properties.name}</span>
+                        </label>
+                      )
+                    })
+                  )}
+                </div>
+
+                {/* Selected Countries Chips */}
+                {selectedCountries.length > 0 && (
+                  <div className="flex flex-wrap gap-1 pt-1 max-h-20 overflow-y-auto">
+                    {selectedCountries.map((c) => (
+                      <span
+                        key={getCountryCode(c)}
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] bg-primary/20 text-primary border border-primary/40 rounded-none font-medium"
+                      >
+                        <span className="truncate max-w-[80px]">{c.properties.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => onToggleCountry(c)}
+                          className="hover:text-foreground opacity-70 hover:opacity-100 cursor-pointer text-[10px]"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Aggregated Country Stats */}
+              {countryStats && countryStats.validCount > 0 && (
+                <div className="p-2 rounded-none bg-background border border-border text-[11px] space-y-1">
+                  <div className="flex justify-between items-center text-muted-foreground text-[10px]">
+                    <span className="truncate font-medium">{countryStats.name}:</span>
+                    <span className="text-foreground font-semibold shrink-0">
+                      {countryStats.validCount.toLocaleString()} cells
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-muted-foreground text-[10px]">
+                    <span>Range:</span>
+                    <span className="text-foreground font-mono">
+                      {countryStats.min.toFixed(2)} → {countryStats.max.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-muted-foreground text-[10px]">
+                    <span>Mean:</span>
+                    <span className="text-foreground font-mono">{countryStats.mean.toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      <Separator />
-
-      {/* Help text */}
-      <div className="text-[11px] text-muted-foreground space-y-1 pt-1">
+      {/* Footer info */}
+      <div className="p-3 border-t border-border bg-card/60 text-[10px] text-muted-foreground space-y-0.5">
         <p>• Hover: Inspect coordinates & values</p>
-        <p>• Click Country in Countries Mode: Toggle selection</p>
-        <p>• Double-click: Reset map view</p>
+        <p>• Mapmodes selected in bottom right tray</p>
+        <p>• Double-click: Reset map camera</p>
       </div>
     </div>
   )
 }
+
 export default SidebarControls

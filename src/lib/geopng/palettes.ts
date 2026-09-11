@@ -150,6 +150,7 @@ export interface RenderRasterOptions {
   logSigma: number
   minVal: number
   maxVal: number
+  breaks?: number[]
   projection?: ProjectionType
   opacity?: number
   activeCountries?: CountryFeature[] | null
@@ -184,6 +185,10 @@ export function renderRasterToCanvas(
   const pixels = imgData.data
   const lut = getPaletteLUT(options.palette, Boolean(options.invertPalette))
 
+  const hasBreaks = Boolean(options.breaks && options.breaks.length >= 2)
+  const sortedBreaks = hasBreaks ? [...options.breaks!].sort((a, b) => a - b) : []
+  const numSegments = sortedBreaks.length - 1
+
   const tMin = transformValue(options.minVal, options.scaleType, options.logSigma)
   const tMax = transformValue(options.maxVal, options.scaleType, options.logSigma)
   const tRange = tMax - tMin || 1
@@ -205,8 +210,28 @@ export function renderRasterToCanvas(
         continue
       }
 
-      const tVal = transformValue(val, options.scaleType, options.logSigma)
-      let norm = (tVal - tMin) / tRange
+      let norm = 0
+      if (hasBreaks && numSegments > 0) {
+        if (val <= sortedBreaks[0]) {
+          norm = 0
+        } else if (val >= sortedBreaks[numSegments]) {
+          norm = 1
+        } else {
+          // Find segment
+          let seg = 0
+          while (seg < numSegments - 1 && val >= sortedBreaks[seg + 1]) {
+            seg++
+          }
+          const segMin = sortedBreaks[seg]
+          const segMax = sortedBreaks[seg + 1]
+          const segT = segMax - segMin > 0 ? (val - segMin) / (segMax - segMin) : 0
+          norm = (seg + segT) / numSegments
+        }
+      } else {
+        const tVal = transformValue(val, options.scaleType, options.logSigma)
+        norm = (tVal - tMin) / tRange
+      }
+
       if (norm < 0) norm = 0
       if (norm > 1) norm = 1
 
