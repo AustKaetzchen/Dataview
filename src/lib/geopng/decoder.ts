@@ -210,6 +210,7 @@ function buildDecodedRasterResult(
     stdDev,
     validCount,
     totalCells,
+    total: validCount > 0 ? mean * validCount : 0,
     quantiles,
     histogram: {
       bins: binEdges,

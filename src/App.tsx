@@ -404,6 +404,11 @@ export const App: React.FC = () => {
         setAppMode={setAppMode}
         binningConfig={binningConfig}
         setBinningConfig={setBinningConfig}
+        mapModes={mapModes}
+        heightmapConfig={heightmapConfig}
+        circleOverlayConfig={circleOverlayConfig}
+        selectedCountries={deferredSelectedCountries}
+        onToggleMapMode={handleToggleMapMode}
       />
 
       {/* Main Map Viewer */}

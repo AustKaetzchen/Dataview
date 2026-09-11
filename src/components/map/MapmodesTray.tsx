@@ -45,6 +45,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
   // Currently expanded mapmode settings panel (null if all collapsed)
   const [expandedMode, setExpandedMode] = useState<MapModeId | null>(null)
   const [countrySearch, setCountrySearch] = useState('')
+  const [mapmodeSearch, setMapmodeSearch] = useState('')
 
   const getCountryCode = (c: CountryFeature) => {
     const iso = c.properties.iso_a3
@@ -71,6 +72,13 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
     setExpandedMode((prev) => (prev === id ? null : id))
   }
 
+  // Filtered mapmodes based on search
+  const filteredMapModes = useMemo(() => {
+    const q = mapmodeSearch.toLowerCase().trim()
+    if (!q) return mapModes
+    return mapModes.filter((m) => m.label.toLowerCase().includes(q))
+  }, [mapModes, mapmodeSearch])
+
   return (
     <div className="absolute bottom-4 right-4 z-20 w-80 max-h-[calc(100vh-140px)] flex flex-col bg-card/98 backdrop-blur-md border border-border shadow-2xl p-2.5 space-y-2 text-xs select-none font-sans overflow-hidden">
       {/* Tray Header */}
@@ -79,14 +87,45 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
           <Icon name="layers" size="0.95rem" />
           <span>Mapmodes</span>
         </span>
-        <span className="text-[10px] px-1.5 py-0.2 bg-primary/20 text-primary border border-primary/40 font-mono font-bold">
+        <span className="text-[10px] px-1.5 py-0.2 bg-muted text-muted-foreground border border-border font-mono font-medium">
           {mapModes.filter((m) => m.active).length} Active
         </span>
       </div>
 
+      {/* Mapmodes Searchbar */}
+      <div className="relative shrink-0">
+        <Icon
+          name="search"
+          size="0.8rem"
+          className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+        />
+        <input
+          type="text"
+          value={mapmodeSearch}
+          onChange={(e) => setMapmodeSearch(e.target.value)}
+          placeholder="Search mapmodes..."
+          className="w-full pl-6 pr-6 py-1 text-xs bg-background/70 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary rounded-none"
+        />
+        {mapmodeSearch && (
+          <button
+            type="button"
+            onClick={() => setMapmodeSearch('')}
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground hover:text-foreground cursor-pointer px-1"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
       {/* Composable Mode Items Stack */}
       <div className="space-y-1 overflow-y-auto max-h-[50vh] pr-0.5">
-        {mapModes.map((mode, index) => {
+        {filteredMapModes.length === 0 && (
+          <p className="text-[11px] text-muted-foreground italic py-2 text-center">
+            No matching mapmodes found
+          </p>
+        )}
+        {filteredMapModes.map((mode) => {
+          const index = mapModes.findIndex((m) => m.id === mode.id)
           const isExpanded = expandedMode === mode.id
           const hasSettings = mode.id !== 'default'
 
@@ -116,17 +155,17 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                       {mode.label}
                     </span>
                     {mode.id === 'country_analysis' && selectedCountries.length > 0 && (
-                      <span className="text-[9px] px-1 py-0.2 bg-primary/20 text-primary border border-primary/40 font-bold shrink-0">
+                      <span className="text-[9px] px-1 py-0.2 bg-muted text-muted-foreground border border-border font-medium shrink-0">
                         {selectedCountries.length}
                       </span>
                     )}
                     {mode.id === 'spike_map' && mode.active && (
-                      <span className="text-[9px] px-1 py-0.2 bg-primary/20 text-primary border border-primary/40 font-bold shrink-0">
+                      <span className="text-[9px] px-1 py-0.2 bg-muted text-muted-foreground border border-border font-medium shrink-0">
                         3D
                       </span>
                     )}
                     {mode.id === 'circle_sizing' && mode.active && (
-                      <span className="text-[9px] px-1 py-0.2 bg-primary/20 text-primary border border-primary/40 font-bold shrink-0">
+                      <span className="text-[9px] px-1 py-0.2 bg-muted text-muted-foreground border border-border font-medium shrink-0">
                         P{circleOverlayConfig.percentileCutoff}
                       </span>
                     )}
@@ -327,6 +366,12 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                         <span>Mean:</span>
                         <span className="text-foreground font-mono">{countryStats.mean.toFixed(2)}</span>
                       </div>
+                      <div className="flex justify-between items-center text-muted-foreground">
+                        <span>Total:</span>
+                        <span className="text-foreground font-mono font-bold">
+                          {(countryStats.total ?? countryStats.mean * countryStats.validCount).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -447,18 +492,18 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                     </div>
                   </div>
 
-                  {/* Circle Base Scale */}
+                  {/* Linear Area Expansion Scale */}
                   <div className="space-y-1.5">
                     <div className="flex justify-between items-center text-[10px]">
-                      <span className="text-muted-foreground">Circle Base Scale</span>
+                      <span className="text-muted-foreground">Area Scale (1 ha / unit)</span>
                       <span className="text-foreground font-mono font-bold">
-                        {circleOverlayConfig.baseRadius.toFixed(1)}×
+                        {(circleOverlayConfig.baseRadius || 1.0).toFixed(1)} ha/unit
                       </span>
                     </div>
                     <Slider
-                      value={[circleOverlayConfig.baseRadius * 10]}
-                      min={5}
-                      max={30}
+                      value={[Math.round((circleOverlayConfig.baseRadius || 1.0) * 10)]}
+                      min={1}
+                      max={50}
                       step={1}
                       onValueChange={(vals) =>
                         setCircleOverlayConfig((prev) => ({

@@ -25,6 +25,7 @@ export interface CountryStats {
   isoA3: string
   totalCells: number
   validCount: number
+  total: number // Sum of all valid cells
   min: number
   max: number
   mean: number
@@ -74,7 +75,7 @@ export async function loadCountriesGeoJson(): Promise<CountryFeature[]> {
   }
 }
 
-function computeGeometryBBox(geometry: any): [number, number, number, number] {
+export function computeGeometryBBox(geometry: any): [number, number, number, number] {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
   const processCoords = (coords: any) => {
     if (typeof coords[0] === 'number') {
@@ -319,6 +320,7 @@ export function binRasterByCountry(
     isoA3,
     totalCells,
     validCount,
+    total: validCount > 0 ? sum : 0,
     min: Number.isFinite(min) ? min : 0,
     max: Number.isFinite(max) ? max : 0,
     mean,
@@ -444,6 +446,7 @@ export function binRasterByMultipleCountries(
     isoA3,
     totalCells,
     validCount,
+    total: validCount > 0 ? sum : 0,
     min: Number.isFinite(min) ? min : 0,
     max: Number.isFinite(max) ? max : 0,
     mean,

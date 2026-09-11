@@ -91,6 +91,7 @@ export interface DecodedRaster {
   stdDev: number
   validCount: number
   totalCells: number
+  total?: number // Sum of all valid raster cell values
   histogram?: { bins: number[]; counts: number[]; min: number; max: number }
   quantiles?: Record<number, number>
 }

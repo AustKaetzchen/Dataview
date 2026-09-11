@@ -10,6 +10,7 @@ import {
   loadCountriesGeoJson,
   findCountryAtLngLat,
   isPointInGeometry,
+  computeGeometryBBox,
 } from '@/lib/geopng/polygonBinning'
 import {
   projectEqualEarth,
@@ -588,20 +589,50 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         ? [selectedCountry]
         : []
 
+    // If Country Analysis mode is active and no countries are selected, de-render spikes completely
+    if (countriesMode && effectiveSelected.length === 0) {
+      return { points: [] }
+    }
+
     const maxScale = heightmapConfig.elevationScale || 800000
     // Continuous base pedestal so all valid grid cells form a cohesive terrain carpet without empty holes
     const baseElevation = isCartesian ? (maxScale / 111000) * 0.35 : maxScale * 0.035
     const opacityVal = heightmapConfig.opacity ?? 0.9
     const alpha = Math.round(255 * opacityVal)
 
-    for (let gr = 0; gr < gridH; gr++) {
+    // In Country Analysis mode with active selection, constrain search space to country bounding box
+    let minGC = 0
+    let maxGC = gridW
+    let minGR = 0
+    let maxGR = gridH
+
+    if (countriesMode && effectiveSelected.length > 0) {
+      let bMinX = Infinity, bMinY = Infinity, bMaxX = -Infinity, bMaxY = -Infinity
+      for (const country of effectiveSelected) {
+        const bbox = country.bbox || computeGeometryBBox(country.geometry)
+        if (bbox) {
+          if (bbox[0] < bMinX) bMinX = bbox[0]
+          if (bbox[1] < bMinY) bMinY = bbox[1]
+          if (bbox[2] > bMaxX) bMaxX = bbox[2]
+          if (bbox[3] > bMaxY) bMaxY = bbox[3]
+        }
+      }
+      if (Number.isFinite(bMinX)) {
+        minGC = Math.max(0, Math.floor(((bMinX + 180) / 360) * gridW) - 1)
+        maxGC = Math.min(gridW, Math.ceil(((bMaxX + 180) / 360) * gridW) + 1)
+        minGR = Math.max(0, Math.floor(((90 - bMaxY) / 180) * gridH) - 1)
+        maxGR = Math.min(gridH, Math.ceil(((90 - bMinY) / 180) * gridH) + 1)
+      }
+    }
+
+    for (let gr = minGR; gr < maxGR; gr++) {
       const startR = gr * step
       const endR = Math.min(H, startR + step)
       const centerLat = 90 - ((gr + 0.5) / gridH) * 180
       const minLat = centerLat - halfH
       const maxLat = centerLat + halfH
 
-      for (let gc = 0; gc < gridW; gc++) {
+      for (let gc = minGC; gc < maxGC; gc++) {
         const startC = gc * step
         const endC = Math.min(W, startC + step)
 
@@ -633,13 +664,14 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         const minLng = centerLng - halfW
         const maxLng = centerLng + halfW
 
-        // Respect bitmap isolation mode in Country Analysis
+        // Strict isolation in Country Analysis: skip any cell outside the selected country/countries
         if (countriesMode && effectiveSelected.length > 0) {
           let isInside = false
           for (const country of effectiveSelected) {
-            if (country.bbox) {
-              const [bMinX, bMinY, bMaxX, bMaxY] = country.bbox
-              if (centerLng < bMinX || centerLng > bMaxX || centerLat < bMinY || centerLat > bMaxY) continue
+            const bbox = country.bbox || computeGeometryBBox(country.geometry)
+            if (bbox) {
+              const [cMinX, cMinY, cMaxX, cMaxY] = bbox
+              if (centerLng < cMinX || centerLng > cMaxX || centerLat < cMinY || centerLat > cMaxY) continue
             }
             if (isPointInGeometry(centerLng, centerLat, country.geometry)) {
               isInside = true
@@ -675,7 +707,14 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           ? Math.pow(norm, 1.25) * ((maxScale / 111000) * 12)
           : Math.pow(norm, 1.25) * maxScale
 
-        const elev = baseElevation + spikeHeight
+        // Latitude compensation: In Web Mercator projection, deck.gl multiplies Z elevation by
+        // 1.0 / cos(lat) (see project.glsl project_size_at_latitude). This causes spikes at northerly latitudes
+        // (e.g. 60°N - 80°N) to be exaggerated up to 2x - 6x compared to mid-latitudes (30°-40°N) or the equator.
+        // By multiplying by cos(lat), we cancel deck.gl's dilation factor so visual height is strictly uniform.
+        const latRad = (Math.min(85, Math.max(-85, centerLat)) * Math.PI) / 180
+        const latCorrection = projection === 'Mercator' ? Math.max(0.08, Math.cos(latRad)) : 1.0
+
+        const elev = (baseElevation + spikeHeight) * latCorrection
 
         // Palette color from LUT with transparency alpha
         const lutIdx = Math.floor(norm * 255) * 3
@@ -732,11 +771,19 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
     const points: any[] = []
     const isCartesian = projection === 'Equirectangular' || projection === 'EqualEarth'
-    const baseR = isCartesian
-      ? circleOverlayConfig.baseRadius * 0.8
-      : circleOverlayConfig.baseRadius * 85000
+    const scaleFactor = circleOverlayConfig.baseRadius || 1.0
 
-    // Downsample search stride if grid is very large
+    const effectiveSelected =
+      selectedCountries && selectedCountries.length > 0
+        ? selectedCountries
+        : selectedCountry
+        ? [selectedCountry]
+        : []
+
+    // De-render circles if Country Analysis mode is active and no countries are selected
+    if (countriesMode && effectiveSelected.length === 0) return []
+
+    // Downsample loop stride to prevent UI lockup on huge rasters
     const stride = Math.max(1, Math.floor(Math.sqrt((W * H) / 100000)))
 
     for (let r = 0; r < H; r += stride) {
@@ -749,18 +796,12 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           const lng = -180 + ((c + 0.5) / W) * 360
 
           // Item 1: Subject to bitmap isolation mode in Country Analysis
-          const effectiveSelected =
-            selectedCountries && selectedCountries.length > 0
-              ? selectedCountries
-              : selectedCountry
-              ? [selectedCountry]
-              : []
-
           if (countriesMode && effectiveSelected.length > 0) {
             let isInside = false
             for (const country of effectiveSelected) {
-              if (country.bbox) {
-                const [bMinX, bMinY, bMaxX, bMaxY] = country.bbox
+              const bbox = country.bbox || computeGeometryBBox(country.geometry)
+              if (bbox) {
+                const [bMinX, bMinY, bMaxX, bMaxY] = bbox
                 if (lng < bMinX || lng > bMaxX || lat < bMinY || lat > bMaxY) continue
               }
               if (isPointInGeometry(lng, lat, country.geometry)) {
@@ -790,9 +831,11 @@ export const MapViewer: React.FC<MapViewerProps> = ({
             }
           }
 
-          // Equal-area scaling: Radius ∝ sqrt(relative value above cutoff)
-          const relAbove = Math.max(0, (v - cutoffVal) / cutoffRange)
-          const radius = baseR * (0.6 + Math.sqrt(relAbove) * 1.8)
+          // Equal-area scaling: Linear with area (1 unit of value = 1 hectare = 10,000 m^2 * scaleFactor)
+          // Area = pi * r^2  ==>  r = sqrt(Area / pi) = sqrt(v * 10000 * scaleFactor / pi)
+          const posV = Math.max(0, v)
+          const radiusMeters = posV > 0 ? Math.sqrt((posV * 10000 * scaleFactor) / Math.PI) : 0
+          const radius = isCartesian ? radiusMeters / 111320 : radiusMeters
 
           // Color from palette
           const normAll = Math.max(0, Math.min(1, (v - minVal) / valRange))
@@ -833,6 +876,12 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   const layers = useMemo(() => {
     const list: any[] = []
     const isCartesian = projection === 'Equirectangular' || projection === 'EqualEarth'
+    const effectiveSelected =
+      selectedCountries && selectedCountries.length > 0
+        ? selectedCountries
+        : selectedCountry
+        ? [selectedCountry]
+        : []
 
     // 1. Basemap Layer (ESRI or Land/Sea when "None" or Equal Earth)
     if (basemap === 'none' || projection === 'EqualEarth') {
@@ -1000,13 +1049,21 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
     // 3.5. 3D Elevation Spike Map Layer (Uniform Rectangular Parent-Pixel SolidPolygonLayer)
     if (heightmapConfig.enabled && elevationSpikesData.points && elevationSpikesData.points.length > 0) {
+      const isolationKey = countriesMode
+        ? `iso-${effectiveSelected.map((c) => c.properties.iso_a3 || c.properties.name).join('_') || 'empty'}`
+        : 'all'
       list.push(
         new SolidPolygonLayer({
-          id: `elevation-spikes-${projection}`,
+          id: `elevation-spikes-${projection}-${isolationKey}`,
           data: elevationSpikesData.points,
           getPolygon: (d: any) => d.polygon,
           getElevation: (d: any) => d.elevation,
           getFillColor: (d: any) => d.color,
+          updateTriggers: {
+            getPolygon: [elevationSpikesData.points.length, countriesMode, effectiveSelected.length],
+            getElevation: [elevationSpikesData.points.length, heightmapConfig.elevationScale],
+            getFillColor: [palette, invertPalette, heightmapConfig.opacity],
+          },
           extruded: true,
           flatShading: true,
           opacity: heightmapConfig.opacity ?? 0.9,
@@ -1068,13 +1125,6 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     }
 
     // 5. Selected Countries Highlight
-    const effectiveSelected =
-      selectedCountries && selectedCountries.length > 0
-        ? selectedCountries
-        : selectedCountry
-        ? [selectedCountry]
-        : []
-
     if (effectiveSelected.length > 0) {
       const selectedData =
         projection === 'EqualEarth'
@@ -1211,32 +1261,6 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           </div>
         )
       })()}
-
-      {/* Floating Status Pill when Countries Mode is Active */}
-      {countriesMode && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-card/95 backdrop-blur-md px-3.5 py-1.5 rounded-none border border-border shadow-xl text-xs font-sans animate-in fade-in-0 zoom-in-95 duration-150">
-          <span className="w-2 h-2 rounded-none bg-primary animate-pulse" />
-          <span className="font-semibold text-foreground">Countries Mode Active</span>
-          <span className="text-muted-foreground">•</span>
-          {hoveredCountry ? (
-            <span className="text-primary font-medium truncate max-w-[220px]">
-              Inspecting: {hoveredCountry.properties.name}
-            </span>
-          ) : (
-            <span className="text-muted-foreground italic">Hover over any country on map</span>
-          )}
-          {onToggleCountriesMode && (
-            <button
-              type="button"
-              onClick={() => onToggleCountriesMode(false)}
-              className="ml-1 text-muted-foreground hover:text-foreground text-[11px] cursor-pointer"
-              title="Exit Countries Mode"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-      )}
 
       {/* Map Control Tools Toolbar (Top Right) */}
       <TooltipProvider delayDuration={150}>

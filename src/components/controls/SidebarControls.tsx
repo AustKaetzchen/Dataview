@@ -7,7 +7,12 @@ import {
   BoundsMode,
   BinningConfig,
   DownsampleMethod,
+  MapModeItem,
+  MapModeId,
+  HeightmapConfig,
+  CircleOverlayConfig,
 } from '@/lib/geopng/types'
+import { CountryFeature } from '@/lib/geopng/polygonBinning'
 import { D3_COLOR_SCHEMES, getPaletteCssGradient } from '@/lib/geopng/palettes'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select'
 import { Slider } from '../ui/slider'
@@ -49,6 +54,11 @@ interface SidebarControlsProps {
   diffNameB?: string
   binningConfig: BinningConfig
   setBinningConfig: React.Dispatch<React.SetStateAction<BinningConfig>>
+  mapModes?: MapModeItem[]
+  heightmapConfig?: HeightmapConfig
+  circleOverlayConfig?: CircleOverlayConfig
+  selectedCountries?: CountryFeature[]
+  onToggleMapMode?: (id: MapModeId) => void
 }
 
 export const SidebarControls: React.FC<SidebarControlsProps> = ({
@@ -84,6 +94,11 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
   diffNameB,
   binningConfig,
   setBinningConfig,
+  mapModes,
+  heightmapConfig,
+  circleOverlayConfig,
+  selectedCountries,
+  onToggleMapMode,
 }) => {
   // Collapsible Folders State
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({
@@ -141,7 +156,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
             <Icon name="layers" size="1.1rem" />
             <span>Confoederatio Dataview</span>
           </h1>
-          <span className="text-[10px] px-1.5 py-0.5 rounded-none bg-primary/20 text-primary border border-primary/40 font-mono font-bold">
+          <span className="text-[10px] px-1.5 py-0.5 rounded-none bg-muted text-muted-foreground border border-border font-mono font-medium tracking-wider">
             BETA
           </span>
         </div>
@@ -681,10 +696,28 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
         </div>
       </div>
 
-      {/* Footer info */}
-      <div className="p-3 border-t border-border bg-card/60 text-[10px] text-muted-foreground space-y-0.5">
+      {/* Footer Info & Active Mapmodes Bullet List (Bottom Left) */}
+      <div className="p-3 border-t border-border bg-card/60 text-[10px] text-muted-foreground space-y-1 select-none font-sans">
         <p>• Hover: Inspect coordinates & values</p>
-        <p>• Mapmodes selected in bottom right tray</p>
+        {mapModes
+          ?.filter((m) => m.active)
+          .map((m) => {
+            let desc = 'Full-resolution raster layer'
+            if (m.id === 'country_analysis') {
+              const count = selectedCountries?.length ?? 0
+              desc = count > 0 ? `${count} ${count === 1 ? 'country' : 'countries'} isolated` : 'Active (select country)'
+            } else if (m.id === 'spike_map') {
+              desc = `${Math.round((heightmapConfig?.elevationScale ?? 800000) / 1000)}km peak scale • ${Math.round((heightmapConfig?.opacity ?? 0.9) * 100)}% opacity`
+            } else if (m.id === 'circle_sizing') {
+              desc = `≥P${circleOverlayConfig?.percentileCutoff ?? 99} cutoff • ${(circleOverlayConfig?.baseRadius ?? 1.0).toFixed(1)} ha/unit`
+            }
+            return (
+              <p key={m.id} className="text-foreground font-medium">
+                • <span className="text-muted-foreground">{m.label}:</span> {desc}
+              </p>
+            )
+          })}
+        <p>• Shift + Drag / Right-click: Pitch & rotate 3D camera</p>
         <p>• Double-click: Reset map camera</p>
       </div>
     </div>
