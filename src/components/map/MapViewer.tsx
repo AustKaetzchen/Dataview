@@ -6,6 +6,7 @@ import { TileLayer, _Tileset2D as Tileset2D } from '@deck.gl/geo-layers'
 import { lngLatToWorld } from '@math.gl/web-mercator'
 import { DecodedRaster, InspectionData, ProjectionType } from '@/lib/geopng/types'
 import { CountryFeature, CountryStats, loadCountriesGeoJson, findCountryAtLngLat } from '@/lib/geopng/polygonBinning'
+import { MAP_CONFIG } from '@config'
 import { ClickInfoPanel } from './ClickInfoPanel'
 import { ColorBarLegend } from './ColorBarLegend'
 import { Button } from '../ui/button'
@@ -25,6 +26,7 @@ interface MapViewerProps {
   setProjection: (p: ProjectionType) => void
   opacity: number
   palette: any
+  invertPalette?: boolean
   minVal: number
   maxVal: number
   legendTitle: string
@@ -32,7 +34,9 @@ interface MapViewerProps {
   logSigma: number
   breaks?: number[]
   selectedCountry?: CountryFeature | null
+  selectedCountries?: CountryFeature[]
   onSelectCountry?: (country: CountryFeature | null) => void
+  onToggleCountry?: (country: CountryFeature) => void
   countriesMode?: boolean
   onToggleCountriesMode?: (enabled: boolean) => void
   hoveredCountry?: CountryFeature | null
@@ -41,21 +45,15 @@ interface MapViewerProps {
   onInspect?: (data: InspectionData | null) => void
 }
 
-// ESRI ArcGIS Online Basemaps (Public, No API key required)
-const ESRI_BASEMAP_URLS: Record<string, string> = {
-  dark: 'https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-  light: 'https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-  satellite: 'https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-  topo: 'https://services.arcgisonline.com/arcgis/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+// Basemaps driven by MAP_CONFIG (config/map.json5)
+const ESRI_BASEMAP_URLS: Record<string, string> = {}
+for (const layer of MAP_CONFIG.basemapLayers) {
+  if (layer.url) {
+    ESRI_BASEMAP_URLS[layer.id] = layer.url
+  }
 }
 
-const BASEMAP_ORDER: ('dark' | 'light' | 'satellite' | 'topo' | 'none')[] = [
-  'dark',
-  'satellite',
-  'light',
-  'topo',
-  'none',
-]
+const BASEMAP_ORDER = MAP_CONFIG.basemapLayers.map((b) => b.id)
 
 // Custom Tileset2D for Equirectangular (Plate Carrée / OrthographicView)
 class EquirectangularTileset2D extends Tileset2D {
@@ -213,6 +211,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   setProjection,
   opacity,
   palette,
+  invertPalette,
   minVal,
   maxVal,
   legendTitle,
@@ -220,7 +219,9 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   logSigma,
   breaks,
   selectedCountry,
+  selectedCountries,
   onSelectCountry,
+  onToggleCountry,
   countriesMode,
   onToggleCountriesMode,
   hoveredCountry,
@@ -229,7 +230,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   onInspect,
 }) => {
   const [projViewStates, setProjViewStates] = useState<Record<ProjectionType, any>>({
-    Mercator: {
+    Mercator: MAP_CONFIG.mapDefines?.initialMercator || {
       longitude: 0,
       latitude: 20,
       zoom: 1.2,
@@ -238,7 +239,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       maxZoom: 18,
       minZoom: 0,
     },
-    Globe: {
+    Globe: MAP_CONFIG.mapDefines?.initialGlobe || {
       longitude: 0,
       latitude: 20,
       zoom: 0,
@@ -247,7 +248,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       maxZoom: 18,
       minZoom: 0,
     },
-    Equirectangular: {
+    Equirectangular: MAP_CONFIG.mapDefines?.initialEquirectangular || {
       target: [0, 0, 0],
       zoom: 2.0,
       minZoom: 0.2,
@@ -255,7 +256,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     },
   })
 
-  const [basemap, setBasemap] = useState<'dark' | 'light' | 'satellite' | 'topo' | 'none'>('dark')
+  const [basemap, setBasemap] = useState<string>(MAP_CONFIG.basemapLayers[0]?.id || 'dark')
   const [showGraticule, setShowGraticule] = useState(true)
   const [flyoutOpen, setFlyoutOpen] = useState(false)
 
@@ -268,7 +269,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
   useEffect(() => {
     setSelectionId((prev) => prev + 1)
-  }, [selectedCountry])
+  }, [selectedCountry, selectedCountries])
 
   useEffect(() => {
     setHoverId((prev) => prev + 1)
@@ -287,11 +288,13 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     loadCountriesGeoJson().then((feats) => setCountryFeatures(feats))
   }, [])
 
-  // Graticule lines (latitude every 10 deg, longitude every 20 deg)
+  // Graticule lines (driven by MAP_CONFIG)
   const graticulePaths = useMemo(() => {
+    const latInterval = MAP_CONFIG.mapDefines?.graticule?.latInterval || 10
+    const lngInterval = MAP_CONFIG.mapDefines?.graticule?.lngInterval || 20
     const paths: { path: [number, number][] }[] = []
     // Parallels (latitude lines)
-    for (let lat = -80; lat <= 80; lat += 10) {
+    for (let lat = -80; lat <= 80; lat += latInterval) {
       const line: [number, number][] = []
       for (let lon = -180; lon <= 180; lon += 5) {
         line.push([lon, lat])
@@ -299,7 +302,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       paths.push({ path: line })
     }
     // Meridians (longitude lines)
-    for (let lon = -180; lon <= 180; lon += 20) {
+    for (let lon = -180; lon <= 180; lon += lngInterval) {
       const line: [number, number][] = []
       for (let lat = -85; lat <= 85; lat += 5) {
         line.push([lon, lat])
@@ -317,8 +320,15 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
       const pixelHeight = 180 / raster.height
       const pixelX = Math.floor(((lng + 180) / 360) * raster.width)
-      // Account for 1-pixel south shift in Equirectangular projection
-      const effLat = projection === 'Equirectangular' ? lat + pixelHeight : lat
+      // Account for pixel offsets from MAP_CONFIG
+      let effLat = lat
+      if (projection === 'Equirectangular') {
+        const offset = (MAP_CONFIG.equirectangularPixelOffset ?? -1) * pixelHeight
+        effLat = lat - offset
+      } else if (projection === 'Mercator') {
+        const offset = (MAP_CONFIG.mercatorPixelOffset ?? -1) * pixelHeight
+        effLat = lat - offset
+      }
       const pixelY = Math.floor(((90 - effLat) / 180) * raster.height)
 
       const clampedX = Math.max(0, Math.min(raster.width - 1, pixelX))
@@ -345,7 +355,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     [raster, countryFeatures, projection]
   )
 
-  // Map click handler (inspects pixel value and selects country for polygon binning)
+  // Map click handler (inspects pixel value and toggles/selects country for polygon binning)
   const handleClick = useCallback(
     (info: any) => {
       if (!info.coordinate) return
@@ -357,14 +367,18 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       if (onInspect) onInspect(insp)
 
       // Identify clicked country
-      if (countryFeatures.length > 0 && onSelectCountry) {
+      if (countryFeatures.length > 0) {
         const country = findCountryAtLngLat(lng, lat, countryFeatures)
         if (country) {
-          onSelectCountry(country)
+          if (onToggleCountry) {
+            onToggleCountry(country)
+          } else if (onSelectCountry) {
+            onSelectCountry(country)
+          }
         }
       }
     },
-    [sampleRasterAt, onInspect, countryFeatures, onSelectCountry]
+    [sampleRasterAt, onInspect, countryFeatures, onToggleCountry, onSelectCountry]
   )
 
   // Map hover handler (triggers pixel inspection & country hover in Countries Mode)
@@ -609,22 +623,24 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       )
     }
 
-    // 4. Selected Country Highlight (Secondary Red Accent)
+    // 4. Selected Countries Highlight (Secondary Red Accent)
     // Dynamic layer ID and cloned data ensure 100% clean GPU buffers without stale cross-country degenerate polygons
-    if (selectedCountry) {
-      const selKey =
-        (selectedCountry.properties.iso_a3 && selectedCountry.properties.iso_a3 !== '-99')
-          ? selectedCountry.properties.iso_a3
-          : (selectedCountry.properties.adm0_a3 || selectedCountry.properties.name || 'sel')
+    const effectiveSelected =
+      selectedCountries && selectedCountries.length > 0
+        ? selectedCountries
+        : selectedCountry
+        ? [selectedCountry]
+        : []
 
+    if (effectiveSelected.length > 0) {
       list.push(
         new GeoJsonLayer({
-          id: `country-selected-${selKey}-${selectionId}-${projection}`,
-          data: [{ ...selectedCountry, geometry: { ...selectedCountry.geometry } }],
+          id: `countries-selected-${selectionId}-${projection}`,
+          data: effectiveSelected.map((c) => ({ ...c, geometry: { ...c.geometry } })),
           coordinateSystem:
             projection === 'Equirectangular' ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
           filled: true,
-          getFillColor: [240, 60, 60, 25],
+          getFillColor: [240, 60, 60, 30],
           stroked: true,
           getLineColor: [240, 60, 60, 220], // secondary red accent outline
           getLineWidth: 2,
@@ -636,7 +652,13 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
     // 5. Hovered Country Highlight in Countries Mode (Light Translucent White)
     // Dynamic layer ID and cloned data ensure 100% clean GPU buffers without stale cross-country degenerate polygons
-    if (countriesMode && hoveredCountry && hoveredCountry !== selectedCountry) {
+    const isHoveredAlreadySelected = effectiveSelected.some(
+      (c) =>
+        (c.properties.iso_a3 && c.properties.iso_a3 !== '-99' && c.properties.iso_a3 === hoveredCountry?.properties.iso_a3) ||
+        c.properties.name === hoveredCountry?.properties.name
+    )
+
+    if (countriesMode && hoveredCountry && !isHoveredAlreadySelected) {
       const hovKey =
         (hoveredCountry.properties.iso_a3 && hoveredCountry.properties.iso_a3 !== '-99')
           ? hoveredCountry.properties.iso_a3
@@ -670,6 +692,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     rasterBounds,
     opacity,
     selectedCountry,
+    selectedCountries,
     selectionId,
     countriesMode,
     hoveredCountry,
@@ -715,6 +738,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           <div className="absolute top-4 left-4 z-20">
             <ColorBarLegend
               palette={palette}
+              invertPalette={invertPalette}
               minVal={legendMin}
               maxVal={legendMax}
               legendTitle={legendTitle}
@@ -730,8 +754,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
       {/* Floating Status Pill when Countries Mode is Active */}
       {countriesMode && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-card/95 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-border shadow-xl text-xs font-sans animate-in fade-in-0 zoom-in-95 duration-150">
-          <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-card/95 backdrop-blur-md px-3.5 py-1.5 rounded-none border border-border shadow-xl text-xs font-sans animate-in fade-in-0 zoom-in-95 duration-150">
+          <span className="w-2 h-2 rounded-none bg-primary animate-pulse" />
           <span className="font-semibold text-foreground">Countries Mode Active</span>
           <span className="text-muted-foreground">•</span>
           {hoveredCountry ? (
@@ -756,7 +780,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
       {/* Map Control Tools Toolbar (Top Right) */}
       <TooltipProvider delayDuration={150}>
-        <div className="absolute top-4 right-4 z-20 flex flex-col gap-1.5 bg-card/95 backdrop-blur-md p-1 rounded-[3px] border border-border shadow-md">
+        <div className="absolute top-4 right-4 z-20 flex flex-col gap-1.5 bg-card/95 backdrop-blur-md p-1 rounded-none border border-border shadow-md">
           {/* Toggle Countries Mode */}
           {onToggleCountriesMode && (
             <Tooltip>
@@ -765,7 +789,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                   variant={countriesMode ? 'secondary' : 'ghost'}
                   size="icon"
                   onClick={() => onToggleCountriesMode(!countriesMode)}
-                  className={`h-7 w-7 ${countriesMode ? 'text-primary' : 'text-white'}`}
+                  className={`h-7 w-7 rounded-none ${countriesMode ? 'text-primary' : 'text-white'}`}
                   aria-label="Toggle Countries Mode"
                 >
                   <Icon name="public" className={countriesMode ? 'text-primary' : 'text-white'} />
@@ -784,7 +808,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                 variant={showGraticule ? 'secondary' : 'ghost'}
                 size="icon"
                 onClick={() => setShowGraticule(!showGraticule)}
-                className="h-7 w-7 text-white"
+                className="h-7 w-7 rounded-none text-white"
                 aria-label="Toggle Graticule Grid"
               >
                 <Icon name="grid_4x4" className="text-white" />
@@ -802,7 +826,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                 variant={flyoutOpen ? 'secondary' : 'ghost'}
                 size="icon"
                 onClick={() => setFlyoutOpen(!flyoutOpen)}
-                className="h-7 w-7 text-white"
+                className="h-7 w-7 rounded-none text-white"
                 aria-label="Map Display Settings"
               >
                 <Icon name="layers" className="text-white" />
@@ -820,7 +844,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                 variant="ghost"
                 size="icon"
                 onClick={handleDoubleClick}
-                className="h-7 w-7 text-white"
+                className="h-7 w-7 rounded-none text-white"
                 aria-label="Reset View"
               >
                 <Icon name="fullscreen" className="text-white" />
@@ -834,7 +858,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
         {/* Unified Basemap & Projection Flyout Panel */}
         {flyoutOpen && (
-          <div className="absolute top-4 right-14 z-30 w-64 bg-card/98 backdrop-blur-md border border-border rounded-[4px] p-3 shadow-2xl text-xs text-card-foreground animate-in fade-in-0 zoom-in-95 duration-100 font-sans space-y-3">
+          <div className="absolute top-4 right-14 z-30 w-64 bg-card/98 backdrop-blur-md border border-border rounded-none p-3 shadow-2xl text-xs text-card-foreground animate-in fade-in-0 zoom-in-95 duration-100 font-sans space-y-3">
             <div className="flex items-center justify-between pb-1.5 border-b border-border">
               <span className="font-bold text-foreground text-xs flex items-center gap-1.5">
                 <Icon name="tune" size="0.9rem" className="text-white" />
@@ -858,7 +882,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                     key={p}
                     type="button"
                     onClick={() => setProjection(p)}
-                    className={`px-1.5 py-1 text-[11px] rounded-[3px] border transition-colors cursor-pointer text-center truncate ${
+                    className={`px-1.5 py-1 text-[11px] rounded-none border transition-colors cursor-pointer text-center truncate ${
                       projection === p
                         ? 'bg-primary text-primary-foreground border-primary font-bold shadow-sm'
                         : 'bg-background hover:bg-muted text-muted-foreground hover:text-foreground border-border'
@@ -885,19 +909,13 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                 </button>
               </div>
 
-              <div className="space-y-1 bg-background/60 p-1.5 rounded-[3px] border border-border">
-                {[
-                  { id: 'dark', label: 'Dark Canvas (ESRI)' },
-                  { id: 'light', label: 'Light Canvas (ESRI)' },
-                  { id: 'satellite', label: 'Satellite Imagery (ESRI)' },
-                  { id: 'topo', label: 'Topographic (ESRI)' },
-                  { id: 'none', label: 'No Basemap (Land / Sea)' },
-                ].map((item) => (
+              <div className="space-y-1 bg-background/60 p-1.5 rounded-none border border-border">
+                {MAP_CONFIG.basemapLayers.map((item) => (
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => setBasemap(item.id as any)}
-                    className={`w-full flex items-center justify-between px-2 py-1 rounded-[2px] text-[11px] transition-colors cursor-pointer text-left ${
+                    onClick={() => setBasemap(item.id)}
+                    className={`w-full flex items-center justify-between px-2 py-1 rounded-none text-[11px] transition-colors cursor-pointer text-left ${
                       basemap === item.id
                         ? 'bg-muted text-foreground font-semibold'
                         : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'
@@ -905,7 +923,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                   >
                     <span>{item.label}</span>
                     {basemap === item.id && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                      <span className="w-1.5 h-1.5 rounded-none bg-primary" />
                     )}
                   </button>
                 ))}

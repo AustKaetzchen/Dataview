@@ -354,3 +354,107 @@ export function binRasterByCountryMemoized(
   statsCache.set(key, result)
   return result
 }
+
+/**
+ * Computes aggregated statistics across multiple selected countries.
+ */
+export function binRasterByMultipleCountries(
+  raster: DecodedRaster,
+  features: CountryFeature[]
+): CountryStats | null {
+  if (!features || features.length === 0) return null
+  if (features.length === 1) {
+    return binRasterByCountryMemoized(raster, features[0])
+  }
+
+  const name =
+    features.length <= 2
+      ? features.map((f) => f.properties.name).join(', ')
+      : `${features[0].properties.name}, ${features[1].properties.name} (+${features.length - 2} more)`
+  const isoA3 = features.map((f) => f.properties.iso_a3 || f.properties.adm0_a3 || '').join(', ')
+
+  let totalCells = 0
+  let validCount = 0
+  let min = Infinity
+  let max = -Infinity
+  let sum = 0
+
+  for (const feat of features) {
+    const stats = binRasterByCountryMemoized(raster, feat)
+    totalCells += stats.totalCells
+    validCount += stats.validCount
+    if (stats.min < min) min = stats.min
+    if (stats.max > max) max = stats.max
+    sum += stats.mean * stats.validCount
+  }
+
+  const mean = validCount > 0 ? sum / validCount : 0
+  const safeMin = Number.isFinite(min) ? min : 0
+  const safeMax = Number.isFinite(max) ? max : 1
+
+  const binCount = 60
+  const binEdges: number[] = []
+  const binCounts: number[] = new Array(binCount).fill(0)
+  const binWidth = (safeMax - safeMin) / binCount || 1
+
+  for (let b = 0; b <= binCount; b++) {
+    binEdges.push(safeMin + b * binWidth)
+  }
+
+  // Aggregate bin counts from each country's histogram
+  for (const feat of features) {
+    const s = binRasterByCountryMemoized(raster, feat)
+    if (s.histogram) {
+      for (let i = 0; i < s.histogram.counts.length; i++) {
+        const c = s.histogram.counts[i]
+        if (c === 0) continue
+        const midVal = (s.histogram.bins[i] + s.histogram.bins[i + 1]) / 2
+        let bIdx = Math.floor((midVal - safeMin) / binWidth)
+        if (bIdx < 0) bIdx = 0
+        if (bIdx >= binCount) bIdx = binCount - 1
+        binCounts[bIdx] += c
+      }
+    }
+  }
+
+  const quantiles: Record<number, number> = {}
+  const targetPercentiles = [0, 1, 5, 25, 50, 75, 95, 99, 100]
+  quantiles[0] = safeMin
+  quantiles[100] = safeMax
+
+  let runningCount = 0
+  let targetIdx = 1
+  for (let b = 0; b < binCount && targetIdx < targetPercentiles.length - 1; b++) {
+    runningCount += binCounts[b]
+    const pVal = (runningCount / (validCount || 1)) * 100
+    while (targetIdx < targetPercentiles.length - 1 && pVal >= targetPercentiles[targetIdx]) {
+      const p = targetPercentiles[targetIdx]
+      quantiles[p] = binEdges[b + 1]
+      targetIdx++
+    }
+  }
+  for (const p of targetPercentiles) {
+    if (quantiles[p] === undefined) {
+      quantiles[p] = (safeMin + safeMax) / 2
+    }
+  }
+
+  return {
+    name,
+    isoA3,
+    totalCells,
+    validCount,
+    min: Number.isFinite(min) ? min : 0,
+    max: Number.isFinite(max) ? max : 0,
+    mean,
+    stdDev: 0,
+    median: quantiles[50] ?? (safeMin + safeMax) / 2,
+    quantiles,
+    histogram: {
+      bins: binEdges,
+      counts: binCounts,
+      min: safeMin,
+      max: safeMax,
+    },
+  }
+}

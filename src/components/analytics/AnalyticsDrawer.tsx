@@ -13,7 +13,9 @@ interface AnalyticsDrawerProps {
   minOverride?: number
   maxOverride?: number
   selectedCountry?: CountryFeature | null
+  selectedCountries?: CountryFeature[]
   onSelectCountry?: (country: CountryFeature | null) => void
+  onClearCountries?: () => void
   countriesMode?: boolean
   onToggleCountriesMode?: (enabled: boolean) => void
   hoveredCountry?: CountryFeature | null
@@ -27,7 +29,9 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
   minOverride,
   maxOverride,
   selectedCountry,
+  selectedCountries,
   onSelectCountry,
+  onClearCountries,
   countryStats,
 }) => {
   const [isOpen, setIsOpen] = useState(true)
@@ -45,6 +49,21 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
     }
   }, [isOpen])
 
+  const effectiveCountries =
+    selectedCountries && selectedCountries.length > 0
+      ? selectedCountries
+      : selectedCountry
+      ? [selectedCountry]
+      : []
+
+  const handleClear = () => {
+    if (onClearCountries) {
+      onClearCountries()
+    } else if (onSelectCountry) {
+      onSelectCountry(null)
+    }
+  }
+
   return (
     <div
       onTransitionEnd={() => {
@@ -52,7 +71,7 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
       }}
       className={`absolute bottom-0 right-4 z-30 w-[740px] max-w-[calc(100vw-340px)] transition-all duration-200 ease-in-out ${
         isOpen ? 'h-68' : 'h-8'
-      } bg-card/95 backdrop-blur-md border-t border-x border-border rounded-t-[5px] text-card-foreground shadow-2xl flex flex-col font-sans`}
+      } bg-card/95 backdrop-blur-md border-t border-x border-border rounded-none text-card-foreground shadow-2xl flex flex-col font-sans`}
     >
       {/* Drawer Header - Clean, spacious, and uncompressed */}
       <div className="h-8 px-3.5 flex items-center justify-between border-b border-border select-none gap-2">
@@ -63,10 +82,10 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
           </span>
 
           {isOpen && (
-            <div className="flex items-center gap-1 bg-muted p-0.5 rounded-[3px] shrink-0">
+            <div className="flex items-center gap-1 bg-muted p-0.5 rounded-none shrink-0">
               <button
                 onClick={() => setActiveTab('histogram')}
-                className={`px-2.5 py-0.5 text-xs font-medium rounded-[3px] transition-colors flex items-center gap-1.5 cursor-pointer ${
+                className={`px-2.5 py-0.5 text-xs font-medium rounded-none transition-colors flex items-center gap-1.5 cursor-pointer ${
                   activeTab === 'histogram'
                     ? 'bg-background text-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
@@ -78,7 +97,7 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
 
               <button
                 onClick={() => setActiveTab('stats')}
-                className={`px-2.5 py-0.5 text-xs font-medium rounded-[3px] transition-colors flex items-center gap-1.5 cursor-pointer ${
+                className={`px-2.5 py-0.5 text-xs font-medium rounded-none transition-colors flex items-center gap-1.5 cursor-pointer ${
                   activeTab === 'stats'
                     ? 'bg-background text-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
@@ -91,20 +110,22 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
           )}
 
           {/* If a country filter is active, show an unobtrusive badge with clear button */}
-          {isOpen && selectedCountry && (
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/15 text-primary text-[11px] font-medium border border-primary/30 truncate">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
-              <span className="truncate max-w-[140px]">{selectedCountry.properties.name}</span>
-              {onSelectCountry && (
-                <button
-                  type="button"
-                  onClick={() => onSelectCountry(null)}
-                  className="ml-0.5 hover:text-foreground opacity-70 hover:opacity-100 cursor-pointer text-[10px]"
-                  title="Clear country filter"
-                >
-                  ✕
-                </button>
-              )}
+          {isOpen && effectiveCountries.length > 0 && (
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-none bg-primary/15 text-primary text-[11px] font-medium border border-primary/30 truncate">
+              <span className="w-1.5 h-1.5 rounded-none bg-primary shrink-0" />
+              <span className="truncate max-w-[180px]">
+                {effectiveCountries.length === 1
+                  ? effectiveCountries[0].properties.name
+                  : `${effectiveCountries[0].properties.name} (+${effectiveCountries.length - 1} more)`}
+              </span>
+              <button
+                type="button"
+                onClick={handleClear}
+                className="ml-0.5 hover:text-foreground opacity-70 hover:opacity-100 cursor-pointer text-[10px]"
+                title="Clear country filter"
+              >
+                ✕
+              </button>
             </div>
           )}
         </div>

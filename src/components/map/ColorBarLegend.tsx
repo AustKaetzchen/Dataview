@@ -5,6 +5,7 @@ import { transformValue } from '@/lib/geopng/scales'
 
 interface ColorBarLegendProps {
   palette: ColorPalette
+  invertPalette?: boolean
   minVal: number
   maxVal: number
   legendTitle: string
@@ -47,6 +48,7 @@ export function formatLegendValue(val: number): string {
 
 export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
   palette,
+  invertPalette = false,
   minVal,
   maxVal,
   legendTitle,
@@ -56,7 +58,7 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
   breaks,
   countryName,
 }) => {
-  const gradient = getPaletteCssGradient(palette)
+  const gradient = getPaletteCssGradient(palette, invertPalette)
 
   const tMin = useMemo(() => transformValue(minVal, scaleType as ScaleType, logSigma), [minVal, scaleType, logSigma])
   const tMax = useMemo(() => transformValue(maxVal, scaleType as ScaleType, logSigma), [maxVal, scaleType, logSigma])
@@ -82,7 +84,6 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
       ]
     }
 
-    // If explicit breaks provided (e.g. from percentile mode)
     if (breaks && breaks.length >= 2) {
       return breaks.map((b) => {
         const tb = transformValue(b, scaleType as ScaleType, logSigma)
@@ -95,7 +96,6 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
       })
     }
 
-    // Default 5 equidistant breaks along the colour ramp (0%, 25%, 50%, 75%, 100%)
     const steps = [0, 0.25, 0.5, 0.75, 1]
     return steps.map((s) => {
       const tVal = tMin + s * range
@@ -109,24 +109,24 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
   }, [breaks, minVal, maxVal, tMin, range, scaleType, logSigma])
 
   return (
-    <div className="rounded-[4px] border border-border bg-card/95 backdrop-blur-md p-3.5 shadow-lg text-xs text-card-foreground w-84 select-none font-sans">
+    <div className="rounded-none border border-border bg-card/95 backdrop-blur-md p-3.5 shadow-lg text-xs text-card-foreground w-84 select-none font-sans">
       {/* Legend Title & Hover Value Readout */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="font-bold text-foreground text-xs">{legendTitle}</span>
-          <span className="text-[10px] text-muted-foreground capitalize bg-muted px-1.5 py-0.5 rounded-[2px]">
+          <span className="text-[10px] text-muted-foreground capitalize bg-muted px-1.5 py-0.5 rounded-none">
             {scaleType}
           </span>
           {countryName && (
-            <span className="text-[10px] font-semibold text-white bg-primary/20 border border-primary/40 px-1.5 py-0.5 rounded-[2px] flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+            <span className="text-[10px] font-semibold text-white bg-primary/20 border border-primary/40 px-1.5 py-0.5 rounded-none flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-none bg-primary animate-pulse" />
               {countryName}
             </span>
           )}
         </div>
 
         {currentVal !== null && currentVal !== undefined && Number.isFinite(currentVal) ? (
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-primary text-primary-foreground font-bold text-[11px] shadow-sm animate-in fade-in-0 duration-100">
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-none bg-primary text-primary-foreground font-bold text-[11px] shadow-sm animate-in fade-in-0 duration-100">
             <span>{formatLegendValue(currentVal)}</span>
           </div>
         ) : (
@@ -139,10 +139,9 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
       {/* Gradient Bar with Breaks & Active Value Needle */}
       <div className="relative w-full my-1.5">
         <div
-          className="relative h-4.5 w-full rounded-[2px] border border-border/80 shadow-inner overflow-hidden"
+          className="relative h-4.5 w-full rounded-none border border-border/80 shadow-inner overflow-hidden"
           style={{ background: gradient }}
         >
-          {/* Visual Break dividers across the colourbar */}
           {breakPoints.map((bp, i) => {
             if (bp.pct <= 1 || bp.pct >= 99) return null
             return (
@@ -156,25 +155,19 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
           })}
         </div>
 
-        {/* Dynamic Needle / Slider when hovering a pixel */}
         {indicatorPct !== null && (
           <div
             className="absolute top-[-4px] bottom-[-4px] pointer-events-none transition-all duration-75 ease-out z-20 flex flex-col items-center justify-between"
             style={{ left: `${indicatorPct}%` }}
           >
-            {/* Top Pointer Pip */}
             <div className="w-0 h-0 border-l-[4.5px] border-l-transparent border-r-[4.5px] border-r-transparent border-t-[6px] border-t-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]" />
-
-            {/* Needle Line */}
-            <div className="w-[2.5px] flex-1 bg-white rounded-full shadow-[0_0_6px_rgba(0,0,0,0.9)] border border-black/30" />
-
-            {/* Bottom Pointer Pip */}
+            <div className="w-[2.5px] flex-1 bg-white rounded-none shadow-[0_0_6px_rgba(0,0,0,0.9)] border border-black/30" />
             <div className="w-0 h-0 border-l-[4.5px] border-l-transparent border-r-[4.5px] border-r-transparent border-b-[6px] border-b-white drop-shadow-[0_-1px_2px_rgba(0,0,0,0.9)]" />
           </div>
         )}
       </div>
 
-      {/* Ticks and aligned break values beneath colourbar */}
+      {/* Ticks and aligned break values */}
       <div className="relative w-full h-5 mt-1">
         {breakPoints.map((bp, i) => {
           const isFirst = i === 0

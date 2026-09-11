@@ -48,7 +48,7 @@
   --border: var(--accent-tertiary-colour);
   --input: var(--accent-tertiary-colour);
   --ring: var(--accent-secondary-colour);
-  --radius: 3px;
+  --radius: 0px;
 }
 
 @theme inline {

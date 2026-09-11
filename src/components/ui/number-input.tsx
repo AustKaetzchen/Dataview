@@ -47,7 +47,7 @@ export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
     return (
       <div
         className={cn(
-          'relative flex items-center h-8 w-full rounded-md border border-input bg-background shadow-sm transition-colors focus-within:ring-1 focus-within:ring-ring overflow-hidden',
+          'relative flex items-center h-8 w-full rounded-none border border-input bg-background shadow-sm transition-colors focus-within:ring-1 focus-within:ring-ring overflow-hidden',
           disabled && 'opacity-50 cursor-not-allowed',
           containerClassName
         )}

@@ -18,14 +18,11 @@
 
     /* Path alias */
     "paths": {
-      "@/*": ["./src/*"]
-    },
-
-    /* Linting */
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "erasableSyntaxOnly": false,
-    "noFallthroughCasesInSwitch": true
+      "@/*": ["./src/*"],
+      "@config/*": ["./config/*"],
+      "config/*": ["./config/*"],
+      "config": ["./config/index.ts"]
+    }
   },
-  "include": ["src"]
+  "include": ["src", "config"]
 }

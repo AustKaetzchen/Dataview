@@ -1,120 +1,124 @@
-import { ColorPalette, ScaleType, ProjectionType } from './types'
+import * as d3Chromatic from 'd3-scale-chromatic'
+import { ColorPalette, ColorSchemeInfo, ScaleType, ProjectionType } from './types'
 import { transformValue } from './scales'
+import { CountryFeature } from './polygonBinning'
 
 type RGB = [number, number, number]
 
-const PALETTE_STOPS: Record<ColorPalette, RGB[]> = {
-  Viridis: [
-    [68, 1, 84],
-    [72, 35, 116],
-    [64, 67, 135],
-    [52, 94, 141],
-    [41, 120, 142],
-    [32, 144, 140],
-    [34, 167, 132],
-    [68, 190, 112],
-    [121, 209, 81],
-    [189, 222, 38],
-    [253, 231, 36],
-  ],
-  Plasma: [
-    [13, 8, 135],
-    [75, 3, 161],
-    [125, 3, 168],
-    [168, 34, 150],
-    [203, 70, 121],
-    [229, 107, 93],
-    [248, 148, 65],
-    [253, 195, 40],
-    [240, 249, 33],
-  ],
-  Magma: [
-    [0, 0, 4],
-    [28, 16, 68],
-    [79, 18, 123],
-    [129, 37, 129],
-    [181, 54, 122],
-    [229, 80, 100],
-    [251, 135, 97],
-    [254, 195, 139],
-    [252, 253, 191],
-  ],
-  Inferno: [
-    [0, 0, 4],
-    [33, 12, 69],
-    [87, 15, 109],
-    [140, 41, 129],
-    [187, 55, 84],
-    [229, 89, 43],
-    [249, 142, 9],
-    [254, 203, 41],
-    [252, 255, 164],
-  ],
-  Cividis: [
-    [0, 32, 76],
-    [0, 52, 110],
-    [65, 78, 116],
-    [102, 104, 123],
-    [139, 133, 129],
-    [179, 165, 130],
-    [222, 200, 124],
-    [255, 234, 70],
-  ],
-  Turbo: [
-    [48, 18, 59],
-    [70, 107, 227],
-    [40, 188, 235],
-    [50, 242, 152],
-    [164, 252, 60],
-    [251, 185, 56],
-    [251, 91, 23],
-    [197, 22, 5],
-    [122, 4, 2],
-  ],
-  Spectral: [
-    [158, 1, 66],
-    [213, 62, 79],
-    [244, 109, 67],
-    [253, 174, 97],
-    [254, 224, 139],
-    [255, 255, 191],
-    [230, 245, 152],
-    [171, 221, 164],
-    [102, 194, 165],
-    [50, 136, 189],
-    [94, 79, 162],
-  ],
-  Heat: [
-    [255, 255, 204],
-    [255, 237, 160],
-    [254, 217, 118],
-    [254, 178, 76],
-    [253, 141, 60],
-    [252, 78, 42],
-    [227, 26, 28],
-    [189, 0, 38],
-    [128, 0, 38],
-  ],
+// Map palette ID to d3-scale-chromatic interpolator
+const D3_INTERPOLATOR_MAP: Record<ColorPalette, (t: number) => string> = {
+  Viridis: d3Chromatic.interpolateViridis,
+  Plasma: d3Chromatic.interpolatePlasma,
+  Inferno: d3Chromatic.interpolateInferno,
+  Magma: d3Chromatic.interpolateMagma,
+  Cividis: d3Chromatic.interpolateCividis,
+  Turbo: d3Chromatic.interpolateTurbo,
+  Warm: d3Chromatic.interpolateWarm,
+  Cool: d3Chromatic.interpolateCool,
+  CubehelixDefault: d3Chromatic.interpolateCubehelixDefault,
+  Rainbow: d3Chromatic.interpolateRainbow,
+  Sinebow: d3Chromatic.interpolateSinebow,
+  Spectral: d3Chromatic.interpolateSpectral,
+  Blues: d3Chromatic.interpolateBlues,
+  Greens: d3Chromatic.interpolateGreens,
+  Greys: d3Chromatic.interpolateGreys,
+  Oranges: d3Chromatic.interpolateOranges,
+  Purples: d3Chromatic.interpolatePurples,
+  Reds: d3Chromatic.interpolateReds,
+  BuGn: d3Chromatic.interpolateBuGn,
+  BuPu: d3Chromatic.interpolateBuPu,
+  GnBu: d3Chromatic.interpolateGnBu,
+  OrRd: d3Chromatic.interpolateOrRd,
+  PuBu: d3Chromatic.interpolatePuBu,
+  PuBuGn: d3Chromatic.interpolatePuBuGn,
+  PuRd: d3Chromatic.interpolatePuRd,
+  RdPu: d3Chromatic.interpolateRdPu,
+  YlGn: d3Chromatic.interpolateYlGn,
+  YlGnBu: d3Chromatic.interpolateYlGnBu,
+  YlOrBr: d3Chromatic.interpolateYlOrBr,
+  YlOrRd: d3Chromatic.interpolateYlOrRd,
+  BrBG: d3Chromatic.interpolateBrBG,
+  PRGn: d3Chromatic.interpolatePRGn,
+  PiYG: d3Chromatic.interpolatePiYG,
+  PuOr: d3Chromatic.interpolatePuOr,
+  RdBu: d3Chromatic.interpolateRdBu,
+  RdGy: d3Chromatic.interpolateRdGy,
+  RdYlBu: d3Chromatic.interpolateRdYlBu,
+  RdYlGn: d3Chromatic.interpolateRdYlGn,
 }
 
-// Generate 256-entry RGB lookup table for given palette
-export function getPaletteLUT(palette: ColorPalette): Uint8Array {
-  const stops = PALETTE_STOPS[palette] || PALETTE_STOPS.Viridis
+export const D3_COLOR_SCHEMES: ColorSchemeInfo[] = [
+  // Sequential (Multi-Hue)
+  { id: 'Viridis', name: 'Viridis', category: 'Sequential (Multi-Hue)' },
+  { id: 'Plasma', name: 'Plasma', category: 'Sequential (Multi-Hue)' },
+  { id: 'Inferno', name: 'Inferno', category: 'Sequential (Multi-Hue)' },
+  { id: 'Magma', name: 'Magma', category: 'Sequential (Multi-Hue)' },
+  { id: 'Cividis', name: 'Cividis', category: 'Sequential (Multi-Hue)' },
+  { id: 'Turbo', name: 'Turbo', category: 'Sequential (Multi-Hue)' },
+  { id: 'Warm', name: 'Warm', category: 'Sequential (Multi-Hue)' },
+  { id: 'Cool', name: 'Cool', category: 'Sequential (Multi-Hue)' },
+  { id: 'CubehelixDefault', name: 'Cubehelix Default', category: 'Sequential (Multi-Hue)' },
+  { id: 'BuGn', name: 'Blue-Green (BuGn)', category: 'Sequential (Multi-Hue)' },
+  { id: 'BuPu', name: 'Blue-Purple (BuPu)', category: 'Sequential (Multi-Hue)' },
+  { id: 'GnBu', name: 'Green-Blue (GnBu)', category: 'Sequential (Multi-Hue)' },
+  { id: 'OrRd', name: 'Orange-Red (OrRd)', category: 'Sequential (Multi-Hue)' },
+  { id: 'PuBu', name: 'Purple-Blue (PuBu)', category: 'Sequential (Multi-Hue)' },
+  { id: 'PuBuGn', name: 'Purple-Blue-Green (PuBuGn)', category: 'Sequential (Multi-Hue)' },
+  { id: 'PuRd', name: 'Purple-Red (PuRd)', category: 'Sequential (Multi-Hue)' },
+  { id: 'RdPu', name: 'Red-Purple (RdPu)', category: 'Sequential (Multi-Hue)' },
+  { id: 'YlGn', name: 'Yellow-Green (YlGn)', category: 'Sequential (Multi-Hue)' },
+  { id: 'YlGnBu', name: 'Yellow-Green-Blue (YlGnBu)', category: 'Sequential (Multi-Hue)' },
+  { id: 'YlOrBr', name: 'Yellow-Orange-Brown (YlOrBr)', category: 'Sequential (Multi-Hue)' },
+  { id: 'YlOrRd', name: 'Yellow-Orange-Red (YlOrRd)', category: 'Sequential (Multi-Hue)' },
+
+  // Sequential (Single-Hue)
+  { id: 'Blues', name: 'Blues', category: 'Sequential (Single-Hue)' },
+  { id: 'Greens', name: 'Greens', category: 'Sequential (Single-Hue)' },
+  { id: 'Greys', name: 'Greys', category: 'Sequential (Single-Hue)' },
+  { id: 'Oranges', name: 'Oranges', category: 'Sequential (Single-Hue)' },
+  { id: 'Purples', name: 'Purples', category: 'Sequential (Single-Hue)' },
+  { id: 'Reds', name: 'Reds', category: 'Sequential (Single-Hue)' },
+
+  // Diverging
+  { id: 'Spectral', name: 'Spectral', category: 'Diverging' },
+  { id: 'BrBG', name: 'Brown-BlueGreen (BrBG)', category: 'Diverging' },
+  { id: 'PRGn', name: 'Purple-Green (PRGn)', category: 'Diverging' },
+  { id: 'PiYG', name: 'Pink-YellowGreen (PiYG)', category: 'Diverging' },
+  { id: 'PuOr', name: 'Purple-Orange (PuOr)', category: 'Diverging' },
+  { id: 'RdBu', name: 'Red-Blue (RdBu)', category: 'Diverging' },
+  { id: 'RdGy', name: 'Red-Grey (RdGy)', category: 'Diverging' },
+  { id: 'RdYlBu', name: 'Red-Yellow-Blue (RdYlBu)', category: 'Diverging' },
+  { id: 'RdYlGn', name: 'Red-Yellow-Green (RdYlGn)', category: 'Diverging' },
+
+  // Cyclical
+  { id: 'Rainbow', name: 'Rainbow', category: 'Cyclical' },
+  { id: 'Sinebow', name: 'Sinebow', category: 'Cyclical' },
+]
+
+// Parses hex string '#rrggbb' or 'rgb(r, g, b)' into [r, g, b]
+export function parseRgbString(str: string): RGB {
+  if (str.startsWith('#')) {
+    const hex = str.slice(1)
+    const num = parseInt(hex, 16)
+    return [(num >> 16) & 255, (num >> 8) & 255, num & 255]
+  }
+  const match = str.match(/\d+/g)
+  if (match && match.length >= 3) {
+    return [parseInt(match[0], 10), parseInt(match[1], 10), parseInt(match[2], 10)]
+  }
+  return [0, 0, 0]
+}
+
+// Generate 256-entry RGB lookup table for given palette with optional inversion
+export function getPaletteLUT(palette: ColorPalette, invert: boolean = false): Uint8Array {
+  const interpolator = D3_INTERPOLATOR_MAP[palette] || d3Chromatic.interpolateViridis
   const lut = new Uint8Array(256 * 3)
-  const numIntervals = stops.length - 1
 
   for (let i = 0; i < 256; i++) {
-    const t = i / 255
-    const pos = t * numIntervals
-    const idx = Math.min(numIntervals - 1, Math.floor(pos))
-    const frac = pos - idx
-
-    const c1 = stops[idx]
-    const c2 = stops[idx + 1]
-
-    const r = Math.round(c1[0] + frac * (c2[0] - c1[0]))
-    const g = Math.round(c1[1] + frac * (c2[1] - c1[1]))
-    const b = Math.round(c1[2] + frac * (c2[2] - c1[2]))
+    const rawT = i / 255
+    const t = invert ? 1 - rawT : rawT
+    const colorStr = interpolator(t)
+    const [r, g, b] = parseRgbString(colorStr)
 
     lut[i * 3 + 0] = r
     lut[i * 3 + 1] = g
@@ -124,29 +128,40 @@ export function getPaletteLUT(palette: ColorPalette): Uint8Array {
   return lut
 }
 
-// Helper to get CSS gradient string for UI legend preview
-export function getPaletteCssGradient(palette: ColorPalette): string {
-  const stops = PALETTE_STOPS[palette] || PALETTE_STOPS.Viridis
-  const colorStrings = stops.map((c) => `rgb(${c[0]}, ${c[1]}, ${c[2]})`)
-  return `linear-gradient(to right, ${colorStrings.join(', ')})`
+// Helper to get CSS gradient string for UI legend & combobox preview
+export function getPaletteCssGradient(palette: ColorPalette, invert: boolean = false): string {
+  const interpolator = D3_INTERPOLATOR_MAP[palette] || d3Chromatic.interpolateViridis
+  const stops: string[] = []
+  const count = 10
+
+  for (let i = 0; i <= count; i++) {
+    const rawT = i / count
+    const t = invert ? 1 - rawT : rawT
+    stops.push(interpolator(t))
+  }
+
+  return `linear-gradient(to right, ${stops.join(', ')})`
 }
 
 export interface RenderRasterOptions {
   palette: ColorPalette
+  invertPalette?: boolean
   scaleType: ScaleType
   logSigma: number
   minVal: number
   maxVal: number
   projection?: ProjectionType
   opacity?: number
+  activeCountries?: CountryFeature[] | null
 }
 
 /**
- * Renders an Equirectangular Float32Array raster (4320x2160 or downsampled) into an HTMLCanvasElement.
+ * Renders an Equirectangular Float32Array raster into an HTMLCanvasElement.
  *
- * - When projection === 'Mercator': warps latitudes from Equirectangular WGS84 linear spacing
- *   to Web Mercator spacing (bounds [-180, -85.051129, 180, 85.051129]) so it aligns with ESRI basemaps.
- * - When projection === 'Equirectangular' or 'Globe': renders standard 2:1 Plate Carrée WGS84 canvas.
+ * When `activeCountries` is provided (Countries Mode isolation):
+ * - Isolates the visible pixels strictly to within the country boundary/boundaries using
+ *   native 2D canvas polygon clipping (`destination-in`).
+ * - Stretches the visual color ramp to the min and max of those countries.
  */
 export function renderRasterToCanvas(
   data: Float32Array,
@@ -167,7 +182,7 @@ export function renderRasterToCanvas(
 
   const imgData = ctx.createImageData(outWidth, outHeight)
   const pixels = imgData.data
-  const lut = getPaletteLUT(options.palette)
+  const lut = getPaletteLUT(options.palette, Boolean(options.invertPalette))
 
   const tMin = transformValue(options.minVal, options.scaleType, options.logSigma)
   const tMax = transformValue(options.maxVal, options.scaleType, options.logSigma)
@@ -206,6 +221,43 @@ export function renderRasterToCanvas(
 
   ctx.putImageData(imgData, 0, 0)
 
+  // Countries Mode isolation: Mask canvas strictly to active country polygon(s)
+  if (options.activeCountries && options.activeCountries.length > 0) {
+    ctx.save()
+    ctx.globalCompositeOperation = 'destination-in'
+    ctx.beginPath()
+
+    for (const country of options.activeCountries) {
+      const geometry = country.geometry
+      if (!geometry) continue
+      const polygons: number[][][][] =
+        geometry.type === 'Polygon'
+          ? [geometry.coordinates as number[][][]]
+          : geometry.type === 'MultiPolygon'
+          ? (geometry.coordinates as number[][][][])
+          : []
+
+      for (const poly of polygons) {
+        for (const ring of poly) {
+          for (let i = 0; i < ring.length; i++) {
+            const [lng, lat] = ring[i]
+            const x = ((lng + 180) / 360) * outWidth
+            const y = ((90 - lat) / 180) * outHeight
+            if (i === 0) {
+              ctx.moveTo(x, y)
+            } else {
+              ctx.lineTo(x, y)
+            }
+          }
+          ctx.closePath()
+        }
+      }
+    }
+
+    ctx.fillStyle = '#ffffff'
+    ctx.fill('evenodd')
+    ctx.restore()
+  }
+
   return { canvas, bounds: [-180, -90, 180, 90] }
 }
-
