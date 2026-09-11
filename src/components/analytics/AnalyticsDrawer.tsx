@@ -50,14 +50,15 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
     })
   }, [])
 
+  const getCountryCode = (c: CountryFeature) => {
+    const iso = c.properties.iso_a3
+    if (iso && iso !== '-99') return iso
+    return c.properties.adm0_a3 || c.properties.name || ''
+  }
+
   const selectedCountryKey = useMemo(() => {
     if (!selectedCountry) return ''
-    return (
-      selectedCountry.properties.iso_a3 ||
-      selectedCountry.properties.adm0_a3 ||
-      selectedCountry.properties.name ||
-      ''
-    )
+    return getCountryCode(selectedCountry)
   }, [selectedCountry])
 
   return (
@@ -152,21 +153,16 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
                     if (onSelectCountry) onSelectCountry(null)
                     return
                   }
-                  const match = allCountries.find(
-                    (c) =>
-                      c.properties.iso_a3 === val ||
-                      c.properties.adm0_a3 === val ||
-                      c.properties.name === val
-                  )
+                  const match = allCountries.find((c) => getCountryCode(c) === val)
                   if (match && onSelectCountry) onSelectCountry(match)
                 }}
                 className="h-6 px-1.5 py-0 text-[11px] bg-background border border-input rounded-[3px] text-foreground focus:outline-none cursor-pointer max-w-[130px] truncate"
               >
                 <option value="">Global (All)</option>
-                {allCountries.map((c) => {
-                  const code = c.properties.iso_a3 || c.properties.adm0_a3 || c.properties.name
+                {allCountries.map((c, idx) => {
+                  const code = getCountryCode(c) || `country-${idx}`
                   return (
-                    <option key={code} value={code}>
+                    <option key={`${code}-${idx}`} value={code}>
                       {c.properties.name}
                     </option>
                   )

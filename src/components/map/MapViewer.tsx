@@ -258,6 +258,18 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   const [inspectData, setInspectData] = useState<InspectionData | null>(null)
   const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null)
 
+  // Unique counters for selected and hovered layers to guarantee fresh GPU buffers on country changes
+  const [selectionId, setSelectionId] = useState(0)
+  const [hoverId, setHoverId] = useState(0)
+
+  useEffect(() => {
+    setSelectionId((prev) => prev + 1)
+  }, [selectedCountry])
+
+  useEffect(() => {
+    setHoverId((prev) => prev + 1)
+  }, [hoveredCountry])
+
   // NaturalEarth Land & Countries data
   const [landGeoJson, setLandGeoJson] = useState<any>(null)
   const [countryFeatures, setCountryFeatures] = useState<CountryFeature[]>([])
@@ -299,8 +311,11 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       if (!raster) return null
       if (lng < -180 || lng > 180 || lat < -90 || lat > 90) return null
 
+      const pixelHeight = 180 / raster.height
       const pixelX = Math.floor(((lng + 180) / 360) * raster.width)
-      const pixelY = Math.floor(((90 - lat) / 180) * raster.height)
+      // Account for 1-pixel south shift in Equirectangular projection
+      const effLat = projection === 'Equirectangular' ? lat + pixelHeight : lat
+      const pixelY = Math.floor(((90 - effLat) / 180) * raster.height)
 
       const clampedX = Math.max(0, Math.min(raster.width - 1, pixelX))
       const clampedY = Math.max(0, Math.min(raster.height - 1, pixelY))
@@ -323,7 +338,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         countryName,
       }
     },
-    [raster, countryFeatures]
+    [raster, countryFeatures, projection]
   )
 
   // Map click handler (inspects pixel value and selects country for polygon binning)
@@ -460,7 +475,6 @@ export const MapViewer: React.FC<MapViewerProps> = ({
             getLineColor: [55, 62, 78, 255],
             getLineWidth: 1,
             lineWidthUnits: 'pixels',
-            wrapLongitude: true,
             parameters: { depthTest: false },
           })
         )
@@ -565,13 +579,12 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           widthMinPixels: 1,
           widthMaxPixels: 1,
           getWidth: 1,
-          wrapLongitude: true,
           pickable: false,
         })
       )
     }
 
-    // 3. GeoPNG Raster Layer (Tesselated for pitch/tilt perspective precision)
+    // 3. GeoPNG Raster Layer (Tesselated for pitch/tilt perspective precision, pure nearest-neighbor)
     if (renderedCanvas) {
       list.push(
         new TesselatedBitmapLayer({
@@ -583,16 +596,27 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           coordinateSystem:
             projection === 'Equirectangular' ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
           _imageCoordinateSystem: projection === 'Globe' ? 'lnglat' : undefined,
+          textureParameters: {
+            minFilter: 'nearest',
+            magFilter: 'nearest',
+            mipmapFilter: 'nearest',
+          },
         })
       )
     }
 
     // 4. Selected Country Highlight (Secondary Red Accent)
+    // Dynamic layer ID and cloned data ensure 100% clean GPU buffers without stale cross-country degenerate polygons
     if (selectedCountry) {
+      const selKey =
+        (selectedCountry.properties.iso_a3 && selectedCountry.properties.iso_a3 !== '-99')
+          ? selectedCountry.properties.iso_a3
+          : (selectedCountry.properties.adm0_a3 || selectedCountry.properties.name || 'sel')
+
       list.push(
         new GeoJsonLayer({
-          id: `country-selected-${projection}`,
-          data: selectedCountry,
+          id: `country-selected-${selKey}-${selectionId}-${projection}`,
+          data: [{ ...selectedCountry, geometry: { ...selectedCountry.geometry } }],
           coordinateSystem:
             projection === 'Equirectangular' ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
           filled: true,
@@ -601,18 +625,23 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           getLineColor: [240, 60, 60, 220], // secondary red accent outline
           getLineWidth: 2,
           lineWidthUnits: 'pixels',
-          wrapLongitude: true,
           parameters: { depthTest: false },
         })
       )
     }
 
     // 5. Hovered Country Highlight in Countries Mode (Light Translucent White)
+    // Dynamic layer ID and cloned data ensure 100% clean GPU buffers without stale cross-country degenerate polygons
     if (countriesMode && hoveredCountry && hoveredCountry !== selectedCountry) {
+      const hovKey =
+        (hoveredCountry.properties.iso_a3 && hoveredCountry.properties.iso_a3 !== '-99')
+          ? hoveredCountry.properties.iso_a3
+          : (hoveredCountry.properties.adm0_a3 || hoveredCountry.properties.name || 'hov')
+
       list.push(
         new GeoJsonLayer({
-          id: `country-hovered-${projection}`,
-          data: hoveredCountry,
+          id: `country-hovered-${hovKey}-${hoverId}-${projection}`,
+          data: [{ ...hoveredCountry, geometry: { ...hoveredCountry.geometry } }],
           coordinateSystem:
             projection === 'Equirectangular' ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
           filled: true,
@@ -621,7 +650,6 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           getLineColor: [255, 255, 255, 220], // crisp white hairline outline
           getLineWidth: 1.5,
           lineWidthUnits: 'pixels',
-          wrapLongitude: true,
           parameters: { depthTest: false },
         })
       )
@@ -638,13 +666,16 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     rasterBounds,
     opacity,
     selectedCountry,
+    selectionId,
     countriesMode,
     hoveredCountry,
+    hoverId,
   ])
 
   return (
     <div
       className="relative w-full h-full overflow-hidden select-none bg-background font-sans"
+      style={{ imageRendering: 'pixelated' }}
       onDoubleClick={handleDoubleClick}
     >
       <DeckGL

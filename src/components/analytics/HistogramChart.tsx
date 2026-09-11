@@ -65,74 +65,118 @@ export const HistogramChart: React.FC<HistogramChartProps> = ({
       return closestIdx
     }
 
-    // Mark lines with margin & vertical staggering heuristics to prevent label overlap
+    // Mark lines for percentiles (P25, P75), median (M), and average (A)
+    // Format horizontally with abbreviations or numbers if clustered together
     const markLines: any[] = []
+    const activeMean = countryStats ? (countryStats as any).mean : raster?.mean
+
+    const rawCandidates: {
+      key: string
+      abbr: string
+      name: string
+      val: number
+      color: string
+      lineType: 'solid' | 'dashed' | 'dotted'
+      lineWidth: number
+    }[] = []
+
     if (activeQuantiles) {
-      const q25 = activeQuantiles[25]
-      const q50 = activeQuantiles[50]
-      const q75 = activeQuantiles[75]
-
-      const idx25 = q25 !== undefined ? findClosestBinIndex(q25) : null
-      const idx50 = q50 !== undefined ? findClosestBinIndex(q50) : null
-      const idx75 = q75 !== undefined ? findClosestBinIndex(q75) : null
-
-      const close25_50 = idx25 !== null && idx50 !== null && Math.abs(idx50 - idx25) <= 3
-      const close50_75 = idx50 !== null && idx75 !== null && Math.abs(idx75 - idx50) <= 3
-
-      if (idx25 !== null && q25 !== undefined) {
-        markLines.push({
-          xAxis: binLabels[idx25],
-          name: 'P25',
-          label: {
-            show: true,
-            formatter: 'P25',
-            position: 'insideStartTop',
-            distance: [0, 2],
-            color: '#a1a1aa',
-            fontSize: 9,
-            fontFamily: 'Karla, sans-serif',
-          },
-          lineStyle: { color: '#71717a', type: 'dashed' },
+      if (activeQuantiles[25] !== undefined) {
+        rawCandidates.push({
+          key: 'p25',
+          abbr: 'P25',
+          name: '25th Percentile',
+          val: activeQuantiles[25],
+          color: '#a1a1aa',
+          lineType: 'dashed',
+          lineWidth: 1,
         })
       }
-
-      if (idx50 !== null && q50 !== undefined) {
-        // If close to P25 or P75, stagger down vertically by 16px so labels never collide
-        const yOffset = close25_50 || close50_75 ? 16 : 2
-        markLines.push({
-          xAxis: binLabels[idx50],
-          name: 'Med',
-          label: {
-            show: true,
-            formatter: 'Med',
-            position: 'insideMiddleTop',
-            distance: [0, yOffset],
-            color: '#60a5fa',
-            fontWeight: 'bold',
-            fontSize: 9,
-            fontFamily: 'Karla, sans-serif',
-          },
-          lineStyle: { color: '#3b82f6', type: 'solid', width: 2 },
+      if (activeQuantiles[50] !== undefined) {
+        rawCandidates.push({
+          key: 'med',
+          abbr: 'M',
+          name: 'Median',
+          val: activeQuantiles[50],
+          color: '#60a5fa',
+          lineType: 'solid',
+          lineWidth: 2,
         })
       }
-
-      if (idx75 !== null && q75 !== undefined) {
-        markLines.push({
-          xAxis: binLabels[idx75],
-          name: 'P75',
-          label: {
-            show: true,
-            formatter: 'P75',
-            position: 'insideEndTop',
-            distance: [0, 2],
-            color: '#a1a1aa',
-            fontSize: 9,
-            fontFamily: 'Karla, sans-serif',
-          },
-          lineStyle: { color: '#71717a', type: 'dashed' },
+      if (activeQuantiles[75] !== undefined) {
+        rawCandidates.push({
+          key: 'p75',
+          abbr: 'P75',
+          name: '75th Percentile',
+          val: activeQuantiles[75],
+          color: '#a1a1aa',
+          lineType: 'dashed',
+          lineWidth: 1,
         })
       }
     }
+
+    if (activeMean !== undefined && Number.isFinite(activeMean)) {
+      rawCandidates.push({
+        key: 'avg',
+        abbr: 'A',
+        name: 'Average',
+        val: activeMean,
+        color: '#34d399',
+        lineType: 'dashed',
+        lineWidth: 1.5,
+      })
+    }
+
+    // Map each candidate to closest bin index and sort by bin index
+    const sortedCandidates = rawCandidates
+      .map((c) => ({
+        ...c,
+        binIdx: findClosestBinIndex(c.val),
+      }))
+      .sort((a, b) => a.binIdx - b.binIdx || a.val - b.val)
+
+    // Check for clustering (distance <= 2 bins between neighbors)
+    const isClusteredWithNeighbor = sortedCandidates.map((c, i) => {
+      const prev = sortedCandidates[i - 1]
+      const next = sortedCandidates[i + 1]
+      const closePrev = prev && Math.abs(c.binIdx - prev.binIdx) <= 2
+      const closeNext = next && Math.abs(c.binIdx - next.binIdx) <= 2
+      return Boolean(closePrev || closeNext)
+    })
+
+    sortedCandidates.forEach((c, i) => {
+      const isClustered = isClusteredWithNeighbor[i]
+      // If clustered, use numbers (1, 2, 3...) or if spaced use abbreviations (P25, M, A, P75)
+      const labelText = isClustered ? `${i + 1}` : c.abbr
+      const vOffset = (i % 2) * 12
+
+      markLines.push({
+        xAxis: binLabels[c.binIdx],
+        name: c.name,
+        label: {
+          show: true,
+          formatter: labelText,
+          position: 'end',
+          rotate: 0,
+          distance: [0, -2 - vOffset],
+          color: c.color,
+          fontSize: 9,
+          fontWeight: c.key === 'med' ? 'bold' : 'normal',
+          fontFamily: 'Karla, sans-serif',
+          padding: [1, 3],
+          borderRadius: 2,
+          backgroundColor: 'rgba(24, 24, 27, 0.9)',
+          borderColor: c.color,
+          borderWidth: 1,
+        },
+        lineStyle: {
+          color: c.color,
+          type: c.lineType,
+          width: c.lineWidth,
+        },
+      })
+    })
 
     // Apply steepness scaling in log mode (power transform in log space)
     const effectiveSteepness = Math.max(0.1, steepness)
@@ -162,7 +206,7 @@ export const HistogramChart: React.FC<HistogramChartProps> = ({
         },
       },
       grid: {
-        top: 15,
+        top: 22,
         right: 20,
         bottom: 25,
         left: 45,

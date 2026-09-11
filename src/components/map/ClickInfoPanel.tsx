@@ -23,7 +23,7 @@ export const ClickInfoPanel: React.FC<ClickInfoPanelProps> = ({ info, pos }) => 
         minWidth: '200px',
       }}
     >
-      <div className="font-bold text-sky-400 mb-1">
+      <div className="font-bold text-white mb-1">
         X: {info.pixelX}, Y: {info.pixelY}
       </div>
       <div className="space-y-0.5 text-[11px]">

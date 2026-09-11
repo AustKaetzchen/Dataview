@@ -154,11 +154,8 @@ export function renderRasterToCanvas(
   srcHeight: number,
   options: RenderRasterOptions
 ): { canvas: HTMLCanvasElement; bounds: [number, number, number, number] } {
-  const isMercator = options.projection === 'Mercator'
-
-  // Output dimensions
   const outWidth = srcWidth
-  const outHeight = isMercator ? Math.round(srcWidth / 2) : srcHeight
+  const outHeight = srcHeight
 
   const canvas = document.createElement('canvas')
   canvas.width = outWidth
@@ -176,27 +173,12 @@ export function renderRasterToCanvas(
   const tMax = transformValue(options.maxVal, options.scaleType, options.logSigma)
   const tRange = tMax - tMin || 1
 
-  // Precompute row mapping if Mercator
-  const mercatorRowToSrcRow = new Int32Array(outHeight)
-  if (isMercator) {
-    for (let my = 0; my < outHeight; my++) {
-      const v = my / (outHeight - 1)
-      const yRad = Math.PI * (1 - 2 * v)
-      const lat = (2 * Math.atan(Math.exp(yRad)) - Math.PI / 2) * (180 / Math.PI)
-      const eqRow = Math.floor(((90 - lat) / 180) * srcHeight)
-      mercatorRowToSrcRow[my] = Math.max(0, Math.min(srcHeight - 1, eqRow))
-    }
-  }
-
   for (let y = 0; y < outHeight; y++) {
-    const srcRow = isMercator ? mercatorRowToSrcRow[y] : y
-    const srcRowOffset = srcRow * srcWidth
+    const srcRowOffset = y * srcWidth
     const outRowOffset = y * outWidth
 
     for (let x = 0; x < outWidth; x++) {
-      // In both Mercator and Equirectangular, Longitude is linear
-      const srcCol = Math.round((x / (outWidth - 1)) * (srcWidth - 1))
-      const val = data[srcRowOffset + srcCol]
+      const val = data[srcRowOffset + x]
       const pIdx = (outRowOffset + x) * 4
 
       // NaN or infinite is transparent (NoData)
@@ -224,12 +206,6 @@ export function renderRasterToCanvas(
 
   ctx.putImageData(imgData, 0, 0)
 
-  const bounds: [number, number, number, number] = isMercator
-    ? [-180, -85.051129, 180, 85.051129]
-    : options.projection === 'Globe'
-    ? [-180, -89.9, 180, 89.9]
-    : [-180, -90, 180, 90]
-
-  return { canvas, bounds }
+  return { canvas, bounds: [-180, -90, 180, 90] }
 }
 

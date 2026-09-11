@@ -179,7 +179,14 @@ export const App: React.FC = () => {
       }
     )
 
-    return { renderedCanvas: canvas, rasterBounds: bounds }
+    // Calculate bounds with 1-pixel south correction for Equirectangular projection
+    const pixelHeight = 180 / activeRaster.height
+    const finalBounds: [number, number, number, number] =
+      projection === 'Equirectangular'
+        ? [-180, -90 - pixelHeight, 180, 90 - pixelHeight]
+        : bounds
+
+    return { renderedCanvas: canvas, rasterBounds: finalBounds }
   }, [activeRaster, colorPalette, scaleType, logSigma, minVal, maxVal, projection])
 
   return (
