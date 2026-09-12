@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import DeckGL from '@deck.gl/react'
-import { MapView, _GlobeView as GlobeView, OrthographicView, COORDINATE_SYSTEM } from '@deck.gl/core'
+import { MapView, _GlobeView as GlobeView, OrbitView, OrthographicView, COORDINATE_SYSTEM } from '@deck.gl/core'
 import { BitmapLayer, PathLayer, PolygonLayer, GeoJsonLayer, ScatterplotLayer, ColumnLayer, SolidPolygonLayer } from '@deck.gl/layers'
 import { TileLayer, _Tileset2D as Tileset2D } from '@deck.gl/geo-layers'
 import { lngLatToWorld } from '@math.gl/web-mercator'
@@ -57,6 +57,7 @@ interface MapViewerProps {
   scaleType: string
   logSigma: number
   breaks?: number[]
+  onUpdateBreaks?: (breaks: number[]) => void
   mapModes: MapModeItem[]
   onToggleMapMode: (id: MapModeId) => void
   onReorderMapModes: (newModes: MapModeItem[]) => void
@@ -94,13 +95,13 @@ class EquirectangularTileset2D extends Tileset2D {
   getTileIndices({ viewport, maxZoom = 18, minZoom = 0 }: any) {
     if (!viewport || !viewport.unproject) return []
 
-    const topLeft = viewport.unproject([0, 0])
-    const bottomRight = viewport.unproject([viewport.width, viewport.height])
+    const tl = viewport.unproject([0, 0], { targetZ: 0 }) || [-180, 85]
+    const br = viewport.unproject([viewport.width, viewport.height], { targetZ: 0 }) || [180, -85]
 
-    const minLng = Math.max(-180, Math.min(topLeft[0], bottomRight[0]))
-    const maxLng = Math.min(180, Math.max(topLeft[0], bottomRight[0]))
-    const minLat = Math.max(-85.051128, Math.min(topLeft[1], bottomRight[1]))
-    const maxLat = Math.min(85.051128, Math.max(topLeft[1], bottomRight[1]))
+    const minLng = Math.max(-180, Math.min(Number.isFinite(tl[0]) ? tl[0] : -180, Number.isFinite(br[0]) ? br[0] : 180))
+    const maxLng = Math.min(180, Math.max(Number.isFinite(tl[0]) ? tl[0] : -180, Number.isFinite(br[0]) ? br[0] : 180))
+    const minLat = Math.max(-85.051128, Math.min(Number.isFinite(tl[1]) ? tl[1] : -85, Number.isFinite(br[1]) ? br[1] : 85))
+    const maxLat = Math.min(85.051128, Math.max(Number.isFinite(tl[1]) ? tl[1] : -85, Number.isFinite(br[1]) ? br[1] : 85))
 
     if (minLng >= maxLng || minLat >= maxLat) return []
 
@@ -272,6 +273,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   scaleType,
   logSigma,
   breaks,
+  onUpdateBreaks,
   mapModes,
   onToggleMapMode,
   onReorderMapModes,
@@ -323,21 +325,32 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       zoom: 2.0,
       minZoom: 0.2,
       maxZoom: 10,
+      rotationX: 0,
+      rotationOrbit: 0,
+      minRotationX: 0,
+      maxRotationX: 85,
     },
     EqualEarth: {
       target: [0, 0, 0],
       zoom: 2.0,
       minZoom: 0.2,
       maxZoom: 10,
+      rotationX: 0,
+      rotationOrbit: 0,
+      minRotationX: 0,
+      maxRotationX: 85,
     },
   })
 
-  // When heightmap is toggled on, tilt camera to 45 degrees so relief is immediately visible
+  // When heightmap is toggled on, tilt camera to 45 degrees so relief is immediately visible across all projections
   useEffect(() => {
     if (heightmapConfig.enabled) {
       setProjViewStates((prev) => ({
         ...prev,
-        Mercator: { ...prev.Mercator, pitch: Math.max(35, prev.Mercator.pitch || 45) },
+        Mercator: { ...prev.Mercator, pitch: Math.max(35, prev.Mercator?.pitch || 45) },
+        Globe: { ...prev.Globe, pitch: Math.max(35, prev.Globe?.pitch || 45) },
+        Equirectangular: { ...prev.Equirectangular, rotationX: Math.max(35, prev.Equirectangular?.rotationX || 45) },
+        EqualEarth: { ...prev.EqualEarth, rotationX: Math.max(35, prev.EqualEarth?.rotationX || 45) },
       }))
     }
   }, [heightmapConfig.enabled])
@@ -517,7 +530,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       ...prev,
       [projection]:
         projection === 'Equirectangular' || projection === 'EqualEarth'
-          ? { target: [0, 0, 0], zoom: 2.0, minZoom: 0.2, maxZoom: 10 }
+          ? { target: [0, 0, 0], zoom: 2.0, minZoom: 0.2, maxZoom: 10, rotationX: 0, rotationOrbit: 0, minRotationX: 0, maxRotationX: 85 }
           : projection === 'Globe'
           ? { longitude: 0, latitude: 20, zoom: 0, pitch: 0, bearing: 0, maxZoom: 18, minZoom: 0 }
           : { longitude: 0, latitude: 20, zoom: 1.2, pitch: 0, bearing: 0, maxZoom: 18, minZoom: 0 },
@@ -534,16 +547,24 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     [projection]
   )
 
-  // Configure deck.gl view
+  // Configure deck.gl view (OrbitView enables 3D tilt/pitch & rotation for Cartesian projections)
   const views = useMemo(() => {
     if (projection === 'Globe') {
       return new GlobeView({ id: 'globe-view', controller: true })
     }
     if (projection === 'Equirectangular') {
-      return new OrthographicView({ id: 'ortho-view', flipY: false, controller: true })
+      return new OrbitView({
+        id: 'equirectangular-view',
+        orbitAxis: 'Y',
+        controller: { doubleClickZoom: false, dragRotate: true },
+      })
     }
     if (projection === 'EqualEarth') {
-      return new OrthographicView({ id: 'equal-earth-view', flipY: false, controller: true })
+      return new OrbitView({
+        id: 'equal-earth-view',
+        orbitAxis: 'Y',
+        controller: { doubleClickZoom: false, dragRotate: true },
+      })
     }
     return new MapView({
       id: 'map-view',
@@ -551,6 +572,24 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       controller: { doubleClickZoom: false, dragRotate: true },
     })
   }, [projection])
+
+  const cameraTilt =
+    projection === 'Mercator' || projection === 'Globe'
+      ? projViewStates[projection]?.pitch || 0
+      : projViewStates[projection]?.rotationX || 0
+
+  const handleSetCameraTilt = useCallback(
+    (tilt: number) => {
+      setProjViewStates((prev) => ({
+        ...prev,
+        [projection]:
+          projection === 'Mercator' || projection === 'Globe'
+            ? { ...prev[projection], pitch: tilt }
+            : { ...prev[projection], rotationX: tilt },
+      }))
+    },
+    [projection]
+  )
 
   // 3D Elevation Spike Map Data Generator (deck.gl SolidPolygonLayer with Flat-Facing Uniform Rectangular Geometry)
   const elevationSpikesData = useMemo(() => {
@@ -1257,6 +1296,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
               currentVal={inspectData?.value ?? null}
               breaks={legendBreaks}
               countryName={legendCountryName}
+              onUpdateBreaks={onUpdateBreaks}
             />
           </div>
         )
@@ -1340,16 +1380,16 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
         {/* Map Display Settings Flyout Panel */}
         {flyoutOpen && (
-          <div className="absolute top-4 right-14 z-30 w-72 bg-card/98 backdrop-blur-md border border-border rounded-none p-3 shadow-2xl text-xs text-card-foreground animate-in fade-in-0 zoom-in-95 duration-100 font-sans space-y-3">
-            <div className="flex items-center justify-between pb-1.5 border-b border-border">
-              <span className="font-bold text-foreground text-xs flex items-center gap-1.5">
-                <Icon name="layers" size="0.9rem" className="text-white" />
+          <div className="absolute top-4 right-14 z-30 w-72 bg-card/98 backdrop-blur-md border border-border rounded-none p-[var(--padding)] shadow-2xl text-[var(--body-font-size)] text-card-foreground animate-in fade-in-0 zoom-in-95 duration-100 font-sans space-y-[var(--padding)]">
+            <div className="flex items-center justify-between pb-[var(--cell-padding)] border-b border-border">
+              <span className="font-bold text-foreground text-[var(--header-font-size)] flex items-center gap-2">
+                <Icon name="layers" className="text-white" />
                 Map Display Settings
               </span>
               <button
                 type="button"
                 onClick={() => setFlyoutOpen(false)}
-                className="text-muted-foreground hover:text-white cursor-pointer text-[11px]"
+                className="text-muted-foreground hover:text-white cursor-pointer text-[var(--body-font-size)]"
               >
                 ✕
               </button>
@@ -1357,17 +1397,17 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
             {/* Spatial Projection Section with Equal Earth */}
             <div className="space-y-1.5">
-              <span className="text-[11px] font-semibold text-foreground block">Spatial Projection</span>
+              <span className="text-[var(--body-font-size)] font-bold text-foreground block">Spatial Projection</span>
               <div className="grid grid-cols-2 gap-1">
                 {(['Mercator', 'Equirectangular', 'Globe', 'EqualEarth'] as ProjectionType[]).map((p) => (
                   <button
                     key={p}
                     type="button"
                     onClick={() => setProjection(p)}
-                    className={`px-1.5 py-1 text-[11px] rounded-none border transition-colors cursor-pointer text-center truncate ${
+                    className={`px-2 py-1 text-[var(--body-font-size)] rounded-none border transition-colors cursor-pointer text-center truncate ${
                       projection === p
                         ? 'bg-primary text-primary-foreground border-primary font-bold shadow-sm'
-                        : 'bg-background hover:bg-muted text-muted-foreground hover:text-foreground border-border'
+                        : 'bg-background hover:bg-muted text-muted-foreground hover:text-foreground border-border font-light'
                     }`}
                   >
                     {p === 'Equirectangular' ? 'Equirect.' : p === 'EqualEarth' ? 'Equal Earth' : p}
@@ -1376,20 +1416,20 @@ export const MapViewer: React.FC<MapViewerProps> = ({
               </div>
             </div>
 
-            {/* Basemap Selection Section (Cycle Next button removed) */}
+            {/* Basemap Selection Section */}
             <div className="space-y-1.5">
-              <span className="text-[11px] font-semibold text-foreground">Basemap Layer</span>
+              <span className="text-[var(--body-font-size)] font-bold text-foreground">Basemap Layer</span>
 
-              <div className="space-y-1 bg-background/60 p-1.5 rounded-none border border-border">
+              <div className="space-y-1 bg-background/60 p-[var(--cell-padding)] rounded-none border border-border">
                 {MAP_CONFIG.basemapLayers.map((item: { id: string; label: string }) => (
                   <button
                     key={item.id}
                     type="button"
                     onClick={() => setBasemap(item.id)}
-                    className={`w-full flex items-center justify-between px-2 py-1 rounded-none text-[11px] transition-colors cursor-pointer text-left ${
+                    className={`w-full flex items-center justify-between px-2 py-1 rounded-none text-[var(--body-font-size)] transition-colors cursor-pointer text-left ${
                       basemap === item.id
-                        ? 'bg-muted text-foreground font-semibold'
-                        : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+                        ? 'bg-muted text-foreground font-bold'
+                        : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground font-light'
                     }`}
                   >
                     <span>{item.label}</span>

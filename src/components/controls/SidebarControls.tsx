@@ -20,6 +20,7 @@ import { Input } from '../ui/input'
 import { NumberInput } from '../ui/number-input'
 import { Label } from '../ui/label'
 import { Icon } from '../ui/icon'
+import { MAPMODES_CONFIG } from '@config'
 
 interface SidebarControlsProps {
   appMode: AppMode
@@ -150,22 +151,22 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
   return (
     <div className="w-84 h-full flex flex-col bg-card border-r border-border text-card-foreground overflow-y-auto select-none font-sans">
       {/* App Header */}
-      <div className="p-3.5 pb-2.5 border-b border-border bg-card/60">
+      <div className="p-[var(--padding)] border-b border-border bg-card/60">
         <div className="flex items-center justify-between">
-          <h1 className="text-sm font-bold tracking-tight text-foreground flex items-center gap-1.5">
-            <Icon name="layers" size="1.1rem" />
+          <h1 className="text-[var(--header-font-size)] font-bold tracking-tight text-foreground flex items-center gap-2">
+            <Icon name="layers" />
             <span>Confoederatio Dataview</span>
           </h1>
-          <span className="text-[10px] px-1.5 py-0.5 rounded-none bg-muted text-muted-foreground border border-border font-mono font-medium tracking-wider">
+          <span className="text-[var(--body-font-size)] px-2 py-0.5 rounded-none bg-muted text-muted-foreground border border-border font-mono font-medium tracking-wider">
             BETA
           </span>
         </div>
-        <p className="text-[11px] text-muted-foreground mt-0.5">
+        <p className="text-[var(--body-font-size)] text-muted-foreground font-light mt-1">
           Equirectangular WGS84 • 3D Surface & Analytics
         </p>
       </div>
 
-      <div className="flex-1 p-3 space-y-3">
+      <div className="flex-1 p-[var(--padding)] space-y-[var(--padding)]">
         {/* ========================================================================= */}
         {/* FOLDER 1: IMAGE SETTINGS */}
         {/* ========================================================================= */}
@@ -173,53 +174,52 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
           <button
             type="button"
             onClick={() => toggleFolder('image')}
-            className="w-full h-8 px-2.5 flex items-center justify-between text-xs font-semibold text-foreground bg-muted/40 hover:bg-muted/70 transition-colors cursor-pointer"
+            className="w-full h-8 px-[var(--padding)] flex items-center justify-between text-[var(--body-font-size)] font-bold text-foreground bg-muted/40 hover:bg-muted/70 transition-colors cursor-pointer"
           >
-            <div className="flex items-center gap-1.5">
-              <Icon name="folder" size="0.9rem" />
+            <div className="flex items-center gap-2">
+              <Icon name="folder" />
               <span>Image Settings</span>
             </div>
             <div className="flex items-center gap-1.5">
               {binningConfig.enabled && (
-                <span className="text-[9px] px-1 py-0.2 bg-primary/20 text-primary font-mono border border-primary/40">
+                <span className="text-[var(--body-font-size)] px-1.5 py-0.5 bg-primary/20 text-primary font-mono border border-primary/40">
                   {binningConfig.width}×{binningConfig.height}
                 </span>
               )}
               <Icon
                 name={openFolders.image ? 'expand_less' : 'expand_more'}
-                size="1rem"
               />
             </div>
           </button>
 
           {openFolders.image && (
-            <div className="p-2.5 space-y-3 text-xs border-t border-border">
+            <div className="p-[var(--padding)] space-y-[var(--padding)] text-[var(--body-font-size)] border-t border-border">
               {/* File Input Mode Selector (Single Image vs Image Difference) */}
               <div className="space-y-1">
-                <Label className="text-[11px] text-muted-foreground">File Input Mode</Label>
+                <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">File Input Mode</Label>
                 <div className="grid grid-cols-2 gap-1 bg-muted/50 p-0.5 border border-border">
                   <button
                     type="button"
                     onClick={() => setAppMode('Single Image')}
-                    className={`h-6 text-[11px] font-medium transition-colors cursor-pointer flex items-center justify-center gap-1 ${
+                    className={`h-7 text-[var(--body-font-size)] font-medium transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
                       appMode === 'Single Image'
-                        ? 'bg-primary text-primary-foreground font-semibold shadow-sm'
+                        ? 'bg-primary text-primary-foreground font-bold shadow-sm'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    <Icon name="image" size="0.75rem" />
+                    <Icon name="image" />
                     <span>Single Image</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setAppMode('Image Difference')}
-                    className={`h-6 text-[11px] font-medium transition-colors cursor-pointer flex items-center justify-center gap-1 ${
+                    className={`h-7 text-[var(--body-font-size)] font-medium transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
                       appMode === 'Image Difference'
-                        ? 'bg-primary text-primary-foreground font-semibold shadow-sm'
+                        ? 'bg-primary text-primary-foreground font-bold shadow-sm'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    <Icon name="compare_arrows" size="0.75rem" />
+                    <Icon name="compare_arrows" />
                     <span>Difference</span>
                   </button>
                 </div>
@@ -228,7 +228,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
               {/* File Upload based on active AppMode */}
               {appMode === 'Single Image' ? (
                 <div className="space-y-1">
-                  <Label className="text-[11px] text-muted-foreground">Select GeoPNG File (.png)</Label>
+                  <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">Select GeoPNG File (.png)</Label>
                   <input
                     type="file"
                     accept=".png"
@@ -242,16 +242,16 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                     htmlFor="single-file-upload"
                     className="flex items-center justify-between w-full h-8 px-2 border border-input rounded-none bg-background text-foreground hover:bg-muted/40 cursor-pointer transition-colors"
                   >
-                    <span className="truncate text-xs">
+                    <span className="truncate text-[var(--body-font-size)]">
                       {activeFileName || 'Upload GeoPNG (.png)...'}
                     </span>
-                    <Icon name="folder_open" size="0.95rem" className="text-white/80 shrink-0 ml-1" />
+                    <Icon name="folder_open" className="text-white/80 shrink-0 ml-1" />
                   </label>
                 </div>
               ) : (
                 <div className="space-y-2">
                   <div className="space-y-1">
-                    <Label className="text-[11px] text-muted-foreground">First GeoPNG (A)</Label>
+                    <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">First GeoPNG (A)</Label>
                     <input
                       type="file"
                       accept=".png"
@@ -265,13 +265,13 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                       htmlFor="diff-file-a"
                       className="flex items-center justify-between w-full h-8 px-2 border border-input rounded-none bg-background text-foreground hover:bg-muted/40 cursor-pointer transition-colors"
                     >
-                      <span className="truncate text-xs">{diffNameA || 'Choose Image A...'}</span>
-                      <Icon name="file_upload" size="0.95rem" className="text-white/80 shrink-0 ml-1" />
+                      <span className="truncate text-[var(--body-font-size)]">{diffNameA || 'Choose Image A...'}</span>
+                      <Icon name="file_upload" className="text-white/80 shrink-0 ml-1" />
                     </label>
                   </div>
 
                   <div className="space-y-1">
-                    <Label className="text-[11px] text-muted-foreground">Second GeoPNG (B)</Label>
+                    <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">Second GeoPNG (B)</Label>
                     <input
                       type="file"
                       accept=".png"
@@ -285,8 +285,8 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                       htmlFor="diff-file-b"
                       className="flex items-center justify-between w-full h-8 px-2 border border-input rounded-none bg-background text-foreground hover:bg-muted/40 cursor-pointer transition-colors"
                     >
-                      <span className="truncate text-xs">{diffNameB || 'Choose Image B...'}</span>
-                      <Icon name="file_upload" size="0.95rem" className="text-white/80 shrink-0 ml-1" />
+                      <span className="truncate text-[var(--body-font-size)]">{diffNameB || 'Choose Image B...'}</span>
+                      <Icon name="file_upload" className="text-white/80 shrink-0 ml-1" />
                     </label>
                   </div>
                 </div>
@@ -294,23 +294,23 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
 
               {/* Encoding Format */}
               <div className="space-y-1">
-                <Label className="text-[11px] text-muted-foreground">Encoding Format</Label>
+                <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">Encoding Format</Label>
                 <Select value={dataFormat} onValueChange={(v) => setDataFormat(v as DataFormat)}>
-                  <SelectTrigger className="rounded-none h-7">
+                  <SelectTrigger className="rounded-none h-7 text-[var(--body-font-size)]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="rounded-none">
-                    <SelectItem value="float32" className="rounded-none">float32 (IEEE 754)</SelectItem>
-                    <SelectItem value="int32" className="rounded-none">int32 (Signed Integer)</SelectItem>
+                    <SelectItem value="float32" className="rounded-none text-[var(--body-font-size)]">float32 (IEEE 754)</SelectItem>
+                    <SelectItem value="int32" className="rounded-none text-[var(--body-font-size)]">int32 (Signed Integer)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               {/* Binning & Downsampling */}
-              <div className="space-y-2 border border-border/80 bg-background/50 p-2">
+              <div className="space-y-2 border border-border/80 bg-background/50 p-[var(--padding)]">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 font-medium text-foreground text-[11px]">
-                    <Icon name="grid_view" size="0.85rem" />
+                  <div className="flex items-center gap-1.5 font-bold text-foreground text-[var(--body-font-size)]">
+                    <Icon name="grid_view" />
                     <span>Binning / Downsampling</span>
                   </div>
                   <label className="flex items-center gap-1.5 cursor-pointer">
@@ -320,10 +320,10 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                       onChange={(e) =>
                         setBinningConfig((prev) => ({ ...prev, enabled: e.target.checked }))
                       }
-                      className="w-3.5 h-3.5 rounded-none accent-emerald-500 cursor-pointer"
+                      className="w-4 h-4 rounded-none accent-emerald-500 cursor-pointer"
                     />
                     <span
-                      className={`text-[10px] font-semibold uppercase ${
+                      className={`text-[var(--body-font-size)] font-bold uppercase ${
                         binningConfig.enabled ? 'text-emerald-400 font-bold' : 'text-muted-foreground'
                       }`}
                     >
@@ -336,7 +336,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                   <div className="space-y-2 pt-1 border-t border-border/60">
                     <div className="grid grid-cols-2 gap-1.5">
                       <div className="space-y-1">
-                        <span className="text-[10px] text-muted-foreground">Width</span>
+                        <span className="text-[var(--body-font-size)] text-muted-foreground">Width</span>
                         <NumberInput
                           value={binningConfig.width}
                           min={60}
@@ -348,11 +348,11 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                               setBinningConfig((prev) => ({ ...prev, width: parsed }))
                             }
                           }}
-                          containerClassName="h-6 rounded-none font-mono text-[11px]"
+                          containerClassName="h-7 rounded-none font-mono text-[var(--body-font-size)]"
                         />
                       </div>
                       <div className="space-y-1">
-                        <span className="text-[10px] text-muted-foreground">Height</span>
+                        <span className="text-[var(--body-font-size)] text-muted-foreground">Height</span>
                         <NumberInput
                           value={binningConfig.height}
                           min={30}
@@ -364,14 +364,14 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                               setBinningConfig((prev) => ({ ...prev, height: parsed }))
                             }
                           }}
-                          containerClassName="h-6 rounded-none font-mono text-[11px]"
+                          containerClassName="h-7 rounded-none font-mono text-[var(--body-font-size)]"
                         />
                       </div>
                     </div>
 
                     {/* Presets */}
                     <div className="space-y-1">
-                      <span className="text-[10px] text-muted-foreground">Presets</span>
+                      <span className="text-[var(--body-font-size)] text-muted-foreground">Presets</span>
                       <div className="grid grid-cols-3 gap-1">
                         {BINNING_PRESETS.slice(1).map((pr) => (
                           <button
@@ -384,7 +384,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                                 height: pr.h,
                               }))
                             }
-                            className={`px-1 py-0.5 text-[10px] border rounded-none text-center truncate transition-colors cursor-pointer ${
+                            className={`px-1.5 py-1 text-[var(--body-font-size)] border rounded-none text-center truncate transition-colors cursor-pointer ${
                               binningConfig.width === pr.w && binningConfig.height === pr.h
                                 ? 'bg-primary text-primary-foreground border-primary font-bold'
                                 : 'bg-background hover:bg-muted text-muted-foreground border-border'
@@ -398,7 +398,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
 
                     {/* Method */}
                     <div className="space-y-1">
-                      <span className="text-[10px] text-muted-foreground">Downsample Method</span>
+                      <span className="text-[var(--body-font-size)] text-muted-foreground">Downsample Method</span>
                       <Select
                         value={binningConfig.method}
                         onValueChange={(v) =>
@@ -408,14 +408,14 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                           }))
                         }
                       >
-                        <SelectTrigger className="rounded-none h-6 text-xs">
+                        <SelectTrigger className="rounded-none h-7 text-[var(--body-font-size)]">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="rounded-none">
-                          <SelectItem value="average" className="rounded-none">Average (Mean)</SelectItem>
-                          <SelectItem value="minimum" className="rounded-none">Minimum</SelectItem>
-                          <SelectItem value="maximum" className="rounded-none">Maximum</SelectItem>
-                          <SelectItem value="near" className="rounded-none">Near (Nearest Neighbor)</SelectItem>
+                          <SelectItem value="average" className="rounded-none text-[var(--body-font-size)]">Average (Mean)</SelectItem>
+                          <SelectItem value="minimum" className="rounded-none text-[var(--body-font-size)]">Minimum</SelectItem>
+                          <SelectItem value="maximum" className="rounded-none text-[var(--body-font-size)]">Maximum</SelectItem>
+                          <SelectItem value="near" className="rounded-none text-[var(--body-font-size)]">Near (Nearest Neighbor)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -425,9 +425,9 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
 
               {/* Layer Opacity */}
               <div className="space-y-1.5">
-                <div className="flex justify-between items-center text-xs">
-                  <Label className="text-[11px] text-muted-foreground">Layer Opacity</Label>
-                  <span className="text-foreground font-bold font-mono text-xs">
+                <div className="flex justify-between items-center text-[var(--body-font-size)]">
+                  <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">Layer Opacity</Label>
+                  <span className="text-foreground font-bold font-mono text-[var(--body-font-size)]">
                     {Math.round(opacity * 100)}%
                   </span>
                 </div>
@@ -450,44 +450,43 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
           <button
             type="button"
             onClick={() => toggleFolder('legend')}
-            className="w-full h-8 px-2.5 flex items-center justify-between text-xs font-semibold text-foreground bg-muted/40 hover:bg-muted/70 transition-colors cursor-pointer"
+            className="w-full h-8 px-[var(--padding)] flex items-center justify-between text-[var(--body-font-size)] font-bold text-foreground bg-muted/40 hover:bg-muted/70 transition-colors cursor-pointer"
           >
-            <div className="flex items-center gap-1.5">
-              <Icon name="palette" size="0.9rem" />
+            <div className="flex items-center gap-2">
+              <Icon name="palette" />
               <span>Legend Settings</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[80px]">
+              <span className="text-[var(--body-font-size)] text-muted-foreground font-mono truncate max-w-[80px]">
                 {colorPalette}
               </span>
               <Icon
                 name={openFolders.legend ? 'expand_less' : 'expand_more'}
-                size="1rem"
               />
             </div>
           </button>
 
           {openFolders.legend && (
-            <div className="p-2.5 space-y-3 text-xs border-t border-border">
+            <div className="p-[var(--padding)] space-y-[var(--padding)] text-[var(--body-font-size)] border-t border-border">
               {/* Scale Transformation */}
               <div className="space-y-1">
-                <Label className="text-[11px] text-muted-foreground">Scale Transformation</Label>
+                <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">Scale Transformation</Label>
                 <Select value={scaleType} onValueChange={(v) => setScaleType(v as ScaleType)}>
-                  <SelectTrigger className="rounded-none h-7">
+                  <SelectTrigger className="rounded-none h-7 text-[var(--body-font-size)]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="rounded-none">
-                    <SelectItem value="pseudo-log" className="rounded-none">pseudo-log</SelectItem>
-                    <SelectItem value="linear" className="rounded-none">linear</SelectItem>
+                    <SelectItem value="pseudo-log" className="rounded-none text-[var(--body-font-size)]">pseudo-log</SelectItem>
+                    <SelectItem value="linear" className="rounded-none text-[var(--body-font-size)]">linear</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               {/* Steepness (Sigma) */}
               {scaleType === 'pseudo-log' && (
-                <div className="space-y-2 rounded-none border border-border p-2 bg-muted/20">
-                  <div className="flex justify-between items-center text-xs">
-                    <Label className="text-muted-foreground text-[11px] font-medium">
+                <div className="space-y-2 rounded-none border border-border p-[var(--padding)] bg-muted/20">
+                  <div className="flex justify-between items-center text-[var(--body-font-size)]">
+                    <Label className="text-muted-foreground text-[var(--body-font-size)] font-normal">
                       Steepness (Sigma)
                     </Label>
                     <NumberInput
@@ -498,7 +497,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                         const parsed = parseFloat(val)
                         if (!Number.isNaN(parsed) && parsed > 0) setLogSigma(parsed)
                       }}
-                      containerClassName="h-6 w-20 rounded-none text-xs font-mono"
+                      containerClassName="h-7 w-20 rounded-none text-[var(--body-font-size)] font-mono"
                     />
                   </div>
 
@@ -517,7 +516,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                         key={preset}
                         type="button"
                         onClick={() => setLogSigma(preset)}
-                        className={`px-1.5 py-0.5 text-[10px] rounded-none border transition-colors ${
+                        className={`px-1.5 py-0.5 text-[var(--body-font-size)] rounded-none border transition-colors ${
                           Math.abs(logSigma - preset) < 0.001
                             ? 'bg-primary text-primary-foreground border-primary font-bold'
                             : 'bg-background hover:bg-muted text-muted-foreground border-border'
@@ -533,15 +532,15 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
               {/* Color Palette (D3) */}
               <div className="space-y-1.5" ref={palettePickerRef}>
                 <div className="flex items-center justify-between">
-                  <Label className="text-[11px] text-muted-foreground">Color Palette (D3)</Label>
-                  <label className="flex items-center gap-1.5 text-xs text-foreground cursor-pointer select-none">
+                  <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">Color Palette (D3)</Label>
+                  <label className="flex items-center gap-1.5 text-[var(--body-font-size)] text-foreground cursor-pointer select-none">
                     <input
                       type="checkbox"
                       checked={invertPalette}
                       onChange={(e) => setInvertPalette(e.target.checked)}
-                      className="w-3.5 h-3.5 rounded-none accent-emerald-500 cursor-pointer"
+                      className="w-4 h-4 rounded-none accent-emerald-500 cursor-pointer"
                     />
-                    <span className="text-[11px] text-muted-foreground">Invert</span>
+                    <span className="text-[var(--body-font-size)] text-muted-foreground">Invert</span>
                   </label>
                 </div>
 
@@ -549,7 +548,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                   <button
                     type="button"
                     onClick={() => setPaletteOpen(!paletteOpen)}
-                    className="w-full h-8 px-2.5 flex items-center justify-between border border-input rounded-none bg-background text-foreground hover:bg-muted/40 cursor-pointer transition-colors text-xs"
+                    className="w-full h-8 px-2.5 flex items-center justify-between border border-input rounded-none bg-background text-foreground hover:bg-muted/40 cursor-pointer transition-colors text-[var(--body-font-size)]"
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <div
@@ -558,18 +557,18 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                       />
                       <span className="truncate font-medium">{colorPalette}</span>
                     </div>
-                    <Icon name={paletteOpen ? 'expand_less' : 'expand_more'} className="text-xs ml-1" />
+                    <Icon name={paletteOpen ? 'expand_less' : 'expand_more'} className="ml-1" />
                   </button>
 
                   {/* Dropdown Popover */}
                   {paletteOpen && (
-                    <div className="absolute top-9 left-0 right-0 z-50 bg-card border border-border shadow-2xl rounded-none p-2 space-y-2 text-xs">
+                    <div className="absolute top-9 left-0 right-0 z-50 bg-card border border-border shadow-2xl rounded-none p-[var(--padding)] space-y-[var(--padding)] text-[var(--body-font-size)]">
                       <input
                         type="text"
                         placeholder="Search schemes..."
                         value={paletteSearch}
                         onChange={(e) => setPaletteSearch(e.target.value)}
-                        className="w-full h-7 px-2 border border-input rounded-none bg-background text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                        className="w-full h-7 px-2 border border-input rounded-none bg-background text-foreground text-[var(--body-font-size)] focus:outline-none focus:ring-1 focus:ring-ring"
                         autoFocus
                       />
 
@@ -582,9 +581,9 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                               setColorPalette(scheme.id)
                               setPaletteOpen(false)
                             }}
-                            className={`w-full flex items-center justify-between px-2 py-1.5 rounded-none cursor-pointer text-left text-xs transition-colors ${
+                            className={`w-full flex items-center justify-between px-2 py-1.5 rounded-none cursor-pointer text-left text-[var(--body-font-size)] transition-colors ${
                               colorPalette === scheme.id
-                                ? 'bg-primary text-primary-foreground font-semibold'
+                                ? 'bg-primary text-primary-foreground font-bold'
                                 : 'hover:bg-muted text-foreground'
                             }`}
                           >
@@ -595,7 +594,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                               />
                               <span className="truncate">{scheme.name}</span>
                             </div>
-                            <span className="text-[9px] opacity-60 ml-1 shrink-0">{scheme.category.split(' ')[0]}</span>
+                            <span className="text-[var(--body-font-size)] opacity-60 ml-1 shrink-0">{scheme.category.split(' ')[0]}</span>
                           </button>
                         ))}
                       </div>
@@ -606,38 +605,38 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
 
               {/* Visual Bounds Mode */}
               <div className="space-y-2">
-                <Label className="text-[11px] font-semibold text-foreground">Visual Bounds</Label>
+                <Label className="text-[var(--body-font-size)] font-bold text-foreground">Visual Bounds</Label>
                 <Select value={boundsMode} onValueChange={(v) => setBoundsMode(v as BoundsMode)}>
-                  <SelectTrigger className="rounded-none h-7">
+                  <SelectTrigger className="rounded-none h-7 text-[var(--body-font-size)]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="rounded-none">
-                    <SelectItem value="Manual" className="rounded-none">Manual (Min / Max)</SelectItem>
-                    <SelectItem value="Percentile" className="rounded-none">Percentile Breaks</SelectItem>
-                    <SelectItem value="Absolute" className="rounded-none">Absolute Number Ramps</SelectItem>
+                    <SelectItem value="Manual" className="rounded-none text-[var(--body-font-size)]">Manual (Min / Max)</SelectItem>
+                    <SelectItem value="Percentile" className="rounded-none text-[var(--body-font-size)]">Percentile Breaks</SelectItem>
+                    <SelectItem value="Absolute" className="rounded-none text-[var(--body-font-size)]">Absolute Number Ramps</SelectItem>
                   </SelectContent>
                 </Select>
 
                 {boundsMode === 'Manual' && (
                   <div className="grid grid-cols-2 gap-2 pt-1">
                     <div className="space-y-1">
-                      <span className="text-[10px] text-muted-foreground">Min Override</span>
+                      <span className="text-[var(--body-font-size)] text-muted-foreground">Min Override</span>
                       <NumberInput
                         placeholder="Auto"
                         value={minValOverride}
                         step="any"
                         onChange={(val) => setMinValOverride(val)}
-                        containerClassName="rounded-none h-7 text-xs font-mono"
+                        containerClassName="rounded-none h-7 text-[var(--body-font-size)] font-mono"
                       />
                     </div>
                     <div className="space-y-1">
-                      <span className="text-[10px] text-muted-foreground">Max Override</span>
+                      <span className="text-[var(--body-font-size)] text-muted-foreground">Max Override</span>
                       <NumberInput
                         placeholder="Auto"
                         value={maxValOverride}
                         step="any"
                         onChange={(val) => setMaxValOverride(val)}
-                        containerClassName="rounded-none h-7 text-xs font-mono"
+                        containerClassName="rounded-none h-7 text-[var(--body-font-size)] font-mono"
                       />
                     </div>
                   </div>
@@ -645,12 +644,12 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
 
                 {boundsMode === 'Percentile' && (
                   <div className="space-y-1 pt-1">
-                    <span className="text-[10px] text-muted-foreground">Percentile Breaks (0-100)</span>
+                    <span className="text-[var(--body-font-size)] text-muted-foreground">Percentile Breaks (0-100)</span>
                     <Input
                       type="text"
                       value={percentileList}
                       onChange={(e) => setPercentileList(e.target.value)}
-                      className="rounded-none h-7 font-mono text-xs"
+                      className="rounded-none h-7 font-mono text-[var(--body-font-size)]"
                     />
                   </div>
                 )}
@@ -658,11 +657,11 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                 {boundsMode === 'Absolute' && (
                   <div className="space-y-1 pt-1">
                     <div className="flex justify-between items-center">
-                      <span className="text-[10px] text-muted-foreground">Absolute Numeric Breaks</span>
+                      <span className="text-[var(--body-font-size)] text-muted-foreground">Absolute Numeric Breaks</span>
                       <button
                         type="button"
                         onClick={() => setAbsoluteBreaks('0, 10, 50, 100, 500, 1000')}
-                        className="text-[10px] text-primary hover:underline cursor-pointer"
+                        className="text-[var(--body-font-size)] text-primary hover:underline cursor-pointer"
                       >
                         Reset Defaults
                       </button>
@@ -672,9 +671,9 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                       placeholder="e.g. 0, 10, 50, 100, 500, 1000"
                       value={absoluteBreaks}
                       onChange={(e) => setAbsoluteBreaks(e.target.value)}
-                      className="rounded-none h-7 font-mono text-xs"
+                      className="rounded-none h-7 font-mono text-[var(--body-font-size)]"
                     />
-                    <span className="text-[10px] text-muted-foreground leading-tight block">
+                    <span className="text-[var(--body-font-size)] text-muted-foreground leading-tight block">
                       Color ramp stretches across these discrete absolute values.
                     </span>
                   </div>
@@ -683,12 +682,12 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
 
               {/* Legend Title */}
               <div className="space-y-1">
-                <Label className="text-[11px] text-muted-foreground">Legend Label</Label>
+                <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">Legend Label</Label>
                 <Input
                   type="text"
                   value={legendTitle}
                   onChange={(e) => setLegendTitle(e.target.value)}
-                  className="rounded-none h-7"
+                  className="rounded-none h-7 text-[var(--body-font-size)]"
                 />
               </div>
             </div>
@@ -697,28 +696,37 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
       </div>
 
       {/* Footer Info & Active Mapmodes Bullet List (Bottom Left) */}
-      <div className="p-3 border-t border-border bg-card/60 text-[10px] text-muted-foreground space-y-1 select-none font-sans">
-        <p>• Hover: Inspect coordinates & values</p>
+      <div className="p-[var(--padding)] border-t border-border bg-card/60 text-[var(--body-font-size)] text-muted-foreground space-y-1.5 select-none font-sans">
+        <p className="font-bold text-foreground uppercase text-[var(--header-font-size)] tracking-wider mb-2">
+          Active Modes & Controls
+        </p>
         {mapModes
           ?.filter((m) => m.active)
           .map((m) => {
-            let desc = 'Full-resolution raster layer'
+            const configItem = MAPMODES_CONFIG.modes.find((c) => c.id === m.id)
+            let desc = configItem?.controlDescription || configItem?.description || 'Active layer'
             if (m.id === 'country_analysis') {
               const count = selectedCountries?.length ?? 0
-              desc = count > 0 ? `${count} ${count === 1 ? 'country' : 'countries'} isolated` : 'Active (select country)'
+              desc =
+                count > 0
+                  ? `${count} ${count === 1 ? 'country' : 'countries'} isolated`
+                  : configItem?.controlDescription || 'Active (select country)'
             } else if (m.id === 'spike_map') {
               desc = `${Math.round((heightmapConfig?.elevationScale ?? 800000) / 1000)}km peak scale • ${Math.round((heightmapConfig?.opacity ?? 0.9) * 100)}% opacity`
             } else if (m.id === 'circle_sizing') {
               desc = `≥P${circleOverlayConfig?.percentileCutoff ?? 99} cutoff • ${(circleOverlayConfig?.baseRadius ?? 1.0).toFixed(1)} ha/unit`
             }
             return (
-              <p key={m.id} className="text-foreground font-medium">
-                • <span className="text-muted-foreground">{m.label}:</span> {desc}
+              <p key={m.id} className="text-foreground text-[var(--body-font-size)] font-light leading-relaxed">
+                • <span className="text-muted-foreground font-bold">{m.label}:</span> {desc}
               </p>
             )
           })}
-        <p>• Shift + Drag / Right-click: Pitch & rotate 3D camera</p>
-        <p>• Double-click: Reset map camera</p>
+        {MAPMODES_CONFIG.controlsFooter.map((item, idx) => (
+          <p key={idx} className="text-[var(--body-font-size)] text-muted-foreground/80 font-light leading-relaxed">
+            • {item}
+          </p>
+        ))}
       </div>
     </div>
   )

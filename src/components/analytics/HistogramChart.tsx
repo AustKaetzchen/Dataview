@@ -25,8 +25,12 @@ export const HistogramChart: React.FC<HistogramChartProps> = ({
 }) => {
   // Toggle between logarithmic (default) and linear distributions
   const [scaleMode, setScaleMode] = useState<'log' | 'linear'>('log')
-  // Steepness adjustment factor for logarithmic mode (default 1.0x)
-  const [steepness, setSteepness] = useState<number>(1.0)
+  // Steepness adjustment factor for logarithmic mode - unbounded custom input
+  const [steepnessInput, setSteepnessInput] = useState<string>('1.0')
+  const steepness = useMemo(() => {
+    const val = parseFloat(steepnessInput)
+    return Number.isFinite(val) && val !== 0 ? val : 1.0
+  }, [steepnessInput])
 
   const containerRef = useRef<HTMLDivElement>(null)
   const echartRef = useRef<any>(null)
@@ -208,9 +212,9 @@ export const HistogramChart: React.FC<HistogramChartProps> = ({
           fontSize: 9,
           fontWeight: c.key === 'med' ? 'bold' : 'normal',
           fontFamily: 'Karla, sans-serif',
-          padding: [1, 3],
-          borderRadius: 2,
-          backgroundColor: 'rgba(24, 24, 27, 0.9)',
+          padding: [2, 4],
+          borderRadius: 0,
+          backgroundColor: 'rgba(24, 24, 27, 0.95)',
           borderColor: c.color,
           borderWidth: 1,
         },
@@ -223,7 +227,8 @@ export const HistogramChart: React.FC<HistogramChartProps> = ({
     })
 
     // Apply steepness scaling in log mode (power transform in log space)
-    const effectiveSteepness = Math.max(0.1, steepness)
+    // Completely unbounded: whatever value the user inputs
+    const effectiveSteepness = Number.isFinite(steepness) && steepness !== 0 ? steepness : 1.0
     const transformedData =
       scaleMode === 'log'
         ? counts.map((c) => (c > 0 ? Math.pow(c, effectiveSteepness) : null))
@@ -240,12 +245,15 @@ export const HistogramChart: React.FC<HistogramChartProps> = ({
         axisPointer: { type: 'shadow' },
         backgroundColor: '#18181b',
         borderColor: '#27272a',
-        textStyle: { color: '#f4f4f5', fontSize: 11, fontFamily: 'Karla, sans-serif' },
+        borderRadius: 0,
+        textStyle: { color: '#f4f4f5', fontSize: 12, fontFamily: 'Karla, sans-serif' },
         formatter: (params: any) => {
           const item = params[0]
           const idx = item.dataIndex
           const actualCount = counts[idx] ?? 0
-          const range = `[${bins[idx]?.toFixed(2)} to ${bins[idx + 1]?.toFixed(2)}]`
+          const b1 = bins[idx]?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+          const b2 = bins[idx + 1]?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+          const range = `[${b1} to ${b2}]`
           return `<strong>Range:</strong> ${range}<br/><strong>Count:</strong> ${actualCount.toLocaleString()}`
         },
       },
@@ -253,7 +261,7 @@ export const HistogramChart: React.FC<HistogramChartProps> = ({
         top: 22,
         right: 20,
         bottom: 25,
-        left: 45,
+        left: 48,
       },
       xAxis: {
         type: 'category',
@@ -261,7 +269,7 @@ export const HistogramChart: React.FC<HistogramChartProps> = ({
         axisLine: { lineStyle: { color: '#3f3f46' } },
         axisLabel: {
           color: '#a1a1aa',
-          fontSize: 9,
+          fontSize: 11,
           fontFamily: 'Karla, sans-serif',
           interval: Math.floor(binLabels.length / 6),
         },
@@ -272,22 +280,25 @@ export const HistogramChart: React.FC<HistogramChartProps> = ({
         logBase: 10,
         min: scaleMode === 'log' ? 1 : 0,
         name: scaleMode === 'log' ? 'Cells (log)' : 'Cells',
-        nameTextStyle: { color: '#71717a', fontSize: 9, fontFamily: 'Karla, sans-serif' },
+        nameTextStyle: { color: '#71717a', fontSize: 11, fontFamily: 'Karla, sans-serif' },
         axisLine: { lineStyle: { color: '#3f3f46' } },
         axisLabel: {
           color: '#a1a1aa',
-          fontSize: 9,
+          fontSize: 11,
           fontFamily: 'Karla, sans-serif',
           formatter: (v: number) => {
-            if (scaleMode === 'log') {
-              const actual = Math.pow(v, 1 / effectiveSteepness)
-              if (actual >= 1000000) return `${(actual / 1000000).toFixed(0)}M`
-              if (actual >= 1000) return `${(actual / 1000).toFixed(0)}k`
-              return Math.round(actual).toString()
-            }
-            if (v >= 1000000) return `${(v / 1000000).toFixed(0)}M`
-            if (v >= 1000) return `${(v / 1000).toFixed(0)}k`
-            return v.toString()
+            const actual =
+              scaleMode === 'log'
+                ? effectiveSteepness !== 0
+                  ? Math.pow(v, 1 / effectiveSteepness)
+                  : v
+                : v
+            const absActual = Math.abs(actual)
+            if (absActual >= 1e12) return `${(actual / 1e12).toFixed(1).replace(/\.0$/, '')}T`
+            if (absActual >= 1e9) return `${(actual / 1e9).toFixed(1).replace(/\.0$/, '')}B`
+            if (absActual >= 1e6) return `${(actual / 1e6).toFixed(1).replace(/\.0$/, '')}M`
+            if (absActual >= 1e3) return `${(actual / 1e3).toFixed(1).replace(/\.0$/, '')}k`
+            return Math.round(actual).toLocaleString()
           },
         },
         splitLine: { lineStyle: { color: '#27272a', type: 'dashed' } },
@@ -300,7 +311,7 @@ export const HistogramChart: React.FC<HistogramChartProps> = ({
           data: transformedData,
           itemStyle: {
             color: '#3b82f6',
-            borderRadius: [2, 2, 0, 0],
+            borderRadius: 0,
           },
           markLine: {
             silent: true,
@@ -315,46 +326,62 @@ export const HistogramChart: React.FC<HistogramChartProps> = ({
   return (
     <div className="relative w-full h-full flex flex-col justify-between font-sans">
       {/* Top Controls: Scope Title, Log Steepness Adjuster & Scale Mode Switch */}
-      <div className="flex items-center justify-between px-2 pt-0.5 pb-1 select-none gap-2">
-        <span className="text-[11px] font-medium text-muted-foreground truncate">
+      <div className="flex items-center justify-between px-[var(--cell-padding)] pt-0.5 pb-[var(--cell-padding)] select-none gap-[var(--padding)]">
+        <span className="text-[var(--body-font-size)] font-light text-muted-foreground truncate">
           {countryStats ? `Distribution: ${countryStats.name}` : 'Global Distribution'}
         </span>
 
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Steepness Option for Logarithmic Scale */}
+        <div className="flex items-center gap-[var(--cell-padding)] shrink-0">
+          {/* Steepness Option for Logarithmic Scale with Custom Textbox */}
           {scaleMode === 'log' && (
-            <div className="flex items-center gap-1 bg-muted px-1.5 py-0.5 rounded-[3px] text-[10px] border border-border/50">
-              <span className="text-muted-foreground font-medium">Steepness:</span>
+            <div className="flex items-center gap-1.5 bg-muted px-[var(--padding)] py-0.5 rounded-none text-[var(--body-font-size)] border border-border">
+              <span className="text-muted-foreground font-normal">Steepness:</span>
               <button
                 type="button"
-                onClick={() => setSteepness((prev) => Math.max(0.2, Math.round((prev - 0.2) * 10) / 10))}
-                className="w-4 h-4 rounded bg-background hover:bg-muted text-foreground flex items-center justify-center font-bold text-[11px] cursor-pointer"
-                title="Decrease logarithmic steepness"
+                onClick={() => {
+                  const curr = parseFloat(steepnessInput)
+                  const base = Number.isFinite(curr) ? curr : 1.0
+                  const next = Math.round((base - 0.1) * 100) / 100
+                  setSteepnessInput(next.toString())
+                }}
+                className="w-5 h-5 rounded-none bg-background hover:bg-muted text-foreground flex items-center justify-center font-bold cursor-pointer border border-border/60"
+                title="Decrease steepness"
               >
                 −
               </button>
-              <span className="font-mono text-foreground font-semibold min-w-[28px] text-center">
-                {steepness.toFixed(1)}x
-              </span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={steepnessInput}
+                onChange={(e) => setSteepnessInput(e.target.value)}
+                className="w-14 h-5 px-1 font-mono font-bold text-center bg-background border border-border rounded-none text-foreground focus:outline-none focus:border-primary text-[var(--body-font-size)]"
+                placeholder="1.0"
+                title="Custom steepness factor (unbounded)"
+              />
               <button
                 type="button"
-                onClick={() => setSteepness((prev) => Math.min(3.0, Math.round((prev + 0.2) * 10) / 10))}
-                className="w-4 h-4 rounded bg-background hover:bg-muted text-foreground flex items-center justify-center font-bold text-[11px] cursor-pointer"
-                title="Increase logarithmic steepness"
+                onClick={() => {
+                  const curr = parseFloat(steepnessInput)
+                  const base = Number.isFinite(curr) ? curr : 1.0
+                  const next = Math.round((base + 0.1) * 100) / 100
+                  setSteepnessInput(next.toString())
+                }}
+                className="w-5 h-5 rounded-none bg-background hover:bg-muted text-foreground flex items-center justify-center font-bold cursor-pointer border border-border/60"
+                title="Increase steepness"
               >
                 +
               </button>
 
-              <div className="flex items-center gap-0.5 ml-0.5 border-l border-border pl-1">
-                {[0.5, 1.0, 2.0].map((preset) => (
+              <div className="flex items-center gap-1 ml-1 border-l border-border pl-1.5">
+                {[0.2, 0.5, 1.0, 2.0].map((preset) => (
                   <button
                     key={preset}
                     type="button"
-                    onClick={() => setSteepness(preset)}
-                    className={`px-1 py-0.2 rounded text-[9px] cursor-pointer transition-colors ${
-                      Math.abs(steepness - preset) < 0.05
+                    onClick={() => setSteepnessInput(preset.toString())}
+                    className={`px-1.5 py-0.5 rounded-none text-[var(--body-font-size)] cursor-pointer transition-colors ${
+                      Math.abs(steepness - preset) < 0.01
                         ? 'bg-primary text-primary-foreground font-bold'
-                        : 'text-muted-foreground hover:text-foreground'
+                        : 'text-muted-foreground hover:text-foreground font-light'
                     }`}
                   >
                     {preset}x
@@ -365,14 +392,14 @@ export const HistogramChart: React.FC<HistogramChartProps> = ({
           )}
 
           {/* Logarithmic vs Linear Switch */}
-          <div className="flex items-center gap-1 bg-muted p-0.5 rounded-[3px] text-[10px] border border-border/50">
+          <div className="flex items-center gap-1 bg-muted p-[var(--cell-padding)] rounded-none text-[var(--body-font-size)] border border-border">
             <button
               type="button"
               onClick={() => setScaleMode('log')}
-              className={`px-2 py-0.5 rounded-[2px] transition-colors cursor-pointer font-medium ${
+              className={`px-2 py-0.5 rounded-none transition-colors cursor-pointer ${
                 scaleMode === 'log'
-                  ? 'bg-background text-foreground shadow-sm font-semibold'
-                  : 'text-muted-foreground hover:text-foreground'
+                  ? 'bg-background text-foreground shadow-sm font-bold'
+                  : 'text-muted-foreground hover:text-foreground font-light'
               }`}
             >
               Logarithmic
@@ -380,10 +407,10 @@ export const HistogramChart: React.FC<HistogramChartProps> = ({
             <button
               type="button"
               onClick={() => setScaleMode('linear')}
-              className={`px-2 py-0.5 rounded-[2px] transition-colors cursor-pointer font-medium ${
+              className={`px-2 py-0.5 rounded-none transition-colors cursor-pointer ${
                 scaleMode === 'linear'
-                  ? 'bg-background text-foreground shadow-sm font-semibold'
-                  : 'text-muted-foreground hover:text-foreground'
+                  ? 'bg-background text-foreground shadow-sm font-bold'
+                  : 'text-muted-foreground hover:text-foreground font-light'
               }`}
             >
               Linear

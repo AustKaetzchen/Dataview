@@ -7,15 +7,25 @@ interface StatsSummaryProps {
   countryStats?: CountryStats | null
 }
 
+const formatLocalizedNumber = (val: number | undefined | null, fractionDigits: number = 4): string => {
+  if (val === undefined || val === null || !Number.isFinite(val)) return 'N/A'
+  return val.toLocaleString(undefined, {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  })
+}
+
 export const StatsSummary: React.FC<StatsSummaryProps> = ({ raster, countryStats }) => {
   if (!raster && !countryStats) return null
 
   if (countryStats) {
-    const validPct =
-      countryStats.totalCells > 0
-        ? ((countryStats.validCount / countryStats.totalCells) * 100).toFixed(1)
-        : '0.0'
-    const median = Number.isFinite(countryStats.median) ? countryStats.median.toFixed(3) : 'N/A'
+    const validPctNum =
+      countryStats.totalCells > 0 ? (countryStats.validCount / countryStats.totalCells) * 100 : 0
+    const validPct = validPctNum.toLocaleString(undefined, {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    })
+    const median = formatLocalizedNumber(countryStats.median, 3)
     const total =
       countryStats.total !== undefined && Number.isFinite(countryStats.total)
         ? countryStats.total
@@ -23,67 +33,81 @@ export const StatsSummary: React.FC<StatsSummaryProps> = ({ raster, countryStats
 
     const statItems = [
       { label: 'Scope', value: `${countryStats.name} (${countryStats.isoA3 || 'N/A'})` },
-      { label: 'Total (Sum)', value: total.toLocaleString(undefined, { maximumFractionDigits: 2 }) },
+      {
+        label: 'Total (Sum)',
+        value: total.toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }),
+      },
       { label: 'Valid Cells', value: `${countryStats.validCount.toLocaleString()} (${validPct}%)` },
       { label: 'Polygon Cells', value: countryStats.totalCells.toLocaleString() },
-      { label: 'Min Value', value: countryStats.min.toFixed(4) },
-      { label: 'Max Value', value: countryStats.max.toFixed(4) },
-      { label: 'Mean', value: countryStats.mean.toFixed(4) },
-      { label: 'Std Dev', value: countryStats.stdDev.toFixed(4) },
+      { label: 'Min Value', value: formatLocalizedNumber(countryStats.min, 4) },
+      { label: 'Max Value', value: formatLocalizedNumber(countryStats.max, 4) },
+      { label: 'Mean', value: formatLocalizedNumber(countryStats.mean, 4) },
+      { label: 'Std Dev', value: formatLocalizedNumber(countryStats.stdDev, 4) },
       { label: 'Median (P50)', value: median },
     ]
 
     return (
-      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2 text-xs">
+      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-[var(--cell-padding)] list-disc list-outside pl-5 text-[var(--body-font-size)] select-text">
         {statItems.map((stat, i) => (
-          <div
-            key={i}
-            className="rounded-md bg-card border border-border p-2 flex flex-col justify-between"
-          >
-            <span className="text-muted-foreground text-[10px] uppercase font-medium">{stat.label}</span>
-            <span className="text-foreground font-medium text-xs mt-1 truncate font-mono">
+          <li key={i} className="leading-snug">
+            <span className="text-muted-foreground uppercase text-[var(--body-font-size)] font-bold tracking-wider mr-2 whitespace-nowrap">
+              {stat.label}:
+            </span>
+            <span className="text-foreground font-mono break-all font-light">
               {stat.value}
             </span>
-          </div>
+          </li>
         ))}
-      </div>
+      </ul>
     )
   }
 
   if (!raster) return null
 
-  const validPct = ((raster.validCount / raster.totalCells) * 100).toFixed(1)
-  const median = raster.quantiles?.[50] !== undefined ? raster.quantiles[50].toFixed(3) : 'N/A'
+  const validPctNum = raster.totalCells > 0 ? (raster.validCount / raster.totalCells) * 100 : 0
+  const validPct = validPctNum.toLocaleString(undefined, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })
+  const median = formatLocalizedNumber(raster.quantiles?.[50], 3)
   const total =
     raster.total !== undefined && Number.isFinite(raster.total)
       ? raster.total
       : raster.mean * raster.validCount
 
   const statItems = [
-    { label: 'Total (Sum)', value: total.toLocaleString(undefined, { maximumFractionDigits: 2 }) },
+    {
+      label: 'Total (Sum)',
+      value: total.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }),
+    },
     { label: 'Valid Cells', value: `${raster.validCount.toLocaleString()} (${validPct}%)` },
-    { label: 'Resolution', value: `${raster.width} × ${raster.height}` },
+    { label: 'Resolution', value: `${raster.width.toLocaleString()} × ${raster.height.toLocaleString()}` },
     { label: 'Total Cells', value: raster.totalCells.toLocaleString() },
-    { label: 'Min Value', value: raster.min.toFixed(4) },
-    { label: 'Max Value', value: raster.max.toFixed(4) },
-    { label: 'Mean', value: raster.mean.toFixed(4) },
-    { label: 'Std Dev', value: raster.stdDev.toFixed(4) },
+    { label: 'Min Value', value: formatLocalizedNumber(raster.min, 4) },
+    { label: 'Max Value', value: formatLocalizedNumber(raster.max, 4) },
+    { label: 'Mean', value: formatLocalizedNumber(raster.mean, 4) },
+    { label: 'Std Dev', value: formatLocalizedNumber(raster.stdDev, 4) },
     { label: 'Median (P50)', value: median },
   ]
 
   return (
-    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2 text-xs">
+    <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-[var(--cell-padding)] list-disc list-outside pl-5 text-[var(--body-font-size)] select-text">
       {statItems.map((stat, i) => (
-        <div
-          key={i}
-          className="rounded-md bg-card border border-border p-2 flex flex-col justify-between"
-        >
-          <span className="text-muted-foreground text-[10px] uppercase font-medium">{stat.label}</span>
-          <span className="text-foreground font-medium text-xs mt-1 truncate font-mono">
+        <li key={i} className="leading-snug">
+          <span className="text-muted-foreground uppercase text-[var(--body-font-size)] font-bold tracking-wider mr-2 whitespace-nowrap">
+            {stat.label}:
+          </span>
+          <span className="text-foreground font-mono break-all font-light">
             {stat.value}
           </span>
-        </div>
+        </li>
       ))}
-    </div>
+    </ul>
   )
 }

@@ -7,6 +7,7 @@ export interface IconProps extends React.HTMLAttributes<HTMLSpanElement> {
 }
 
 export const Icon: React.FC<IconProps> = ({ name, className, style, size, ...props }) => {
+  const iconSize = size ? (typeof size === 'number' ? `${size}px` : size) : '1rem'
   return (
     <span
       className={cn(
@@ -14,9 +15,9 @@ export const Icon: React.FC<IconProps> = ({ name, className, style, size, ...pro
         className
       )}
       style={{
-        fontSize: size ? (typeof size === 'number' ? `${size}px` : size) : '1rem',
-        width: size ? (typeof size === 'number' ? `${size}px` : size) : '1.25rem',
-        height: size ? (typeof size === 'number' ? `${size}px` : size) : '1.25rem',
+        fontSize: iconSize,
+        width: iconSize,
+        height: iconSize,
         ...style,
       }}
       {...props}

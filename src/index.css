@@ -5,24 +5,24 @@
 :root {
   --navbar-height: 2rem;
   
-  --accent-primary-colour: rgb(200, 40, 40);
-  --accent-secondary-colour: rgb(240, 60, 60);
+  --accent-primary-colour: rgba(200, 40, 40);
+  --accent-secondary-colour: rgba(240, 60, 60);
   --accent-tertiary-colour: rgba(255, 255, 255, 0.15);
-  --bg-primary-colour: #111113;
-  --bg-secondary-colour: #232323;
+  --bg-primary-colour: rgba(0, 0, 0, 0.85);
+  --bg-secondary-colour: rgba(35, 35, 35);
   --hover-colour: rgba(255, 255, 255, 0.3);
 
-  --header-colour: #ffffff;
-  --header-font-family: "Karla", sans-serif;
+  --header-colour: white;
+  --header-font-family: "Karla";
   --header-font-size: 1rem;
   --header-font-weight: 700;
   --image-filter: brightness(100);
-  --monospace-font-family: "Karla", sans-serif;
+  --monospace-font-family: "Fira Code";
 
-  --body-colour: #ffffff;
-  --body-font-family: "Karla", sans-serif;
+  --body-colour: white;
+  --body-font-family: "Karla";
   --body-font-size: 0.85rem;
-  --body-font-weight: 400;
+  --body-font-weight: 300;
 
   --cell-padding: 0.25rem;
   --default-width: 12rem;
@@ -53,7 +53,7 @@
 
 @theme inline {
   --font-sans: 'Karla', sans-serif;
-  --font-mono: 'Karla', sans-serif;
+  --font-mono: 'Fira Code', monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -82,13 +82,13 @@ html, head, body {
 }
 
 *, ::before, ::after {
-  font-family: 'Karla', sans-serif;
+  font-family: var(--body-font-family), sans-serif;
   border-color: var(--border);
   box-sizing: border-box;
 }
 
 body {
-  font-family: var(--body-font-family);
+  font-family: var(--body-font-family), sans-serif;
   font-size: var(--body-font-size);
   font-weight: var(--body-font-weight);
   color: var(--body-colour);
@@ -97,7 +97,8 @@ body {
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: var(--header-font-family);
+  font-family: var(--header-font-family), sans-serif;
+  font-size: var(--header-font-size);
   font-weight: var(--header-font-weight);
   color: var(--header-colour);
 }
@@ -108,27 +109,63 @@ b, strong {
 
 button, input, select, textarea {
   font-size: inherit;
-  font-family: 'Karla', sans-serif !important;
-}
+} /* -- Rem fix -- */
 
 canvas, iframe {
   user-select: none;
 }
 
-/* Clean modern number inputs without jarring native spin buttons */
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+  margin-left: var(--cell-padding);
 }
 
-input[type="number"] {
-  -moz-appearance: textfield;
-  appearance: textfield;
+textarea {
+  font-family: var(--monospace-font-family), monospace;
 }
 
 textarea, code, pre, .font-mono {
-  font-family: 'Karla', sans-serif !important;
+  font-family: var(--monospace-font-family), monospace !important;
+}
+
+.tippy-box {
+  max-width: fit-content !important;
+}
+
+.ve.overlay {
+  pointer-events: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 100dvh;
+  width: 100dvw;
+  > div {
+    pointer-events: auto;
+  }
+}
+
+.ve.scene {
+  position: fixed;
+  height: 100dvh;
+  width: 100dvw;
+}
+
+/* -- Vercengen atomics -- */
+.ve-display-none { display: none !important; }
+[ve-searchbar="true"] {
+  align-items: center;
+  background-color: var(--bg-secondary-colour);
+  border: 1px solid var(--bg-primary-colour);
+  border-radius: 3px;
+  display: flex;
+  overflow: hidden;
+  margin-bottom: calc(var(--cell-padding) * 1.25);
+  padding: 0 var(--padding) 0 0;
+  width: 20rem;
+  
+  [component="ve-datalist"] { input { margin-left: 0 } }
 }
 
 /* Material Icons inline styling */
@@ -137,6 +174,8 @@ icon, .material-icons, .ve-icon, [class*="material-icons"] {
   font-weight: normal;
   font-style: normal;
   font-size: 1rem;
+  width: 1rem;
+  height: 1rem;
   line-height: 1;
   letter-spacing: normal;
   text-transform: none;
@@ -164,7 +203,7 @@ icon, .material-icons, .ve-icon, [class*="material-icons"] {
 
 ::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
+  border-radius: 0px;
 }
 
 ::-webkit-scrollbar-thumb:hover {

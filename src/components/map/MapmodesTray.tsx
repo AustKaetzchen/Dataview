@@ -8,6 +8,7 @@ import {
 import { CountryFeature, CountryStats } from '@/lib/geopng/polygonBinning'
 import { Icon } from '@/components/ui/icon'
 import { Slider } from '@/components/ui/slider'
+import { MAPMODES_CONFIG } from '@config'
 
 interface MapmodesTrayProps {
   mapModes: MapModeItem[]
@@ -21,6 +22,8 @@ interface MapmodesTrayProps {
   countryStats?: CountryStats | null
   heightmapConfig: HeightmapConfig
   setHeightmapConfig: React.Dispatch<React.SetStateAction<HeightmapConfig>>
+  cameraTilt?: number
+  onSetCameraTilt?: (tilt: number) => void
   circleOverlayConfig: CircleOverlayConfig
   setCircleOverlayConfig: React.Dispatch<React.SetStateAction<CircleOverlayConfig>>
   allCountries: CountryFeature[]
@@ -38,6 +41,8 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
   countryStats,
   heightmapConfig,
   setHeightmapConfig,
+  cameraTilt,
+  onSetCameraTilt,
   circleOverlayConfig,
   setCircleOverlayConfig,
   allCountries,
@@ -80,14 +85,14 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
   }, [mapModes, mapmodeSearch])
 
   return (
-    <div className="absolute bottom-4 right-4 z-20 w-80 max-h-[calc(100vh-140px)] flex flex-col bg-card/98 backdrop-blur-md border border-border shadow-2xl p-2.5 space-y-2 text-xs select-none font-sans overflow-hidden">
+    <div className="absolute bottom-4 right-4 z-20 w-80 max-h-[calc(100vh-140px)] flex flex-col bg-card/98 backdrop-blur-md border border-border shadow-2xl p-[var(--padding)] space-y-[var(--padding)] text-[var(--body-font-size)] select-none font-sans overflow-hidden">
       {/* Tray Header */}
-      <div className="flex items-center justify-between border-b border-border pb-1.5 shrink-0">
-        <span className="font-bold text-foreground text-xs flex items-center gap-1.5">
-          <Icon name="layers" size="0.95rem" />
+      <div className="flex items-center justify-between border-b border-border pb-[var(--cell-padding)] shrink-0">
+        <span className="font-bold text-foreground text-[var(--header-font-size)] flex items-center gap-2">
+          <Icon name="layers" />
           <span>Mapmodes</span>
         </span>
-        <span className="text-[10px] px-1.5 py-0.2 bg-muted text-muted-foreground border border-border font-mono font-medium">
+        <span className="text-[var(--body-font-size)] px-2 py-0.5 bg-muted text-muted-foreground border border-border font-mono font-medium">
           {mapModes.filter((m) => m.active).length} Active
         </span>
       </div>
@@ -96,7 +101,6 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
       <div className="relative shrink-0">
         <Icon
           name="search"
-          size="0.8rem"
           className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
         />
         <input
@@ -104,13 +108,13 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
           value={mapmodeSearch}
           onChange={(e) => setMapmodeSearch(e.target.value)}
           placeholder="Search mapmodes..."
-          className="w-full pl-6 pr-6 py-1 text-xs bg-background/70 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary rounded-none"
+          className="w-full pl-7 pr-7 py-1 text-[var(--body-font-size)] bg-background/70 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary rounded-none"
         />
         {mapmodeSearch && (
           <button
             type="button"
             onClick={() => setMapmodeSearch('')}
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground hover:text-foreground cursor-pointer px-1"
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[var(--body-font-size)] text-muted-foreground hover:text-foreground cursor-pointer px-1"
           >
             ✕
           </button>
@@ -120,7 +124,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
       {/* Composable Mode Items Stack */}
       <div className="space-y-1 overflow-y-auto max-h-[50vh] pr-0.5">
         {filteredMapModes.length === 0 && (
-          <p className="text-[11px] text-muted-foreground italic py-2 text-center">
+          <p className="text-[var(--body-font-size)] text-muted-foreground italic py-2 text-center">
             No matching mapmodes found
           </p>
         )}
@@ -133,7 +137,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
             <div key={mode.id} className="border border-border/80 bg-background/50">
               {/* Row Header */}
               <div
-                className={`flex items-center justify-between px-2 py-1.5 transition-colors ${
+                className={`flex items-center justify-between px-[var(--padding)] py-1.5 transition-colors ${
                   mode.active
                     ? 'bg-muted/60 text-foreground'
                     : 'bg-background/40 text-muted-foreground'
@@ -144,45 +148,44 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                     type="checkbox"
                     checked={mode.active}
                     onChange={() => onToggleMapMode(mode.id)}
-                    className="w-3.5 h-3.5 rounded-none accent-emerald-500 cursor-pointer shrink-0"
+                    className="w-4 h-4 rounded-none accent-emerald-500 cursor-pointer shrink-0"
                   />
                   <button
                     type="button"
                     onClick={() => hasSettings && toggleExpand(mode.id)}
-                    className="truncate text-xs text-left cursor-pointer flex-1 flex items-center gap-1.5 hover:text-foreground"
+                    className="truncate text-[var(--body-font-size)] text-left cursor-pointer flex-1 flex items-center gap-1.5 hover:text-foreground"
                   >
-                    <span className={mode.active ? 'font-semibold text-foreground' : ''}>
+                    <span className={mode.active ? 'font-bold text-foreground' : 'font-light'}>
                       {mode.label}
                     </span>
                     {mode.id === 'country_analysis' && selectedCountries.length > 0 && (
-                      <span className="text-[9px] px-1 py-0.2 bg-muted text-muted-foreground border border-border font-medium shrink-0">
+                      <span className="text-[var(--body-font-size)] px-1.5 py-0.2 bg-muted text-muted-foreground border border-border font-medium shrink-0">
                         {selectedCountries.length}
                       </span>
                     )}
                     {mode.id === 'spike_map' && mode.active && (
-                      <span className="text-[9px] px-1 py-0.2 bg-muted text-muted-foreground border border-border font-medium shrink-0">
+                      <span className="text-[var(--body-font-size)] px-1.5 py-0.2 bg-muted text-muted-foreground border border-border font-medium shrink-0">
                         3D
                       </span>
                     )}
                     {mode.id === 'circle_sizing' && mode.active && (
-                      <span className="text-[9px] px-1 py-0.2 bg-muted text-muted-foreground border border-border font-medium shrink-0">
+                      <span className="text-[var(--body-font-size)] px-1.5 py-0.2 bg-muted text-muted-foreground border border-border font-medium shrink-0">
                         P{circleOverlayConfig.percentileCutoff}
                       </span>
                     )}
                   </button>
                 </div>
 
-                <div className="flex items-center gap-0.5 shrink-0 ml-1">
+                <div className="flex items-center gap-1 shrink-0 ml-1">
                   {hasSettings && (
                     <button
                       type="button"
                       onClick={() => toggleExpand(mode.id)}
-                      className="w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
+                      className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
                       title="Toggle Settings"
                     >
                       <Icon
                         name={isExpanded ? 'expand_less' : 'tune'}
-                        size="0.8rem"
                       />
                     </button>
                   )}
@@ -198,10 +201,10 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                         onReorderMapModes(updated)
                       }
                     }}
-                    className="w-4 h-4 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
+                    className="w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
                     title="Move up"
                   >
-                    <Icon name="arrow_upward" size="0.7rem" />
+                    <Icon name="arrow_upward" />
                   </button>
                   <button
                     type="button"
@@ -215,10 +218,10 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                         onReorderMapModes(updated)
                       }
                     }}
-                    className="w-4 h-4 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
+                    className="w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
                     title="Move down"
                   >
-                    <Icon name="arrow_downward" size="0.7rem" />
+                    <Icon name="arrow_downward" />
                   </button>
                 </div>
               </div>
@@ -227,17 +230,17 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
               {/* SETTINGS: COUNTRY ANALYSIS */}
               {/* ========================================================================= */}
               {isExpanded && mode.id === 'country_analysis' && (
-                <div className="p-2.5 border-t border-border space-y-2 bg-card/80 animate-in fade-in-0 duration-100">
+                <div className="p-[var(--padding)] border-t border-border space-y-2 bg-card/80 animate-in fade-in-0 duration-100">
                   <div className="flex items-center justify-between pb-1 border-b border-border/60">
-                    <span className="text-[11px] font-semibold text-foreground flex items-center gap-1">
-                      <Icon name="flag" size="0.85rem" />
+                    <span className="text-[var(--body-font-size)] font-bold text-foreground flex items-center gap-1.5">
+                      <Icon name="flag" />
                       <span>Country Analysis Settings</span>
                     </span>
                     {selectedCountries.length > 0 && (
                       <button
                         type="button"
                         onClick={onClearCountries}
-                        className="text-[10px] text-primary hover:underline cursor-pointer"
+                        className="text-[var(--body-font-size)] text-primary hover:underline cursor-pointer"
                       >
                         Clear all ({selectedCountries.length})
                       </button>
@@ -245,12 +248,12 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                   </div>
 
                   {/* Bitmap Isolation Mode Toggle */}
-                  <div className="flex items-center justify-between p-1.5 bg-background border border-border">
+                  <div className="flex items-center justify-between p-[var(--cell-padding)] bg-background border border-border">
                     <div className="flex flex-col">
-                      <span className="font-semibold text-foreground text-[11px]">
+                      <span className="font-bold text-foreground text-[var(--body-font-size)]">
                         Bitmap Isolation Mode
                       </span>
-                      <span className="text-[9px] text-muted-foreground">
+                      <span className="text-[var(--body-font-size)] text-muted-foreground font-light">
                         Clip raster pixels strictly to selected countries
                       </span>
                     </div>
@@ -259,11 +262,11 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                         type="checkbox"
                         checked={countriesMode}
                         onChange={(e) => onToggleCountriesMode && onToggleCountriesMode(e.target.checked)}
-                        className="w-3.5 h-3.5 rounded-none accent-emerald-500 cursor-pointer"
+                        className="w-4 h-4 rounded-none accent-emerald-500 cursor-pointer"
                       />
                       <span
-                        className={`text-[10px] font-semibold uppercase ${
-                          countriesMode ? 'text-emerald-400 font-bold' : 'text-muted-foreground'
+                        className={`text-[var(--body-font-size)] font-bold uppercase ${
+                          countriesMode ? 'text-emerald-400' : 'text-muted-foreground'
                         }`}
                       >
                         {countriesMode ? 'ON' : 'OFF'}
@@ -278,13 +281,13 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                       placeholder="Filter country by name or ISO..."
                       value={countrySearch}
                       onChange={(e) => setCountrySearch(e.target.value)}
-                      className="w-full h-7 px-2 text-[11px] bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+                      className="w-full h-7 px-2 text-[var(--body-font-size)] bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
                     />
                     {countrySearch && (
                       <button
                         type="button"
                         onClick={() => setCountrySearch('')}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-[11px] cursor-pointer"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-[var(--body-font-size)] cursor-pointer"
                       >
                         ✕
                       </button>
@@ -292,9 +295,9 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                   </div>
 
                   {/* Scrollable Checklist */}
-                  <div className="h-32 overflow-y-auto border border-border bg-background/50 divide-y divide-border/40 text-[11px]">
+                  <div className="h-32 overflow-y-auto border border-border bg-background/50 divide-y divide-border/40 text-[var(--body-font-size)]">
                     {filteredCountries.length === 0 ? (
-                      <div className="p-2 text-center text-muted-foreground text-[10px]">
+                      <div className="p-2 text-center text-muted-foreground text-[var(--body-font-size)]">
                         No matching countries
                       </div>
                     ) : (
@@ -310,13 +313,13 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                               type="checkbox"
                               checked={isChecked}
                               onChange={() => onToggleCountry(c)}
-                              className="w-3.5 h-3.5 rounded-none accent-emerald-500 cursor-pointer shrink-0"
+                              className="w-4 h-4 rounded-none accent-emerald-500 cursor-pointer shrink-0"
                             />
                             <span className="truncate flex-1 text-foreground">
                               {c.properties.name}
                             </span>
                             {c.properties.iso_a3 && c.properties.iso_a3 !== '-99' && (
-                              <span className="text-[9px] font-mono text-muted-foreground">
+                              <span className="text-[var(--body-font-size)] font-mono text-muted-foreground">
                                 {c.properties.iso_a3}
                               </span>
                             )}
@@ -332,7 +335,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                       {selectedCountries.map((c) => (
                         <span
                           key={getCountryCode(c)}
-                          className="inline-flex items-center gap-1 px-1.5 py-0.2 text-[9px] bg-primary/20 text-primary border border-primary/40 rounded-none font-medium"
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[var(--body-font-size)] bg-primary/20 text-primary border border-primary/40 rounded-none font-medium"
                         >
                           <span className="truncate max-w-[90px]">{c.properties.name}</span>
                           <button
@@ -349,27 +352,29 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
 
                   {/* Country Stats Summary */}
                   {countryStats && countryStats.validCount > 0 && (
-                    <div className="p-2 bg-background border border-border text-[10px] space-y-1">
+                    <div className="p-[var(--cell-padding)] bg-background border border-border text-[var(--body-font-size)] space-y-1">
                       <div className="flex justify-between items-center text-muted-foreground">
-                        <span className="truncate font-medium">{countryStats.name}:</span>
+                        <span className="truncate font-bold">{countryStats.name}:</span>
                         <span className="text-foreground font-semibold">
                           {countryStats.validCount.toLocaleString()} cells
                         </span>
                       </div>
                       <div className="flex justify-between items-center text-muted-foreground">
                         <span>Range:</span>
-                        <span className="text-foreground font-mono">
-                          {countryStats.min.toFixed(2)} → {countryStats.max.toFixed(2)}
+                        <span className="text-foreground font-mono font-light">
+                          {countryStats.min.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} → {countryStats.max.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </div>
                       <div className="flex justify-between items-center text-muted-foreground">
                         <span>Mean:</span>
-                        <span className="text-foreground font-mono">{countryStats.mean.toFixed(2)}</span>
+                        <span className="text-foreground font-mono font-light">
+                          {countryStats.mean.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
                       </div>
                       <div className="flex justify-between items-center text-muted-foreground">
                         <span>Total:</span>
                         <span className="text-foreground font-mono font-bold">
-                          {(countryStats.total ?? countryStats.mean * countryStats.validCount).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                          {(countryStats.total ?? countryStats.mean * countryStats.validCount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </div>
                     </div>
@@ -381,17 +386,17 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
               {/* SETTINGS: 3D SPIKE MAP */}
               {/* ========================================================================= */}
               {isExpanded && mode.id === 'spike_map' && (
-                <div className="p-2.5 border-t border-border space-y-2.5 bg-card/80 animate-in fade-in-0 duration-100">
+                <div className="p-[var(--padding)] border-t border-border space-y-[var(--padding)] bg-card/80 animate-in fade-in-0 duration-100">
                   <div className="flex items-center justify-between pb-1 border-b border-border/60">
-                    <span className="text-[11px] font-semibold text-foreground flex items-center gap-1">
-                      <Icon name="view_in_ar" size="0.85rem" />
+                    <span className="text-[var(--body-font-size)] font-bold text-foreground flex items-center gap-1.5">
+                      <Icon name="view_in_ar" />
                       <span>3D Spike Map Settings</span>
                     </span>
                   </div>
 
                   {/* Spike Height Scale */}
                   <div className="space-y-1.5">
-                    <div className="flex justify-between items-center text-[10px]">
+                    <div className="flex justify-between items-center text-[var(--body-font-size)]">
                       <span className="text-muted-foreground">Spike Height Scale</span>
                       <span className="text-foreground font-mono font-bold">
                         {(heightmapConfig.elevationScale / 1000).toFixed(0)} km
@@ -408,9 +413,26 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                     />
                   </div>
 
+                  {/* Camera 3D Tilt / Pitch */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center text-[var(--body-font-size)]">
+                      <span className="text-muted-foreground">Camera Tilt (Pitch)</span>
+                      <span className="text-foreground font-mono font-bold">
+                        {Math.round(cameraTilt ?? 0)}°
+                      </span>
+                    </div>
+                    <Slider
+                      value={[Math.round(cameraTilt ?? 0)]}
+                      min={0}
+                      max={80}
+                      step={1}
+                      onValueChange={(vals) => onSetCameraTilt?.(vals[0])}
+                    />
+                  </div>
+
                   {/* Spikes Transparency / Opacity */}
                   <div className="space-y-1.5">
-                    <div className="flex justify-between items-center text-[10px]">
+                    <div className="flex justify-between items-center text-[var(--body-font-size)]">
                       <span className="text-muted-foreground">Spikes Opacity</span>
                       <span className="text-foreground font-mono font-bold">
                         {Math.round((heightmapConfig.opacity ?? 0.9) * 100)}%
@@ -427,8 +449,8 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                     />
                   </div>
 
-                  <p className="text-[9px] text-muted-foreground leading-tight">
-                    • Right-click / Ctrl+Drag on map to orbit in 3D perspective.
+                  <p className="text-[var(--body-font-size)] text-muted-foreground font-light leading-tight">
+                    • Right-click / Ctrl+Drag on map to orbit in 3D perspective across all projections.
                   </p>
                 </div>
               )}
@@ -437,17 +459,17 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
               {/* SETTINGS: EQUAL-AREA CIRCLE SIZING */}
               {/* ========================================================================= */}
               {isExpanded && mode.id === 'circle_sizing' && (
-                <div className="p-2.5 border-t border-border space-y-2.5 bg-card/80 animate-in fade-in-0 duration-100">
+                <div className="p-[var(--padding)] border-t border-border space-y-[var(--padding)] bg-card/80 animate-in fade-in-0 duration-100">
                   <div className="flex items-center justify-between pb-1 border-b border-border/60">
-                    <span className="text-[11px] font-semibold text-foreground flex items-center gap-1">
-                      <Icon name="scatter_plot" size="0.85rem" />
+                    <span className="text-[var(--body-font-size)] font-bold text-foreground flex items-center gap-1.5">
+                      <Icon name="scatter_plot" />
                       <span>Circle Sizing Settings</span>
                     </span>
                   </div>
 
                   {/* Custom Percentile Cutoff */}
                   <div className="space-y-1.5">
-                    <div className="flex justify-between items-center text-[10px]">
+                    <div className="flex justify-between items-center text-[var(--body-font-size)]">
                       <span className="text-muted-foreground">Custom Percentile Cutoff</span>
                       <div className="flex items-center gap-1">
                         <span className="font-mono text-muted-foreground">P</span>
@@ -466,7 +488,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                               }))
                             }
                           }}
-                          className="w-14 h-5 px-1 font-mono font-bold text-center bg-background border border-border text-foreground focus:outline-none focus:border-primary text-[10px]"
+                          className="w-14 h-6 px-1 font-mono font-bold text-center bg-background border border-border text-foreground focus:outline-none focus:border-primary text-[var(--body-font-size)]"
                         />
                       </div>
                     </div>
@@ -480,7 +502,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                           onClick={() =>
                             setCircleOverlayConfig((prev) => ({ ...prev, percentileCutoff: p }))
                           }
-                          className={`px-1 py-0.5 text-[9px] border rounded-none text-center cursor-pointer transition-colors ${
+                          className={`px-1 py-0.5 text-[var(--body-font-size)] border rounded-none text-center cursor-pointer transition-colors ${
                             circleOverlayConfig.percentileCutoff === p
                               ? 'bg-primary text-white font-bold border-accent shadow-sm'
                               : 'bg-background hover:bg-muted text-muted-foreground border-border'
@@ -494,7 +516,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
 
                   {/* Linear Area Expansion Scale */}
                   <div className="space-y-1.5">
-                    <div className="flex justify-between items-center text-[10px]">
+                    <div className="flex justify-between items-center text-[var(--body-font-size)]">
                       <span className="text-muted-foreground">Area Scale (1 ha / unit)</span>
                       <span className="text-foreground font-mono font-bold">
                         {(circleOverlayConfig.baseRadius || 1.0).toFixed(1)} ha/unit
@@ -516,7 +538,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
 
                   {/* Outline Stroke Width */}
                   <div className="space-y-1.5">
-                    <div className="flex justify-between items-center text-[10px]">
+                    <div className="flex justify-between items-center text-[var(--body-font-size)]">
                       <span className="text-muted-foreground">Coloured Outline Stroke</span>
                       <span className="text-foreground font-mono font-bold">
                         {circleOverlayConfig.strokeWidth || 2} px
@@ -538,7 +560,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
 
                   {/* Black Halo Thickness (Default 1px) */}
                   <div className="space-y-1.5">
-                    <div className="flex justify-between items-center text-[10px]">
+                    <div className="flex justify-between items-center text-[var(--body-font-size)]">
                       <span className="text-muted-foreground">Black Halo Thickness</span>
                       <span className="text-foreground font-mono font-bold">
                         {circleOverlayConfig.haloWidth ?? 1} px
@@ -558,7 +580,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                     />
                   </div>
 
-                  <p className="text-[9px] text-muted-foreground leading-tight">
+                  <p className="text-[var(--body-font-size)] text-muted-foreground font-light leading-tight">
                     • Hollow circles with coloured outline and adjustable black halo border. Area linearly scales with value (A ∝ Value).
                   </p>
                 </div>
@@ -569,7 +591,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
       </div>
 
       {/* Tray Footer */}
-      <div className="pt-1 border-t border-border/80 text-[9px] text-muted-foreground flex justify-between items-center shrink-0">
+      <div className="pt-[var(--cell-padding)] border-t border-border/80 text-[var(--body-font-size)] text-muted-foreground flex justify-between items-center shrink-0">
         <span>Click mode name to configure</span>
         <span>Drag / Arrow to reorder</span>
       </div>

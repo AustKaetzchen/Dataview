@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import { ColorPalette, ScaleType } from '@/lib/geopng/types'
 import { getPaletteCssGradient } from '@/lib/geopng/palettes'
 import { transformValue } from '@/lib/geopng/scales'
@@ -14,6 +14,7 @@ interface ColorBarLegendProps {
   currentVal?: number | null
   breaks?: number[]
   countryName?: string | null
+  onUpdateBreaks?: (breaks: number[]) => void
 }
 
 // Inverse transform for pseudo-log: y = asinh(x / (2 * sigma)) / ln(10)
@@ -28,19 +29,47 @@ function inverseTransform(val: number, scaleType: ScaleType, logSigma: number): 
   return val
 }
 
-// Helper to cleanly format numbers without scientific notation
+// Helper to cleanly format numbers using abbreviated notation (k, M, B, T)
 export function formatLegendValue(val: number): string {
   if (val === null || val === undefined || !Number.isFinite(val)) return ''
   const absVal = Math.abs(val)
   if (absVal === 0) return '0'
+
+  const units = [
+    { suffix: 'T', factor: 1e12 },
+    { suffix: 'B', factor: 1e9 },
+    { suffix: 'M', factor: 1e6 },
+    { suffix: 'k', factor: 1e3 },
+  ]
+
+  for (const { suffix, factor } of units) {
+    if (absVal >= factor) {
+      const scaled = val / factor
+      const absScaled = Math.abs(scaled)
+      const maxDecimals = absScaled >= 100 ? 1 : 2
+      const formatted = Number(scaled.toFixed(maxDecimals)).toLocaleString(undefined, {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: maxDecimals,
+      })
+      return `${formatted}${suffix}`
+    }
+  }
+
   if (absVal >= 100) {
-    return Math.round(val).toLocaleString()
-  } else if (absVal >= 10) {
-    return val.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })
+    return Number(val.toFixed(1)).toLocaleString(undefined, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 1,
+    })
   } else if (absVal >= 1) {
-    return val.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+    return Number(val.toFixed(2)).toLocaleString(undefined, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    })
   } else if (absVal >= 0.01) {
-    return val.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 })
+    return Number(val.toFixed(3)).toLocaleString(undefined, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 3,
+    })
   } else {
     return parseFloat(val.toFixed(5)).toString()
   }
@@ -57,7 +86,11 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
   currentVal,
   breaks,
   countryName,
+  onUpdateBreaks,
 }) => {
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
+  const [editingValue, setEditingValue] = useState<string>('')
+
   const gradient = getPaletteCssGradient(palette, invertPalette)
 
   const tMin = useMemo(() => transformValue(minVal, scaleType as ScaleType, logSigma), [minVal, scaleType, logSigma])
@@ -124,16 +157,16 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
   }, [breaks, minVal, maxVal, tMin, range, scaleType, logSigma])
 
   return (
-    <div className="rounded-none border border-border bg-card/95 backdrop-blur-md p-3.5 shadow-lg text-xs text-card-foreground w-84 select-none font-sans">
+    <div className="rounded-none border border-border bg-card/95 backdrop-blur-md p-[var(--padding)] shadow-lg text-[var(--body-font-size)] text-card-foreground w-96 select-none font-sans">
       {/* Legend Title & Hover Value Readout */}
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-2 gap-[var(--padding)]">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="font-bold text-foreground text-xs">{legendTitle}</span>
-          <span className="text-[10px] text-muted-foreground capitalize bg-muted px-1.5 py-0.5 rounded-none">
+          <span className="font-bold text-foreground text-[var(--header-font-size)]">{legendTitle}</span>
+          <span className="text-[var(--body-font-size)] text-muted-foreground capitalize bg-muted px-2 py-0.5 rounded-none">
             {scaleType}
           </span>
           {countryName && (
-            <span className="text-[10px] font-semibold text-white bg-primary/20 border border-primary/40 px-1.5 py-0.5 rounded-none flex items-center gap-1">
+            <span className="text-[var(--body-font-size)] font-bold text-white bg-primary/20 border border-primary/40 px-2 py-0.5 rounded-none flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-none bg-primary animate-pulse" />
               {countryName}
             </span>
@@ -141,11 +174,11 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
         </div>
 
         {currentVal !== null && currentVal !== undefined && Number.isFinite(currentVal) ? (
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-none bg-primary text-primary-foreground font-bold text-[11px] shadow-sm animate-in fade-in-0 duration-100">
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-none bg-primary text-primary-foreground font-bold text-[var(--body-font-size)] shadow-sm animate-in fade-in-0 duration-100 font-mono">
             <span>{formatLegendValue(currentVal)}</span>
           </div>
         ) : (
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-[var(--body-font-size)] text-muted-foreground font-mono font-light">
             {formatLegendValue(minVal)} → {formatLegendValue(maxVal)}
           </span>
         )}
@@ -182,8 +215,8 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
         )}
       </div>
 
-      {/* Ticks and aligned break values */}
-      <div className="relative w-full h-5 mt-1">
+      {/* Ticks and aligned break values with click-to-edit */}
+      <div className="relative w-full h-6 mt-1">
         {breakPoints.map((bp, i) => {
           const isFirst = i === 0
           const isLast = i === breakPoints.length - 1
@@ -193,14 +226,62 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
             ? 'items-end -translate-x-full'
             : 'items-center -translate-x-1/2'
 
+          const isEditing = editingIndex === i
+
           return (
             <div
               key={i}
-              className={`absolute top-0 flex flex-col text-[10px] text-muted-foreground font-medium ${alignment}`}
+              className={`absolute top-0 flex flex-col text-[var(--body-font-size)] text-muted-foreground font-mono font-light ${alignment}`}
               style={{ left: `${bp.pct}%` }}
             >
               <div className="w-[1px] h-1 bg-border/80 mb-0.5" />
-              <span className="whitespace-nowrap px-0.5">{bp.label}</span>
+              {isEditing ? (
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  autoFocus
+                  value={editingValue}
+                  onChange={(e) => setEditingValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const parsed = parseFloat(editingValue)
+                      if (Number.isFinite(parsed) && onUpdateBreaks) {
+                        const currentBreaks = breakPoints.map((b) => b.val)
+                        const newBreaks = currentBreaks.map((b, idx) => (idx === i ? parsed : b))
+                        newBreaks.sort((a, b) => a - b)
+                        onUpdateBreaks(newBreaks)
+                      }
+                      setEditingIndex(null)
+                    } else if (e.key === 'Escape') {
+                      setEditingIndex(null)
+                    }
+                  }}
+                  onBlur={() => {
+                    const parsed = parseFloat(editingValue)
+                    if (Number.isFinite(parsed) && onUpdateBreaks) {
+                      const currentBreaks = breakPoints.map((b) => b.val)
+                      const newBreaks = currentBreaks.map((b, idx) => (idx === i ? parsed : b))
+                      newBreaks.sort((a, b) => a - b)
+                      onUpdateBreaks(newBreaks)
+                    }
+                    setEditingIndex(null)
+                  }}
+                  className="w-16 h-6 px-1 text-[var(--body-font-size)] font-mono font-bold bg-background border border-primary text-foreground text-center rounded-none z-30 shadow-lg focus:outline-none"
+                  title="Enter absolute break number"
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingIndex(i)
+                    setEditingValue(bp.val.toString())
+                  }}
+                  className="whitespace-nowrap px-1 py-0.2 cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted rounded-none transition-colors underline decoration-dotted decoration-muted-foreground/60 underline-offset-2"
+                  title="Click to set break value by typing number"
+                >
+                  {bp.label}
+                </button>
+              )}
             </div>
           )
         })}

@@ -25,7 +25,7 @@ import {
   CountryStats,
   binRasterByMultipleCountries,
 } from './lib/geopng/polygonBinning'
-import { MAP_CONFIG } from '@config'
+import { MAP_CONFIG, MAPMODES_CONFIG } from '@config'
 import { SidebarControls } from './components/controls/SidebarControls'
 import { MapViewer } from './components/map/MapViewer'
 import { AnalyticsDrawer } from './components/analytics/AnalyticsDrawer'
@@ -69,13 +69,14 @@ export const App: React.FC = () => {
     haloWidth: 1,
   })
 
-  // Composable & Reorderable Mapmodes stack
-  const [mapModes, setMapModes] = useState<MapModeItem[]>([
-    { id: 'default', label: 'Default Raster', active: true },
-    { id: 'country_analysis', label: 'Country Analysis', active: false },
-    { id: 'spike_map', label: '3D Spike Map', active: false },
-    { id: 'circle_sizing', label: 'Equal-Area Circle Sizing', active: false },
-  ])
+  // Composable & Reorderable Mapmodes stack initialized from MAPMODES_CONFIG (mapmodes.json5)
+  const [mapModes, setMapModes] = useState<MapModeItem[]>(() =>
+    MAPMODES_CONFIG.modes.map((m) => ({
+      id: m.id,
+      label: m.label,
+      active: m.active ?? false,
+    }))
+  )
 
   // Top right view panel for analytics & settings drawer
   const [analyticsOpen, setAnalyticsOpen] = useState<boolean>(false)
@@ -275,6 +276,11 @@ export const App: React.FC = () => {
     setMapModes(newModes)
   }, [])
 
+  const handleUpdateBreaks = useCallback((newBreaks: number[]) => {
+    setBoundsMode('Absolute')
+    setAbsoluteBreaks(newBreaks.map((n) => (Math.round(n * 1000) / 1000).toString()).join(', '))
+  }, [])
+
   // Active countries for deferred background calculations
   const deferredActiveCountries = useMemo<CountryFeature[]>(() => {
     if (deferredSelectedCountries.length > 0) return deferredSelectedCountries
@@ -428,6 +434,7 @@ export const App: React.FC = () => {
           scaleType={scaleType}
           logSigma={logSigma}
           breaks={breaks}
+          onUpdateBreaks={handleUpdateBreaks}
           mapModes={mapModes}
           onToggleMapMode={handleToggleMapMode}
           onReorderMapModes={handleReorderMapModes}
