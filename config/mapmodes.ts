@@ -1,5 +1,5 @@
 import JSON5 from 'json5'
-import rawMapmodesConfig from './mapmodes.json5?raw'
+import rawMapmodesConfig from './panes/mapmodes.json5?raw'
 import { MapModeId } from '@/lib/geopng/types'
 
 export interface MapmodeConfigItem {

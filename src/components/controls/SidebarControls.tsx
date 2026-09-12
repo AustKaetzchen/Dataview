@@ -20,7 +20,7 @@ import { Input } from '../ui/input'
 import { NumberInput } from '../ui/number-input'
 import { Label } from '../ui/label'
 import { Icon } from '../ui/icon'
-import { MAPMODES_CONFIG, LOCALISATION_CONFIG } from '@config'
+import { LOCALISATION_CONFIG } from '@config'
 
 interface SidebarControlsProps {
   appMode: AppMode
@@ -695,39 +695,6 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
         </div>
       </div>
 
-      {/* Footer Info & Active Mapmodes Bullet List (Bottom Left) */}
-      <div className="p-[var(--padding)] border-t border-border bg-card/60 text-[var(--body-font-size)] text-muted-foreground space-y-1.5 select-none font-sans">
-        <p className="font-bold text-foreground uppercase text-[var(--header-font-size)] tracking-wider mb-2">
-          Active Modes & Controls
-        </p>
-        {mapModes
-          ?.filter((m) => m.active)
-          .map((m) => {
-            const configItem = MAPMODES_CONFIG.modes.find((c) => c.id === m.id)
-            let desc = configItem?.controlDescription || configItem?.description || 'Active layer'
-            if (m.id === 'country_analysis') {
-              const count = selectedCountries?.length ?? 0
-              desc =
-                count > 0
-                  ? `${count} ${count === 1 ? 'country' : 'countries'} isolated`
-                  : configItem?.controlDescription || 'Active (select country)'
-            } else if (m.id === 'spike_map') {
-              desc = `${Math.round((heightmapConfig?.elevationScale ?? 800000) / 1000)}km peak scale • ${Math.round((heightmapConfig?.opacity ?? 0.9) * 100)}% opacity`
-            } else if (m.id === 'circle_sizing') {
-              desc = `≥P${circleOverlayConfig?.percentileCutoff ?? 99} cutoff • ${(circleOverlayConfig?.baseRadius ?? 1.0).toFixed(1)} ha/unit`
-            }
-            return (
-              <p key={m.id} className="text-foreground text-[var(--body-font-size)] font-light leading-relaxed">
-                • <span className="text-muted-foreground font-bold">{m.label}:</span> {desc}
-              </p>
-            )
-          })}
-        {MAPMODES_CONFIG.controlsFooter.map((item, idx) => (
-          <p key={idx} className="text-[var(--body-font-size)] text-muted-foreground/80 font-light leading-relaxed">
-            • {item}
-          </p>
-        ))}
-      </div>
     </div>
   )
 }

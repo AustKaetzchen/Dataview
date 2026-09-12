@@ -41,6 +41,12 @@ import {
   TooltipTrigger,
 } from '../ui/tooltip'
 import { MapmodesTray } from './MapmodesTray'
+import { InfoFlyoutPanel } from './InfoFlyoutPanel'
+import {
+  SmoothMapController,
+  SmoothOrbitController,
+  SmoothGlobeController,
+} from './SmoothControllers'
 
 interface MapViewerProps {
   raster: DecodedRaster | null
@@ -302,6 +308,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   onToggleSettingsDrawer,
 }) => {
   const [internalFlyoutOpen, setInternalFlyoutOpen] = useState(false)
+  const [infoFlyoutOpen, setInfoFlyoutOpen] = useState(false)
   const flyoutOpen = settingsDrawerOpen !== undefined ? settingsDrawerOpen : internalFlyoutOpen
   const setFlyoutOpen = onToggleSettingsDrawer || setInternalFlyoutOpen
 
@@ -314,6 +321,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       bearing: 0,
       maxZoom: 18,
       minZoom: 0,
+      minPitch: 0,
+      maxPitch: 85,
     },
     Globe: MAP_CONFIG.mapDefines?.initialGlobe || {
       longitude: 0,
@@ -323,6 +332,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       bearing: 0,
       maxZoom: 18,
       minZoom: 0,
+      minPitch: 0,
+      maxPitch: 85,
     },
     Equirectangular: MAP_CONFIG.mapDefines?.initialEquirectangular || {
       target: [0, 0, 0],
@@ -331,8 +342,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       maxZoom: 10,
       rotationX: 0,
       rotationOrbit: 0,
-      minRotationX: 0,
-      maxRotationX: 85,
+      minRotationX: -85,
+      maxRotationX: 0,
     },
     EqualEarth: {
       target: [0, 0, 0],
@@ -341,20 +352,20 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       maxZoom: 10,
       rotationX: 0,
       rotationOrbit: 0,
-      minRotationX: 0,
-      maxRotationX: 85,
+      minRotationX: -85,
+      maxRotationX: 0,
     },
   })
 
-  // When heightmap is toggled on, tilt camera to 45 degrees so relief is immediately visible across all projections
+  // When heightmap is toggled on, tilt camera up to 45 degrees so relief is immediately visible across all projections
   useEffect(() => {
     if (heightmapConfig.enabled) {
       setProjViewStates((prev) => ({
         ...prev,
         Mercator: { ...prev.Mercator, pitch: Math.max(35, prev.Mercator?.pitch || 45) },
         Globe: { ...prev.Globe, pitch: Math.max(35, prev.Globe?.pitch || 45), bearing: 0 },
-        Equirectangular: { ...prev.Equirectangular, rotationX: Math.max(35, prev.Equirectangular?.rotationX || 45) },
-        EqualEarth: { ...prev.EqualEarth, rotationX: Math.max(35, prev.EqualEarth?.rotationX || 45) },
+        Equirectangular: { ...prev.Equirectangular, rotationX: Math.min(-35, prev.Equirectangular?.rotationX || -45) },
+        EqualEarth: { ...prev.EqualEarth, rotationX: Math.min(-35, prev.EqualEarth?.rotationX || -45) },
       }))
     }
   }, [heightmapConfig.enabled])
@@ -534,10 +545,10 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       ...prev,
       [projection]:
         projection === 'Equirectangular' || projection === 'EqualEarth'
-          ? { target: [0, 0, 0], zoom: 2.0, minZoom: 0.2, maxZoom: 10, rotationX: 0, rotationOrbit: 0, minRotationX: 0, maxRotationX: 85 }
+          ? { target: [0, 0, 0], zoom: 2.0, minZoom: 0.2, maxZoom: 10, rotationX: 0, rotationOrbit: 0, minRotationX: -85, maxRotationX: 0 }
           : projection === 'Globe'
-          ? { longitude: 0, latitude: 20, zoom: 0, pitch: 0, bearing: 0, maxZoom: 18, minZoom: 0 }
-          : { longitude: 0, latitude: 20, zoom: 1.2, pitch: 0, bearing: 0, maxZoom: 18, minZoom: 0 },
+          ? { longitude: 0, latitude: 20, zoom: 0, pitch: 0, bearing: 0, maxZoom: 18, minZoom: 0, minPitch: 0, maxPitch: 85 }
+          : { longitude: 0, latitude: 20, zoom: 1.2, pitch: 0, bearing: 0, maxZoom: 18, minZoom: 0, minPitch: 0, maxPitch: 85 },
     }))
   }, [projection])
 
@@ -566,36 +577,60 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     [projection]
   )
 
-  // Configure deck.gl view (OrbitView enables 3D tilt/pitch & rotation for Cartesian projections)
+  // Configure deck.gl view with SmoothControllers (Ctrl + Left Drag pitch & rotate, Left Drag pan)
   const views = useMemo(() => {
     if (projection === 'Globe') {
-      return new GlobeView({ id: 'globe-view', resolution: 1, controller: true })
+      return new GlobeView({
+        id: 'globe-view',
+        resolution: 1,
+        controller: {
+          type: SmoothGlobeController,
+          doubleClickZoom: false,
+          dragRotate: true,
+          dragMode: 'pan',
+        },
+      })
     }
     if (projection === 'Equirectangular') {
       return new OrbitView({
         id: 'equirectangular-view',
         orbitAxis: 'Y',
-        controller: { doubleClickZoom: false, dragRotate: true },
+        controller: {
+          type: SmoothOrbitController,
+          doubleClickZoom: false,
+          dragRotate: true,
+          dragMode: 'pan',
+        },
       })
     }
     if (projection === 'EqualEarth') {
       return new OrbitView({
         id: 'equal-earth-view',
         orbitAxis: 'Y',
-        controller: { doubleClickZoom: false, dragRotate: true },
+        controller: {
+          type: SmoothOrbitController,
+          doubleClickZoom: false,
+          dragRotate: true,
+          dragMode: 'pan',
+        },
       })
     }
     return new MapView({
       id: 'map-view',
       repeat: false,
-      controller: { doubleClickZoom: false, dragRotate: true },
+      controller: {
+        type: SmoothMapController,
+        doubleClickZoom: false,
+        dragRotate: true,
+        dragMode: 'pan',
+      },
     })
   }, [projection])
 
   const cameraTilt =
     projection === 'Mercator' || projection === 'Globe'
       ? projViewStates[projection]?.pitch || 0
-      : projViewStates[projection]?.rotationX || 0
+      : Math.abs(projViewStates[projection]?.rotationX || 0)
 
   const handleSetCameraTilt = useCallback(
     (tilt: number) => {
@@ -604,7 +639,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         [projection]:
           projection === 'Mercator' || projection === 'Globe'
             ? { ...prev[projection], pitch: tilt }
-            : { ...prev[projection], rotationX: tilt },
+            : { ...prev[projection], rotationX: -tilt },
       }))
     },
     [projection]
@@ -1277,12 +1312,13 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       className="relative w-full h-full overflow-hidden select-none bg-background font-sans"
       style={{ imageRendering: 'pixelated' }}
       onDoubleClick={handleDoubleClick}
+      onContextMenu={(e) => e.preventDefault()}
     >
       <DeckGL
         views={views}
         viewState={projViewStates[projection]}
         onViewStateChange={handleViewStateChange}
-        controller={{ doubleClickZoom: false, dragRotate: true }}
+        controller={false}
         layers={layers}
         onClick={handleClick}
         onHover={handleHover}
@@ -1484,6 +1520,47 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         setCircleOverlayConfig={setCircleOverlayConfig || (() => {})}
         allCountries={countryFeatures}
       />
+
+      {/* Bottom Left: Information & Controls Flyout */}
+      <TooltipProvider delayDuration={150}>
+        <div className="absolute bottom-[var(--padding)] left-[var(--padding)] z-20">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={infoFlyoutOpen ? 'secondary' : 'default'}
+                size="icon"
+                onClick={() => setInfoFlyoutOpen(!infoFlyoutOpen)}
+                className={`h-8 w-8 rounded-none border border-border backdrop-blur-md shadow-md cursor-pointer transition-colors ${
+                  infoFlyoutOpen
+                    ? 'bg-primary text-primary-foreground border-primary font-bold'
+                    : 'bg-card/95 text-white hover:bg-muted'
+                }`}
+                aria-label="Information & Controls"
+              >
+                <Icon
+                  name="info"
+                  className={infoFlyoutOpen ? 'text-primary-foreground' : 'text-white'}
+                />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <span>Information & Controls</span>
+            </TooltipContent>
+          </Tooltip>
+
+          {/* Flyout Panel anchored to bottom left */}
+          <InfoFlyoutPanel
+            isOpen={infoFlyoutOpen}
+            onClose={() => setInfoFlyoutOpen(false)}
+            mapModes={mapModes}
+            heightmapConfig={heightmapConfig}
+            circleOverlayConfig={circleOverlayConfig}
+            selectedCountries={selectedCountries || []}
+            projection={projection}
+            cameraTilt={cameraTilt}
+          />
+        </div>
+      </TooltipProvider>
     </div>
   )
 }

@@ -36,10 +36,11 @@
     },
   ],
 
-  // Control shortcut descriptions displayed in the bottom-left sidebar footer
+  // Control shortcut descriptions
   controlsFooter: [
-    "Hover: Inspect coordinates & values",
-    "Shift + Drag / Right-click: Pitch & rotate 3D camera",
+    "Left Drag: Pan map view",
+    "Ctrl + Drag / Right-click: Pitch & rotate 3D camera",
     "Double-click: Reset map camera",
+    "Hover: Inspect coordinates & values",
   ],
 }
