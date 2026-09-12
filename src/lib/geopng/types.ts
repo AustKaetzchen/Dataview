@@ -63,7 +63,7 @@ export interface HeightmapConfig {
   elevationScale: number // height multiplier in meters
   opacity?: number // 0.0 to 1.0 (defaults to 0.9)
   opacityByPercentile?: boolean // tie opacity to cell empirical percentile rank
-  opacityByPercentileStrength?: number // 0.0 to 1.0 (defaults to 1.0)
+  opacityByPercentileStrength?: number // 0.0 to 10.0 (pseudo-log ramp, defaults to 1.0)
 }
 
 export type MapModeId = 'default' | 'country_analysis' | 'spike_map' | 'circle_sizing'

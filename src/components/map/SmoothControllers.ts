@@ -109,10 +109,40 @@ export class SmoothOrbitController extends OrbitController {
   }
 }
 
+const DEGREES_TO_RADIANS = Math.PI / 180
+const RADIANS_TO_DEGREES = 180 / Math.PI
+const MAX_LATITUDE = 89.9
+
+function zoomAdjust(latitude: number, clampToPoles?: boolean): number {
+  if (clampToPoles) {
+    latitude = Math.max(Math.min(latitude, MAX_LATITUDE), -MAX_LATITUDE)
+  }
+  const scaleAdjust = Math.PI * Math.cos((latitude * Math.PI) / 180)
+  return Math.log2(scaleAdjust)
+}
+
+
+
 /**
- * SmoothGlobeState provides linear pitch and rotation for GlobeView.
+ * SmoothGlobeState provides Google Earth style globe panning:
+ * - Natural spherical spin around Earth's polar axis (East-West)
+ * - Meridian tilt (North-South) with pole clamping
+ * - Preserved stable camera bearing during pan (no horizon twist)
+ * - Linear pitch/rotation when holding Ctrl + Left Click (or Right-click drag)
  */
 class SmoothGlobeState extends BaseGlobeState {
+  constructor(options: any) {
+    super(options)
+    const s = (this as any)._state
+    if (options.startPanPos !== undefined) s.startPanPos = options.startPanPos
+    if (options.startPanLng !== undefined) s.startPanLng = options.startPanLng
+    if (options.startPanLat !== undefined) s.startPanLat = options.startPanLat
+    if (options.startPanBearing !== undefined) s.startPanBearing = options.startPanBearing
+    if (options.startPanZoom !== undefined) s.startPanZoom = options.startPanZoom
+    if (options.lastPanLng !== undefined) s.lastPanLng = options.lastPanLng
+    if (options.lastPanLat !== undefined) s.lastPanLat = options.lastPanLat
+  }
+
   _getNewRotation(
     pos: [number, number],
     startPos: [number, number],
@@ -130,10 +160,96 @@ class SmoothGlobeState extends BaseGlobeState {
 
     return { pitch, bearing }
   }
+
+  panStart({ pos }: { pos: [number, number] }): any {
+    const { latitude, longitude, zoom, bearing = 0 } = this.getViewportProps()
+    return this._getUpdatedState({
+      startPanPos: pos,
+      startPanLng: longitude,
+      startPanLat: latitude,
+      startPanBearing: bearing,
+      startPanZoom: zoom,
+      lastPanLng: longitude,
+      lastPanLat: latitude,
+    })
+  }
+
+  pan({ pos, startPos }: { pos: [number, number]; startPos?: [number, number] }): any {
+    const state = this.getState() as any
+    const origin = state.startPanPos || startPos
+    if (!origin) return this
+
+    const startLng = state.startPanLng ?? this.getViewportProps().longitude
+    const startLat = state.startPanLat ?? this.getViewportProps().latitude
+    const startBearing = state.startPanBearing ?? (this.getViewportProps().bearing || 0)
+    const startZoom = state.startPanZoom ?? this.getViewportProps().zoom
+
+    const dx = pos[0] - origin[0]
+    const dy = pos[1] - origin[1]
+
+    // Scale rotation speed inversely with zoom for 1:1 screen pixel tracking
+    const scale = Math.pow(2, startZoom - zoomAdjust(startLat, true))
+    const rotationSpeed = 0.25 / scale
+
+    // Rotate screen drag vector by camera bearing
+    const bRad = (startBearing * Math.PI) / 180
+    const cosB = Math.cos(bRad)
+    const sinB = Math.sin(bRad)
+
+    const dragEast = dx * cosB - dy * sinB
+    const dragNorth = dx * sinB + dy * cosB
+
+    // Delta latitude: dragging down tilts northern hemisphere into center
+    const deltaLat = dragNorth * rotationSpeed
+    const latitude = Math.max(-85, Math.min(85, startLat + deltaLat))
+
+    // Delta longitude: scaled by 1 / cos(lat) to maintain 1:1 ground tracking
+    const latRad = (latitude * Math.PI) / 180
+    const cosLat = Math.max(0.15, Math.cos(latRad))
+    const deltaLng = -(dragEast * rotationSpeed) / cosLat
+
+    let longitude = startLng + deltaLng
+    while (longitude > 180) longitude -= 360
+    while (longitude < -180) longitude += 360
+
+    return this._getUpdatedState({
+      longitude,
+      latitude,
+      bearing: startBearing, // Bearing is invariant during normal left drag!
+      zoom: startZoom,
+      lastPanLng: longitude,
+      lastPanLat: latitude,
+    })
+  }
+
+  panEnd(): any {
+    const state = this.getState() as any
+    const longitude = state.lastPanLng ?? this.getViewportProps().longitude
+    const latitude = state.lastPanLat ?? this.getViewportProps().latitude
+    const bearing = state.startPanBearing ?? (this.getViewportProps().bearing || 0)
+    const zoom = state.startPanZoom ?? this.getViewportProps().zoom
+
+    return this._getUpdatedState({
+      longitude,
+      latitude,
+      bearing,
+      zoom,
+      startPanPos: null,
+      startPanLng: null,
+      startPanLat: null,
+      startPanBearing: null,
+      startPanZoom: null,
+      lastPanLng: null,
+      lastPanLat: null,
+    })
+  }
 }
 
 /**
  * SmoothGlobeController for Globe projection.
+ * Works exactly like Google Earth:
+ * - Left Click Drag spins/tilts the globe smoothly around the polar axis without twisting bearing or snapping back
+ * - Ctrl + Left Drag (or Right-Click Drag) orbits pitch & bearing in 3D
  */
 export class SmoothGlobeController extends _GlobeController {
   // @ts-ignore
@@ -144,4 +260,31 @@ export class SmoothGlobeController extends _GlobeController {
     const src = event.srcEvent
     return Boolean(src?.ctrlKey || src?.metaKey)
   }
+
+  protected _onPanMove(event: any): boolean {
+    if (!this.dragPan) {
+      return false
+    }
+    const pos = this.getCenter(event)
+    const newControllerState = this.controllerState.pan({ pos })
+    this.updateViewport(
+      newControllerState,
+      { transitionDuration: 0 },
+      {
+        isDragging: true,
+        isPanning: true,
+      }
+    )
+    return true
+  }
+
+  protected _onPanMoveEnd(_event: any): boolean {
+    const newControllerState = this.controllerState.panEnd()
+    this.updateViewport(newControllerState, null, {
+      isDragging: false,
+      isPanning: false,
+    })
+    return true
+  }
 }
+

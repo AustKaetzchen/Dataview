@@ -47,6 +47,8 @@ interface SidebarControlsProps {
   setAbsoluteBreaks: (p: string) => void
   legendTitle: string
   setLegendTitle: (t: string) => void
+  legendSubtitle?: string
+  setLegendSubtitle?: (s: string) => void
   opacity: number
   setOpacity: (o: number) => void
   onFileUpload: (file: File, target: 'single' | 'diff_a' | 'diff_b') => void
@@ -91,6 +93,8 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
   setAbsoluteBreaks,
   legendTitle,
   setLegendTitle,
+  legendSubtitle = '',
+  setLegendSubtitle,
   opacity,
   setOpacity,
   onFileUpload,
@@ -739,14 +743,37 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                 )}
               </div>
 
-              {/* Legend Title */}
+              {/* Legend Title (Supports line breaks) */}
               <div className="space-y-1">
-                <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">Legend Label</Label>
-                <Input
-                  type="text"
+                <div className="flex items-center justify-between">
+                  <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">
+                    Legend Label
+                  </Label>
+                  <span className="text-[10px] text-muted-foreground/70 font-light">Supports Enter / line breaks</span>
+                </div>
+                <textarea
                   value={legendTitle}
                   onChange={(e) => setLegendTitle(e.target.value)}
-                  className="rounded-none h-7 text-[var(--body-font-size)]"
+                  rows={2}
+                  placeholder="e.g. Population Density&#10;(people per km²)"
+                  className="w-full rounded-none border border-input bg-transparent px-2.5 py-1 text-[var(--body-font-size)] text-foreground shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y font-sans leading-tight"
+                />
+              </div>
+
+              {/* Legend Subtitle (Optional, defaults to empty) */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">
+                    Legend Subtitle
+                  </Label>
+                  <span className="text-[10px] text-muted-foreground/70 font-light">Optional</span>
+                </div>
+                <textarea
+                  value={legendSubtitle}
+                  onChange={(e) => setLegendSubtitle?.(e.target.value)}
+                  rows={1}
+                  placeholder="Optional subtitle or data source..."
+                  className="w-full rounded-none border border-input bg-transparent px-2.5 py-1 text-[var(--body-font-size)] text-foreground shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y font-sans leading-tight"
                 />
               </div>
             </div>

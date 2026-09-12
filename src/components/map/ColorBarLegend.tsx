@@ -9,6 +9,7 @@ interface ColorBarLegendProps {
   minVal: number
   maxVal: number
   legendTitle: string
+  legendSubtitle?: string
   scaleType: string
   logSigma: number
   currentVal?: number | null
@@ -83,6 +84,7 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
   minVal,
   maxVal,
   legendTitle,
+  legendSubtitle,
   scaleType,
   logSigma,
   currentVal,
@@ -198,30 +200,41 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
           <div className="w-[2px] h-6 bg-border group-hover:bg-primary absolute top-1/2 -translate-y-1/2 right-0.5" />
         </div>
       )}
-      {/* Legend Title & Hover Value Readout */}
-      <div className="flex items-center justify-between mb-2 gap-[var(--padding)]">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="font-bold text-foreground text-[var(--header-font-size)]">{legendTitle}</span>
-          <span className="text-[var(--body-font-size)] text-muted-foreground capitalize bg-muted px-2 py-0.5 rounded-none">
-            {scaleType}
-          </span>
-          {countryName && (
-            <span className="text-[var(--body-font-size)] font-bold text-white bg-primary/20 border border-primary/40 px-2 py-0.5 rounded-none flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-none bg-primary animate-pulse" />
-              {countryName}
+      {/* Legend Title, Subtitle & Hover Value Readout */}
+      <div className="flex items-start justify-between mb-2 gap-[var(--padding)]">
+        <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="font-bold text-foreground text-[var(--header-font-size)] whitespace-pre-line leading-tight">
+              {legendTitle}
             </span>
+            <span className="text-[var(--body-font-size)] text-muted-foreground capitalize bg-muted px-2 py-0.5 rounded-none shrink-0">
+              {scaleType}
+            </span>
+            {countryName && (
+              <span className="text-[var(--body-font-size)] font-bold text-white bg-primary/20 border border-primary/40 px-2 py-0.5 rounded-none flex items-center gap-1 shrink-0">
+                <span className="w-1.5 h-1.5 rounded-none bg-primary animate-pulse" />
+                {countryName}
+              </span>
+            )}
+          </div>
+          {legendSubtitle && legendSubtitle.trim().length > 0 && (
+            <p className="text-[11px] text-muted-foreground font-light whitespace-pre-line leading-tight mt-0.5">
+              {legendSubtitle}
+            </p>
           )}
         </div>
 
-        {currentVal !== null && currentVal !== undefined && Number.isFinite(currentVal) ? (
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-none bg-primary text-primary-foreground font-bold text-[var(--body-font-size)] shadow-sm animate-in fade-in-0 duration-100">
-            <span>{formatLegendValue(currentVal)}</span>
-          </div>
-        ) : (
-          <span className="text-[var(--body-font-size)] text-muted-foreground font-light">
-            {formatLegendValue(minVal)} → {formatLegendValue(maxVal)}
-          </span>
-        )}
+        <div className="shrink-0 pt-0.5">
+          {currentVal !== null && currentVal !== undefined && Number.isFinite(currentVal) ? (
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-none bg-primary text-primary-foreground font-bold text-[var(--body-font-size)] shadow-sm animate-in fade-in-0 duration-100">
+              <span>{formatLegendValue(currentVal)}</span>
+            </div>
+          ) : (
+            <span className="text-[var(--body-font-size)] text-muted-foreground font-light">
+              {formatLegendValue(minVal)} → {formatLegendValue(maxVal)}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Gradient Bar with Breaks & Active Value Needle */}

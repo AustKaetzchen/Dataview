@@ -61,6 +61,7 @@ interface MapViewerProps {
   minVal: number
   maxVal: number
   legendTitle: string
+  legendSubtitle?: string
   scaleType: string
   logSigma: number
   breaks?: number[]
@@ -289,6 +290,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   minVal,
   maxVal,
   legendTitle,
+  legendSubtitle,
   scaleType,
   logSigma,
   breaks,
@@ -848,10 +850,14 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         const lutIdx = Math.floor(norm * 255) * 3
         let cellAlpha = alpha
         if (getPercentileRank) {
-          const rank = Math.max(0.05, getPercentileRank(v))
+          const rank = Math.max(0.01, Math.min(1, getPercentileRank(v)))
           const strength = heightmapConfig.opacityByPercentileStrength ?? 1.0
-          const factor = (1 - strength) + strength * rank
-          cellAlpha = Math.round(255 * opacityVal * Math.max(0.05, factor))
+          // Power curve gives smooth pseudo-log/exponential contrast:
+          // strength = 0: uniform opacity (rank^0 = 1.0)
+          // strength = 1: linear fade (rank^1 = rank)
+          // strength = 10: 10x order-of-magnitude fade (rank^10, isolates extreme spikes)
+          const factor = Math.pow(rank, strength)
+          cellAlpha = Math.round(255 * opacityVal * Math.max(0.02, factor))
         }
         const color: [number, number, number, number] = [
           lut[lutIdx],
@@ -1426,6 +1432,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                     minVal={legendMin}
                     maxVal={legendMax}
                     legendTitle={legendTitle}
+                    legendSubtitle={legendSubtitle}
                     scaleType={scaleType}
                     logSigma={logSigma}
                     currentVal={inspectData?.value ?? null}

@@ -46,6 +46,7 @@ export const App: React.FC = () => {
   )
   const [absoluteBreaks, setAbsoluteBreaks] = useState<string>('0, 10, 50, 100, 500, 1000')
   const [legendTitle, setLegendTitle] = useState<string>('Value')
+  const [legendSubtitle, setLegendSubtitle] = useState<string>('')
   const [opacity, setOpacity] = useState<number>(0.85)
 
   // 3D Heightmap, Proportional Circles & Binning
@@ -384,6 +385,7 @@ export const App: React.FC = () => {
           minVal={minVal}
           maxVal={maxVal}
           legendTitle={legendTitle}
+          legendSubtitle={legendSubtitle}
           scaleType={scaleType}
           logSigma={logSigma}
           breaks={breaks}
@@ -463,6 +465,8 @@ export const App: React.FC = () => {
         setAbsoluteBreaks={setAbsoluteBreaks}
         legendTitle={legendTitle}
         setLegendTitle={setLegendTitle}
+        legendSubtitle={legendSubtitle}
+        setLegendSubtitle={setLegendSubtitle}
         opacity={opacity}
         setOpacity={setOpacity}
         onFileUpload={handleFileUpload}

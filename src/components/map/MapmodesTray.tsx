@@ -9,6 +9,7 @@ import { CountryFeature, CountryStats } from '@/lib/geopng/polygonBinning'
 import { Icon } from '@/components/ui/icon'
 import { Slider } from '@/components/ui/slider'
 import { MAPMODES_CONFIG, LOCALISATION_CONFIG } from '@config'
+import { pseudoLogTransform, inversePseudoLogTransform } from '@/lib/geopng/scales'
 
 interface MapmodesTrayProps {
   mapModes: MapModeItem[]
@@ -28,6 +29,24 @@ interface MapmodesTrayProps {
   circleOverlayConfig: CircleOverlayConfig
   setCircleOverlayConfig: React.Dispatch<React.SetStateAction<CircleOverlayConfig>>
   allCountries: CountryFeature[]
+}
+
+const MAX_PERCENTILE_STRENGTH = 10.0
+const PERCENTILE_STRENGTH_SIGMA = 0.5
+const T_MAX_PERCENTILE = pseudoLogTransform(MAX_PERCENTILE_STRENGTH, PERCENTILE_STRENGTH_SIGMA)
+
+function strengthToSliderPos(strength: number): number {
+  const clamped = Math.max(0, Math.min(MAX_PERCENTILE_STRENGTH, strength))
+  const t = pseudoLogTransform(clamped, PERCENTILE_STRENGTH_SIGMA)
+  const norm = t / T_MAX_PERCENTILE
+  return Math.round(Math.max(0, Math.min(100, norm * 100)))
+}
+
+function sliderPosToStrength(pos: number): number {
+  const norm = Math.max(0, Math.min(100, pos)) / 100
+  const y = norm * T_MAX_PERCENTILE
+  const strength = inversePseudoLogTransform(y, PERCENTILE_STRENGTH_SIGMA)
+  return Math.max(0, Math.min(MAX_PERCENTILE_STRENGTH, Math.round(strength * 100) / 100))
 }
 
 export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
@@ -482,30 +501,68 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                       />
                     </label>
 
-                    {/* Adjustable Percentile Opacity Strength Slider */}
+                    {/* Adjustable Percentile Opacity Strength Slider with Pseudo-Log Ramp */}
                     {Boolean(heightmapConfig.opacityByPercentile) && (
-                      <div className="mt-2 pl-2 border-l-2 border-primary/50 space-y-1.5 animate-in fade-in-0 duration-150">
+                      <div className="mt-2 pl-2 border-l-2 border-primary/50 space-y-2 animate-in fade-in-0 duration-150">
                         <div className="flex justify-between items-center text-[var(--body-font-size)]">
                           <span className="text-muted-foreground">Percentile Effect Strength</span>
-                          <span className="text-foreground font-bold">
+                          <span className="text-foreground font-bold font-mono">
                             {Math.round((heightmapConfig.opacityByPercentileStrength ?? 1.0) * 100)}%
+                            <span className="text-muted-foreground font-normal text-xs ml-1">
+                              ({(heightmapConfig.opacityByPercentileStrength ?? 1.0).toFixed(1)}x)
+                            </span>
                           </span>
                         </div>
                         <Slider
-                          value={[Math.round((heightmapConfig.opacityByPercentileStrength ?? 1.0) * 100)]}
+                          value={[strengthToSliderPos(heightmapConfig.opacityByPercentileStrength ?? 1.0)]}
                           min={0}
                           max={100}
-                          step={5}
+                          step={1}
                           onValueChange={(vals) =>
                             setHeightmapConfig((prev) => ({
                               ...prev,
-                              opacityByPercentileStrength: vals[0] / 100,
+                              opacityByPercentileStrength: sliderPosToStrength(vals[0]),
                             }))
                           }
                         />
                         <div className="flex justify-between text-[10px] text-muted-foreground font-light">
                           <span>Uniform (0%)</span>
-                          <span>Full Fade (100%)</span>
+                          <span>100% (1.0x)</span>
+                          <span>Max (1000% / 10x)</span>
+                        </div>
+
+                        {/* Quick preset chips */}
+                        <div className="flex items-center gap-1 pt-0.5 flex-wrap">
+                          {[
+                            { label: '0%', val: 0.0 },
+                            { label: '50%', val: 0.5 },
+                            { label: '100%', val: 1.0 },
+                            { label: '300%', val: 3.0 },
+                            { label: '500%', val: 5.0 },
+                            { label: '1000%', val: 10.0 },
+                          ].map((preset) => {
+                            const curr = heightmapConfig.opacityByPercentileStrength ?? 1.0
+                            const isSelected = Math.abs(curr - preset.val) < 0.05
+                            return (
+                              <button
+                                key={preset.label}
+                                type="button"
+                                onClick={() =>
+                                  setHeightmapConfig((prev) => ({
+                                    ...prev,
+                                    opacityByPercentileStrength: preset.val,
+                                  }))
+                                }
+                                className={`px-1.5 py-0.5 text-[10px] rounded-none border transition-colors cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-primary text-primary-foreground border-primary font-bold shadow-xs'
+                                    : 'bg-background hover:bg-muted text-muted-foreground border-border'
+                                }`}
+                              >
+                                {preset.label}
+                              </button>
+                            )
+                          })}
                         </div>
                       </div>
                     )}
