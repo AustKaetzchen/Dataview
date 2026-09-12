@@ -18,7 +18,7 @@ import {
   transformGeometryToEqualEarth,
   generateEqualEarthGraticule,
 } from '@/lib/geopng/equalEarth'
-import { computeQuantiles, transformValue } from '@/lib/geopng/scales'
+import { computeQuantiles, transformValue, createPercentileRankCalculator } from '@/lib/geopng/scales'
 import { getPaletteLUT } from '@/lib/geopng/palettes'
 import {
   DecodedRaster,
@@ -30,7 +30,7 @@ import {
   MapModeId,
 } from '@/lib/geopng/types'
 import { MAP_CONFIG, getPixelOffset } from '@config'
-import { UI_LAYOUT, getSidebarOverlayLeft } from '@/lib/uiLayout'
+import { UI_LAYOUT } from '@/lib/uiLayout'
 import { ClickInfoPanel } from './ClickInfoPanel'
 import { ColorBarLegend } from './ColorBarLegend'
 import { Button } from '../ui/button'
@@ -76,6 +76,8 @@ interface MapViewerProps {
   onToggleAnalytics: () => void
   selectedCountry?: CountryFeature | null
   selectedCountries?: CountryFeature[]
+  deferredSelectedCountries?: CountryFeature[]
+  isCalculatingStats?: boolean
   onSelectCountry?: (country: CountryFeature | null) => void
   onToggleCountry?: (country: CountryFeature) => void
   onClearCountries?: () => void
@@ -87,6 +89,12 @@ interface MapViewerProps {
   onInspect?: (data: InspectionData | null) => void
   settingsDrawerOpen?: boolean
   onToggleSettingsDrawer?: (open: boolean) => void
+  sidebarWidth?: number
+  colourbarWidth?: number
+  onResizeColourbarWidth?: (width: number) => void
+  infoPanelOpen?: boolean
+  onToggleInfoPanel?: () => void
+  onCloseInfoPanel?: () => void
 }
 
 // Basemaps driven by MAP_CONFIG (config/map.json5)
@@ -296,6 +304,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   onToggleAnalytics,
   selectedCountry,
   selectedCountries,
+  deferredSelectedCountries,
+  isCalculatingStats,
   onSelectCountry,
   onToggleCountry,
   onClearCountries,
@@ -307,9 +317,13 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   onInspect,
   settingsDrawerOpen,
   onToggleSettingsDrawer,
+  sidebarWidth,
+  colourbarWidth,
+  onResizeColourbarWidth,
+  infoPanelOpen = false,
+  onCloseInfoPanel,
 }) => {
   const [internalFlyoutOpen, setInternalFlyoutOpen] = useState(false)
-  const [infoFlyoutOpen, setInfoFlyoutOpen] = useState(false)
   const flyoutOpen = settingsDrawerOpen !== undefined ? settingsDrawerOpen : internalFlyoutOpen
   const setFlyoutOpen = onToggleSettingsDrawer || setInternalFlyoutOpen
 
@@ -384,16 +398,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     setCursorPos({ x: e.clientX - rect.left, y: e.clientY - rect.top })
   }, [])
 
-  const [selectionId, setSelectionId] = useState(0)
-  const [hoverId, setHoverId] = useState(0)
 
-  useEffect(() => {
-    setSelectionId((prev) => prev + 1)
-  }, [selectedCountry, selectedCountries])
-
-  useEffect(() => {
-    setHoverId((prev) => prev + 1)
-  }, [hoveredCountry])
 
   // NaturalEarth Land & Countries data
   const [landGeoJson, setLandGeoJson] = useState<any>(null)
@@ -695,9 +700,10 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
     const points: any[] = []
 
+    const deferredList = deferredSelectedCountries ?? selectedCountries
     const effectiveSelected =
-      selectedCountries && selectedCountries.length > 0
-        ? selectedCountries
+      deferredList && deferredList.length > 0
+        ? deferredList
         : selectedCountry
           ? [selectedCountry]
           : []
@@ -712,6 +718,12 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     const baseElevation = isCartesian ? (maxScale / 111000) * 0.35 : maxScale * 0.035
     const opacityVal = heightmapConfig.opacity ?? 0.9
     const alpha = Math.round(255 * opacityVal)
+    const getPercentileRank = heightmapConfig.opacityByPercentile
+      ? createPercentileRankCalculator(
+          raster,
+          countriesMode && countryStats?.histogram ? countryStats.histogram : undefined
+        )
+      : null
 
     // In Country Analysis mode with active selection, constrain search space to country bounding box
     let minGC = 0
@@ -832,13 +844,20 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
         const elev = (baseElevation + spikeHeight) * latCorrection
 
-        // Palette color from LUT with transparency alpha
+        // Palette color from LUT with transparency alpha (optionally tied to cell empirical percentile)
         const lutIdx = Math.floor(norm * 255) * 3
+        let cellAlpha = alpha
+        if (getPercentileRank) {
+          const rank = Math.max(0.05, getPercentileRank(v))
+          const strength = heightmapConfig.opacityByPercentileStrength ?? 1.0
+          const factor = (1 - strength) + strength * rank
+          cellAlpha = Math.round(255 * opacityVal * Math.max(0.05, factor))
+        }
         const color: [number, number, number, number] = [
           lut[lutIdx],
           lut[lutIdx + 1],
           lut[lutIdx + 2],
-          alpha,
+          cellAlpha,
         ]
 
         points.push({
@@ -857,6 +876,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     heightmapConfig.enabled,
     heightmapConfig.elevationScale,
     heightmapConfig.opacity,
+    heightmapConfig.opacityByPercentile,
+    heightmapConfig.opacityByPercentileStrength,
     raster,
     minVal,
     maxVal,
@@ -866,6 +887,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     invertPalette,
     projection,
     countriesMode,
+    countryStats,
+    deferredSelectedCountries,
     selectedCountries,
     selectedCountry,
   ])
@@ -889,9 +912,10 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     const isCartesian = projection === 'Equirectangular' || projection === 'EqualEarth'
     const scaleFactor = circleOverlayConfig.baseRadius || 1.0
 
+    const deferredList = deferredSelectedCountries ?? selectedCountries
     const effectiveSelected =
-      selectedCountries && selectedCountries.length > 0
-        ? selectedCountries
+      deferredList && deferredList.length > 0
+        ? deferredList
         : selectedCountry
           ? [selectedCountry]
           : []
@@ -987,6 +1011,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     projection,
     heightmapConfig,
     countriesMode,
+    deferredSelectedCountries,
     selectedCountries,
     selectedCountry,
   ])
@@ -1185,11 +1210,11 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           updateTriggers: {
             getPolygon: [elevationSpikesData.points.length, countriesMode, effectiveSelected.length],
             getElevation: [elevationSpikesData.points.length, heightmapConfig.elevationScale],
-            getFillColor: [palette, invertPalette, heightmapConfig.opacity],
+            getFillColor: [palette, invertPalette, heightmapConfig.opacity, heightmapConfig.opacityByPercentile, heightmapConfig.opacityByPercentileStrength],
           },
           extruded: true,
           flatShading: true,
-          opacity: heightmapConfig.opacity ?? 0.9,
+          opacity: 1,
           elevationScale: 1,
           coordinateSystem: isCartesian ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
           pickable: true,
@@ -1247,7 +1272,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       )
     }
 
-    // 5. Selected Countries Highlight
+    // 5. Selected Countries Highlight (Immediate outline rendering)
     if (effectiveSelected.length > 0) {
       const selectedData =
         projection === 'EqualEarth'
@@ -1257,9 +1282,13 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           }))
           : effectiveSelected.map((c) => ({ ...c, geometry: { ...c.geometry } }))
 
+      const selectedKey = effectiveSelected
+        .map((c) => (c.properties.iso_a3 && c.properties.iso_a3 !== '-99' ? c.properties.iso_a3 : c.properties.name))
+        .join('_')
+
       list.push(
         new GeoJsonLayer({
-          id: `countries-selected-${selectionId}-${projection}`,
+          id: `countries-selected-${projection}-${selectedKey}`,
           data: selectedData,
           coordinateSystem: isCartesian ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
           filled: true,
@@ -1268,6 +1297,10 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           getLineColor: [240, 60, 60, 220],
           getLineWidth: 2,
           lineWidthUnits: 'pixels',
+          updateTriggers: {
+            getFillColor: [selectedKey],
+            getLineColor: [selectedKey],
+          },
           parameters: { depthTest: false },
         })
       )
@@ -1293,7 +1326,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
       list.push(
         new GeoJsonLayer({
-          id: `country-hovered-${hovKey}-${hoverId}-${projection}`,
+          id: `country-hovered-${projection}-${hovKey}`,
           data: hoveredData,
           coordinateSystem: isCartesian ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
           filled: true,
@@ -1323,14 +1356,14 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     circleOverlayConfig,
     circlePixelData,
     raster,
+    palette,
+    invertPalette,
     minVal,
     maxVal,
     selectedCountry,
     selectedCountries,
-    selectionId,
     countriesMode,
     hoveredCountry,
-    hoverId,
   ])
 
   return (
@@ -1355,41 +1388,75 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       {/* Floating HUD Inspector */}
       <ClickInfoPanel info={inspectData} pos={cursorPos} />
 
-      {/* Color Ramp Legend (Top Left by Sidebar) */}
-      {renderedCanvas && (() => {
-        const isCountryRelative = Boolean(
-          countriesMode &&
-          countryStats &&
-          countryStats.validCount > 0 &&
-          Number.isFinite(countryStats.min) &&
-          Number.isFinite(countryStats.max)
-        )
-        const legendMin = isCountryRelative ? countryStats!.min : minVal
-        const legendMax = isCountryRelative ? countryStats!.max : maxVal
-        const legendBreaks = isCountryRelative ? undefined : breaks
-        const legendCountryName = isCountryRelative ? countryStats!.name : null
+      {/* Top Left: Value Colourbar & Information Flyout Container */}
+      {(Boolean(renderedCanvas) || infoPanelOpen) &&
+        (() => {
+          const hasCanvas = Boolean(renderedCanvas)
+          const isCountryRelative = Boolean(
+            countriesMode &&
+            countryStats &&
+            countryStats.validCount > 0 &&
+            Number.isFinite(countryStats.min) &&
+            Number.isFinite(countryStats.max)
+          )
+          const legendMin = isCountryRelative ? countryStats!.min : minVal
+          const legendMax = isCountryRelative ? countryStats!.max : maxVal
+          const legendBreaks = isCountryRelative ? undefined : breaks
+          const legendCountryName = isCountryRelative ? countryStats!.name : null
 
-        return (
-          <div
-            style={{ top: `${UI_LAYOUT.margin}px`, left: `${getSidebarOverlayLeft()}px` }}
-            className="absolute z-20"
-          >
-            <ColorBarLegend
-              palette={palette}
-              invertPalette={invertPalette}
-              minVal={legendMin}
-              maxVal={legendMax}
-              legendTitle={legendTitle}
-              scaleType={scaleType}
-              logSigma={logSigma}
-              currentVal={inspectData?.value ?? null}
-              breaks={legendBreaks}
-              countryName={legendCountryName}
-              onUpdateBreaks={onUpdateBreaks}
-            />
-          </div>
-        )
-      })()}
+          const currentSidebarWidth = sidebarWidth ?? UI_LAYOUT.sidebarWidth
+          const currentColourbarWidth = colourbarWidth ?? 336
+          const colourbarLeft = UI_LAYOUT.margin + currentSidebarWidth + UI_LAYOUT.gap
+
+          return (
+            <div
+              style={{
+                top: `${UI_LAYOUT.margin}px`,
+                left: `${colourbarLeft}px`,
+                width: `${currentColourbarWidth}px`,
+              }}
+              className="absolute z-20 flex flex-col gap-3 pointer-events-none"
+            >
+              {/* Value Colourbar (when canvas/raster is available) */}
+              {hasCanvas && (
+                <div className="pointer-events-auto">
+                  <ColorBarLegend
+                    palette={palette}
+                    invertPalette={invertPalette}
+                    minVal={legendMin}
+                    maxVal={legendMax}
+                    legendTitle={legendTitle}
+                    scaleType={scaleType}
+                    logSigma={logSigma}
+                    currentVal={inspectData?.value ?? null}
+                    breaks={legendBreaks}
+                    countryName={legendCountryName}
+                    onUpdateBreaks={onUpdateBreaks}
+                    width={currentColourbarWidth}
+                    onResizeWidth={onResizeColourbarWidth}
+                  />
+                </div>
+              )}
+
+              {/* Information & Controls Flyout Panel (Window component: starts docked with 12px gap, or floats/resizes) */}
+              {infoPanelOpen && (
+                <div className="pointer-events-auto">
+                  <InfoFlyoutPanel
+                    isOpen={infoPanelOpen}
+                    onClose={onCloseInfoPanel || (() => {})}
+                    mapModes={mapModes}
+                    heightmapConfig={heightmapConfig}
+                    circleOverlayConfig={circleOverlayConfig}
+                    selectedCountries={selectedCountries || []}
+                    projection={projection}
+                    cameraTilt={cameraTilt}
+                    width={currentColourbarWidth}
+                  />
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
       {/* Map Control Tools Toolbar (Top Right) */}
       <TooltipProvider delayDuration={150}>
@@ -1552,6 +1619,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         onToggleCountry={onToggleCountry || (() => { })}
         onClearCountries={onClearCountries || (() => { })}
         countryStats={countryStats}
+        isCalculatingStats={isCalculatingStats}
         heightmapConfig={heightmapConfig}
         setHeightmapConfig={setHeightmapConfig || (() => { })}
         circleOverlayConfig={circleOverlayConfig}
@@ -1559,48 +1627,6 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         allCountries={countryFeatures}
       />
 
-      {/* Bottom Left: Information & Controls Flyout */}
-      <TooltipProvider delayDuration={150}>
-        <div
-          style={{ bottom: `${UI_LAYOUT.margin}px`, left: `${getSidebarOverlayLeft()}px` }}
-          className="absolute z-20"
-        >
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={infoFlyoutOpen ? 'secondary' : 'default'}
-                size="icon"
-                onClick={() => setInfoFlyoutOpen(!infoFlyoutOpen)}
-                className={`h-8 w-8 rounded-none border border-border backdrop-blur-md shadow-md cursor-pointer transition-colors ${infoFlyoutOpen
-                  ? 'bg-primary text-primary-foreground border-primary font-bold'
-                  : 'bg-card/95 text-white hover:bg-muted'
-                  }`}
-                aria-label="Information & Controls"
-              >
-                <Icon
-                  name="info"
-                  className={infoFlyoutOpen ? 'text-primary-foreground' : 'text-white'}
-                />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              <span>Information & Controls</span>
-            </TooltipContent>
-          </Tooltip>
-
-          {/* Flyout Panel anchored to bottom left */}
-          <InfoFlyoutPanel
-            isOpen={infoFlyoutOpen}
-            onClose={() => setInfoFlyoutOpen(false)}
-            mapModes={mapModes}
-            heightmapConfig={heightmapConfig}
-            circleOverlayConfig={circleOverlayConfig}
-            selectedCountries={selectedCountries || []}
-            projection={projection}
-            cameraTilt={cameraTilt}
-          />
-        </div>
-      </TooltipProvider>
     </div>
   )
 }

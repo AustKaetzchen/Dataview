@@ -9,28 +9,39 @@ import { CountryFeature } from '@/lib/geopng/polygonBinning'
 import { Icon } from '@/components/ui/icon'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
+import { Window } from '@/components/ui/Window'
 import { INFO_PANEL_CONFIG, MAPMODES_CONFIG } from '@config'
 
 interface InfoFlyoutPanelProps {
   isOpen: boolean
   onClose: () => void
+  isPinned?: boolean
+  defaultPinned?: boolean
+  onTogglePin?: (pinned: boolean) => void
   mapModes: MapModeItem[]
   heightmapConfig: HeightmapConfig
   circleOverlayConfig: CircleOverlayConfig
   selectedCountries: CountryFeature[]
   projection: ProjectionType
   cameraTilt?: number
+  width?: number
+  className?: string
 }
 
 export const InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = ({
   isOpen,
   onClose,
+  isPinned,
+  defaultPinned = true,
+  onTogglePin,
   mapModes,
   heightmapConfig,
   circleOverlayConfig,
   selectedCountries,
   projection,
   cameraTilt = 0,
+  width = 336,
+  className,
 }) => {
   const [activeTab, setActiveTab] = useState<string>(
     INFO_PANEL_CONFIG.defaultTab || INFO_PANEL_CONFIG.tabs[0]?.id || 'controls'
@@ -41,28 +52,23 @@ export const InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = ({
   const activeModes = mapModes.filter((m) => m.active)
 
   return (
-    <div className="absolute bottom-11 left-0 z-30 w-96 sm:w-[420px] max-h-[calc(100vh-160px)] flex flex-col bg-card/98 backdrop-blur-md border border-border shadow-2xl p-[var(--padding)] text-[var(--body-font-size)] font-sans select-none animate-in fade-in-0 zoom-in-95 duration-100">
-      {/* Panel Header */}
-      <div className="flex items-center justify-between pb-[var(--cell-padding)] border-b border-border shrink-0">
-        <span className="font-bold text-foreground text-[var(--header-font-size)] flex items-center gap-2">
-          <Icon name="info" className="text-primary" />
-          <span>{INFO_PANEL_CONFIG.title}</span>
-        </span>
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-muted-foreground hover:text-foreground cursor-pointer text-[var(--body-font-size)] px-1 py-0.5 rounded-none hover:bg-muted/50 transition-colors"
-          aria-label="Close Info Panel"
-        >
-          ✕
-        </button>
-      </div>
-
+    <Window
+      id="info-and-controls"
+      title={INFO_PANEL_CONFIG.title || 'Information & Controls'}
+      icon="info"
+      isOpen={isOpen}
+      onClose={onClose}
+      isPinned={isPinned}
+      defaultPinned={defaultPinned}
+      onTogglePin={onTogglePin}
+      defaultWidth={width}
+      className={className}
+    >
       {/* Tabs Container */}
       <Tabs
         value={activeTab}
         onValueChange={setActiveTab}
-        className="flex flex-col flex-1 min-h-0 overflow-hidden mt-[var(--cell-padding)]"
+        className="flex flex-col flex-1 min-h-0 overflow-hidden"
       >
         <TabsList className="w-full flex h-8 bg-muted/60 border border-border rounded-none p-0.5 shrink-0">
           {INFO_PANEL_CONFIG.tabs.map((tab) => (
@@ -71,7 +77,7 @@ export const InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = ({
               value={tab.id}
               className="flex-1 text-[var(--body-font-size)] h-full flex items-center justify-center gap-1.5 rounded-none font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:font-bold transition-colors cursor-pointer truncate"
             >
-              {tab.icon && <Icon name={tab.icon} size={14} className="shrink-0" />}
+              {tab.icon && <Icon name={tab.icon} size={14} className="shrink-0 text-white" />}
               <span className="truncate">{tab.label}</span>
             </TabsTrigger>
           ))}
@@ -94,7 +100,7 @@ export const InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = ({
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-foreground text-[var(--body-font-size)] uppercase tracking-wider flex items-center gap-1.5">
-                        <Icon name="layers" size={14} className="text-white/80" />
+                        <Icon name="layers" size={14} className="text-white" />
                         <span>Active Rendering Modes</span>
                       </span>
                       <span className="text-[var(--body-font-size)] px-2 py-0.5 bg-primary/20 text-primary border border-primary/40 font-semibold leading-none flex items-center">
@@ -122,9 +128,10 @@ export const InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = ({
                                 ? `${count} ${count === 1 ? 'country' : 'countries'} isolated`
                                 : configItem?.controlDescription || 'Active (select country)'
                           } else if (m.id === 'spike_map') {
+                            const pctStr = heightmapConfig.opacityByPercentile ? ' (percentile)' : ''
                             desc = `${Math.round(
                               (heightmapConfig.elevationScale ?? 800000) / 1000
-                            )}km peak • ${Math.round((heightmapConfig.opacity ?? 0.9) * 100)}% opacity`
+                            )}km peak • ${Math.round((heightmapConfig.opacity ?? 0.9) * 100)}% opacity${pctStr}`
                           } else if (m.id === 'circle_sizing') {
                             desc = `≥P${circleOverlayConfig.percentileCutoff ?? 99} cutoff • ${(
                               circleOverlayConfig.baseRadius ?? 1.0
@@ -249,7 +256,7 @@ export const InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = ({
           ))}
         </div>
       </Tabs>
-    </div>
+    </Window>
   )
 }
 

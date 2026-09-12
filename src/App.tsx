@@ -22,9 +22,8 @@ import { computeQuantiles } from './lib/geopng/scales'
 import { createBinnedRaster } from './lib/geopng/downsampling'
 import {
   CountryFeature,
-  CountryStats,
-  binRasterByMultipleCountries,
 } from './lib/geopng/polygonBinning'
+import { useCountryStatsAsync } from './lib/geopng/useCountryStatsAsync'
 import { MAP_CONFIG, MAPMODES_CONFIG, getPixelOffset } from '@config'
 import { SidebarControls } from './components/controls/SidebarControls'
 import { MapViewer } from './components/map/MapViewer'
@@ -60,7 +59,12 @@ export const App: React.FC = () => {
     enabled: false,
     elevationScale: 800000,
     opacity: 0.9,
+    opacityByPercentile: false,
+    opacityByPercentileStrength: 1.0,
   })
+  const [sidebarWidth, setSidebarWidth] = useState<number>(336)
+  const [colourbarWidth, setColourbarWidth] = useState<number>(336)
+  const [infoPanelOpen, setInfoPanelOpen] = useState<boolean>(false)
   const [circleOverlayConfig, setCircleOverlayConfig] = useState<CircleOverlayConfig>({
     enabled: false,
     percentileCutoff: 99,
@@ -100,7 +104,6 @@ export const App: React.FC = () => {
 
   // Asynchronous / deferred values for non-blocking UI reflows
   const deferredSelectedCountries = useDeferredValue(selectedCountries)
-  const deferredHoveredCountry = useDeferredValue(hoveredCountry)
 
   // Re-decode when user changes format (float32 <-> int32)
   useEffect(() => {
@@ -281,23 +284,21 @@ export const App: React.FC = () => {
     setAbsoluteBreaks(newBreaks.map((n) => (Math.round(n * 1000) / 1000).toString()).join(', '))
   }, [])
 
-  // Active countries for deferred background calculations
-  const deferredActiveCountries = useMemo<CountryFeature[]>(() => {
-    if (deferredSelectedCountries.length > 0) return deferredSelectedCountries
-    if (countriesMode && deferredHoveredCountry) return [deferredHoveredCountry]
+  // Active countries: prioritize selected countries, fallback to hovered country in countriesMode
+  const activeCountries = useMemo<CountryFeature[]>(() => {
+    if (selectedCountries.length > 0) return selectedCountries
+    if (countriesMode && hoveredCountry) return [hoveredCountry]
     return []
-  }, [countriesMode, deferredSelectedCountries, deferredHoveredCountry])
+  }, [countriesMode, selectedCountries, hoveredCountry])
 
-  // Deferred Country Polygon Binning statistics
-  const countryStats = useMemo<CountryStats | null>(() => {
-    if (!activeRaster || deferredActiveCountries.length === 0) return null
-    try {
-      return binRasterByMultipleCountries(activeRaster, deferredActiveCountries)
-    } catch (err) {
-      console.error('Failed to bin raster by countries:', err)
-      return null
-    }
-  }, [activeRaster, deferredActiveCountries])
+  const isHoverOnly = selectedCountries.length === 0 && Boolean(hoveredCountry)
+
+  // Asynchronous background Web Worker for heavy polygon binning & country stats
+  const { countryStats, isCalculatingStats } = useCountryStatsAsync({
+    activeRaster,
+    activeCountries,
+    isHoverOnly,
+  })
 
   // Render raster canvas (uses downsampled raster if binning enabled)
   const { renderedCanvas, rasterBounds } = useMemo(() => {
@@ -314,9 +315,10 @@ export const App: React.FC = () => {
     }
 
     // In Countries Mode with active countries, isolate the raster pixels to the country outline
+    // Raster isolation applies once countryStats calculation is ready
     const isCountryIsolated = Boolean(
       countriesMode &&
-        deferredActiveCountries.length > 0 &&
+        activeCountries.length > 0 &&
         countryStats &&
         countryStats.validCount > 0 &&
         Number.isFinite(countryStats.min) &&
@@ -326,7 +328,7 @@ export const App: React.FC = () => {
     const effectiveMin = isCountryIsolated ? countryStats!.min : minVal
     const effectiveMax = isCountryIsolated ? countryStats!.max : maxVal
 
-    const { canvas, bounds } = renderRasterToCanvas(
+    const { canvas } = renderRasterToCanvas(
       r.data,
       r.width,
       r.height,
@@ -339,7 +341,7 @@ export const App: React.FC = () => {
         maxVal: effectiveMax,
         breaks,
         projection,
-        activeCountries: countriesMode && deferredActiveCountries.length > 0 ? deferredActiveCountries : null,
+        activeCountries: isCountryIsolated ? activeCountries : null,
       }
     )
 
@@ -362,7 +364,7 @@ export const App: React.FC = () => {
     breaks,
     projection,
     countriesMode,
-    deferredActiveCountries,
+    activeCountries,
     countryStats,
   ])
 
@@ -395,8 +397,10 @@ export const App: React.FC = () => {
           setCircleOverlayConfig={setCircleOverlayConfig}
           analyticsOpen={analyticsOpen}
           onToggleAnalytics={() => setAnalyticsOpen((prev) => !prev)}
-          selectedCountry={deferredSelectedCountries[0] || null}
-          selectedCountries={deferredSelectedCountries}
+          selectedCountry={selectedCountries[0] || null}
+          selectedCountries={selectedCountries}
+          deferredSelectedCountries={deferredSelectedCountries}
+          isCalculatingStats={isCalculatingStats}
           onSelectCountry={handleSelectCountry}
           onToggleCountry={handleToggleCountry}
           onClearCountries={handleClearCountries}
@@ -407,6 +411,12 @@ export const App: React.FC = () => {
           countryStats={countryStats}
           settingsDrawerOpen={settingsDrawerOpen}
           onToggleSettingsDrawer={setSettingsDrawerOpen}
+          sidebarWidth={sidebarWidth}
+          colourbarWidth={colourbarWidth}
+          onResizeColourbarWidth={setColourbarWidth}
+          infoPanelOpen={infoPanelOpen}
+          onToggleInfoPanel={() => setInfoPanelOpen((prev) => !prev)}
+          onCloseInfoPanel={() => setInfoPanelOpen(false)}
         />
 
         {/* ECharts Analytical View Panel (Top Right) */}
@@ -418,11 +428,12 @@ export const App: React.FC = () => {
           logSigma={logSigma}
           minOverride={minValOverride !== '' ? parseFloat(minValOverride) : undefined}
           maxOverride={maxValOverride !== '' ? parseFloat(maxValOverride) : undefined}
-          selectedCountry={deferredSelectedCountries[0] || null}
-          selectedCountries={deferredSelectedCountries}
+          selectedCountry={selectedCountries[0] || null}
+          selectedCountries={selectedCountries}
           onSelectCountry={handleSelectCountry}
           onClearCountries={handleClearCountries}
           countryStats={countryStats}
+          isCalculatingStats={isCalculatingStats}
           isSettingsDrawerOpen={settingsDrawerOpen}
         />
       </div>
@@ -466,6 +477,10 @@ export const App: React.FC = () => {
         circleOverlayConfig={circleOverlayConfig}
         selectedCountries={deferredSelectedCountries}
         onToggleMapMode={handleToggleMapMode}
+        width={sidebarWidth}
+        onWidthChange={setSidebarWidth}
+        infoPanelOpen={infoPanelOpen}
+        onToggleInfoPanel={() => setInfoPanelOpen((prev) => !prev)}
       />
     </div>
   )

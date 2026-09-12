@@ -60,6 +60,10 @@ interface SidebarControlsProps {
   circleOverlayConfig?: CircleOverlayConfig
   selectedCountries?: CountryFeature[]
   onToggleMapMode?: (id: MapModeId) => void
+  width?: number
+  onWidthChange?: (newWidth: number) => void
+  infoPanelOpen?: boolean
+  onToggleInfoPanel?: () => void
 }
 
 export const SidebarControls: React.FC<SidebarControlsProps> = ({
@@ -100,7 +104,35 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
   circleOverlayConfig,
   selectedCountries,
   onToggleMapMode,
+  width,
+  onWidthChange,
+  infoPanelOpen,
+  onToggleInfoPanel,
 }) => {
+  const currentWidth = width ?? 336
+
+  // Right-border resize handler to adjust shared width
+  const handleResizeMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const startX = e.clientX
+    const startW = currentWidth
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const delta = moveEvent.clientX - startX
+      const nextW = Math.max(260, Math.min(650, startW + delta))
+      onWidthChange?.(nextW)
+    }
+
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+  }
+
   // Collapsible Folders State
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({
     image: true,
@@ -128,8 +160,6 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [paletteOpen])
 
-
-
   // Filtered D3 palettes
   const filteredPalettes = useMemo(() => {
     const q = paletteSearch.toLowerCase().trim()
@@ -149,9 +179,21 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
   ]
 
   return (
-    <div className="absolute top-3 left-3 bottom-3 z-20 w-84 flex flex-col bg-card/95 backdrop-blur-md border border-border text-card-foreground overflow-y-auto select-none font-sans shadow-2xl">
+    <div
+      style={{ width: `${currentWidth}px` }}
+      className="absolute top-3 left-3 bottom-3 z-20 flex flex-col bg-card/95 backdrop-blur-md border border-border text-card-foreground overflow-hidden select-none font-sans shadow-2xl transition-shadow"
+    >
+      {/* Draggable Right Border Resize Handle */}
+      <div
+        onMouseDown={handleResizeMouseDown}
+        className="absolute top-0 right-0 bottom-0 w-2 cursor-col-resize hover:bg-primary/50 active:bg-primary transition-colors z-30 group"
+        title="Drag right border to resize sidebar"
+      >
+        <div className="w-[2px] h-8 bg-border group-hover:bg-primary absolute top-1/2 -translate-y-1/2 right-0.5" />
+      </div>
+
       {/* App Header */}
-      <div className="p-[var(--padding)] border-b border-border bg-card/60">
+      <div className="p-[var(--padding)] border-b border-border bg-card/60 shrink-0">
         <div className="flex items-center justify-between">
           <h1 className="text-[var(--header-font-size)] font-bold tracking-tight text-foreground flex items-center gap-2">
             <Icon name="layers" />
@@ -164,9 +206,26 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
         <p className="text-[var(--body-font-size)] text-muted-foreground font-light mt-1">
           {LOCALISATION_CONFIG.app.subtitle}
         </p>
+
+        {/* Inline Information Toggle Button directly underneath the description */}
+        <div className="mt-2.5">
+          <button
+            type="button"
+            onClick={onToggleInfoPanel}
+            className={`px-2.5 py-1 text-[var(--body-font-size)] font-medium rounded-none border transition-colors cursor-pointer inline-flex items-center gap-1.5 ${
+              infoPanelOpen
+                ? 'bg-primary text-primary-foreground border-primary font-bold shadow-sm'
+                : 'bg-background hover:bg-muted text-foreground border-border'
+            }`}
+            title="Toggle Information & Controls flyout"
+          >
+            <Icon name="info" className={infoPanelOpen ? 'text-primary-foreground' : 'text-white'} />
+            <span>Information</span>
+          </button>
+        </div>
       </div>
 
-      <div className="flex-1 p-[var(--padding)] space-y-[var(--padding)]">
+      <div className="flex-1 p-[var(--padding)] space-y-[var(--padding)] overflow-y-auto">
         {/* ========================================================================= */}
         {/* FOLDER 1: IMAGE SETTINGS */}
         {/* ========================================================================= */}

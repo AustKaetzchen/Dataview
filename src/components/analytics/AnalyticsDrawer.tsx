@@ -20,6 +20,7 @@ interface AnalyticsDrawerProps {
   onSelectCountry?: (country: CountryFeature | null) => void
   onClearCountries?: () => void
   countryStats?: CountryStats | null
+  isCalculatingStats?: boolean
   isSettingsDrawerOpen?: boolean
 }
 
@@ -36,6 +37,7 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
   onSelectCountry,
   onClearCountries,
   countryStats,
+  isCalculatingStats = false,
   isSettingsDrawerOpen = false,
 }) => {
   const [activeTab, setActiveTab] = useState<'histogram' | 'stats'>('histogram')
@@ -118,12 +120,17 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
           {/* Active country filter badge */}
           {effectiveCountries.length > 0 && (
             <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-none bg-primary/15 text-primary text-[var(--body-font-size)] font-medium border border-primary/30 truncate">
-              <span className="w-1.5 h-1.5 rounded-none bg-primary shrink-0" />
+              <span className={`w-1.5 h-1.5 rounded-none ${isCalculatingStats ? 'bg-amber-400 animate-pulse' : 'bg-primary'} shrink-0`} />
               <span className="truncate max-w-[140px]">
                 {effectiveCountries.length === 1
                   ? effectiveCountries[0].properties.name
                   : `${effectiveCountries[0].properties.name} (+${effectiveCountries.length - 1})`}
               </span>
+              {isCalculatingStats && (
+                <span className="text-[10px] text-amber-400 font-normal ml-0.5 animate-pulse shrink-0">
+                  (calculating...)
+                </span>
+              )}
               <button
                 type="button"
                 onClick={handleClear}
@@ -155,6 +162,16 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
             <span>No GeoPNG raster loaded.</span>
             <span className="text-[var(--body-font-size)] text-muted-foreground/70">
               Upload a GeoPNG file in the sidebar to inspect statistics & distributions.
+            </span>
+          </div>
+        ) : isCalculatingStats && !countryStats ? (
+          <div className="h-full flex flex-col items-center justify-center text-muted-foreground text-[var(--body-font-size)] space-y-2">
+            <div className="flex items-center gap-2 text-primary font-medium">
+              <span className="w-2 h-2 rounded-full bg-primary animate-ping" />
+              <span>Calculating country statistics...</span>
+            </div>
+            <span className="text-[var(--body-font-size)] text-muted-foreground/70">
+              Processing raster cells in background worker.
             </span>
           </div>
         ) : (

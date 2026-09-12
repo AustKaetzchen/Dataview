@@ -15,6 +15,8 @@ interface ColorBarLegendProps {
   breaks?: number[]
   countryName?: string | null
   onUpdateBreaks?: (breaks: number[]) => void
+  width?: number
+  onResizeWidth?: (width: number) => void
 }
 
 // Inverse transform for pseudo-log: y = asinh(x / (2 * sigma)) / ln(10)
@@ -87,9 +89,33 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
   breaks,
   countryName,
   onUpdateBreaks,
+  width,
+  onResizeWidth,
 }) => {
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [editingValue, setEditingValue] = useState<string>('')
+  const currentWidth = width ?? 336
+
+  const handleResizeMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const startX = e.clientX
+    const startW = currentWidth
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const delta = moveEvent.clientX - startX
+      const nextW = Math.max(260, Math.min(650, startW + delta))
+      onResizeWidth?.(nextW)
+    }
+
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+  }
 
   const gradient = getPaletteCssGradient(palette, invertPalette)
 
@@ -144,6 +170,7 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
       })
     }
 
+    // Default continuous: 5 evenly spaced ticks
     const steps = [0, 0.25, 0.5, 0.75, 1]
     return steps.map((s) => {
       const tVal = tMin + s * range
@@ -157,7 +184,20 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
   }, [breaks, minVal, maxVal, tMin, range, scaleType, logSigma])
 
   return (
-    <div className="rounded-none border border-border bg-card/95 backdrop-blur-md p-[var(--padding)] shadow-lg text-[var(--body-font-size)] text-card-foreground w-96 select-none font-sans">
+    <div
+      style={{ width: `${currentWidth}px` }}
+      className="relative rounded-none border border-border bg-card/95 backdrop-blur-md p-[var(--padding)] pb-3 shadow-lg text-[var(--body-font-size)] text-card-foreground select-none font-sans"
+    >
+      {/* Draggable Right Border Resize Handle */}
+      {onResizeWidth && (
+        <div
+          onMouseDown={handleResizeMouseDown}
+          className="absolute top-0 right-0 bottom-0 w-2 cursor-col-resize hover:bg-primary/50 active:bg-primary transition-colors z-30 group"
+          title="Drag right border to resize Value colourbar"
+        >
+          <div className="w-[2px] h-6 bg-border group-hover:bg-primary absolute top-1/2 -translate-y-1/2 right-0.5" />
+        </div>
+      )}
       {/* Legend Title & Hover Value Readout */}
       <div className="flex items-center justify-between mb-2 gap-[var(--padding)]">
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -216,7 +256,7 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
       </div>
 
       {/* Ticks and aligned break values with click-to-edit */}
-      <div className="relative w-full h-6 mt-1">
+      <div className="relative w-full h-7 mt-1">
         {breakPoints.map((bp, i) => {
           const isFirst = i === 0
           const isLast = i === breakPoints.length - 1

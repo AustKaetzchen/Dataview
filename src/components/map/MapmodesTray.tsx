@@ -20,6 +20,7 @@ interface MapmodesTrayProps {
   onToggleCountry: (country: CountryFeature) => void
   onClearCountries: () => void
   countryStats?: CountryStats | null
+  isCalculatingStats?: boolean
   heightmapConfig: HeightmapConfig
   setHeightmapConfig: React.Dispatch<React.SetStateAction<HeightmapConfig>>
   cameraTilt?: number
@@ -39,6 +40,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
   onToggleCountry,
   onClearCountries,
   countryStats,
+  isCalculatingStats,
   heightmapConfig,
   setHeightmapConfig,
   cameraTilt,
@@ -165,7 +167,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                     )}
                     {mode.id === 'spike_map' && mode.active && (
                       <span className="text-[var(--body-font-size)] px-1.5 py-0.2 bg-muted text-muted-foreground border border-border font-medium shrink-0">
-                        3D
+                        {heightmapConfig.opacityByPercentile ? '3D • %' : '3D'}
                       </span>
                     )}
                     {mode.id === 'circle_sizing' && mode.active && (
@@ -237,13 +239,20 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                       <span>Country Analysis Settings</span>
                     </span>
                     {selectedCountries.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={onClearCountries}
-                        className="text-[var(--body-font-size)] text-primary hover:underline cursor-pointer"
-                      >
-                        Clear all ({selectedCountries.length})
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {isCalculatingStats && (
+                          <span className="text-[10px] text-amber-400 font-medium animate-pulse">
+                            Calculating stats...
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={onClearCountries}
+                          className="text-[var(--body-font-size)] text-destructive hover:underline cursor-pointer"
+                        >
+                          Clear all ({selectedCountries.length})
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -447,6 +456,59 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                         setHeightmapConfig((prev) => ({ ...prev, opacity: vals[0] / 100 }))
                       }
                     />
+                  </div>
+
+                  {/* Opacity Tied to Percentile Toggle */}
+                  <div className="pt-1">
+                    <label className="flex items-center justify-between gap-2 p-1.5 bg-background/50 border border-border/80 cursor-pointer hover:bg-muted/40 transition-colors">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[var(--body-font-size)] font-medium text-foreground">
+                          Opacity by Percentile
+                        </span>
+                        <span className="text-[10px] text-muted-foreground font-light leading-tight">
+                          Tie spike transparency to empirical cell percentile rank
+                        </span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(heightmapConfig.opacityByPercentile)}
+                        onChange={(e) =>
+                          setHeightmapConfig((prev) => ({
+                            ...prev,
+                            opacityByPercentile: e.target.checked,
+                          }))
+                        }
+                        className="w-[var(--body-font-size)] h-[var(--body-font-size)] rounded-none accent-emerald-500 cursor-pointer shrink-0"
+                      />
+                    </label>
+
+                    {/* Adjustable Percentile Opacity Strength Slider */}
+                    {Boolean(heightmapConfig.opacityByPercentile) && (
+                      <div className="mt-2 pl-2 border-l-2 border-primary/50 space-y-1.5 animate-in fade-in-0 duration-150">
+                        <div className="flex justify-between items-center text-[var(--body-font-size)]">
+                          <span className="text-muted-foreground">Percentile Effect Strength</span>
+                          <span className="text-foreground font-bold">
+                            {Math.round((heightmapConfig.opacityByPercentileStrength ?? 1.0) * 100)}%
+                          </span>
+                        </div>
+                        <Slider
+                          value={[Math.round((heightmapConfig.opacityByPercentileStrength ?? 1.0) * 100)]}
+                          min={0}
+                          max={100}
+                          step={5}
+                          onValueChange={(vals) =>
+                            setHeightmapConfig((prev) => ({
+                              ...prev,
+                              opacityByPercentileStrength: vals[0] / 100,
+                            }))
+                          }
+                        />
+                        <div className="flex justify-between text-[10px] text-muted-foreground font-light">
+                          <span>Uniform (0%)</span>
+                          <span>Full Fade (100%)</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <p className="text-[var(--body-font-size)] text-muted-foreground font-light leading-tight">

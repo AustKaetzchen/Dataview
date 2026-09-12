@@ -58,6 +58,8 @@
         {
           title: "Projections & 3D Terrain",
           content: [
+            "> [!WARNING]",
+            "We need support for warnings/notes and the like.",
             "- **Web Mercator**: Standard tiled and planar projection.",
             "- **3D Interactive Globe**: Full spherical rendering with altitude displacement.",
             "- **Equirectangular & Equal Earth**: True equal-area cylindrical and pseudocylindrical projections.",
@@ -80,23 +82,11 @@
       type: "content",
       markdown: [
         {
-          title: "Data Usage & Client Privacy",
+          title: "We have no policy!",
           content: [
-            "All raster decoding, color mapping, histogram calculations, and country mask operations are processed locally in your client browser memory via Web Workers and GPU shaders. No uploaded imagery or sensitive raster data is transmitted to external servers.",
+            "We're not big corpo.",
           ],
-        },
-        {
-          title: "Map Tiles & Boundaries",
-          content: [
-            "Basemap imagery is served via Esri ArcGIS World Imagery and Dark Canvas services. Country administrative boundaries are derived from Natural Earth 1:50m cultural datasets under public domain licensing.",
-          ],
-        },
-        {
-          title: "Attribution & Citation",
-          content: [
-            "When citing or publishing maps produced with GeoPNG Dataview, please attribute GeoPNG Dataview, Natural Earth, and applicable source raster authors.",
-          ],
-        },
+        }
       ],
     },
   ],
