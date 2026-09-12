@@ -1,4 +1,10 @@
-import { MapController, OrbitController, _GlobeController } from '@deck.gl/core'
+import {
+  MapController,
+  OrbitController,
+  _GlobeController,
+  _GlobeViewport,
+  _GlobeView,
+} from '@deck.gl/core'
 
 // Retrieve underlying ControllerState classes
 const dummyMap = new MapController({} as any)
@@ -109,8 +115,6 @@ export class SmoothOrbitController extends OrbitController {
   }
 }
 
-const DEGREES_TO_RADIANS = Math.PI / 180
-const RADIANS_TO_DEGREES = 180 / Math.PI
 const MAX_LATITUDE = 89.9
 
 function zoomAdjust(latitude: number, clampToPoles?: boolean): number {
@@ -118,16 +122,47 @@ function zoomAdjust(latitude: number, clampToPoles?: boolean): number {
     latitude = Math.max(Math.min(latitude, MAX_LATITUDE), -MAX_LATITUDE)
   }
   const scaleAdjust = Math.PI * Math.cos((latitude * Math.PI) / 180)
-  return Math.log2(scaleAdjust)
+  return Math.log2(Math.max(0.0001, scaleAdjust))
 }
 
+/**
+ * SmoothGlobeViewport eliminates deck.gl's latitude-dependent Mercator distance distortion.
+ * In default deck.gl GlobeViewport, scale = Math.pow(2, zoom - zoomAdjust(scaleLatitude)),
+ * which causes the globe to balloon by 1 / cos(latitude) when looking at higher latitudes.
+ * By adjusting the zoom passed to super by (zoomAdjust(latitude, true) - zoomAdjust(0, true)),
+ * the internal scale calculation cancels out the latitude term, resulting in:
+ * scale = Math.pow(2, zoom - zoomAdjust(0, true))
+ * This ensures the 3D globe diameter and camera distance remain 100% constant regardless of latitude,
+ * exactly like Google Earth!
+ */
+export class SmoothGlobeViewport extends _GlobeViewport {
+  constructor(opts: any = {}) {
+    const lat = opts.latitude ?? 0
+    const latAdjust = zoomAdjust(lat, true) - zoomAdjust(0, true)
+    super({
+      ...opts,
+      zoom: (opts.zoom ?? 0) + latAdjust,
+    })
+    // Restore clean, unadjusted zoom on the viewport instance
+    this.zoom = opts.zoom ?? 0
+  }
+}
 
+/**
+ * SmoothGlobeView ensures deck.gl uses SmoothGlobeViewport for rendering and projection.
+ */
+export class SmoothGlobeView extends _GlobeView {
+  getViewportType() {
+    return SmoothGlobeViewport
+  }
+}
 
 /**
  * SmoothGlobeState provides Google Earth style globe panning:
  * - Natural spherical spin around Earth's polar axis (East-West)
  * - Meridian tilt (North-South) with pole clamping
  * - Preserved stable camera bearing during pan (no horizon twist)
+ * - Invariant camera zoom (no ballooning or zoom changing during pan)
  * - Linear pitch/rotation when holding Ctrl + Left Click (or Right-click drag)
  */
 class SmoothGlobeState extends BaseGlobeState {
@@ -141,6 +176,12 @@ class SmoothGlobeState extends BaseGlobeState {
     if (options.startPanZoom !== undefined) s.startPanZoom = options.startPanZoom
     if (options.lastPanLng !== undefined) s.lastPanLng = options.lastPanLng
     if (options.lastPanLat !== undefined) s.lastPanLat = options.lastPanLat
+  }
+
+  _constrainZoom(zoom: number, props?: any): number {
+    const p = props || this.getViewportProps()
+    const { minZoom = 0, maxZoom = 18 } = p
+    return Math.max(minZoom, Math.min(maxZoom, zoom))
   }
 
   _getNewRotation(
@@ -188,8 +229,8 @@ class SmoothGlobeState extends BaseGlobeState {
     const dy = pos[1] - origin[1]
 
     // Scale rotation speed inversely with zoom for 1:1 screen pixel tracking
-    const scale = Math.pow(2, startZoom - zoomAdjust(startLat, true))
-    const rotationSpeed = 0.25 / scale
+    const scale = Math.pow(2, startZoom - zoomAdjust(0, true))
+    const rotationSpeed = 0.2238 / scale
 
     // Rotate screen drag vector by camera bearing
     const bRad = (startBearing * Math.PI) / 180

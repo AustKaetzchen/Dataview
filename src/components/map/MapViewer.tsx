@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import DeckGL from '@deck.gl/react'
-import { MapView, _GlobeView as GlobeView, OrbitView, OrthographicView, COORDINATE_SYSTEM } from '@deck.gl/core'
+import { MapView, OrbitView, OrthographicView, COORDINATE_SYSTEM } from '@deck.gl/core'
 import { BitmapLayer, PathLayer, PolygonLayer, GeoJsonLayer, ScatterplotLayer, ColumnLayer, SolidPolygonLayer } from '@deck.gl/layers'
 import { TileLayer, _Tileset2D as Tileset2D } from '@deck.gl/geo-layers'
 import { lngLatToWorld } from '@math.gl/web-mercator'
@@ -47,6 +47,7 @@ import {
   SmoothMapController,
   SmoothOrbitController,
   SmoothGlobeController,
+  SmoothGlobeView,
 } from './SmoothControllers'
 
 interface MapViewerProps {
@@ -607,7 +608,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   // Configure deck.gl view with SmoothControllers (Ctrl + Left Drag pitch & rotate, Left Drag pan)
   const views = useMemo(() => {
     if (projection === 'Globe') {
-      return new GlobeView({
+      return new SmoothGlobeView({
         id: 'globe-view',
         resolution: 1,
         controller: {
