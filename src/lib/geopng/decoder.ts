@@ -62,65 +62,116 @@ export function decodeRawGeoPngBuffer(
   let sum = 0
   let validCount = 0
 
-  // Pixel iteration using DataView or sharedView
-  const dv = new DataView(pixelBytes.buffer, pixelBytes.byteOffset, pixelBytes.byteLength)
+  // Check if we can use fast 32-bit typed array path (RGBA 4-channel, 4-byte aligned on little-endian CPU)
+  const isLittleEndian = new Uint8Array(new Uint32Array([0x12345678]).buffer)[0] === 0x78
+  const canUseFastU32 = channels === 4 && pixelBytes.byteOffset % 4 === 0 && isLittleEndian
 
-  for (let i = 0; i < totalCells; i++) {
-    const byteOffset = i * channels
-    let val: number
+  if (canUseFastU32) {
+    const srcU32 = new Uint32Array(pixelBytes.buffer, pixelBytes.byteOffset, totalCells)
+    const outputU32 = new Uint32Array(output.buffer)
 
-    if (channels >= 4) {
-      if (format === 'float32') {
-        // Read big-endian IEEE 754 32-bit float directly
-        val = dv.getFloat32(byteOffset, false)
-        // NaN or exact 0 is treated as NoData (matching R: let_r[let_r == 0] = NA)
-        if (Number.isNaN(val) || val === 0) {
-          val = Number.NaN
+    if (format === 'float32') {
+      for (let i = 0; i < totalCells; i++) {
+        const raw = srcU32[i]
+        if (raw === 0) {
+          output[i] = Number.NaN
+          continue
         }
-      } else {
+        // Big-endian IEEE 754 float32 byte-swapped into shared Float32Array buffer
+        outputU32[i] = ((raw & 0xff) << 24) | ((raw & 0xff00) << 8) | ((raw >>> 8) & 0xff00) | (raw >>> 24)
+        const val = output[i]
+
+        if (!Number.isNaN(val) && val !== 0 && Number.isFinite(val)) {
+          if (val < min) min = val
+          if (val > max) max = val
+          sum += val
+          validCount++
+        } else {
+          output[i] = Number.NaN
+        }
+      }
+    } else {
+      // Signed 32-bit integer
+      for (let i = 0; i < totalCells; i++) {
+        const raw = srcU32[i]
+        if (raw === 0) {
+          output[i] = Number.NaN
+          continue
+        }
+        const swapped = ((raw & 0xff) << 24) | ((raw & 0xff00) << 8) | ((raw >>> 8) & 0xff00) | (raw >>> 24)
+        const val = swapped | 0
+        if (val === 0) {
+          output[i] = Number.NaN
+        } else {
+          output[i] = val
+          if (val < min) min = val
+          if (val > max) max = val
+          sum += val
+          validCount++
+        }
+      }
+    }
+  } else {
+    // Pixel iteration using DataView or sharedView
+    const dv = new DataView(pixelBytes.buffer, pixelBytes.byteOffset, pixelBytes.byteLength)
+
+    for (let i = 0; i < totalCells; i++) {
+      const byteOffset = i * channels
+      let val: number
+
+      if (channels >= 4) {
+        if (format === 'float32') {
+          // Read big-endian IEEE 754 32-bit float directly
+          val = dv.getFloat32(byteOffset, false)
+          // NaN or exact 0 is treated as NoData (matching R: let_r[let_r == 0] = NA)
+          if (Number.isNaN(val) || val === 0) {
+            val = Number.NaN
+          }
+        } else {
+          const r = pixelBytes[byteOffset]
+          const g = pixelBytes[byteOffset + 1]
+          const b = pixelBytes[byteOffset + 2]
+          const a = pixelBytes[byteOffset + 3]
+          val = ((r << 24) | (g << 16) | (b << 8) | a) >>> 0
+          if (val === 0) {
+            val = Number.NaN
+          }
+        }
+      } else if (channels === 3) {
         const r = pixelBytes[byteOffset]
         const g = pixelBytes[byteOffset + 1]
         const b = pixelBytes[byteOffset + 2]
-        const a = pixelBytes[byteOffset + 3]
-        val = ((r << 24) | (g << 16) | (b << 8) | a) >>> 0
-        if (val === 0) {
-          val = Number.NaN
+        if (format === 'float32') {
+          sharedView.setUint8(0, r)
+          sharedView.setUint8(1, g)
+          sharedView.setUint8(2, b)
+          sharedView.setUint8(3, 0)
+          val = sharedView.getFloat32(0, false)
+          if (Number.isNaN(val) || val === 0) val = Number.NaN
+        } else {
+          val = ((r << 16) | (g << 8) | b) >>> 0
+          if (val === 0) val = Number.NaN
         }
-      }
-    } else if (channels === 3) {
-      const r = pixelBytes[byteOffset]
-      const g = pixelBytes[byteOffset + 1]
-      const b = pixelBytes[byteOffset + 2]
-      if (format === 'float32') {
-        sharedView.setUint8(0, r)
-        sharedView.setUint8(1, g)
-        sharedView.setUint8(2, b)
-        sharedView.setUint8(3, 0)
-        val = sharedView.getFloat32(0, false)
-        if (Number.isNaN(val) || val === 0) val = Number.NaN
       } else {
-        val = ((r << 16) | (g << 8) | b) >>> 0
+        // 1 channel (grayscale)
+        val = pixelBytes[byteOffset]
         if (val === 0) val = Number.NaN
       }
-    } else {
-      // 1 channel (grayscale)
-      val = pixelBytes[byteOffset]
-      if (val === 0) val = Number.NaN
-    }
 
-    output[i] = val
+      output[i] = val
 
-    if (!Number.isNaN(val) && Number.isFinite(val)) {
-      if (val < min) min = val
-      if (val > max) max = val
-      sum += val
-      validCount++
+      if (!Number.isNaN(val) && Number.isFinite(val)) {
+        if (val < min) min = val
+        if (val > max) max = val
+        sum += val
+        validCount++
+      }
     }
   }
 
   const mean = validCount > 0 ? sum / validCount : 0
 
-  // Standard deviation
+  // Standard deviation (sample up to 100,000 cells)
   let varianceSum = 0
   if (validCount > 1) {
     const sampleStep = Math.max(1, Math.floor(totalCells / 100000))
@@ -153,17 +204,14 @@ function buildDecodedRasterResult(
   const safeMin = Number.isFinite(min) ? min : 0
   const safeMax = Number.isFinite(max) ? max : 1
 
-  // Compute histogram and quantiles (subsample up to 50,000 values for performance)
+  // Compute histogram and quantiles (sample directly with step for O(sample) complexity)
   const sampleValues: number[] = []
-  const step = Math.max(1, Math.floor(validCount / 50000))
-  let stepCounter = 0
+  const step = Math.max(1, Math.floor(totalCells / 50000))
 
-  for (let i = 0; i < totalCells; i++) {
+  for (let i = 0; i < totalCells; i += step) {
     const v = output[i]
     if (!Number.isNaN(v) && Number.isFinite(v)) {
-      if (stepCounter++ % step === 0) {
-        sampleValues.push(v)
-      }
+      sampleValues.push(v)
     }
   }
 
@@ -221,6 +269,76 @@ function buildDecodedRasterResult(
   }
 }
 
+let decoderWorker: Worker | null = null
+let nextDecoderReqId = 1
+const pendingDecoderRequests = new Map<
+  number,
+  { resolve: (r: DecodedRaster) => void; reject: (err: any) => void }
+>()
+
+function getDecoderWorker(): Worker | null {
+  if (typeof Worker === 'undefined') return null
+  if (!decoderWorker) {
+    try {
+      decoderWorker = new Worker(new URL('./pngDecoder.worker.ts', import.meta.url), {
+        type: 'module',
+      })
+      decoderWorker.onmessage = (e: MessageEvent<any>) => {
+        const msg = e.data
+        if (!msg) return
+        const handlers = pendingDecoderRequests.get(msg.reqId)
+        if (!handlers) return
+        pendingDecoderRequests.delete(msg.reqId)
+        if (msg.type === 'PNG_DECODE_SUCCESS') {
+          handlers.resolve(msg.raster)
+        } else {
+          handlers.reject(new Error(msg.error || 'Worker decoding failed'))
+        }
+      }
+      decoderWorker.onerror = (err) => {
+        console.warn('PNG decoder worker error, will fall back to sync:', err)
+      }
+    } catch (err) {
+      console.warn('Could not spawn PNG decoder worker:', err)
+      return null
+    }
+  }
+  return decoderWorker
+}
+
+/**
+ * Decodes a raw PNG buffer asynchronously in a background Web Worker with zero-copy buffer transfer.
+ * Falls back to optimized synchronous main-thread decoding if worker is unavailable.
+ */
+export async function decodeRawGeoPngBufferAsync(
+  buffer: ArrayBuffer | Uint8Array,
+  format: DataFormat
+): Promise<DecodedRaster> {
+  const worker = getDecoderWorker()
+
+  if (worker) {
+    const arrayBuf =
+      buffer instanceof Uint8Array
+        ? buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength)
+        : buffer.slice(0)
+
+    const reqId = nextDecoderReqId++
+    return new Promise<DecodedRaster>((resolve, reject) => {
+      pendingDecoderRequests.set(reqId, { resolve, reject })
+      try {
+        worker.postMessage({ reqId, buffer: arrayBuf, format }, [arrayBuf])
+      } catch {
+        worker.postMessage({ reqId, buffer: arrayBuf, format })
+      }
+    }).catch((err) => {
+      console.warn('Worker decoding failed, falling back to sync:', err)
+      return decodeRawGeoPngBuffer(buffer, format)
+    })
+  }
+
+  return decodeRawGeoPngBuffer(buffer, format)
+}
+
 /**
  * Loads a GeoPNG from File or URL using pure fast-png (zero canvas pre-multiplication).
  */
@@ -239,7 +357,7 @@ export async function loadAndDecodeGeoPng(
     buffer = source
   }
 
-  return decodeRawGeoPngBuffer(buffer, format)
+  return decodeRawGeoPngBufferAsync(buffer, format)
 }
 
 /**

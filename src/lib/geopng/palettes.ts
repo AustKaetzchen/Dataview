@@ -182,8 +182,19 @@ export function renderRasterToCanvas(
   }
 
   const imgData = ctx.createImageData(outWidth, outHeight)
-  const pixels = imgData.data
+  const pixels32 = new Uint32Array(imgData.data.buffer)
+  const totalPixels = outWidth * outHeight
   const lut = getPaletteLUT(options.palette, Boolean(options.invertPalette))
+
+  // Precompute 32-bit packed ABGR color table for 4x faster writes
+  const lut32 = new Uint32Array(256)
+  for (let i = 0; i < 256; i++) {
+    const r = lut[i * 3]
+    const g = lut[i * 3 + 1]
+    const b = lut[i * 3 + 2]
+    // Little-endian memory layout for Canvas ImageData: 0xAABBGGRR
+    lut32[i] = (255 << 24) | (b << 16) | (g << 8) | r
+  }
 
   const hasBreaks = Boolean(options.breaks && options.breaks.length >= 2)
   const sortedBreaks = hasBreaks ? [...options.breaks!].sort((a, b) => a - b) : []
@@ -192,21 +203,31 @@ export function renderRasterToCanvas(
   const tMin = transformValue(options.minVal, options.scaleType, options.logSigma)
   const tMax = transformValue(options.maxVal, options.scaleType, options.logSigma)
   const tRange = tMax - tMin || 1
+  const invRange = 1 / tRange
+  const isLinear = (!options.scaleType || options.scaleType === 'linear') && !hasBreaks
 
-  for (let y = 0; y < outHeight; y++) {
-    const srcRowOffset = y * srcWidth
-    const outRowOffset = y * outWidth
-
-    for (let x = 0; x < outWidth; x++) {
-      const val = data[srcRowOffset + x]
-      const pIdx = (outRowOffset + x) * 4
-
-      // NaN or infinite is transparent (NoData)
+  if (isLinear) {
+    // Fast path: linear scale without custom breaks
+    for (let i = 0; i < totalPixels; i++) {
+      const val = data[i]
       if (Number.isNaN(val) || !Number.isFinite(val)) {
-        pixels[pIdx + 0] = 0
-        pixels[pIdx + 1] = 0
-        pixels[pIdx + 2] = 0
-        pixels[pIdx + 3] = 0
+        pixels32[i] = 0
+        continue
+      }
+
+      let norm = (val - tMin) * invRange
+      if (norm < 0) norm = 0
+      else if (norm > 1) norm = 1
+
+      const lutIdx = Math.floor(norm * 255)
+      pixels32[i] = lut32[lutIdx]
+    }
+  } else {
+    // General path: custom breaks or pseudo-log transformation
+    for (let i = 0; i < totalPixels; i++) {
+      const val = data[i]
+      if (Number.isNaN(val) || !Number.isFinite(val)) {
+        pixels32[i] = 0
         continue
       }
 
@@ -217,7 +238,6 @@ export function renderRasterToCanvas(
         } else if (val >= sortedBreaks[numSegments]) {
           norm = 1
         } else {
-          // Find segment
           let seg = 0
           while (seg < numSegments - 1 && val >= sortedBreaks[seg + 1]) {
             seg++
@@ -229,18 +249,14 @@ export function renderRasterToCanvas(
         }
       } else {
         const tVal = transformValue(val, options.scaleType, options.logSigma)
-        norm = (tVal - tMin) / tRange
+        norm = (tVal - tMin) * invRange
       }
 
       if (norm < 0) norm = 0
-      if (norm > 1) norm = 1
+      else if (norm > 1) norm = 1
 
-      const lutIdx = Math.floor(norm * 255) * 3
-
-      pixels[pIdx + 0] = lut[lutIdx]
-      pixels[pIdx + 1] = lut[lutIdx + 1]
-      pixels[pIdx + 2] = lut[lutIdx + 2]
-      pixels[pIdx + 3] = 255
+      const lutIdx = Math.floor(norm * 255)
+      pixels32[i] = lut32[lutIdx]
     }
   }
 

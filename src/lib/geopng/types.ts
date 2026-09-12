@@ -58,7 +58,7 @@ export interface BinningConfig {
   method: DownsampleMethod
 }
 
-export type SpikeHeightScaleMode = 'linear' | 'percentile'
+export type SpikeHeightScaleMode = 'linear' | 'percentile' | 'blend'
 
 export interface HeightmapConfig {
   enabled: boolean
@@ -67,7 +67,8 @@ export interface HeightmapConfig {
   opacityByPercentile?: boolean // tie opacity to cell empirical percentile rank
   opacityByPercentileStrength?: number // 0.0 to 10.0 (pseudo-log ramp, defaults to 1.0)
   resolutionArcmin?: number // resolution / granularity in arcminutes (bounded to 5-arcmin at most)
-  heightScaleMode?: SpikeHeightScaleMode // 'linear' (colourbar scale) or 'percentile'
+  heightScaleMode?: SpikeHeightScaleMode // 'linear' (colourbar scale), 'percentile', or 'blend'
+  blendWeight?: number // 0.0 (pure linear) to 1.0 (pure percentile), defaults to 0.5
 }
 
 export type MapModeId = 'default' | 'country_analysis' | 'spike_map' | 'circle_sizing'

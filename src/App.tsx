@@ -14,7 +14,7 @@ import {
   MapModeId,
 } from './lib/geopng/types'
 import {
-  decodeRawGeoPngBuffer,
+  decodeRawGeoPngBufferAsync,
   computeRasterDifference,
 } from './lib/geopng/decoder'
 import { renderRasterToCanvas } from './lib/geopng/palettes'
@@ -63,6 +63,8 @@ export const App: React.FC = () => {
     opacityByPercentile: false,
     opacityByPercentileStrength: 1.0,
     resolutionArcmin: 60,
+    heightScaleMode: 'linear',
+    blendWeight: 0.5,
   })
   const [sidebarWidth, setSidebarWidth] = useState<number>(336)
   const [colourbarWidth, setColourbarWidth] = useState<number>(336)
@@ -112,15 +114,22 @@ export const App: React.FC = () => {
 
   // Re-decode when user changes format (float32 <-> int32)
   useEffect(() => {
-    if (rawBytesA) {
-      const decodedA = decodeRawGeoPngBuffer(rawBytesA, dataFormat)
-      setRasterA(decodedA)
+    let cancelled = false
+    async function redecode() {
+      if (rawBytesA) {
+        const decodedA = await decodeRawGeoPngBufferAsync(rawBytesA, dataFormat)
+        if (!cancelled) setRasterA(decodedA)
+      }
+      if (rawBytesB) {
+        const decodedB = await decodeRawGeoPngBufferAsync(rawBytesB, dataFormat)
+        if (!cancelled) setRasterB(decodedB)
+      }
+      if (!cancelled) setRasterVersion((v) => v + 1)
     }
-    if (rawBytesB) {
-      const decodedB = decodeRawGeoPngBuffer(rawBytesB, dataFormat)
-      setRasterB(decodedB)
+    redecode()
+    return () => {
+      cancelled = true
     }
-    setRasterVersion((v) => v + 1)
   }, [dataFormat])
 
   // File Uploads
@@ -129,7 +138,7 @@ export const App: React.FC = () => {
       try {
         const buffer = await file.arrayBuffer()
         const uint8 = new Uint8Array(buffer)
-        const decoded = decodeRawGeoPngBuffer(uint8, dataFormat)
+        const decoded = await decodeRawGeoPngBufferAsync(uint8, dataFormat)
 
         if (target === 'single') {
           setRawBytesA(uint8)

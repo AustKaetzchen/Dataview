@@ -721,14 +721,18 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     const maxScale = heightmapConfig.elevationScale || 800000
     // Continuous base pedestal so all valid grid cells form a cohesive terrain carpet without empty holes
     const baseElevation = isCartesian ? (maxScale / 111000) * 0.35 : maxScale * 0.035
-    const opacityVal = heightmapConfig.opacity ?? 0.9
-    const alpha = Math.round(255 * opacityVal)
-    const getPercentileRank = heightmapConfig.opacityByPercentile
+    const heightScaleMode = heightmapConfig.heightScaleMode ?? 'linear'
+    const needsPercentileRank = Boolean(
+      heightmapConfig.opacityByPercentile || heightScaleMode === 'percentile' || heightScaleMode === 'blend'
+    )
+    const getPercentileRank = needsPercentileRank
       ? createPercentileRankCalculator(
           raster,
           countriesMode && countryStats?.histogram ? countryStats.histogram : undefined
         )
       : null
+    const opacityVal = heightmapConfig.opacity ?? 0.9
+    const alpha = Math.round(255 * opacityVal)
 
     // In Country Analysis mode with active selection, constrain search space to country bounding box
     let minGC = 0
@@ -844,10 +848,27 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         const tVal = transformValue(v, scaleType as any, logSigma)
         const norm = Math.max(0, Math.min(1, (tVal - tMin) / tRange))
 
-        // Needle spike elevation: baseline pedestal + dynamic exponential scale
+        // Needle spike elevation: linear scale relative to current colourbar OR percentile-based OR blend
+        let heightNorm = 0
+        const cbRange = maxVal - minVal || 1
+        const linNorm = Math.max(0, Math.min(1, (v - minVal) / cbRange))
+
+        if (heightScaleMode === 'percentile') {
+          const rank = getPercentileRank ? getPercentileRank(v) : linNorm
+          heightNorm = Math.max(0, Math.min(1, rank))
+        } else if (heightScaleMode === 'blend') {
+          const rank = getPercentileRank ? getPercentileRank(v) : linNorm
+          const pctNorm = Math.max(0, Math.min(1, rank))
+          const w = Math.max(0, Math.min(1, heightmapConfig.blendWeight ?? 0.5))
+          heightNorm = (1 - w) * linNorm + w * pctNorm
+        } else {
+          // Direct linear scale relative to the current colourbar bounds
+          heightNorm = linNorm
+        }
+
         const spikeHeight = isCartesian
-          ? Math.pow(norm, 1.25) * ((maxScale / 111000) * 12)
-          : Math.pow(norm, 1.25) * maxScale
+          ? heightNorm * ((maxScale / 111000) * 12)
+          : heightNorm * maxScale
 
         // Latitude compensation: In Web Mercator projection, deck.gl multiplies Z elevation by
         // 1.0 / cos(lat) (see project.glsl project_size_at_latitude). This causes spikes at northerly latitudes
@@ -861,7 +882,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         // Palette color from LUT with transparency alpha (optionally tied to cell empirical percentile)
         const lutIdx = Math.floor(norm * 255) * 3
         let cellAlpha = alpha
-        if (getPercentileRank) {
+        if (heightmapConfig.opacityByPercentile && getPercentileRank) {
           const rank = Math.max(0.01, Math.min(1, getPercentileRank(v)))
           const strength = heightmapConfig.opacityByPercentileStrength ?? 1.0
           // Power curve gives smooth pseudo-log/exponential contrast:
@@ -897,6 +918,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     heightmapConfig.opacityByPercentile,
     heightmapConfig.opacityByPercentileStrength,
     heightmapConfig.resolutionArcmin,
+    heightmapConfig.heightScaleMode,
+    heightmapConfig.blendWeight,
     raster,
     minVal,
     maxVal,
@@ -1221,14 +1244,14 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         : 'all'
       list.push(
         new SolidPolygonLayer({
-          id: `elevation-spikes-${projection}-${isolationKey}-${heightmapConfig.resolutionArcmin ?? 60}`,
+          id: `elevation-spikes-${projection}-${isolationKey}-${heightmapConfig.resolutionArcmin ?? 60}-${heightmapConfig.heightScaleMode ?? 'linear'}-${heightmapConfig.blendWeight ?? 0.5}`,
           data: elevationSpikesData.points,
           getPolygon: (d: any) => d.polygon,
           getElevation: (d: any) => d.elevation,
           getFillColor: (d: any) => d.color,
           updateTriggers: {
             getPolygon: [elevationSpikesData.points.length, countriesMode, effectiveSelected.length, heightmapConfig.resolutionArcmin],
-            getElevation: [elevationSpikesData.points.length, heightmapConfig.elevationScale, heightmapConfig.resolutionArcmin],
+            getElevation: [elevationSpikesData.points.length, heightmapConfig.elevationScale, heightmapConfig.resolutionArcmin, heightmapConfig.heightScaleMode, heightmapConfig.blendWeight],
             getFillColor: [palette, invertPalette, heightmapConfig.opacity, heightmapConfig.opacityByPercentile, heightmapConfig.opacityByPercentileStrength],
           },
           extruded: true,

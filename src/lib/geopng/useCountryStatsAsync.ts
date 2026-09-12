@@ -57,31 +57,15 @@ export function useCountryStatsAsync({
     }
   }, [])
 
-  // Sync raster to worker and clear stale countryStats whenever activeRaster changes
+  // Reset stats and invalidate worker raster cache whenever activeRaster changes
   useEffect(() => {
     // Invalidate any ongoing calculation for the old raster immediately
     reqIdRef.current++
     setCountryStats(null)
+    lastRasterRef.current = null
 
     if (!activeRaster) {
-      lastRasterRef.current = null
       setIsCalculatingStats(false)
-      return
-    }
-
-    lastRasterRef.current = activeRaster
-
-    if (workerRef.current) {
-      const msg: WorkerInMessage = {
-        type: 'SET_RASTER',
-        data: activeRaster.data,
-        width: activeRaster.width,
-        height: activeRaster.height,
-        min: activeRaster.min,
-        max: activeRaster.max,
-        bounds: activeRaster.bounds,
-      }
-      workerRef.current.postMessage(msg)
     }
   }, [activeRaster])
 

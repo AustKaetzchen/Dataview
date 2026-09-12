@@ -128,11 +128,17 @@ export const InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = ({
                                 ? `${count} ${count === 1 ? 'country' : 'countries'} isolated`
                                 : configItem?.controlDescription || 'Active (select country)'
                           } else if (m.id === 'spike_map') {
-                            const pctStr = heightmapConfig.opacityByPercentile ? ' (percentile)' : ''
+                            const pctStr = heightmapConfig.opacityByPercentile ? ' (pct opacity)' : ''
                             const resStr = heightmapConfig.resolutionArcmin ? ` • ${heightmapConfig.resolutionArcmin}' res` : ''
+                            const modeStr =
+                              heightmapConfig.heightScaleMode === 'percentile'
+                                ? ' • % height'
+                                : heightmapConfig.heightScaleMode === 'blend'
+                                  ? ` • blend (${Math.round((heightmapConfig.blendWeight ?? 0.5) * 100)}%)`
+                                  : ' • linear height'
                             desc = `${Math.round(
                               (heightmapConfig.elevationScale ?? 800000) / 1000
-                            )}km peak • ${Math.round((heightmapConfig.opacity ?? 0.9) * 100)}% opacity${pctStr}${resStr}`
+                            )}km peak • ${Math.round((heightmapConfig.opacity ?? 0.9) * 100)}% opacity${pctStr}${modeStr}${resStr}`
                           } else if (m.id === 'circle_sizing') {
                             desc = `≥P${circleOverlayConfig.percentileCutoff ?? 99} cutoff • ${(
                               circleOverlayConfig.baseRadius ?? 1.0
