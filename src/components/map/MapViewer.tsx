@@ -545,9 +545,17 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     (e: any) => {
       let nextViewState = e.viewState
       if (projection === 'Globe') {
+        // Clamp latitude to [-85, 85] to prevent polar singularities where orientation flips
+        const clampedLat = Math.max(-85, Math.min(85, nextViewState.latitude ?? 0))
+        // Keep bearing normalized to [-180, 180] while allowing diagonal drags to adjust bearing freely
+        let bearing = nextViewState.bearing ?? 0
+        while (bearing > 180) bearing -= 360
+        while (bearing < -180) bearing += 360
+
         nextViewState = {
           ...nextViewState,
-          bearing: 0,
+          latitude: clampedLat,
+          bearing,
         }
       }
       setProjViewStates((prev) => ({
@@ -595,7 +603,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         ...prev,
         [projection]:
           projection === 'Mercator' || projection === 'Globe'
-            ? { ...prev[projection], pitch: tilt, bearing: 0 }
+            ? { ...prev[projection], pitch: tilt }
             : { ...prev[projection], rotationX: tilt },
       }))
     },
@@ -1299,7 +1307,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         const legendCountryName = isCountryRelative ? countryStats!.name : null
 
         return (
-          <div className="absolute top-4 left-4 z-20">
+          <div className="absolute top-[var(--padding)] left-[var(--padding)] z-20">
             <ColorBarLegend
               palette={palette}
               invertPalette={invertPalette}
@@ -1319,7 +1327,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
       {/* Map Control Tools Toolbar (Top Right) */}
       <TooltipProvider delayDuration={150}>
-        <div className="absolute top-4 right-4 z-20 flex flex-col gap-1.5 bg-card/95 backdrop-blur-md p-1 rounded-none border border-border shadow-md">
+        <div className="absolute top-[var(--padding)] right-[var(--padding)] z-20 flex flex-col gap-[var(--cell-padding)] bg-card/95 backdrop-blur-md p-[var(--cell-padding)] rounded-none border border-border shadow-md">
           {/* Map Display Settings Toggle (Basemaps & Projections) - ALWAYS AT TOP with GEAR ICON */}
           <Tooltip>
             <TooltipTrigger asChild>
@@ -1395,7 +1403,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
         {/* Map Display Settings Flyout Panel */}
         {flyoutOpen && (
-          <div className="absolute top-4 right-14 z-30 w-72 bg-card/98 backdrop-blur-md border border-border rounded-none p-[var(--padding)] shadow-2xl text-[var(--body-font-size)] text-card-foreground animate-in fade-in-0 zoom-in-95 duration-100 font-sans space-y-[var(--padding)]">
+          <div className="absolute top-[var(--padding)] right-[calc(var(--padding)+2.25rem+var(--padding))] z-30 w-72 bg-card/98 backdrop-blur-md border border-border rounded-none p-[var(--padding)] shadow-2xl text-[var(--body-font-size)] text-card-foreground animate-in fade-in-0 zoom-in-95 duration-100 font-sans space-y-[var(--padding)]">
             <div className="flex items-center justify-between pb-[var(--cell-padding)] border-b border-border">
               <span className="font-bold text-foreground text-[var(--header-font-size)] flex items-center gap-2">
                 <Icon name="layers" className="text-white" />

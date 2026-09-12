@@ -85,7 +85,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
   }, [mapModes, mapmodeSearch])
 
   return (
-    <div className="absolute bottom-4 right-4 z-20 w-80 max-h-[calc(100vh-140px)] flex flex-col bg-card/98 backdrop-blur-md border border-border shadow-2xl p-[var(--padding)] space-y-[var(--padding)] text-[var(--body-font-size)] select-none font-sans overflow-hidden">
+    <div className="absolute bottom-[var(--padding)] right-[var(--padding)] z-20 w-80 max-h-[calc(100vh-140px)] flex flex-col bg-card/98 backdrop-blur-md border border-border shadow-2xl p-[var(--padding)] space-y-[var(--padding)] text-[var(--body-font-size)] select-none font-sans overflow-hidden">
       {/* Tray Header */}
       <div className="flex items-center justify-between border-b border-border pb-[var(--cell-padding)] shrink-0">
         <span className="font-bold text-foreground text-[var(--header-font-size)] flex items-center gap-2">

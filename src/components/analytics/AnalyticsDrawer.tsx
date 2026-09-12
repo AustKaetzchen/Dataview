@@ -75,8 +75,12 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
       onTransitionEnd={() => {
         window.dispatchEvent(new Event('resize'))
       }}
-      style={{ right: `${rightOffset}px` }}
-      className="absolute top-4 z-30 w-[640px] max-w-[calc(100vw-720px)] h-[340px] bg-card/95 backdrop-blur-md border border-border rounded-none text-card-foreground shadow-2xl flex flex-col font-sans transition-all duration-200 ease-out animate-in fade-in-0 zoom-in-95 duration-150"
+      style={{
+        right: isSettingsDrawerOpen
+          ? 'calc(var(--padding) + 2.25rem + 18rem + var(--padding))'
+          : 'calc(var(--padding) + 2.25rem + var(--padding))',
+      }}
+      className="absolute top-[var(--padding)] z-30 w-[640px] max-w-[calc(100vw-720px)] h-[340px] bg-card/95 backdrop-blur-md border border-border rounded-none text-card-foreground shadow-2xl flex flex-col font-sans transition-all duration-200 ease-out animate-in fade-in-0 zoom-in-95 duration-150"
     >
       {/* Panel Header */}
       <div className="h-[var(--navbar-height)] px-[var(--padding)] flex items-center justify-between border-b border-border select-none gap-[var(--padding)] bg-card/90">
