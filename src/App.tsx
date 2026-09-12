@@ -62,6 +62,7 @@ export const App: React.FC = () => {
     opacity: 0.9,
     opacityByPercentile: false,
     opacityByPercentileStrength: 1.0,
+    resolutionArcmin: 60,
   })
   const [sidebarWidth, setSidebarWidth] = useState<number>(336)
   const [colourbarWidth, setColourbarWidth] = useState<number>(336)
@@ -86,6 +87,9 @@ export const App: React.FC = () => {
   // Top right view panel for analytics & settings drawer
   const [analyticsOpen, setAnalyticsOpen] = useState<boolean>(false)
   const [settingsDrawerOpen, setSettingsDrawerOpen] = useState<boolean>(false)
+
+  // Raster version key to force synchronized reflow and clear stale caches
+  const [rasterVersion, setRasterVersion] = useState<number>(0)
 
   // Raw Uint8Arrays for fast format re-decoding
   const [rawBytesA, setRawBytesA] = useState<Uint8Array | null>(null)
@@ -116,6 +120,7 @@ export const App: React.FC = () => {
       const decodedB = decodeRawGeoPngBuffer(rawBytesB, dataFormat)
       setRasterB(decodedB)
     }
+    setRasterVersion((v) => v + 1)
   }, [dataFormat])
 
   // File Uploads
@@ -139,6 +144,7 @@ export const App: React.FC = () => {
           setRasterB(decoded)
           setDiffNameB(file.name)
         }
+        setRasterVersion((v) => v + 1)
       } catch (err) {
         console.error('Failed to load GeoPNG file:', err)
         alert(`Could not decode GeoPNG file: ${(err as Error).message}`)
@@ -146,6 +152,10 @@ export const App: React.FC = () => {
     },
     [dataFormat]
   )
+
+  const handleForceRefreshAnalytics = useCallback(() => {
+    setRasterVersion((v) => v + 1)
+  }, [])
 
   // Determine active raw raster
   const activeRaster = useMemo<DecodedRaster | null>(() => {
@@ -437,6 +447,8 @@ export const App: React.FC = () => {
           countryStats={countryStats}
           isCalculatingStats={isCalculatingStats}
           isSettingsDrawerOpen={settingsDrawerOpen}
+          rasterKey={rasterVersion}
+          onForceRefresh={handleForceRefreshAnalytics}
         />
       </div>
 

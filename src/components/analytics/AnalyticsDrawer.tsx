@@ -22,6 +22,8 @@ interface AnalyticsDrawerProps {
   countryStats?: CountryStats | null
   isCalculatingStats?: boolean
   isSettingsDrawerOpen?: boolean
+  rasterKey?: string | number
+  onForceRefresh?: () => void
 }
 
 export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
@@ -39,11 +41,13 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
   countryStats,
   isCalculatingStats = false,
   isSettingsDrawerOpen = false,
+  rasterKey,
+  onForceRefresh,
 }) => {
   const [activeTab, setActiveTab] = useState<'histogram' | 'stats'>('histogram')
   const rightOffset = getAnalyticsPanelRightOffset(isSettingsDrawerOpen)
 
-  // Staggered resize events when opening panel to notify ECharts
+  // Staggered resize events when opening panel or when raster changes to notify ECharts
   useEffect(() => {
     if (isOpen) {
       const t1 = setTimeout(() => window.dispatchEvent(new Event('resize')), 50)
@@ -53,7 +57,7 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
         clearTimeout(t2)
       }
     }
-  }, [isOpen, rightOffset])
+  }, [isOpen, rightOffset, raster, rasterKey])
 
   if (!isOpen) return null
 
@@ -143,15 +147,33 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
           )}
         </div>
 
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-6 w-6 p-0 rounded-none text-muted-foreground hover:text-foreground cursor-pointer"
-          onClick={onToggleOpen}
-          title="Close Analytics Panel"
-        >
-          <Icon name="close" className="text-white" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0 rounded-none text-muted-foreground hover:text-foreground cursor-pointer"
+            onClick={() => {
+              if (onForceRefresh) {
+                onForceRefresh()
+              }
+              window.dispatchEvent(new Event('resize'))
+            }}
+            title="Force Refresh Raster Calculator"
+            aria-label="Force Refresh Raster Calculator"
+          >
+            <Icon name="refresh" className="text-white text-xs" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0 rounded-none text-muted-foreground hover:text-foreground cursor-pointer"
+            onClick={onToggleOpen}
+            title="Close Analytics Panel"
+          >
+            <Icon name="close" className="text-white" />
+          </Button>
+        </div>
       </div>
 
       {/* Panel Body */}
@@ -175,24 +197,30 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
             </span>
           </div>
         ) : (
-          <>
-            {activeTab === 'histogram' && (
-              <HistogramChart
-                raster={raster}
-                scaleType={scaleType}
-                logSigma={logSigma}
-                minOverride={minOverride}
-                maxOverride={maxOverride}
-                countryStats={countryStats}
-              />
-            )}
+          (() => {
+            const derivedKey = `${rasterKey ?? ''}-${raster ? `${raster.width}x${raster.height}-${raster.min}-${raster.max}` : 'none'}-${countryStats ? countryStats.name : 'all'}`
+            return (
+              <>
+                {activeTab === 'histogram' && (
+                  <HistogramChart
+                    key={`hist-${derivedKey}`}
+                    raster={raster}
+                    scaleType={scaleType}
+                    logSigma={logSigma}
+                    minOverride={minOverride}
+                    maxOverride={maxOverride}
+                    countryStats={countryStats}
+                  />
+                )}
 
-            {activeTab === 'stats' && (
-              <div className="h-full w-full p-[var(--padding)] overflow-y-auto">
-                <StatsSummary raster={raster} countryStats={countryStats} />
-              </div>
-            )}
-          </>
+                {activeTab === 'stats' && (
+                  <div className="h-full w-full p-[var(--padding)] overflow-y-auto">
+                    <StatsSummary key={`stats-${derivedKey}`} raster={raster} countryStats={countryStats} />
+                  </div>
+                )}
+              </>
+            )
+          })()
         )}
       </div>
     </div>

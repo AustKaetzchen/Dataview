@@ -49,6 +49,25 @@ function sliderPosToStrength(pos: number): number {
   return Math.max(0, Math.min(MAX_PERCENTILE_STRENGTH, Math.round(strength * 100) / 100))
 }
 
+export const SPIKE_RESOLUTION_OPTIONS = [
+  { value: 120, label: "120' (2°)", title: "Low granularity (120-arcminute / 2 degrees)" },
+  { value: 60, label: "60' (1°)", title: "Standard granularity (60-arcminute / 1 degree)" },
+  { value: 30, label: "30'", title: "Medium granularity (30-arcminute / 0.5 degree)" },
+  { value: 15, label: "15'", title: "Fine granularity (15-arcminute / 0.25 degree)" },
+  { value: 10, label: "10'", title: "Very fine granularity (10-arcminute)" },
+  { value: 5, label: "5'", title: "Maximum granularity (5-arcminute / up to 5-arcmin at most)" },
+]
+
+export function formatSpikeResolution(arcmin: number): string {
+  if (arcmin === 5) return "5' (0.08° • Max)"
+  if (arcmin === 10) return "10' (0.17° • Very Fine)"
+  if (arcmin === 15) return "15' (0.25° • Fine)"
+  if (arcmin === 30) return "30' (0.50° • Medium)"
+  if (arcmin === 60) return "60' (1.00° • Standard)"
+  if (arcmin === 120) return "120' (2.00° • Coarse)"
+  return `${arcmin}'`
+}
+
 export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
   mapModes,
   onToggleMapMode,
@@ -439,6 +458,67 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                         setHeightmapConfig((prev) => ({ ...prev, elevationScale: vals[0] }))
                       }
                     />
+                  </div>
+
+                  {/* Spike Resolution (Granularity) */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center text-[var(--body-font-size)]">
+                      <span className="text-muted-foreground">Spike Granularity</span>
+                      <span className="text-foreground font-bold font-mono">
+                        {formatSpikeResolution(heightmapConfig.resolutionArcmin ?? 60)}
+                      </span>
+                    </div>
+                    <Slider
+                      value={[
+                        Math.max(
+                          0,
+                          SPIKE_RESOLUTION_OPTIONS.findIndex(
+                            (o) => o.value === (heightmapConfig.resolutionArcmin ?? 60)
+                          )
+                        ),
+                      ]}
+                      min={0}
+                      max={SPIKE_RESOLUTION_OPTIONS.length - 1}
+                      step={1}
+                      onValueChange={(vals) => {
+                        const opt = SPIKE_RESOLUTION_OPTIONS[vals[0]]
+                        if (opt) {
+                          setHeightmapConfig((prev) => ({ ...prev, resolutionArcmin: opt.value }))
+                        }
+                      }}
+                    />
+                    <div className="flex justify-between text-[10px] text-muted-foreground font-light">
+                      <span>Coarse (120')</span>
+                      <span>Standard (60')</span>
+                      <span>Max (5-arcmin)</span>
+                    </div>
+
+                    {/* Quick preset chips */}
+                    <div className="flex items-center gap-1 pt-0.5 flex-wrap">
+                      {SPIKE_RESOLUTION_OPTIONS.map((opt) => {
+                        const isSelected = (heightmapConfig.resolutionArcmin ?? 60) === opt.value
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() =>
+                              setHeightmapConfig((prev) => ({
+                                ...prev,
+                                resolutionArcmin: opt.value,
+                              }))
+                            }
+                            title={opt.title}
+                            className={`px-1.5 py-0.5 text-[10px] rounded-none border transition-colors cursor-pointer ${
+                              isSelected
+                                ? 'bg-primary text-primary-foreground border-primary font-bold shadow-xs'
+                                : 'bg-background hover:bg-muted text-muted-foreground border-border'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
 
                   {/* Camera 3D Tilt / Pitch */}

@@ -297,8 +297,15 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                     accept=".png"
                     id="single-file-upload"
                     className="hidden"
+                    onClick={(e) => {
+                      ;(e.target as HTMLInputElement).value = ''
+                    }}
                     onChange={(e) => {
-                      if (e.target.files?.[0]) onFileUpload(e.target.files[0], 'single')
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        onFileUpload(file, 'single')
+                      }
+                      e.target.value = ''
                     }}
                   />
                   <label
@@ -320,8 +327,15 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                       accept=".png"
                       id="diff-file-a"
                       className="hidden"
+                      onClick={(e) => {
+                        ;(e.target as HTMLInputElement).value = ''
+                      }}
                       onChange={(e) => {
-                        if (e.target.files?.[0]) onFileUpload(e.target.files[0], 'diff_a')
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          onFileUpload(file, 'diff_a')
+                        }
+                        e.target.value = ''
                       }}
                     />
                     <label
@@ -340,8 +354,15 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                       accept=".png"
                       id="diff-file-b"
                       className="hidden"
+                      onClick={(e) => {
+                        ;(e.target as HTMLInputElement).value = ''
+                      }}
                       onChange={(e) => {
-                        if (e.target.files?.[0]) onFileUpload(e.target.files[0], 'diff_b')
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          onFileUpload(file, 'diff_b')
+                        }
+                        e.target.value = ''
                       }}
                     />
                     <label

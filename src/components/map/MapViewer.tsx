@@ -687,9 +687,11 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     const lut = getPaletteLUT(palette, Boolean(invertPalette))
     const isCartesian = projection === 'Equirectangular' || projection === 'EqualEarth'
 
-    // Target grid resolution to cover all grid cells smoothly (~50k to 65k cells max for 60fps)
-    const maxDim = 360
-    const step = Math.max(1, Math.ceil(Math.max(W, H) / maxDim))
+    // Resolution / granularity in arcminutes: bounded to 5-arcmin at most (finest granularity)
+    const resArcmin = Math.max(5, heightmapConfig.resolutionArcmin ?? 60)
+    // 360 degrees = 21,600 arcminutes
+    const targetCols = Math.round(21600 / resArcmin)
+    const step = Math.max(1, Math.round(W / targetCols))
     const gridW = Math.ceil(W / step)
     const gridH = Math.ceil(H / step)
 
@@ -772,14 +774,23 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         let countVal = 0
         let maxBlockVal = -Infinity
 
-        for (let r = startR; r < endR; r++) {
-          const rowOffset = r * W
-          for (let c = startC; c < endC; c++) {
-            const v = raster.data[rowOffset + c]
-            if (Number.isFinite(v)) {
-              sumVal += v
-              countVal++
-              if (v > maxBlockVal) maxBlockVal = v
+        if (step === 1) {
+          const v = raster.data[startR * W + startC]
+          if (Number.isFinite(v)) {
+            sumVal = v
+            countVal = 1
+            maxBlockVal = v
+          }
+        } else {
+          for (let r = startR; r < endR; r++) {
+            const rowOffset = r * W
+            for (let c = startC; c < endC; c++) {
+              const v = raster.data[rowOffset + c]
+              if (Number.isFinite(v)) {
+                sumVal += v
+                countVal++
+                if (v > maxBlockVal) maxBlockVal = v
+              }
             }
           }
         }
@@ -885,6 +896,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     heightmapConfig.opacity,
     heightmapConfig.opacityByPercentile,
     heightmapConfig.opacityByPercentileStrength,
+    heightmapConfig.resolutionArcmin,
     raster,
     minVal,
     maxVal,
@@ -1209,14 +1221,14 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         : 'all'
       list.push(
         new SolidPolygonLayer({
-          id: `elevation-spikes-${projection}-${isolationKey}`,
+          id: `elevation-spikes-${projection}-${isolationKey}-${heightmapConfig.resolutionArcmin ?? 60}`,
           data: elevationSpikesData.points,
           getPolygon: (d: any) => d.polygon,
           getElevation: (d: any) => d.elevation,
           getFillColor: (d: any) => d.color,
           updateTriggers: {
-            getPolygon: [elevationSpikesData.points.length, countriesMode, effectiveSelected.length],
-            getElevation: [elevationSpikesData.points.length, heightmapConfig.elevationScale],
+            getPolygon: [elevationSpikesData.points.length, countriesMode, effectiveSelected.length, heightmapConfig.resolutionArcmin],
+            getElevation: [elevationSpikesData.points.length, heightmapConfig.elevationScale, heightmapConfig.resolutionArcmin],
             getFillColor: [palette, invertPalette, heightmapConfig.opacity, heightmapConfig.opacityByPercentile, heightmapConfig.opacityByPercentileStrength],
           },
           extruded: true,

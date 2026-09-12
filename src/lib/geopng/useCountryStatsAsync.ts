@@ -57,10 +57,15 @@ export function useCountryStatsAsync({
     }
   }, [])
 
-  // Sync raster to worker whenever activeRaster changes
+  // Sync raster to worker and clear stale countryStats whenever activeRaster changes
   useEffect(() => {
+    // Invalidate any ongoing calculation for the old raster immediately
+    reqIdRef.current++
+    setCountryStats(null)
+
     if (!activeRaster) {
       lastRasterRef.current = null
+      setIsCalculatingStats(false)
       return
     }
 
@@ -80,7 +85,7 @@ export function useCountryStatsAsync({
     }
   }, [activeRaster])
 
-  // Compute stats asynchronously when activeCountries changes
+  // Compute stats asynchronously when activeCountries or activeRaster changes
   useEffect(() => {
     if (!activeRaster || activeCountries.length === 0) {
       reqIdRef.current++
