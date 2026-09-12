@@ -6,7 +6,7 @@
   // =========================================================================
   app: {
     title: "Confoederatio Dataview",
-    subtitle: "Global viewer for historical statistics",
+    subtitle: "Internal tooling for historical statistics",
     badge: "BETA",
   },
   mapmodes: {
