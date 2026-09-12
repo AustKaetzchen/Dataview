@@ -11,6 +11,17 @@ export interface InfoPanelSection {
   text: string
 }
 
+export interface MarkdownSectionItem {
+  title?: string
+  heading?: string
+  summary?: string
+  content?: string | string[]
+  text?: string | string[]
+  defaultOpen?: boolean
+}
+
+export type TabMarkdownContent = string | string[] | MarkdownSectionItem[]
+
 export interface InfoPanelTab {
   id: string
   label: string
@@ -21,6 +32,8 @@ export interface InfoPanelTab {
   badge?: string
   shortcutsHeader?: string
   shortcuts?: InfoPanelShortcut[]
+  markdown?: TabMarkdownContent
+  content?: TabMarkdownContent
   sections?: InfoPanelSection[]
 }
 

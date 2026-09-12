@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { DecodedRaster, ScaleType } from '@/lib/geopng/types'
 import { CountryFeature, CountryStats } from '@/lib/geopng/polygonBinning'
-import { getAnalyticsPanelRightOffset } from '@/lib/uiLayout'
+import { getAnalyticsPanelRightOffset, UI_LAYOUT } from '@/lib/uiLayout'
 import { HistogramChart } from './HistogramChart'
 import { StatsSummary } from './StatsSummary'
 import { Button } from '../ui/button'
@@ -59,8 +59,8 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
     selectedCountries && selectedCountries.length > 0
       ? selectedCountries
       : selectedCountry
-      ? [selectedCountry]
-      : []
+        ? [selectedCountry]
+        : []
 
   const handleClear = () => {
     if (onClearCountries) {
@@ -76,29 +76,27 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
         window.dispatchEvent(new Event('resize'))
       }}
       style={{
-        right: isSettingsDrawerOpen
-          ? 'calc(var(--padding) + 2.25rem + 18rem + var(--padding))'
-          : 'calc(var(--padding) + 2.25rem + var(--padding))',
+        top: `${UI_LAYOUT.margin}px`,
+        right: `${rightOffset}px`,
       }}
-      className="absolute top-[var(--padding)] z-30 w-[640px] max-w-[calc(100vw-720px)] h-[340px] bg-card/95 backdrop-blur-md border border-border rounded-none text-card-foreground shadow-2xl flex flex-col font-sans transition-all duration-200 ease-out animate-in fade-in-0 zoom-in-95 duration-150"
+      className="absolute z-30 w-[640px] max-w-[calc(100vw-720px)] h-[340px] bg-card/95 backdrop-blur-md border border-border rounded-none text-card-foreground shadow-2xl flex flex-col font-sans transition-all duration-200 ease-out animate-in fade-in-0 zoom-in-95 duration-150"
     >
       {/* Panel Header */}
       <div className="h-[var(--navbar-height)] px-[var(--padding)] flex items-center justify-between border-b border-border select-none gap-[var(--padding)] bg-card/90">
         <div className="flex items-center gap-[var(--padding)] min-w-0">
           <span className="text-[var(--header-font-size)] font-bold text-foreground flex items-center gap-1.5 shrink-0">
             <Icon name="bar_chart" />
-            <span>Raster Analytics</span>
+            <span>Raster Calculator</span>
           </span>
 
           <div className="flex items-center gap-1 bg-muted p-[var(--cell-padding)] rounded-none shrink-0">
             <button
               type="button"
               onClick={() => setActiveTab('histogram')}
-              className={`px-2 py-0.5 text-[var(--body-font-size)] rounded-none transition-colors flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'histogram'
+              className={`px-2 py-0.5 text-[var(--body-font-size)] rounded-none transition-colors flex items-center gap-1.5 cursor-pointer ${activeTab === 'histogram'
                   ? 'bg-background text-foreground shadow-sm font-bold'
                   : 'text-muted-foreground hover:text-foreground font-light'
-              }`}
+                }`}
             >
               <Icon name="bar_chart" className="text-white" />
               Distribution
@@ -107,11 +105,10 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
             <button
               type="button"
               onClick={() => setActiveTab('stats')}
-              className={`px-2 py-0.5 text-[var(--body-font-size)] rounded-none transition-colors flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'stats'
+              className={`px-2 py-0.5 text-[var(--body-font-size)] rounded-none transition-colors flex items-center gap-1.5 cursor-pointer ${activeTab === 'stats'
                   ? 'bg-background text-foreground shadow-sm font-bold'
                   : 'text-muted-foreground hover:text-foreground font-light'
-              }`}
+                }`}
             >
               <Icon name="info" className="text-white" />
               Statistics

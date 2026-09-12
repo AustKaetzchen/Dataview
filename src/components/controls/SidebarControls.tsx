@@ -149,7 +149,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
   ]
 
   return (
-    <div className="w-84 h-full flex flex-col bg-card border-r border-border text-card-foreground overflow-y-auto select-none font-sans">
+    <div className="absolute top-3 left-3 bottom-3 z-20 w-84 flex flex-col bg-card/95 backdrop-blur-md border border-border text-card-foreground overflow-y-auto select-none font-sans shadow-2xl">
       {/* App Header */}
       <div className="p-[var(--padding)] border-b border-border bg-card/60">
         <div className="flex items-center justify-between">

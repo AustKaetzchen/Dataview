@@ -43,7 +43,7 @@
     resetCamera: "Reset Camera",
   },
   analytics: {
-    title: "Raster Analytics",
+    title: "Raster Calculator",
     steepness: "Steepness",
     totalCells: "Total Cells",
     validCells: "Valid Cells %",

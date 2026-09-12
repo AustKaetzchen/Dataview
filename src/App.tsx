@@ -367,50 +367,9 @@ export const App: React.FC = () => {
   ])
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground font-sans">
-      {/* Sidebar Controls Dock */}
-      <SidebarControls
-        appMode={appMode}
-        dataFormat={dataFormat}
-        setDataFormat={setDataFormat}
-        scaleType={scaleType}
-        setScaleType={setScaleType}
-        logSigma={logSigma}
-        setLogSigma={setLogSigma}
-        colorPalette={colorPalette}
-        setColorPalette={setColorPalette}
-        invertPalette={invertPalette}
-        setInvertPalette={setInvertPalette}
-        boundsMode={boundsMode}
-        setBoundsMode={setBoundsMode}
-        minValOverride={minValOverride}
-        setMinValOverride={setMinValOverride}
-        maxValOverride={maxValOverride}
-        setMaxValOverride={setMaxValOverride}
-        percentileList={percentileList}
-        setPercentileList={setPercentileList}
-        absoluteBreaks={absoluteBreaks}
-        setAbsoluteBreaks={setAbsoluteBreaks}
-        legendTitle={legendTitle}
-        setLegendTitle={setLegendTitle}
-        opacity={opacity}
-        setOpacity={setOpacity}
-        onFileUpload={handleFileUpload}
-        activeFileName={activeFileName}
-        diffNameA={diffNameA}
-        diffNameB={diffNameB}
-        setAppMode={setAppMode}
-        binningConfig={binningConfig}
-        setBinningConfig={setBinningConfig}
-        mapModes={mapModes}
-        heightmapConfig={heightmapConfig}
-        circleOverlayConfig={circleOverlayConfig}
-        selectedCountries={deferredSelectedCountries}
-        onToggleMapMode={handleToggleMapMode}
-      />
-
-      {/* Main Map Viewer */}
-      <div className="relative flex-1 h-full overflow-hidden">
+    <div className="relative h-screen w-screen overflow-hidden bg-background text-foreground font-sans">
+      {/* Main Map Viewer (Full viewport scene extending behind floating sidebar) */}
+      <div className="absolute inset-0 w-full h-full overflow-hidden">
         <MapViewer
           raster={displayRaster || activeRaster}
           renderedCanvas={renderedCanvas}
@@ -467,6 +426,47 @@ export const App: React.FC = () => {
           isSettingsDrawerOpen={settingsDrawerOpen}
         />
       </div>
+
+      {/* Floating Sidebar Controls Dock */}
+      <SidebarControls
+        appMode={appMode}
+        dataFormat={dataFormat}
+        setDataFormat={setDataFormat}
+        scaleType={scaleType}
+        setScaleType={setScaleType}
+        logSigma={logSigma}
+        setLogSigma={setLogSigma}
+        colorPalette={colorPalette}
+        setColorPalette={setColorPalette}
+        invertPalette={invertPalette}
+        setInvertPalette={setInvertPalette}
+        boundsMode={boundsMode}
+        setBoundsMode={setBoundsMode}
+        minValOverride={minValOverride}
+        setMinValOverride={setMinValOverride}
+        maxValOverride={maxValOverride}
+        setMaxValOverride={setMaxValOverride}
+        percentileList={percentileList}
+        setPercentileList={setPercentileList}
+        absoluteBreaks={absoluteBreaks}
+        setAbsoluteBreaks={setAbsoluteBreaks}
+        legendTitle={legendTitle}
+        setLegendTitle={setLegendTitle}
+        opacity={opacity}
+        setOpacity={setOpacity}
+        onFileUpload={handleFileUpload}
+        activeFileName={activeFileName}
+        diffNameA={diffNameA}
+        diffNameB={diffNameB}
+        setAppMode={setAppMode}
+        binningConfig={binningConfig}
+        setBinningConfig={setBinningConfig}
+        mapModes={mapModes}
+        heightmapConfig={heightmapConfig}
+        circleOverlayConfig={circleOverlayConfig}
+        selectedCountries={deferredSelectedCountries}
+        onToggleMapMode={handleToggleMapMode}
+      />
     </div>
   )
 }

@@ -9,62 +9,45 @@
  */
 
 export interface UILayoutMetrics {
-  leftbar: {
-    width: number // 320px (w-80)
-  }
-  rightbar: {
-    margin: number // 16px (right-4)
-    toolbarWidth: number // 36px (w-9)
-    gap: number // 16px (1rem)
-    settingsDrawerWidth: number // 288px (w-72)
-    settingsDrawerRight: number // 56px (right-14)
-  }
-  topbar: {
-    margin: number // 16px (top-4)
-  }
-  bottombar: {
-    margin: number // 16px (bottom-4)
-    mapmodesWidth: number // 256px (w-64)
-  }
+  margin: number
+  gap: number
+  sidebarWidth: number
+  toolbarWidth: number
+  settingsDrawerWidth: number
+  settingsDrawerRight: number
 }
 
 export const UI_LAYOUT: UILayoutMetrics = {
-  leftbar: {
-    width: 320,
-  },
-  rightbar: {
-    margin: 16,
-    toolbarWidth: 36,
-    gap: 16,
-    settingsDrawerWidth: 288,
-    settingsDrawerRight: 56,
-  },
-  topbar: {
-    margin: 16,
-  },
-  bottombar: {
-    margin: 16,
-    mapmodesWidth: 256,
-  },
+  margin: 12, // 12px standard outer margin
+  gap: 12, // 12px standard gap between adjacent panels
+  sidebarWidth: 336, // w-84 = 336px
+  toolbarWidth: 38, // 28px button + 8px padding + 2px border = 38px
+  settingsDrawerWidth: 288, // w-72 = 288px
+  settingsDrawerRight: 62, // margin (12) + toolbarWidth (38) + gap (12) = 62px
 }
 
 /**
- * Computes the total taken width from the right edge for rightbar elements
+ * Computes total taken width from the right edge for right-docked elements
  */
 export function getRightbarTakenWidth(isSettingsDrawerOpen: boolean): number {
   if (isSettingsDrawerOpen) {
-    // Toolbar (52px) + Settings Drawer (56px + 288px = 344px)
-    return UI_LAYOUT.rightbar.settingsDrawerRight + UI_LAYOUT.rightbar.settingsDrawerWidth
+    return UI_LAYOUT.settingsDrawerRight + UI_LAYOUT.settingsDrawerWidth
   }
-  // Toolbar only: margin (16px) + width (36px) = 52px
-  return UI_LAYOUT.rightbar.margin + UI_LAYOUT.rightbar.toolbarWidth
+  return UI_LAYOUT.margin + UI_LAYOUT.toolbarWidth
 }
 
 /**
- * Computes the right offset for the Analytics view panel
- * so it leaves a clean 16px margin from whichever right-hand element is active
+ * Computes right offset for the Analytics view panel with guaranteed standard gap
  */
 export function getAnalyticsPanelRightOffset(isSettingsDrawerOpen: boolean): number {
   const taken = getRightbarTakenWidth(isSettingsDrawerOpen)
-  return taken + UI_LAYOUT.rightbar.gap
+  return taken + UI_LAYOUT.gap
 }
+
+/**
+ * Offset from left screen edge for overlays adjacent to the floating sidebar
+ */
+export function getSidebarOverlayLeft(): number {
+  return UI_LAYOUT.margin + UI_LAYOUT.sidebarWidth + UI_LAYOUT.gap
+}
+

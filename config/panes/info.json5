@@ -5,10 +5,8 @@
   // Users can edit existing tabs or add new custom tabs below.
   // Comments and trailing commas are fully supported.
   // =========================================================================
-
   title: "Information & Controls",
   defaultTab: "controls",
-
   tabs: [
     {
       id: "controls",
@@ -50,20 +48,28 @@
       label: "About",
       icon: "info",
       type: "content",
-      title: "About GeoPNG Dataview",
-      badge: "v2.4 Pro",
-      sections: [
+      markdown: [
         {
-          heading: "Overview",
-          text: "GeoPNG Dataview is a high-performance geospatial raster visualizer powered by deck.gl and WebGL. It delivers real-time 2D/3D rendering of high-resolution single-band and multi-temporal geospatial datasets directly in the browser with zero server latency.",
+          title: "Overview",
+          content: [
+            "GeoPNG Dataview is a high-performance geospatial raster visualizer powered by deck.gl and WebGL. It delivers real-time 2D/3D rendering of high-resolution single-band and multi-temporal geospatial datasets directly in the browser with zero server latency.",
+          ],
         },
         {
-          heading: "Projections & 3D Terrain",
-          text: "Full support for Web Mercator, Equirectangular, Equal Earth, and 3D Interactive Globe projections. Render extruded 3D terrain needle columns, proportional equal-area circles, and multi-country polygon quantile binning on demand.",
+          title: "Projections & 3D Terrain",
+          content: [
+            "- **Web Mercator**: Standard tiled and planar projection.",
+            "- **3D Interactive Globe**: Full spherical rendering with altitude displacement.",
+            "- **Equirectangular & Equal Earth**: True equal-area cylindrical and pseudocylindrical projections.",
+            "- **3D Needle Spikes**: Extruded terrain columns with dynamic exponential scaling.",
+            "- **Equal-Area Circles**: High-value proportional circle overlays.",
+          ],
         },
         {
-          heading: "Analytical Engine",
-          text: "Integrated ECharts analytical distributions, interactive percentile breakpoint adjustment, and instant multi-country statistical mask calculations.",
+          title: "Analytical Engine",
+          content: [
+            "Integrated ECharts analytical distributions, interactive percentile breakpoint adjustment, and instant multi-country statistical mask calculations.",
+          ],
         },
       ],
     },
@@ -72,19 +78,24 @@
       label: "Policy",
       icon: "gavel",
       type: "content",
-      title: "Data Policy & Terms",
-      sections: [
+      markdown: [
         {
-          heading: "Data Usage & Client Privacy",
-          text: "All raster decoding, color mapping, histogram calculations, and country mask operations are processed locally in your client browser memory via Web Workers and GPU shaders. No uploaded imagery or sensitive raster data is transmitted to external servers.",
+          title: "Data Usage & Client Privacy",
+          content: [
+            "All raster decoding, color mapping, histogram calculations, and country mask operations are processed locally in your client browser memory via Web Workers and GPU shaders. No uploaded imagery or sensitive raster data is transmitted to external servers.",
+          ],
         },
         {
-          heading: "Map Tiles & Boundaries",
-          text: "Basemap imagery is served via Esri ArcGIS World Imagery and Dark Canvas services. Country administrative boundaries are derived from Natural Earth 1:50m cultural datasets under public domain licensing.",
+          title: "Map Tiles & Boundaries",
+          content: [
+            "Basemap imagery is served via Esri ArcGIS World Imagery and Dark Canvas services. Country administrative boundaries are derived from Natural Earth 1:50m cultural datasets under public domain licensing.",
+          ],
         },
         {
-          heading: "Attribution & Citation",
-          text: "When citing or publishing maps produced with GeoPNG Dataview, please attribute GeoPNG Dataview, Natural Earth, and applicable source raster authors.",
+          title: "Attribution & Citation",
+          content: [
+            "When citing or publishing maps produced with GeoPNG Dataview, please attribute GeoPNG Dataview, Natural Earth, and applicable source raster authors.",
+          ],
         },
       ],
     },

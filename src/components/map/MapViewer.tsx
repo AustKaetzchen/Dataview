@@ -30,6 +30,7 @@ import {
   MapModeId,
 } from '@/lib/geopng/types'
 import { MAP_CONFIG, getPixelOffset } from '@config'
+import { UI_LAYOUT, getSidebarOverlayLeft } from '@/lib/uiLayout'
 import { ClickInfoPanel } from './ClickInfoPanel'
 import { ColorBarLegend } from './ColorBarLegend'
 import { Button } from '../ui/button'
@@ -566,8 +567,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         projection === 'Equirectangular' || projection === 'EqualEarth'
           ? { target: [0, 0, 0], zoom: 2.0, minZoom: 0.2, maxZoom: 10, rotationX: 0, rotationOrbit: 0, minRotationX: -85, maxRotationX: 0 }
           : projection === 'Globe'
-          ? { longitude: 0, latitude: 20, zoom: 0, pitch: 0, bearing: 0, maxZoom: 18, minZoom: 0, minPitch: 0, maxPitch: 85 }
-          : { longitude: 0, latitude: 20, zoom: 1.2, pitch: 0, bearing: 0, maxZoom: 18, minZoom: 0, minPitch: 0, maxPitch: 85 },
+            ? { longitude: 0, latitude: 20, zoom: 0, pitch: 0, bearing: 0, maxZoom: 18, minZoom: 0, minPitch: 0, maxPitch: 85 }
+            : { longitude: 0, latitude: 20, zoom: 1.2, pitch: 0, bearing: 0, maxZoom: 18, minZoom: 0, minPitch: 0, maxPitch: 85 },
     }))
   }, [projection])
 
@@ -698,8 +699,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       selectedCountries && selectedCountries.length > 0
         ? selectedCountries
         : selectedCountry
-        ? [selectedCountry]
-        : []
+          ? [selectedCountry]
+          : []
 
     // If Country Analysis mode is active and no countries are selected, de-render spikes completely
     if (countriesMode && effectiveSelected.length === 0) {
@@ -892,8 +893,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       selectedCountries && selectedCountries.length > 0
         ? selectedCountries
         : selectedCountry
-        ? [selectedCountry]
-        : []
+          ? [selectedCountry]
+          : []
 
     // De-render circles if Country Analysis mode is active and no countries are selected
     if (countriesMode && effectiveSelected.length === 0) return []
@@ -998,8 +999,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       selectedCountries && selectedCountries.length > 0
         ? selectedCountries
         : selectedCountry
-        ? [selectedCountry]
-        : []
+          ? [selectedCountry]
+          : []
 
     // 1. Basemap Layer (ESRI or Land/Sea when "None" or Equal Earth)
     if (basemap === 'none' || projection === 'EqualEarth') {
@@ -1251,9 +1252,9 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       const selectedData =
         projection === 'EqualEarth'
           ? effectiveSelected.map((c) => ({
-              ...c,
-              geometry: transformGeometryToEqualEarth(c.geometry),
-            }))
+            ...c,
+            geometry: transformGeometryToEqualEarth(c.geometry),
+          }))
           : effectiveSelected.map((c) => ({ ...c, geometry: { ...c.geometry } }))
 
       list.push(
@@ -1358,10 +1359,10 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       {renderedCanvas && (() => {
         const isCountryRelative = Boolean(
           countriesMode &&
-            countryStats &&
-            countryStats.validCount > 0 &&
-            Number.isFinite(countryStats.min) &&
-            Number.isFinite(countryStats.max)
+          countryStats &&
+          countryStats.validCount > 0 &&
+          Number.isFinite(countryStats.min) &&
+          Number.isFinite(countryStats.max)
         )
         const legendMin = isCountryRelative ? countryStats!.min : minVal
         const legendMax = isCountryRelative ? countryStats!.max : maxVal
@@ -1369,7 +1370,10 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         const legendCountryName = isCountryRelative ? countryStats!.name : null
 
         return (
-          <div className="absolute top-[var(--padding)] left-[var(--padding)] z-20">
+          <div
+            style={{ top: `${UI_LAYOUT.margin}px`, left: `${getSidebarOverlayLeft()}px` }}
+            className="absolute z-20"
+          >
             <ColorBarLegend
               palette={palette}
               invertPalette={invertPalette}
@@ -1389,7 +1393,10 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
       {/* Map Control Tools Toolbar (Top Right) */}
       <TooltipProvider delayDuration={150}>
-        <div className="absolute top-[var(--padding)] right-[var(--padding)] z-20 flex flex-col gap-[var(--cell-padding)] bg-card/95 backdrop-blur-md p-[var(--cell-padding)] rounded-none border border-border shadow-md">
+        <div
+          style={{ top: `${UI_LAYOUT.margin}px`, right: `${UI_LAYOUT.margin}px` }}
+          className="absolute z-20 flex flex-col gap-[var(--cell-padding)] bg-card/95 backdrop-blur-md p-[var(--cell-padding)] rounded-none border border-border shadow-md"
+        >
           {/* Map Display Settings Toggle (Basemaps & Projections) - ALWAYS AT TOP with GEAR ICON */}
           <Tooltip>
             <TooltipTrigger asChild>
@@ -1408,7 +1415,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
             </TooltipContent>
           </Tooltip>
 
-          {/* Toggle Raster Analytics View Panel */}
+          {/* Toggle Raster Calculator View Panel */}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -1416,13 +1423,13 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                 size="icon"
                 onClick={onToggleAnalytics}
                 className="h-7 w-7 rounded-none text-white"
-                aria-label="Toggle Raster Analytics"
+                aria-label="Toggle Raster Calculator"
               >
                 <Icon name="analytics" className="text-white" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="left">
-              <span>Toggle Raster Analytics (Top Right View Panel)</span>
+              <span>Toggle Raster Calculator (Top Right View Panel)</span>
             </TooltipContent>
           </Tooltip>
 
@@ -1465,7 +1472,14 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
         {/* Map Display Settings Flyout Panel */}
         {flyoutOpen && (
-          <div className="absolute top-[var(--padding)] right-[calc(var(--padding)+2.25rem+var(--padding))] z-30 w-72 bg-card/98 backdrop-blur-md border border-border rounded-none p-[var(--padding)] shadow-2xl text-[var(--body-font-size)] text-card-foreground animate-in fade-in-0 zoom-in-95 duration-100 font-sans space-y-[var(--padding)]">
+          <div
+            style={{
+              top: `${UI_LAYOUT.margin}px`,
+              right: `${UI_LAYOUT.settingsDrawerRight}px`,
+              width: `${UI_LAYOUT.settingsDrawerWidth}px`,
+            }}
+            className="absolute z-30 bg-card/98 backdrop-blur-md border border-border rounded-none p-[var(--padding)] shadow-2xl text-[var(--body-font-size)] text-card-foreground animate-in fade-in-0 zoom-in-95 duration-100 font-sans space-y-[var(--padding)]"
+          >
             <div className="flex items-center justify-between pb-[var(--cell-padding)] border-b border-border">
               <span className="font-bold text-foreground text-[var(--header-font-size)] flex items-center gap-2">
                 <Icon name="layers" className="text-white" />
@@ -1489,11 +1503,10 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                     key={p}
                     type="button"
                     onClick={() => setProjection(p)}
-                    className={`px-2 py-1 text-[var(--body-font-size)] rounded-none border transition-colors cursor-pointer text-center truncate ${
-                      projection === p
-                        ? 'bg-primary text-primary-foreground border-primary font-bold shadow-sm'
-                        : 'bg-background hover:bg-muted text-muted-foreground hover:text-foreground border-border font-light'
-                    }`}
+                    className={`px-2 py-1 text-[var(--body-font-size)] rounded-none border transition-colors cursor-pointer text-center truncate ${projection === p
+                      ? 'bg-primary text-primary-foreground border-primary font-bold shadow-sm'
+                      : 'bg-background hover:bg-muted text-muted-foreground hover:text-foreground border-border font-light'
+                      }`}
                   >
                     {p === 'Equirectangular' ? 'Equirect.' : p === 'EqualEarth' ? 'Equal Earth' : p}
                   </button>
@@ -1511,11 +1524,10 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                     key={item.id}
                     type="button"
                     onClick={() => setBasemap(item.id)}
-                    className={`w-full flex items-center justify-between px-2 py-1 rounded-none text-[var(--body-font-size)] transition-colors cursor-pointer text-left ${
-                      basemap === item.id
-                        ? 'bg-muted text-foreground font-bold'
-                        : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground font-light'
-                    }`}
+                    className={`w-full flex items-center justify-between px-2 py-1 rounded-none text-[var(--body-font-size)] transition-colors cursor-pointer text-left ${basemap === item.id
+                      ? 'bg-muted text-foreground font-bold'
+                      : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground font-light'
+                      }`}
                   >
                     <span>{item.label}</span>
                     {basemap === item.id && (
@@ -1537,30 +1549,32 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         countriesMode={Boolean(countriesMode)}
         onToggleCountriesMode={onToggleCountriesMode}
         selectedCountries={selectedCountries || []}
-        onToggleCountry={onToggleCountry || (() => {})}
-        onClearCountries={onClearCountries || (() => {})}
+        onToggleCountry={onToggleCountry || (() => { })}
+        onClearCountries={onClearCountries || (() => { })}
         countryStats={countryStats}
         heightmapConfig={heightmapConfig}
-        setHeightmapConfig={setHeightmapConfig || (() => {})}
+        setHeightmapConfig={setHeightmapConfig || (() => { })}
         circleOverlayConfig={circleOverlayConfig}
-        setCircleOverlayConfig={setCircleOverlayConfig || (() => {})}
+        setCircleOverlayConfig={setCircleOverlayConfig || (() => { })}
         allCountries={countryFeatures}
       />
 
       {/* Bottom Left: Information & Controls Flyout */}
       <TooltipProvider delayDuration={150}>
-        <div className="absolute bottom-[var(--padding)] left-[var(--padding)] z-20">
+        <div
+          style={{ bottom: `${UI_LAYOUT.margin}px`, left: `${getSidebarOverlayLeft()}px` }}
+          className="absolute z-20"
+        >
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant={infoFlyoutOpen ? 'secondary' : 'default'}
                 size="icon"
                 onClick={() => setInfoFlyoutOpen(!infoFlyoutOpen)}
-                className={`h-8 w-8 rounded-none border border-border backdrop-blur-md shadow-md cursor-pointer transition-colors ${
-                  infoFlyoutOpen
-                    ? 'bg-primary text-primary-foreground border-primary font-bold'
-                    : 'bg-card/95 text-white hover:bg-muted'
-                }`}
+                className={`h-8 w-8 rounded-none border border-border backdrop-blur-md shadow-md cursor-pointer transition-colors ${infoFlyoutOpen
+                  ? 'bg-primary text-primary-foreground border-primary font-bold'
+                  : 'bg-card/95 text-white hover:bg-muted'
+                  }`}
                 aria-label="Information & Controls"
               >
                 <Icon
