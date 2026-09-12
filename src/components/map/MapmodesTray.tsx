@@ -8,7 +8,7 @@ import {
 import { CountryFeature, CountryStats } from '@/lib/geopng/polygonBinning'
 import { Icon } from '@/components/ui/icon'
 import { Slider } from '@/components/ui/slider'
-import { MAPMODES_CONFIG } from '@config'
+import { MAPMODES_CONFIG, LOCALISATION_CONFIG } from '@config'
 
 interface MapmodesTrayProps {
   mapModes: MapModeItem[]
@@ -90,10 +90,10 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
       <div className="flex items-center justify-between border-b border-border pb-[var(--cell-padding)] shrink-0">
         <span className="font-bold text-foreground text-[var(--header-font-size)] flex items-center gap-2">
           <Icon name="layers" />
-          <span>Mapmodes</span>
+          <span>{LOCALISATION_CONFIG.mapmodes.title}</span>
         </span>
-        <span className="text-[var(--body-font-size)] px-2 py-0.5 bg-muted text-muted-foreground border border-border font-mono font-medium">
-          {mapModes.filter((m) => m.active).length} Active
+        <span className="text-[var(--body-font-size)] px-2 py-0.5 bg-muted text-muted-foreground border border-border font-medium">
+          {mapModes.filter((m) => m.active).length} {LOCALISATION_CONFIG.mapmodes.activeSuffix}
         </span>
       </div>
 
@@ -107,7 +107,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
           type="text"
           value={mapmodeSearch}
           onChange={(e) => setMapmodeSearch(e.target.value)}
-          placeholder="Search mapmodes..."
+          placeholder={LOCALISATION_CONFIG.mapmodes.searchPlaceholder}
           className="w-full pl-7 pr-7 py-1 text-[var(--body-font-size)] bg-background/70 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary rounded-none"
         />
         {mapmodeSearch && (
@@ -125,7 +125,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
       <div className="space-y-1 overflow-y-auto max-h-[50vh] pr-0.5">
         {filteredMapModes.length === 0 && (
           <p className="text-[var(--body-font-size)] text-muted-foreground italic py-2 text-center">
-            No matching mapmodes found
+            {LOCALISATION_CONFIG.mapmodes.noResults}
           </p>
         )}
         {filteredMapModes.map((mode) => {
@@ -148,7 +148,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                     type="checkbox"
                     checked={mode.active}
                     onChange={() => onToggleMapMode(mode.id)}
-                    className="w-4 h-4 rounded-none accent-emerald-500 cursor-pointer shrink-0"
+                    className="w-[var(--body-font-size)] h-[var(--body-font-size)] rounded-none accent-emerald-500 cursor-pointer shrink-0"
                   />
                   <button
                     type="button"
@@ -262,7 +262,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                         type="checkbox"
                         checked={countriesMode}
                         onChange={(e) => onToggleCountriesMode && onToggleCountriesMode(e.target.checked)}
-                        className="w-4 h-4 rounded-none accent-emerald-500 cursor-pointer"
+                        className="w-[var(--body-font-size)] h-[var(--body-font-size)] rounded-none accent-emerald-500 cursor-pointer"
                       />
                       <span
                         className={`text-[var(--body-font-size)] font-bold uppercase ${
@@ -313,13 +313,13 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                               type="checkbox"
                               checked={isChecked}
                               onChange={() => onToggleCountry(c)}
-                              className="w-4 h-4 rounded-none accent-emerald-500 cursor-pointer shrink-0"
+                              className="w-[var(--body-font-size)] h-[var(--body-font-size)] rounded-none accent-emerald-500 cursor-pointer shrink-0"
                             />
                             <span className="truncate flex-1 text-foreground">
                               {c.properties.name}
                             </span>
                             {c.properties.iso_a3 && c.properties.iso_a3 !== '-99' && (
-                              <span className="text-[var(--body-font-size)] font-mono text-muted-foreground">
+                              <span className="text-[var(--body-font-size)] text-muted-foreground">
                                 {c.properties.iso_a3}
                               </span>
                             )}
@@ -361,19 +361,19 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                       </div>
                       <div className="flex justify-between items-center text-muted-foreground">
                         <span>Range:</span>
-                        <span className="text-foreground font-mono font-light">
+                        <span className="text-foreground font-light">
                           {countryStats.min.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} → {countryStats.max.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </div>
                       <div className="flex justify-between items-center text-muted-foreground">
                         <span>Mean:</span>
-                        <span className="text-foreground font-mono font-light">
+                        <span className="text-foreground font-light">
                           {countryStats.mean.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </div>
                       <div className="flex justify-between items-center text-muted-foreground">
                         <span>Total:</span>
-                        <span className="text-foreground font-mono font-bold">
+                        <span className="text-foreground font-bold">
                           {(countryStats.total ?? countryStats.mean * countryStats.validCount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </div>
@@ -398,7 +398,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                   <div className="space-y-1.5">
                     <div className="flex justify-between items-center text-[var(--body-font-size)]">
                       <span className="text-muted-foreground">Spike Height Scale</span>
-                      <span className="text-foreground font-mono font-bold">
+                      <span className="text-foreground font-bold">
                         {(heightmapConfig.elevationScale / 1000).toFixed(0)} km
                       </span>
                     </div>
@@ -417,7 +417,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                   <div className="space-y-1.5">
                     <div className="flex justify-between items-center text-[var(--body-font-size)]">
                       <span className="text-muted-foreground">Camera Tilt (Pitch)</span>
-                      <span className="text-foreground font-mono font-bold">
+                      <span className="text-foreground font-bold">
                         {Math.round(cameraTilt ?? 0)}°
                       </span>
                     </div>
@@ -434,7 +434,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                   <div className="space-y-1.5">
                     <div className="flex justify-between items-center text-[var(--body-font-size)]">
                       <span className="text-muted-foreground">Spikes Opacity</span>
-                      <span className="text-foreground font-mono font-bold">
+                      <span className="text-foreground font-bold">
                         {Math.round((heightmapConfig.opacity ?? 0.9) * 100)}%
                       </span>
                     </div>
@@ -472,7 +472,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                     <div className="flex justify-between items-center text-[var(--body-font-size)]">
                       <span className="text-muted-foreground">Custom Percentile Cutoff</span>
                       <div className="flex items-center gap-1">
-                        <span className="font-mono text-muted-foreground">P</span>
+                        <span className="text-muted-foreground font-medium">P</span>
                         <input
                           type="number"
                           min={0}
@@ -488,7 +488,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                               }))
                             }
                           }}
-                          className="w-14 h-6 px-1 font-mono font-bold text-center bg-background border border-border text-foreground focus:outline-none focus:border-primary text-[var(--body-font-size)]"
+                          className="w-14 h-6 px-1 font-bold text-center bg-background border border-border text-foreground focus:outline-none focus:border-primary text-[var(--body-font-size)]"
                         />
                       </div>
                     </div>
@@ -518,7 +518,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                   <div className="space-y-1.5">
                     <div className="flex justify-between items-center text-[var(--body-font-size)]">
                       <span className="text-muted-foreground">Area Scale (1 ha / unit)</span>
-                      <span className="text-foreground font-mono font-bold">
+                      <span className="text-foreground font-bold">
                         {(circleOverlayConfig.baseRadius || 1.0).toFixed(1)} ha/unit
                       </span>
                     </div>
@@ -540,7 +540,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                   <div className="space-y-1.5">
                     <div className="flex justify-between items-center text-[var(--body-font-size)]">
                       <span className="text-muted-foreground">Coloured Outline Stroke</span>
-                      <span className="text-foreground font-mono font-bold">
+                      <span className="text-foreground font-bold">
                         {circleOverlayConfig.strokeWidth || 2} px
                       </span>
                     </div>
@@ -561,9 +561,9 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                   {/* Black Halo Thickness (Default 1px) */}
                   <div className="space-y-1.5">
                     <div className="flex justify-between items-center text-[var(--body-font-size)]">
-                      <span className="text-muted-foreground">Black Halo Thickness</span>
-                      <span className="text-foreground font-mono font-bold">
-                        {circleOverlayConfig.haloWidth ?? 1} px
+                      <span className="text-muted-foreground">{LOCALISATION_CONFIG.mapmodes.haloThicknessLabel}</span>
+                      <span className="text-foreground font-bold">
+                        {circleOverlayConfig.haloWidth ?? 1} {LOCALISATION_CONFIG.mapmodes.haloThicknessUnit}
                       </span>
                     </div>
                     <Slider
@@ -581,7 +581,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                   </div>
 
                   <p className="text-[var(--body-font-size)] text-muted-foreground font-light leading-tight">
-                    • Hollow circles with coloured outline and adjustable black halo border. Area linearly scales with value (A ∝ Value).
+                    {LOCALISATION_CONFIG.mapmodes.haloDescription}
                   </p>
                 </div>
               )}
@@ -590,10 +590,10 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
         })}
       </div>
 
-      {/* Tray Footer */}
-      <div className="pt-[var(--cell-padding)] border-t border-border/80 text-[var(--body-font-size)] text-muted-foreground flex justify-between items-center shrink-0">
-        <span>Click mode name to configure</span>
-        <span>Drag / Arrow to reorder</span>
+      {/* Tray Footer - Each hint on its own separate line */}
+      <div className="pt-[var(--cell-padding)] border-t border-border/80 text-[var(--body-font-size)] text-muted-foreground flex flex-col gap-0.5 shrink-0">
+        <span>{LOCALISATION_CONFIG.mapmodes.hintConfigure}</span>
+        <span>{LOCALISATION_CONFIG.mapmodes.hintReorder}</span>
       </div>
     </div>
   )

@@ -204,8 +204,9 @@ class TesselatedBitmapLayer extends BitmapLayer<TesselatedBitmapLayerProps> {
       maxY = bounds[3]
     }
 
-    // Step size for mesh grid (finer step for 3D relief)
-    const stepDeg = heightmapEnabled ? 1.5 : 2.0
+    // Step size for mesh grid (finer step for Globe & 3D relief)
+    // On Globe, 0.4 degree grid ensures maximum chord sag is < 38m, preventing basemap puncture.
+    const stepDeg = projection === 'Globe' ? 0.4 : heightmapEnabled ? 1.5 : 2.0
     const xSpan = maxX - minX
     const ySpan = maxY - minY
     const uCount = Math.max(16, Math.ceil(xSpan / stepDeg) + 1)
@@ -215,6 +216,9 @@ class TesselatedBitmapLayer extends BitmapLayer<TesselatedBitmapLayerProps> {
     const indices = new Uint32Array(vertexCount)
     const texCoords = new Float32Array(uCount * vCount * 2)
     const positions = new Float64Array(uCount * vCount * 3)
+
+    // On Globe, offset altitude slightly (150m) so raster surface floats cleanly above the basemap sphere
+    const altitudeOffset = projection === 'Globe' ? 150 : 0
 
     let vertex = 0
     let index = 0
@@ -237,7 +241,7 @@ class TesselatedBitmapLayer extends BitmapLayer<TesselatedBitmapLayerProps> {
 
         positions[vertex * 3 + 0] = px
         positions[vertex * 3 + 1] = py
-        positions[vertex * 3 + 2] = 0
+        positions[vertex * 3 + 2] = altitudeOffset
 
         texCoords[vertex * 2 + 0] = ut
         texCoords[vertex * 2 + 1] = 1 - vt
@@ -348,7 +352,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       setProjViewStates((prev) => ({
         ...prev,
         Mercator: { ...prev.Mercator, pitch: Math.max(35, prev.Mercator?.pitch || 45) },
-        Globe: { ...prev.Globe, pitch: Math.max(35, prev.Globe?.pitch || 45) },
+        Globe: { ...prev.Globe, pitch: Math.max(35, prev.Globe?.pitch || 45), bearing: 0 },
         Equirectangular: { ...prev.Equirectangular, rotationX: Math.max(35, prev.Equirectangular?.rotationX || 45) },
         EqualEarth: { ...prev.EqualEarth, rotationX: Math.max(35, prev.EqualEarth?.rotationX || 45) },
       }))
@@ -539,9 +543,16 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
   const handleViewStateChange = useCallback(
     (e: any) => {
+      let nextViewState = e.viewState
+      if (projection === 'Globe') {
+        nextViewState = {
+          ...nextViewState,
+          bearing: 0,
+        }
+      }
       setProjViewStates((prev) => ({
         ...prev,
-        [projection]: e.viewState,
+        [projection]: nextViewState,
       }))
     },
     [projection]
@@ -550,7 +561,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   // Configure deck.gl view (OrbitView enables 3D tilt/pitch & rotation for Cartesian projections)
   const views = useMemo(() => {
     if (projection === 'Globe') {
-      return new GlobeView({ id: 'globe-view', controller: true })
+      return new GlobeView({ id: 'globe-view', resolution: 1, controller: true })
     }
     if (projection === 'Equirectangular') {
       return new OrbitView({
@@ -584,7 +595,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         ...prev,
         [projection]:
           projection === 'Mercator' || projection === 'Globe'
-            ? { ...prev[projection], pitch: tilt }
+            ? { ...prev[projection], pitch: tilt, bearing: 0 }
             : { ...prev[projection], rotationX: tilt },
       }))
     },
@@ -1077,6 +1088,10 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           rasterHeight: raster?.height,
           minVal,
           maxVal,
+          parameters: {
+            depthTest: true,
+            polygonOffset: [-2, -2],
+          } as any,
           textureParameters: {
             minFilter: 'nearest',
             magFilter: 'nearest',

@@ -56,7 +56,7 @@ export const StatsSummary: React.FC<StatsSummaryProps> = ({ raster, countryStats
             <span className="text-muted-foreground uppercase text-[var(--body-font-size)] font-bold tracking-wider mr-2 whitespace-nowrap">
               {stat.label}:
             </span>
-            <span className="text-foreground font-mono break-all font-light">
+            <span className="text-foreground break-all font-light">
               {stat.value}
             </span>
           </li>
@@ -103,7 +103,7 @@ export const StatsSummary: React.FC<StatsSummaryProps> = ({ raster, countryStats
           <span className="text-muted-foreground uppercase text-[var(--body-font-size)] font-bold tracking-wider mr-2 whitespace-nowrap">
             {stat.label}:
           </span>
-          <span className="text-foreground font-mono break-all font-light">
+          <span className="text-foreground break-all font-light">
             {stat.value}
           </span>
         </li>

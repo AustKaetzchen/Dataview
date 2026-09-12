@@ -20,7 +20,7 @@ import { Input } from '../ui/input'
 import { NumberInput } from '../ui/number-input'
 import { Label } from '../ui/label'
 import { Icon } from '../ui/icon'
-import { MAPMODES_CONFIG } from '@config'
+import { MAPMODES_CONFIG, LOCALISATION_CONFIG } from '@config'
 
 interface SidebarControlsProps {
   appMode: AppMode
@@ -155,14 +155,14 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
         <div className="flex items-center justify-between">
           <h1 className="text-[var(--header-font-size)] font-bold tracking-tight text-foreground flex items-center gap-2">
             <Icon name="layers" />
-            <span>Confoederatio Dataview</span>
+            <span>{LOCALISATION_CONFIG.app.title}</span>
           </h1>
-          <span className="text-[var(--body-font-size)] px-2 py-0.5 rounded-none bg-muted text-muted-foreground border border-border font-mono font-medium tracking-wider">
-            BETA
+          <span className="text-[var(--body-font-size)] px-2 py-0.5 rounded-none bg-muted text-muted-foreground border border-border font-medium tracking-wider">
+            {LOCALISATION_CONFIG.app.badge}
           </span>
         </div>
         <p className="text-[var(--body-font-size)] text-muted-foreground font-light mt-1">
-          Equirectangular WGS84 • 3D Surface & Analytics
+          {LOCALISATION_CONFIG.app.subtitle}
         </p>
       </div>
 
@@ -182,7 +182,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
             </div>
             <div className="flex items-center gap-1.5">
               {binningConfig.enabled && (
-                <span className="text-[var(--body-font-size)] px-1.5 py-0.5 bg-primary/20 text-primary font-mono border border-primary/40">
+                <span className="text-[var(--body-font-size)] px-1.5 py-0.5 bg-primary/20 text-primary border border-primary/40 font-medium">
                   {binningConfig.width}×{binningConfig.height}
                 </span>
               )}
@@ -320,7 +320,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                       onChange={(e) =>
                         setBinningConfig((prev) => ({ ...prev, enabled: e.target.checked }))
                       }
-                      className="w-4 h-4 rounded-none accent-emerald-500 cursor-pointer"
+                      className="w-[var(--body-font-size)] h-[var(--body-font-size)] rounded-none accent-emerald-500 cursor-pointer"
                     />
                     <span
                       className={`text-[var(--body-font-size)] font-bold uppercase ${
@@ -348,7 +348,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                               setBinningConfig((prev) => ({ ...prev, width: parsed }))
                             }
                           }}
-                          containerClassName="h-7 rounded-none font-mono text-[var(--body-font-size)]"
+                          containerClassName="h-7 rounded-none text-[var(--body-font-size)]"
                         />
                       </div>
                       <div className="space-y-1">
@@ -364,7 +364,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                               setBinningConfig((prev) => ({ ...prev, height: parsed }))
                             }
                           }}
-                          containerClassName="h-7 rounded-none font-mono text-[var(--body-font-size)]"
+                          containerClassName="h-7 rounded-none text-[var(--body-font-size)]"
                         />
                       </div>
                     </div>
@@ -427,7 +427,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
               <div className="space-y-1.5">
                 <div className="flex justify-between items-center text-[var(--body-font-size)]">
                   <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">Layer Opacity</Label>
-                  <span className="text-foreground font-bold font-mono text-[var(--body-font-size)]">
+                  <span className="text-foreground font-bold text-[var(--body-font-size)]">
                     {Math.round(opacity * 100)}%
                   </span>
                 </div>
@@ -457,7 +457,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
               <span>Legend Settings</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="text-[var(--body-font-size)] text-muted-foreground font-mono truncate max-w-[80px]">
+              <span className="text-[var(--body-font-size)] text-muted-foreground truncate max-w-[80px]">
                 {colorPalette}
               </span>
               <Icon
@@ -497,7 +497,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                         const parsed = parseFloat(val)
                         if (!Number.isNaN(parsed) && parsed > 0) setLogSigma(parsed)
                       }}
-                      containerClassName="h-7 w-20 rounded-none text-[var(--body-font-size)] font-mono"
+                      containerClassName="h-7 w-20 rounded-none text-[var(--body-font-size)]"
                     />
                   </div>
 
@@ -538,7 +538,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                       type="checkbox"
                       checked={invertPalette}
                       onChange={(e) => setInvertPalette(e.target.checked)}
-                      className="w-4 h-4 rounded-none accent-emerald-500 cursor-pointer"
+                      className="w-[var(--body-font-size)] h-[var(--body-font-size)] rounded-none accent-emerald-500 cursor-pointer"
                     />
                     <span className="text-[var(--body-font-size)] text-muted-foreground">Invert</span>
                   </label>
@@ -626,7 +626,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                         value={minValOverride}
                         step="any"
                         onChange={(val) => setMinValOverride(val)}
-                        containerClassName="rounded-none h-7 text-[var(--body-font-size)] font-mono"
+                        containerClassName="rounded-none h-7 text-[var(--body-font-size)]"
                       />
                     </div>
                     <div className="space-y-1">
@@ -636,7 +636,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                         value={maxValOverride}
                         step="any"
                         onChange={(val) => setMaxValOverride(val)}
-                        containerClassName="rounded-none h-7 text-[var(--body-font-size)] font-mono"
+                        containerClassName="rounded-none h-7 text-[var(--body-font-size)]"
                       />
                     </div>
                   </div>
@@ -649,7 +649,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                       type="text"
                       value={percentileList}
                       onChange={(e) => setPercentileList(e.target.value)}
-                      className="rounded-none h-7 font-mono text-[var(--body-font-size)]"
+                      className="rounded-none h-7 text-[var(--body-font-size)]"
                     />
                   </div>
                 )}
@@ -671,7 +671,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                       placeholder="e.g. 0, 10, 50, 100, 500, 1000"
                       value={absoluteBreaks}
                       onChange={(e) => setAbsoluteBreaks(e.target.value)}
-                      className="rounded-none h-7 font-mono text-[var(--body-font-size)]"
+                      className="rounded-none h-7 text-[var(--body-font-size)]"
                     />
                     <span className="text-[var(--body-font-size)] text-muted-foreground leading-tight block">
                       Color ramp stretches across these discrete absolute values.

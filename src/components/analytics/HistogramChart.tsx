@@ -354,7 +354,7 @@ export const HistogramChart: React.FC<HistogramChartProps> = ({
                 inputMode="decimal"
                 value={steepnessInput}
                 onChange={(e) => setSteepnessInput(e.target.value)}
-                className="w-14 h-5 px-1 font-mono font-bold text-center bg-background border border-border rounded-none text-foreground focus:outline-none focus:border-primary text-[var(--body-font-size)]"
+                className="w-14 h-5 px-1 font-bold text-center bg-background border border-border rounded-none text-foreground focus:outline-none focus:border-primary text-[var(--body-font-size)]"
                 placeholder="1.0"
                 title="Custom steepness factor (unbounded)"
               />

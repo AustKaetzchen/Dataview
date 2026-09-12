@@ -174,11 +174,11 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
         </div>
 
         {currentVal !== null && currentVal !== undefined && Number.isFinite(currentVal) ? (
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-none bg-primary text-primary-foreground font-bold text-[var(--body-font-size)] shadow-sm animate-in fade-in-0 duration-100 font-mono">
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-none bg-primary text-primary-foreground font-bold text-[var(--body-font-size)] shadow-sm animate-in fade-in-0 duration-100">
             <span>{formatLegendValue(currentVal)}</span>
           </div>
         ) : (
-          <span className="text-[var(--body-font-size)] text-muted-foreground font-mono font-light">
+          <span className="text-[var(--body-font-size)] text-muted-foreground font-light">
             {formatLegendValue(minVal)} → {formatLegendValue(maxVal)}
           </span>
         )}
@@ -231,7 +231,7 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
           return (
             <div
               key={i}
-              className={`absolute top-0 flex flex-col text-[var(--body-font-size)] text-muted-foreground font-mono font-light ${alignment}`}
+              className={`absolute top-0 flex flex-col text-[var(--body-font-size)] text-muted-foreground font-light ${alignment}`}
               style={{ left: `${bp.pct}%` }}
             >
               <div className="w-[1px] h-1 bg-border/80 mb-0.5" />
@@ -266,7 +266,7 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
                     }
                     setEditingIndex(null)
                   }}
-                  className="w-16 h-6 px-1 text-[var(--body-font-size)] font-mono font-bold bg-background border border-primary text-foreground text-center rounded-none z-30 shadow-lg focus:outline-none"
+                  className="w-16 h-6 px-1 text-[var(--body-font-size)] font-bold bg-background border border-primary text-foreground text-center rounded-none z-30 shadow-lg focus:outline-none"
                   title="Enter absolute break number"
                 />
               ) : (

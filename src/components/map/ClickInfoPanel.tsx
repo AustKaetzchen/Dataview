@@ -32,11 +32,11 @@ export const ClickInfoPanel: React.FC<ClickInfoPanelProps> = ({ info, pos }) => 
       <div className="space-y-0.5 text-[var(--body-font-size)] font-light">
         <div>
           <span className="text-muted-foreground font-bold">Value: </span>
-          <span className="font-bold font-mono text-foreground">{formattedVal}</span>
+          <span className="font-bold text-foreground">{formattedVal}</span>
         </div>
         <div>
           <span className="text-muted-foreground font-bold">Latlng: </span>
-          <span className="text-muted-foreground font-mono">
+          <span className="text-muted-foreground">
             {formattedLat}, {formattedLng}
           </span>
         </div>

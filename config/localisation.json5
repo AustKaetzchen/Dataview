@@ -1,0 +1,66 @@
+{
+  // =========================================================================
+  // GeoPNG Dataview Localisation Configuration (JSON5 format)
+  // Edit titles, hero banners, badges, button text, and static hints.
+  // Comments and trailing commas are fully supported.
+  // =========================================================================
+
+  app: {
+    title: "Confoederatio Dataview",
+    subtitle: "Equirectangular WGS84 • 3D Surface & Analytics",
+    badge: "BETA",
+  },
+
+  mapmodes: {
+    title: "Mapmodes",
+    activeSuffix: "Active",
+    searchPlaceholder: "Search mapmodes...",
+    noResults: "No matching mapmodes found",
+    hintConfigure: "Click mode name to configure",
+    hintReorder: "Drag / Arrow to reorder",
+    haloThicknessLabel: "Black Halo Thickness",
+    haloThicknessUnit: "px",
+    haloDescription: "• Hollow circles with coloured outline and adjustable black halo border. Area linearly scales with value (A ∝ Value).",
+  },
+
+  sidebar: {
+    folders: {
+      image: "Image Settings",
+      palette: "Color & Visualization",
+      display: "Map Display Settings",
+    },
+    fileInputMode: "File Input Mode",
+    singleImage: "Single Image",
+    imageDifference: "Image Difference (A - B)",
+    selectRaster: "Select Raster Image (GeoPNG / PNG)",
+    selectRasterB: "Select Subtrahend Image (Image B)",
+    binning: "Binning / Downsampling",
+    colorPalette: "Color Palette (D3)",
+    invertPalette: "Invert",
+    valueColorScale: "Value Color Scale",
+    manualRange: "Manual Range",
+    basemapLayer: "Basemap Layer",
+    projection: "Map Projection",
+    cameraTilt: "3D Camera Tilt",
+    opacity: "Raster Opacity",
+    resetCamera: "Reset Camera",
+  },
+
+  analytics: {
+    title: "Raster Analytics",
+    steepness: "Steepness",
+    totalCells: "Total Cells",
+    validCells: "Valid Cells %",
+    resolution: "Resolution",
+    minValue: "Min Value",
+    maxValue: "Max Value",
+    mean: "Mean",
+    stdDev: "Std Dev",
+    median: "Median",
+  },
+
+  hud: {
+    coordinate: "Coordinates",
+    value: "Value",
+  },
+}

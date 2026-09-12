@@ -120,11 +120,16 @@ input[type="number"]::-webkit-outer-spin-button {
   margin-left: var(--cell-padding);
 }
 
-textarea {
-  font-family: var(--monospace-font-family), monospace;
+input[type="checkbox"] {
+  width: var(--body-font-size);
+  height: var(--body-font-size);
+  min-width: var(--body-font-size);
+  min-height: var(--body-font-size);
+  margin: 0;
+  vertical-align: middle;
 }
 
-textarea, code, pre, .font-mono {
+code, pre {
   font-family: var(--monospace-font-family), monospace !important;
 }
 
