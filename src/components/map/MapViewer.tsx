@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import DeckGL from '@deck.gl/react'
 import { MapView, _GlobeView as GlobeView, OrbitView, OrthographicView, COORDINATE_SYSTEM } from '@deck.gl/core'
 import { BitmapLayer, PathLayer, PolygonLayer, GeoJsonLayer, ScatterplotLayer, ColumnLayer, SolidPolygonLayer } from '@deck.gl/layers'
@@ -29,7 +29,7 @@ import {
   MapModeItem,
   MapModeId,
 } from '@/lib/geopng/types'
-import { MAP_CONFIG } from '@config'
+import { MAP_CONFIG, getPixelOffset } from '@config'
 import { ClickInfoPanel } from './ClickInfoPanel'
 import { ColorBarLegend } from './ColorBarLegend'
 import { Button } from '../ui/button'
@@ -345,7 +345,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       minRotationX: -85,
       maxRotationX: 0,
     },
-    EqualEarth: {
+    EqualEarth: MAP_CONFIG.mapDefines?.initialEqualEarth || {
       target: [0, 0, 0],
       zoom: 2.0,
       minZoom: 0.2,
@@ -375,6 +375,13 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
   const [inspectData, setInspectData] = useState<InspectionData | null>(null)
   const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null)
+  const lastCountryRef = useRef<CountryFeature | null>(null)
+  const lastHoveredCountryCodeRef = useRef<string | null | undefined>(null)
+
+  const handleContainerPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    setCursorPos({ x: e.clientX - rect.left, y: e.clientY - rect.top })
+  }, [])
 
   const [selectionId, setSelectionId] = useState(0)
   const [hoverId, setHoverId] = useState(0)
@@ -463,14 +470,9 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
       const pixelHeight = 180 / raster.height
       const pixelX = Math.floor(((lng + 180) / 360) * raster.width)
-      let effLat = lat
-      if (projection === 'Equirectangular') {
-        const offset = (MAP_CONFIG.equirectangularPixelOffset ?? -1) * pixelHeight
-        effLat = lat - offset
-      } else if (projection === 'Mercator') {
-        const offset = (MAP_CONFIG.mercatorPixelOffset ?? -1) * pixelHeight
-        effLat = lat - offset
-      }
+      const pixelOffset = getPixelOffset(projection)
+      const offset = pixelOffset * pixelHeight
+      const effLat = lat - offset
       const pixelY = Math.floor(((90 - effLat) / 180) * raster.height)
 
       const clampedX = Math.max(0, Math.min(raster.width - 1, pixelX))
@@ -481,8 +483,18 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
       let countryName: string | null = null
       if (countryFeatures.length > 0) {
-        const c = findCountryAtLngLat(lng, lat, countryFeatures)
-        if (c) countryName = c.properties.name || c.properties.name_long || null
+        const cached = lastCountryRef.current
+        if (cached && cached.bbox) {
+          const [minX, minY, maxX, maxY] = cached.bbox
+          if (lng >= minX && lng <= maxX && lat >= minY && lat <= maxY && isPointInGeometry(lng, lat, cached.geometry)) {
+            countryName = cached.properties.name || cached.properties.name_long || null
+          }
+        }
+        if (!countryName) {
+          const c = findCountryAtLngLat(lng, lat, countryFeatures)
+          lastCountryRef.current = c
+          if (c) countryName = c.properties.name || c.properties.name_long || null
+        }
       }
 
       return {
@@ -523,18 +535,25 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       if (!info.coordinate) {
         setInspectData(null)
         setCursorPos(null)
+        lastHoveredCountryCodeRef.current = null
         if (countriesMode && onHoverCountry) onHoverCountry(null)
         return
       }
       const [x, y] = info.coordinate
       const insp = sampleRasterAt(x, y)
       setInspectData(insp)
-      setCursorPos({ x: info.x, y: info.y })
+      if (info.x !== undefined && info.y !== undefined) {
+        setCursorPos({ x: info.x, y: info.y })
+      }
       if (onInspect) onInspect(insp)
 
       if (countriesMode && insp && countryFeatures.length > 0 && onHoverCountry) {
-        const country = findCountryAtLngLat(insp.lng, insp.lat, countryFeatures)
-        onHoverCountry(country)
+        const nextCode = insp.countryName
+        if (lastHoveredCountryCodeRef.current !== nextCode) {
+          lastHoveredCountryCodeRef.current = nextCode
+          const country = findCountryAtLngLat(insp.lng, insp.lat, countryFeatures)
+          onHoverCountry(country)
+        }
       }
     },
     [sampleRasterAt, onInspect, countriesMode, countryFeatures, onHoverCountry]
@@ -718,10 +737,13 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       }
     }
 
+    const pixelOffset = getPixelOffset(projection)
+    const latOffset = pixelOffset * (180 / H)
+
     for (let gr = minGR; gr < maxGR; gr++) {
       const startR = gr * step
       const endR = Math.min(H, startR + step)
-      const centerLat = 90 - ((gr + 0.5) / gridH) * 180
+      const centerLat = 90 - ((gr + 0.5) / gridH) * 180 + latOffset
       const minLat = centerLat - halfH
       const maxLat = centerLat + halfH
 
@@ -879,9 +901,12 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     // Downsample loop stride to prevent UI lockup on huge rasters
     const stride = Math.max(1, Math.floor(Math.sqrt((W * H) / 100000)))
 
+    const pixelOffset = getPixelOffset(projection)
+    const latOffset = pixelOffset * (180 / H)
+
     for (let r = 0; r < H; r += stride) {
       const rowOffset = r * W
-      const lat = 90 - ((r + 0.5) / H) * 180
+      const lat = 90 - ((r + 0.5) / H) * 180 + latOffset
 
       for (let c = 0; c < W; c += stride) {
         const v = raster.data[rowOffset + c]
@@ -1313,6 +1338,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       style={{ imageRendering: 'pixelated' }}
       onDoubleClick={handleDoubleClick}
       onContextMenu={(e) => e.preventDefault()}
+      onPointerMove={handleContainerPointerMove}
     >
       <DeckGL
         views={views}

@@ -4,19 +4,12 @@
   // Edit values directly in this file. Comments & trailing commas supported.
   // =========================================================================
 
-  // Pixel offset in Mercator projection.
-  // -1 shifts the raster SOUTH by 1 pixel height to correct the 1px too far north issue.
-  mercatorPixelOffset: -1,
-
-  // Pixel offset in Equirectangular projection.
-  // -1 shifts the raster SOUTH by 1 pixel height for exact Plate Carrée alignment.
-  equirectangularPixelOffset: -1,
-
   // Default percentile breaks for quantile scale calculation (comma-separated).
   // Can also be edited live by the user in the sidebar controls.
   defaultPercentileBreaks: "0, 1, 5, 25, 50, 75, 95, 99, 100",
 
-  // Initial camera viewports and graticule defines
+  // Camera viewport definitions, graticule settings, and projection pixel offsets.
+  // pixelOffset: -1 shifts the raster SOUTH by 1 pixel height to correct northern offset.
   mapDefines: {
     initialMercator: {
       longitude: 0,
@@ -26,6 +19,7 @@
       bearing: 0,
       maxZoom: 18,
       minZoom: 0,
+      pixelOffset: -1,
     },
     initialGlobe: {
       longitude: 0,
@@ -35,12 +29,21 @@
       bearing: 0,
       maxZoom: 18,
       minZoom: 0,
+      pixelOffset: -1,
     },
     initialEquirectangular: {
       target: [0, 0, 0],
       zoom: 2.0,
       minZoom: 0.2,
       maxZoom: 10,
+      pixelOffset: -1,
+    },
+    initialEqualEarth: {
+      target: [0, 0, 0],
+      zoom: 2.0,
+      minZoom: 0.2,
+      maxZoom: 10,
+      pixelOffset: -1,
     },
     graticule: {
       latInterval: 10,

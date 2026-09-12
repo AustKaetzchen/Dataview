@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import { InspectionData } from '@/lib/geopng/types'
 
 interface ClickInfoPanelProps {
@@ -7,6 +7,15 @@ interface ClickInfoPanelProps {
 }
 
 export const ClickInfoPanel: React.FC<ClickInfoPanelProps> = ({ info, pos }) => {
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  // Direct GPU transform update on pointer coordinate change without any CSS animation lag
+  useEffect(() => {
+    if (panelRef.current && pos) {
+      panelRef.current.style.transform = `translate3d(${pos.x + 14}px, ${pos.y - 70}px, 0)`
+    }
+  }, [pos])
+
   if (!info || !pos) return null
 
   const formattedVal =
@@ -19,11 +28,12 @@ export const ClickInfoPanel: React.FC<ClickInfoPanelProps> = ({ info, pos }) => 
 
   return (
     <div
-      className="absolute pointer-events-none z-50 rounded-none border border-border bg-popover/95 p-[var(--padding)] shadow-md font-sans text-[var(--body-font-size)] text-popover-foreground transition-all duration-75"
+      ref={panelRef}
+      className="absolute top-0 left-0 pointer-events-none z-50 rounded-none border border-border bg-popover/95 p-[var(--padding)] shadow-md font-sans text-[var(--body-font-size)] text-popover-foreground will-change-transform"
       style={{
-        left: `${pos.x + 14}px`,
-        top: `${pos.y - 70}px`,
+        transform: `translate3d(${pos.x + 14}px, ${pos.y - 70}px, 0)`,
         minWidth: '200px',
+        transition: 'none',
       }}
     >
       <div className="font-bold text-white mb-1">
@@ -50,3 +60,5 @@ export const ClickInfoPanel: React.FC<ClickInfoPanelProps> = ({ info, pos }) => 
     </div>
   )
 }
+
+export default ClickInfoPanel

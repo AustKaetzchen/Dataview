@@ -25,7 +25,7 @@ import {
   CountryStats,
   binRasterByMultipleCountries,
 } from './lib/geopng/polygonBinning'
-import { MAP_CONFIG, MAPMODES_CONFIG } from '@config'
+import { MAP_CONFIG, MAPMODES_CONFIG, getPixelOffset } from '@config'
 import { SidebarControls } from './components/controls/SidebarControls'
 import { MapViewer } from './components/map/MapViewer'
 import { AnalyticsDrawer } from './components/analytics/AnalyticsDrawer'
@@ -345,17 +345,9 @@ export const App: React.FC = () => {
 
     // Bounds with pixel offset corrections
     const pixelHeight = 180 / r.height
-    let finalBounds: [number, number, number, number] = bounds
-
-    if (projection === 'Equirectangular') {
-      const offset = (MAP_CONFIG.equirectangularPixelOffset ?? -1) * pixelHeight
-      finalBounds = [-180, -90 + offset, 180, 90 + offset]
-    } else if (projection === 'Mercator') {
-      const offset = (MAP_CONFIG.mercatorPixelOffset ?? -1) * pixelHeight
-      finalBounds = [-180, -90 + offset, 180, 90 + offset]
-    } else if (projection === 'EqualEarth') {
-      finalBounds = [-180, -90, 180, 90]
-    }
+    const pixelOffset = getPixelOffset(projection)
+    const offset = pixelOffset * pixelHeight
+    const finalBounds: [number, number, number, number] = [-180, -90 + offset, 180, 90 + offset]
 
     return { renderedCanvas: canvas, rasterBounds: finalBounds }
   }, [

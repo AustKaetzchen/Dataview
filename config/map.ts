@@ -17,6 +17,7 @@ export interface MapDefines {
     bearing: number
     maxZoom: number
     minZoom: number
+    pixelOffset?: number
   }
   initialGlobe: {
     longitude: number
@@ -26,12 +27,21 @@ export interface MapDefines {
     bearing: number
     maxZoom: number
     minZoom: number
+    pixelOffset?: number
   }
   initialEquirectangular: {
     target: [number, number, number]
     zoom: number
     minZoom: number
     maxZoom: number
+    pixelOffset?: number
+  }
+  initialEqualEarth?: {
+    target: [number, number, number]
+    zoom: number
+    minZoom: number
+    maxZoom: number
+    pixelOffset?: number
   }
   graticule: {
     latInterval: number
@@ -41,11 +51,35 @@ export interface MapDefines {
 }
 
 export interface MapConfig {
-  mercatorPixelOffset: number
-  equirectangularPixelOffset: number
+  mercatorPixelOffset?: number
+  equirectangularPixelOffset?: number
+  globePixelOffset?: number
+  equalEarthPixelOffset?: number
   defaultPercentileBreaks: string
   mapDefines: MapDefines
   basemapLayers: BasemapDefinition[]
 }
 
 export const MAP_CONFIG: MapConfig = JSON5.parse(rawMapConfig)
+
+/**
+ * Returns the configured pixel offset for a given projection mode.
+ * Defaults to -1 if unspecified.
+ */
+export function getPixelOffset(projection: string): number {
+  const defs = MAP_CONFIG.mapDefines as any
+  if (!defs) return -1
+
+  switch (projection) {
+    case 'Mercator':
+      return defs.initialMercator?.pixelOffset ?? defs.mercator?.pixelOffset ?? MAP_CONFIG.mercatorPixelOffset ?? -1
+    case 'Globe':
+      return defs.initialGlobe?.pixelOffset ?? defs.globe?.pixelOffset ?? MAP_CONFIG.globePixelOffset ?? -1
+    case 'Equirectangular':
+      return defs.initialEquirectangular?.pixelOffset ?? defs.equirectangular?.pixelOffset ?? MAP_CONFIG.equirectangularPixelOffset ?? -1
+    case 'EqualEarth':
+      return defs.initialEqualEarth?.pixelOffset ?? defs.equalEarth?.pixelOffset ?? MAP_CONFIG.equalEarthPixelOffset ?? -1
+    default:
+      return -1
+  }
+}
