@@ -69,7 +69,7 @@ export function CountryModeSettings (arg0_props: CountryModeSettingsProps) {
 
   //Return statement
   return (
-    <div className="p-[var(--padding)] border-t border-border space-y-2 bg-card/80 animate-in fade-in-0 duration-100">
+    <div className="w-full space-y-1.5 animate-in fade-in-0 duration-100">
       <div className="flex items-center justify-between pb-1 border-b border-border/60">
         <span className="text-[var(--body-font-size)] font-bold text-foreground flex items-center gap-1.5">
           <Icon name="flag" />

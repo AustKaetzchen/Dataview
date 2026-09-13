@@ -4,3 +4,5 @@ export * from './mapmodes'
 export * from './localisation'
 export * from './panes/info'
 export * from './panes/alerts'
+export * from './permissions'
+

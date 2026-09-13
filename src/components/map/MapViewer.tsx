@@ -43,6 +43,8 @@ import {
   SmoothGlobeView,
 } from './SmoothControllers'
 import { useElevationSpikes } from './useElevationSpikes'
+import { ParsedDataLayer } from '@/server/layerParser'
+import { UserRole } from '../controls/DataLayersTab'
 import { useCircleOverlay } from './useCircleOverlay'
 import { useDeckLayers } from './useDeckLayers'
 
@@ -93,6 +95,15 @@ export interface MapViewerProps {
   infoPanelOpen?: boolean
   onToggleInfoPanel?: () => void
   onCloseInfoPanel?: () => void
+  activeLayerId?: string | null
+  activeVariableSelectors?: Record<string, string>
+  dataLayers?: Record<string, ParsedDataLayer>
+  isLoadingLayers?: boolean
+  onChangeVariableSelector?: (arg0_key: string, arg1_option: string) => void
+  onSelectLayer?: (arg0_layer_id: string) => void
+  uiVisible?: boolean
+  onToggleUi?: () => void
+  userRole?: UserRole
 }
 
 /**
@@ -104,6 +115,8 @@ export interface MapViewerProps {
 export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewerProps) {
   //Convert from parameters
   let props = (arg0_props) ? arg0_props : ({} as MapViewerProps)
+  let on_toggle_ui = props.onToggleUi
+  let ui_visible = props.uiVisible !== undefined ? props.uiVisible : true
 
   //Declare local instance variables
   let analytics_open = props.analyticsOpen
@@ -594,10 +607,10 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
       />
 
       {/* Floating HUD Inspector */}
-      <ClickInfoPanel info={inspect_data} pos={cursor_pos} />
+      {ui_visible && <ClickInfoPanel info={inspect_data} pos={cursor_pos} />}
 
       {/* Top Left: Value Colourbar & Information Flyout Container */}
-      {(Boolean(rendered_canvas) || info_panel_open) &&
+      {ui_visible && (Boolean(rendered_canvas) || info_panel_open) &&
         (() => {
           let has_canvas = Boolean(rendered_canvas)
           let is_country_relative = Boolean(
@@ -744,6 +757,24 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
               <span>Reset Map View (Centre & Zoom)</span>
             </TooltipContent>
           </Tooltip>
+
+          {/* Toggle Fullscreen / UI Visibility */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={ui_visible ? 'ghost' : 'secondary'}
+                size="icon"
+                onClick={on_toggle_ui}
+                className="h-7 w-7 rounded-none text-white cursor-pointer"
+                aria-label={ui_visible ? 'Hide UI (Full Map View)' : 'Show UI'}
+              >
+                <Icon name={ui_visible ? 'visibility' : 'visibility_off'} className="text-white" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="left">
+              <span>{ui_visible ? 'Hide UI (Full Map View)' : 'Show UI'}</span>
+            </TooltipContent>
+          </Tooltip>
         </div>
 
         {/* Map Display Settings Flyout Panel */}
@@ -756,32 +787,33 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
             }}
             className="absolute z-30 bg-card/98 backdrop-blur-md border border-border rounded-none p-[var(--padding)] shadow-2xl text-[var(--body-font-size)] text-card-foreground animate-in fade-in-0 zoom-in-95 duration-100 font-sans space-y-[var(--padding)]"
           >
-            <div className="flex items-center justify-between pb-[var(--cell-padding)] border-b border-border">
-              <span className="font-bold text-foreground text-[var(--header-font-size)] flex items-center gap-2">
-                <Icon name="layers" className="text-white" />
-                Map Display Settings
+            {/* Header */}
+            <div className="flex items-center justify-between pb-1.5 border-b border-border">
+              <span className="text-[var(--body-font-size)] font-bold text-foreground flex items-center gap-1.5">
+                <Icon name="settings" />
+                <span>Map Display Settings</span>
               </span>
               <button
                 type="button"
                 onClick={() => set_flyout_open(false)}
-                className="text-muted-foreground hover:text-white cursor-pointer text-[var(--body-font-size)]"
+                className="text-muted-foreground hover:text-foreground text-[var(--body-font-size)] cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            {/* Spatial Projection Section with Equal Earth */}
+            {/* Projection Selection Section */}
             <div className="space-y-1.5">
-              <span className="text-[var(--body-font-size)] font-bold text-foreground block">Spatial Projection</span>
-              <div className="grid grid-cols-2 gap-1">
+              <span className="text-[var(--body-font-size)] font-bold text-foreground">Projection Mode</span>
+              <div className="grid grid-cols-2 gap-1 bg-background/60 p-[var(--cell-padding)] rounded-none border border-border">
                 {(['Mercator', 'Equirectangular', 'Globe', 'EqualEarth'] as ProjectionType[]).map((p) => (
                   <button
                     key={p}
                     type="button"
                     onClick={() => set_projection(p)}
-                    className={`px-2 py-1 text-[var(--body-font-size)] rounded-none border transition-colors cursor-pointer text-center truncate ${(projection === p)
-                      ? 'bg-primary text-primary-foreground border-primary font-bold shadow-sm'
-                      : 'bg-background hover:bg-muted text-muted-foreground hover:text-foreground border-border font-light'
+                    className={`px-2 py-1 rounded-none text-[var(--body-font-size)] transition-colors cursor-pointer text-center ${(projection === p)
+                      ? 'bg-primary text-primary-foreground font-bold shadow-xs'
+                      : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground font-light'
                       }`}
                   >
                     {(p === 'Equirectangular') ? 'Equirect.' : (p === 'EqualEarth') ? 'Equal Earth' : p}
@@ -818,23 +850,32 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
       </TooltipProvider>
 
       {/* Bottom Right Tray: Unified Mapmodes with Inline Settings */}
-      <MapmodesTray
-        mapModes={map_modes}
-        onToggleMapMode={on_toggle_map_mode}
-        onReorderMapModes={on_reorder_map_modes}
-        countriesMode={Boolean(countries_mode)}
-        onToggleCountriesMode={on_toggle_countries_mode}
-        selectedCountries={selected_countries || []}
-        onToggleCountry={on_toggle_country || (() => { })}
-        onClearCountries={on_clear_countries || (() => { })}
-        countryStats={country_stats}
-        isCalculatingStats={is_calculating_stats}
-        heightmapConfig={heightmap_config}
-        setHeightmapConfig={set_heightmap_config || (() => { })}
-        circleOverlayConfig={circle_overlay_config}
-        setCircleOverlayConfig={set_circle_overlay_config || (() => { })}
-        allCountries={country_features}
-      />
+      {ui_visible && (
+        <MapmodesTray
+          activeLayerId={props.activeLayerId}
+          activeVariableSelectors={props.activeVariableSelectors}
+          allCountries={country_features}
+          circleOverlayConfig={circle_overlay_config}
+          countriesMode={Boolean(countries_mode)}
+          countryStats={country_stats}
+          heightmapConfig={heightmap_config}
+          isCalculatingStats={is_calculating_stats}
+          isLoadingLayers={props.isLoadingLayers}
+          layers={props.dataLayers}
+          mapModes={map_modes}
+          onChangeVariableSelector={props.onChangeVariableSelector}
+          onClearCountries={on_clear_countries || (() => { })}
+          onReorderMapModes={on_reorder_map_modes}
+          onSelectLayer={props.onSelectLayer}
+          onToggleCountriesMode={on_toggle_countries_mode}
+          onToggleCountry={on_toggle_country || (() => { })}
+          onToggleMapMode={on_toggle_map_mode}
+          selectedCountries={selected_countries || []}
+          setCircleOverlayConfig={set_circle_overlay_config || (() => { })}
+          setHeightmapConfig={set_heightmap_config || (() => { })}
+          userRole={props.userRole}
+        />
+      )}
     </div>
   )
 }

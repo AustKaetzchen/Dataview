@@ -1,53 +1,62 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react'
 import {
   MapModeItem,
   MapModeId,
   HeightmapConfig,
   CircleOverlayConfig,
-} from '@/lib/geopng/types';
-import { CountryFeature, CountryStats } from '@/lib/geopng/polygonBinning';
-import { Icon } from '@/components/ui/icon';
-import { TooltipProvider } from '@/components/ui/tooltip';
-import { LOCALISATION_CONFIG } from '@config';
-import { CountryModeSettings } from './mapmodes/CountryModeSettings';
+} from '@/lib/geopng/types'
+import { CountryFeature, CountryStats } from '@/lib/geopng/polygonBinning'
+import { Icon } from '@/components/ui/icon'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { LOCALISATION_CONFIG, UserRole } from '@config'
+import { CountryModeSettings } from './mapmodes/CountryModeSettings'
 import {
   SpikeMapSettings,
   SPIKE_RESOLUTION_OPTIONS,
   formatSpikeResolution,
   strengthToSliderPos,
   sliderPosToStrength,
-} from './mapmodes/SpikeMapSettings';
-import { CircleOverlaySettings } from './mapmodes/CircleOverlaySettings';
+} from './mapmodes/SpikeMapSettings'
+import { CircleOverlaySettings } from './mapmodes/CircleOverlaySettings'
+import { ParsedDataLayer } from '@/server/layerParser'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select'
 
 export {
   SPIKE_RESOLUTION_OPTIONS,
   formatSpikeResolution,
   strengthToSliderPos,
   sliderPosToStrength,
-};
+}
 
 export interface MapmodesTrayProps {
-  allCountries: CountryFeature[];
-  cameraTilt?: number;
-  circleOverlayConfig: CircleOverlayConfig;
-  countriesMode: boolean;
-  countryStats?: CountryStats | null;
-  heightmapConfig: HeightmapConfig;
-  isCalculatingStats?: boolean;
-  mapModes: MapModeItem[];
-  onClearCountries: () => void;
-  onReorderMapModes: (newModes: MapModeItem[]) => void;
-  onSetCameraTilt?: (tilt: number) => void;
-  onToggleCountriesMode?: (enabled: boolean) => void;
-  onToggleCountry: (country: CountryFeature) => void;
-  onToggleMapMode: (id: MapModeId) => void;
-  selectedCountries: CountryFeature[];
-  setCircleOverlayConfig: React.Dispatch<React.SetStateAction<CircleOverlayConfig>>;
-  setHeightmapConfig: React.Dispatch<React.SetStateAction<HeightmapConfig>>;
+  activeLayerId?: string | null
+  activeVariableSelectors?: Record<string, string>
+  allCountries: CountryFeature[]
+  cameraTilt?: number
+  circleOverlayConfig: CircleOverlayConfig
+  countriesMode: boolean
+  countryStats?: CountryStats | null
+  heightmapConfig: HeightmapConfig
+  isCalculatingStats?: boolean
+  isLoadingLayers?: boolean
+  layers?: Record<string, ParsedDataLayer>
+  mapModes: MapModeItem[]
+  onChangeVariableSelector?: (arg0_key: string, arg1_option: string) => void
+  onClearCountries: () => void
+  onReorderMapModes: (newModes: MapModeItem[]) => void
+  onSelectLayer?: (arg0_layer_id: string) => void
+  onSetCameraTilt?: (tilt: number) => void
+  onToggleCountriesMode?: (enabled: boolean) => void
+  onToggleCountry: (country: CountryFeature) => void
+  onToggleMapMode: (id: MapModeId) => void
+  selectedCountries: CountryFeature[]
+  setCircleOverlayConfig: React.Dispatch<React.SetStateAction<CircleOverlayConfig>>
+  setHeightmapConfig: React.Dispatch<React.SetStateAction<HeightmapConfig>>
+  userRole?: UserRole
 }
 
 /**
- * MapmodesTray interactive UI tray for configuring layer stacks and mapmodes.
+ * MapmodesTray interactive UI tray structured as a nested tree of mapmodes and overlays with a searchbar.
  *
  * @param {MapmodesTrayProps} arg0_props
  *
@@ -55,8 +64,10 @@ export interface MapmodesTrayProps {
  */
 export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
   //Convert from parameters
-  let props = arg0_props;
+  let props = arg0_props
   let {
+    activeLayerId: active_layer_id = null,
+    activeVariableSelectors: active_variable_selectors = {},
     allCountries: all_countries,
     cameraTilt: camera_tilt,
     circleOverlayConfig: circle_overlay_config,
@@ -64,9 +75,13 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
     countryStats: country_stats,
     heightmapConfig: heightmap_config,
     isCalculatingStats: is_calculating_stats,
+    isLoadingLayers: is_loading_layers = false,
+    layers = {},
     mapModes: map_modes,
+    onChangeVariableSelector: on_change_variable_selector,
     onClearCountries: on_clear_countries,
     onReorderMapModes: on_reorder_map_modes,
+    onSelectLayer: on_select_layer,
     onSetCameraTilt: on_set_camera_tilt,
     onToggleCountriesMode: on_toggle_countries_mode,
     onToggleCountry: on_toggle_country,
@@ -74,221 +89,409 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
     selectedCountries: selected_countries,
     setCircleOverlayConfig: set_circle_overlay_config,
     setHeightmapConfig: set_heightmap_config,
-  } = props;
+    userRole: user_role = 'developer',
+  } = props
 
   //Declare local instance variables
-  let expanded_mode: MapModeId | null;
-  let filtered_map_modes: MapModeItem[];
-  let mapmode_search: string;
-  let set_expanded_mode: React.Dispatch<React.SetStateAction<MapModeId | null>>;
-  let set_mapmode_search: React.Dispatch<React.SetStateAction<string>>;
-  let toggle_expand: (arg0_id: MapModeId) => void;
+  let all_layer_entries: ParsedDataLayer[]
+  let expanded_nodes: Record<string, boolean>
+  let filtered_layers: ParsedDataLayer[]
+  let filtered_overlays: MapModeItem[]
+  let is_layer_accessible: (arg0_layer: ParsedDataLayer) => boolean
+  let is_tray_collapsed: boolean
+  let render_data_layer_node: (arg0_layer: ParsedDataLayer, arg1_depth?: number) => React.ReactNode
+  let render_variable_selectors: (arg0_layer: ParsedDataLayer) => React.ReactNode
+  let search_query: string
+  let set_expanded_nodes: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
+  let set_is_tray_collapsed: React.Dispatch<React.SetStateAction<boolean>>
+  let set_search_query: React.Dispatch<React.SetStateAction<string>>
+  let toggle_node: (arg0_id: string) => void
 
   //Function body
-  ;[expanded_mode, set_expanded_mode] = useState<MapModeId | null>(null);
-  ;[mapmode_search, set_mapmode_search] = useState('');
+  ;[is_tray_collapsed, set_is_tray_collapsed] = useState<boolean>(false)
+  ;[search_query, set_search_query] = useState<string>('')
+  ;[expanded_nodes, set_expanded_nodes] = useState<Record<string, boolean>>({
+    data_layers: true,
+    overlays: true,
+  })
 
-  toggle_expand = function (arg0_id: MapModeId) {
-    let id = arg0_id;
-    set_expanded_mode((arg0_prev) => (arg0_prev === id ? null : id));
-  };
+  toggle_node = function (arg0_id: string) {
+    let id = arg0_id
+    set_expanded_nodes((arg0_prev) => ({
+      ...arg0_prev,
+      [id]: !arg0_prev[id],
+    }))
+  }
 
-  //Filter mapmodes based on search
-  filtered_map_modes = useMemo(() => {
-    let q = mapmode_search.toLowerCase().trim();
+  is_layer_accessible = useCallback(
+    function (arg0_layer: ParsedDataLayer) {
+      let layer = arg0_layer
+      if (user_role === 'developer')
+        return true
+      if (user_role === 'privileged')
+        return !layer.permissions?.includes('developer')
+      return layer.permissions?.includes('default') || !layer.permissions || layer.permissions.length === 0
+    },
+    [user_role]
+  )
+
+  all_layer_entries = useMemo(() => {
+    return Object.values(layers)
+  }, [layers])
+
+  //Filter layers by search
+  filtered_layers = useMemo(() => {
+    let q = search_query.toLowerCase().trim()
     if (!q)
-      return map_modes;
-    return map_modes.filter((arg0_mode) => arg0_mode.label.toLowerCase().includes(q));
-  }, [map_modes, mapmode_search]);
+      return all_layer_entries
+
+    return all_layer_entries.filter((arg0_layer) => {
+      let matches_name = arg0_layer.name.toLowerCase().includes(q)
+      let matches_id = arg0_layer.id.toLowerCase().includes(q)
+      let matches_sub = arg0_layer.sub_layers?.some(
+        (arg0_sub) => arg0_sub.name.toLowerCase().includes(q) || arg0_sub.id.toLowerCase().includes(q)
+      )
+      return matches_name || matches_id || matches_sub
+    })
+  }, [all_layer_entries, search_query])
+
+  //Filter overlays by search
+  filtered_overlays = useMemo(() => {
+    let q = search_query.toLowerCase().trim()
+    let list = map_modes.filter((arg0_m) => arg0_m.id !== 'default')
+    if (!q)
+      return list
+    return list.filter((arg0_m) => arg0_m.label.toLowerCase().includes(q))
+  }, [map_modes, search_query])
+
+  //Render variable selector dropdowns directly within the active layer node
+  render_variable_selectors = function (arg0_layer: ParsedDataLayer) {
+    let layer = arg0_layer
+    if (!layer.variable_selectors || Object.keys(layer.variable_selectors).length === 0)
+      return null
+
+    let selector_keys = Object.keys(layer.variable_selectors)
+
+    return (
+      <div className="mt-1 p-1.5 border-t border-border/60 bg-muted/20 space-y-1.5 text-[11px]">
+        {selector_keys.map((arg0_key) => {
+          let sel = layer.variable_selectors![arg0_key]
+          let opts = Object.entries(sel.options)
+          let current_val = active_variable_selectors[arg0_key] || opts[0]?.[0] || ''
+
+          return (
+            <div key={arg0_key} className="space-y-1">
+              <span className="text-muted-foreground uppercase font-bold text-[10px] tracking-wider block">
+                {sel.name || arg0_key}
+              </span>
+              <Select
+                value={current_val}
+                onValueChange={(arg0_v) => on_change_variable_selector && on_change_variable_selector(arg0_key, arg0_v)}
+              >
+                <SelectTrigger className="h-6 rounded-none text-[11px] bg-card border-border">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="rounded-none">
+                  {opts.map(([arg0_opt_key, arg0_opt]) => (
+                    <SelectItem key={arg0_opt_key} value={arg0_opt_key} className="rounded-none text-[11px]">
+                      {arg0_opt.name || arg0_opt_key}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  //Recursive or leaf renderer for data layers in tree
+  render_data_layer_node = function (arg0_layer: ParsedDataLayer, arg1_depth?: number) {
+    let depth = arg1_depth || 0
+    let layer = arg0_layer
+    let is_active = active_layer_id === layer.id
+    let is_accessible = is_layer_accessible(layer)
+    let has_sub_layers = Boolean(layer.sub_layers && layer.sub_layers.length > 0)
+    let is_node_expanded = expanded_nodes[layer.id] ?? true
+
+    return (
+      <div key={layer.id} className="space-y-1" style={{ paddingLeft: `${depth*12}px` }}>
+        {has_sub_layers ? (
+          <div>
+            <div
+              onClick={() => toggle_node(layer.id)}
+              className="flex items-center justify-between px-2 py-1 bg-muted/30 hover:bg-muted/60 cursor-pointer border border-border/60 transition-colors"
+            >
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Icon name="folder" className="text-primary text-xs shrink-0" />
+                <span className="text-xs font-bold text-foreground truncate">{layer.name}</span>
+              </div>
+              <Icon
+                name={is_node_expanded ? 'expand_less' : 'expand_more'}
+                className="text-xs text-muted-foreground shrink-0"
+              />
+            </div>
+
+            {is_node_expanded && (
+              <div className="mt-1 space-y-1 border-l-2 border-border/40 pl-1.5 ml-2">
+                {/* Parent layer entry itself */}
+                <button
+                  type="button"
+                  disabled={!is_accessible}
+                  onClick={() => on_select_layer && on_select_layer(layer.id)}
+                  className={`w-full flex items-center justify-between px-2 py-1 text-left cursor-pointer border transition-colors ${
+                    is_active
+                      ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
+                      : 'hover:bg-muted/40 text-foreground border-transparent'
+                  } ${!is_accessible ? 'opacity-40 cursor-not-allowed' : ''}`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`w-3 h-3 rounded-full border flex items-center justify-center shrink-0 ${
+                      is_active ? 'border-primary bg-primary' : 'border-muted-foreground/60'
+                    }`}>
+                      {is_active && <span className="w-1 h-1 rounded-full bg-primary-foreground" />}
+                    </span>
+                    <span className="text-xs truncate">{layer.name} (Total)</span>
+                  </div>
+                  {layer.unit && (
+                    <span className="text-[10px] text-muted-foreground shrink-0 ml-1">{layer.unit}</span>
+                  )}
+                </button>
+
+                {is_active && render_variable_selectors(layer)}
+
+                {/* Child sub-layers */}
+                {layer.sub_layers!.map((arg0_sub) => render_data_layer_node(arg0_sub, depth + 1))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div>
+            <button
+              type="button"
+              disabled={!is_accessible}
+              onClick={() => on_select_layer && on_select_layer(layer.id)}
+              className={`w-full flex items-center justify-between px-2 py-1 text-left cursor-pointer border transition-colors ${
+                is_active
+                  ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
+                  : 'hover:bg-muted/40 text-foreground border-transparent'
+              } ${!is_accessible ? 'opacity-40 cursor-not-allowed' : ''}`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={`w-3 h-3 rounded-full border flex items-center justify-center shrink-0 ${
+                  is_active ? 'border-primary bg-primary' : 'border-muted-foreground/60'
+                }`}>
+                  {is_active && <span className="w-1 h-1 rounded-full bg-primary-foreground" />}
+                </span>
+                <span className="text-xs truncate">{layer.name}</span>
+              </div>
+              {layer.unit && (
+                <span className="text-[10px] text-muted-foreground shrink-0 ml-1">{layer.unit}</span>
+              )}
+            </button>
+
+            {is_active && render_variable_selectors(layer)}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   //Return statement
   return (
     <TooltipProvider delayDuration={150}>
-      <div className="absolute bottom-[var(--padding)] right-[var(--padding)] z-20 w-80 max-h-[calc(100vh-140px)] flex flex-col bg-card/98 backdrop-blur-md border border-border shadow-2xl p-[var(--padding)] space-y-[var(--padding)] text-[var(--body-font-size)] select-none font-sans overflow-hidden">
+      <div className="absolute bottom-3 right-3 z-20 w-80 max-h-[calc(100vh-140px)] flex flex-col bg-card/95 backdrop-blur-md border border-border shadow-2xl p-2.5 space-y-2 text-[var(--body-font-size)] select-none font-sans overflow-hidden transition-all">
         {/* Tray Header */}
-        <div className="flex items-center justify-between border-b border-border pb-[var(--cell-padding)] shrink-0">
-          <span className="font-bold text-foreground text-[var(--header-font-size)] flex items-center gap-2">
-            <Icon name="layers" />
-            <span>{LOCALISATION_CONFIG.mapmodes.title}</span>
-          </span>
-          <span className="text-[var(--body-font-size)] px-2 py-0.5 bg-muted text-muted-foreground border border-border font-medium">
-            {map_modes.filter((arg0_mode) => arg0_mode.active).length} {LOCALISATION_CONFIG.mapmodes.activeSuffix}
-          </span>
-        </div>
-
-        {/* Mapmodes Searchbar */}
-        <div className="relative shrink-0">
-          <Icon
-            name="search"
-            className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
-          />
-          <input
-            type="text"
-            value={mapmode_search}
-            onChange={(arg0_e) => set_mapmode_search(arg0_e.target.value)}
-            placeholder={LOCALISATION_CONFIG.mapmodes.searchPlaceholder}
-            className="w-full pl-7 pr-7 py-1 text-[var(--body-font-size)] bg-background/70 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary rounded-none"
-          />
-          {mapmode_search && (
+        <div className="flex items-center justify-between border-b border-border pb-1.5 shrink-0">
+          <div className="flex items-center gap-2">
+            <Icon name="layers" className="text-primary text-sm" />
+            <span className="font-bold text-foreground text-xs uppercase tracking-wider">
+              {LOCALISATION_CONFIG.mapmodes.title}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] px-1.5 py-0.5 bg-primary/20 text-primary border border-primary/40 font-mono font-medium">
+              {filtered_layers.length} Layers
+            </span>
             <button
               type="button"
-              onClick={() => set_mapmode_search('')}
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[var(--body-font-size)] text-muted-foreground hover:text-foreground cursor-pointer px-1"
+              onClick={() => set_is_tray_collapsed((arg0_prev) => !arg0_prev)}
+              className="p-1 text-muted-foreground hover:text-foreground cursor-pointer"
+              title={is_tray_collapsed ? 'Expand Mapmodes Tray' : 'Collapse Mapmodes Tray'}
             >
-              ✕
+              <Icon name={is_tray_collapsed ? 'expand_less' : 'expand_more'} className="text-sm" />
             </button>
-          )}
+          </div>
         </div>
 
-        {/* Composable Mode Items Stack */}
-        <div className="space-y-1 overflow-y-auto max-h-[50vh] pr-0.5">
-          {filtered_map_modes.length === 0 && (
-            <p className="text-[var(--body-font-size)] text-muted-foreground italic py-2 text-center">
-              {LOCALISATION_CONFIG.mapmodes.noResults}
-            </p>
-          )}
-          {filtered_map_modes.map((arg0_mode) => {
-            let mode = arg0_mode;
-            let has_settings = mode.id !== 'default';
-            let index = map_modes.findIndex((arg0_m) => arg0_m.id === mode.id);
-            let is_expanded = expanded_mode === mode.id;
-
-            return (
-              <div key={mode.id} className="border border-border/80 bg-background/50">
-                {/* Row Header */}
-                <div
-                  className={`flex items-center justify-between px-[var(--padding)] py-1.5 transition-colors ${
-                    mode.active
-                      ? 'bg-muted/60 text-foreground'
-                      : 'bg-background/40 text-muted-foreground'
-                  }`}
+        {!is_tray_collapsed && (
+          <div className="flex-1 flex flex-col min-h-0 space-y-2">
+            {/* Unified Searchbar */}
+            <div className="relative shrink-0">
+              <Icon
+                name="search"
+                className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none"
+              />
+              <input
+                type="text"
+                placeholder="Search mapmodes & layers..."
+                value={search_query}
+                onChange={(arg0_e) => set_search_query(arg0_e.target.value)}
+                className="w-full h-7 pl-7 pr-6 bg-background border border-input rounded-none text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+              {search_query && (
+                <button
+                  type="button"
+                  onClick={() => set_search_query('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
                 >
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <input
-                      type="checkbox"
-                      checked={mode.active}
-                      onChange={() => on_toggle_map_mode(mode.id)}
-                      className="w-[var(--body-font-size)] h-[var(--body-font-size)] rounded-none accent-emerald-500 cursor-pointer shrink-0"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (has_settings)
-                          toggle_expand(mode.id);
-                      }}
-                      className="truncate text-[var(--body-font-size)] text-left cursor-pointer flex-1 flex items-center gap-1.5 hover:text-foreground"
-                    >
-                      <span className={mode.active ? 'font-bold text-foreground' : 'font-light'}>
-                        {mode.label}
-                      </span>
-                      {mode.id === 'country_analysis' && selected_countries.length > 0 && (
-                        <span className="text-[var(--body-font-size)] px-1.5 py-0.2 bg-muted text-muted-foreground border border-border font-medium shrink-0">
-                          {selected_countries.length}
-                        </span>
-                      )}
-                      {mode.id === 'spike_map' && mode.active && (
-                        <span className="text-[var(--body-font-size)] px-1.5 py-0.2 bg-muted text-muted-foreground border border-border font-medium shrink-0">
-                          {heightmap_config.opacityByPercentile ? '3D • %' : '3D'}
-                        </span>
-                      )}
-                      {mode.id === 'circle_sizing' && mode.active && (
-                        <span className="text-[var(--body-font-size)] px-1.5 py-0.2 bg-muted text-muted-foreground border border-border font-medium shrink-0">
-                          P{circle_overlay_config.percentileCutoff}
-                        </span>
-                      )}
-                    </button>
-                  </div>
+                  <Icon name="close" className="text-xs" />
+                </button>
+              )}
+            </div>
 
-                  <div className="flex items-center gap-1 shrink-0 ml-1">
-                    {has_settings && (
-                      <button
-                        type="button"
-                        onClick={() => toggle_expand(mode.id)}
-                        className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
-                        title="Toggle Settings"
-                      >
-                        <Icon name={is_expanded ? 'expand_less' : 'tune'} />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      disabled={index === 0}
-                      onClick={() => {
-                        if (index > 0) {
-                          let temp = map_modes[index];
-                          let updated = [...map_modes];
-                          updated[index] = updated[index - 1];
-                          updated[index - 1] = temp;
-                          on_reorder_map_modes(updated);
-                        }
-                      }}
-                      className="w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
-                      title="Move up"
-                    >
-                      <Icon name="arrow_upward" />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={index === map_modes.length - 1}
-                      onClick={() => {
-                        if (index < map_modes.length - 1) {
-                          let temp = map_modes[index];
-                          let updated = [...map_modes];
-                          updated[index] = updated[index + 1];
-                          updated[index + 1] = temp;
-                          on_reorder_map_modes(updated);
-                        }
-                      }}
-                      className="w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
-                      title="Move down"
-                    >
-                      <Icon name="arrow_downward" />
-                    </button>
+            {/* Nested Tree List */}
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+              {/* Branch 1: Data Layers (Base Mapmodes) */}
+              <div className="border border-border/80 bg-card/40">
+                <div
+                  onClick={() => toggle_node('data_layers')}
+                  className="flex items-center justify-between p-1.5 bg-muted/40 hover:bg-muted/70 cursor-pointer transition-colors"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Icon name="folder_open" className="text-primary text-xs" />
+                    <span className="font-bold text-xs text-foreground uppercase tracking-wide">
+                      Data Layers
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-muted-foreground font-mono">
+                      {filtered_layers.length}
+                    </span>
+                    <Icon
+                      name={expanded_nodes.data_layers ? 'expand_less' : 'expand_more'}
+                      className="text-xs text-muted-foreground"
+                    />
                   </div>
                 </div>
 
-                {/* Subpanel settings */}
-                {is_expanded && mode.id === 'country_analysis' && (
-                  <CountryModeSettings
-                    allCountries={all_countries}
-                    countriesMode={countries_mode}
-                    countryStats={country_stats}
-                    isCalculatingStats={is_calculating_stats}
-                    onClearCountries={on_clear_countries}
-                    onToggleCountriesMode={on_toggle_countries_mode}
-                    onToggleCountry={on_toggle_country}
-                    selectedCountries={selected_countries}
-                  />
-                )}
-
-                {is_expanded && mode.id === 'spike_map' && (
-                  <SpikeMapSettings
-                    cameraTilt={camera_tilt}
-                    heightmapConfig={heightmap_config}
-                    onSetCameraTilt={on_set_camera_tilt}
-                    setHeightmapConfig={set_heightmap_config}
-                  />
-                )}
-
-                {is_expanded && mode.id === 'circle_sizing' && (
-                  <CircleOverlaySettings
-                    circleOverlayConfig={circle_overlay_config}
-                    setCircleOverlayConfig={set_circle_overlay_config}
-                  />
+                {expanded_nodes.data_layers && (
+                  <div className="p-1 space-y-1">
+                    {is_loading_layers && (
+                      <div className="p-2 text-center text-xs text-muted-foreground animate-pulse">
+                        Loading raster layers...
+                      </div>
+                    )}
+                    {filtered_layers.length === 0 && !is_loading_layers && (
+                      <div className="p-2 text-center text-xs text-muted-foreground">
+                        No matching layers found.
+                      </div>
+                    )}
+                    {filtered_layers.map((arg0_layer) => render_data_layer_node(arg0_layer))}
+                  </div>
                 )}
               </div>
-            );
-          })}
-        </div>
 
-        {/* Tray Footer */}
-        <div className="pt-[var(--cell-padding)] border-t border-border/80 text-[var(--body-font-size)] text-muted-foreground flex flex-col gap-0.5 shrink-0">
-          <span>{LOCALISATION_CONFIG.mapmodes.hintConfigure}</span>
-          <span>{LOCALISATION_CONFIG.mapmodes.hintReorder}</span>
-        </div>
+              {/* Branch 2: Analytical Overlays */}
+              <div className="border border-border/80 bg-card/40">
+                <div
+                  onClick={() => toggle_node('overlays')}
+                  className="flex items-center justify-between p-1.5 bg-muted/40 hover:bg-muted/70 cursor-pointer transition-colors"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Icon name="folder_open" className="text-primary text-xs" />
+                    <span className="font-bold text-xs text-foreground uppercase tracking-wide">
+                      Analytical Overlays
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-muted-foreground font-mono">
+                      {filtered_overlays.length}
+                    </span>
+                    <Icon
+                      name={expanded_nodes.overlays ? 'expand_less' : 'expand_more'}
+                      className="text-xs text-muted-foreground"
+                    />
+                  </div>
+                </div>
+
+                {expanded_nodes.overlays && (
+                  <div className="p-1 space-y-1.5">
+                    {filtered_overlays.map((arg0_mode) => {
+                      let is_active = arg0_mode.active
+
+                      return (
+                        <div key={arg0_mode.id} className="space-y-1">
+                          <button
+                            type="button"
+                            onClick={() => on_toggle_map_mode(arg0_mode.id)}
+                            className={`w-full flex items-center justify-between px-2 py-1 text-left cursor-pointer border transition-colors ${
+                              is_active
+                                ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
+                                : 'hover:bg-muted/40 text-foreground border-transparent'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className={`w-3.5 h-3.5 rounded-none border flex items-center justify-center shrink-0 ${
+                                is_active ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/60'
+                              }`}>
+                                {is_active && <Icon name="check" className="text-[10px]" />}
+                              </span>
+                              <span className="text-xs truncate">{arg0_mode.label}</span>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground uppercase font-mono">
+                              {is_active ? 'ON' : 'OFF'}
+                            </span>
+                          </button>
+
+                          {/* Nested Overlay Settings */}
+                          {is_active && arg0_mode.id === 'country_analysis' && (
+                            <div className="mt-0.5 p-1 border-t border-border/60 bg-card/40 space-y-1 text-xs">
+                              <CountryModeSettings
+                                allCountries={all_countries}
+                                countriesMode={countries_mode}
+                                countryStats={country_stats}
+                                isCalculatingStats={is_calculating_stats}
+                                onClearCountries={on_clear_countries}
+                                onToggleCountriesMode={on_toggle_countries_mode}
+                                onToggleCountry={on_toggle_country}
+                                selectedCountries={selected_countries}
+                              />
+                            </div>
+                          )}
+
+                          {is_active && arg0_mode.id === 'spike_map' && (
+                            <div className="mt-0.5 p-1 border-t border-border/60 bg-card/40 space-y-1 text-xs">
+                              <SpikeMapSettings
+                                cameraTilt={camera_tilt}
+                                heightmapConfig={heightmap_config}
+                                onSetCameraTilt={on_set_camera_tilt}
+                                setHeightmapConfig={set_heightmap_config}
+                              />
+                            </div>
+                          )}
+
+                          {is_active && arg0_mode.id === 'circle_sizing' && (
+                            <div className="mt-0.5 p-1 border-t border-border/60 bg-card/40 space-y-1 text-xs">
+                              <CircleOverlaySettings
+                                circleOverlayConfig={circle_overlay_config}
+                                setCircleOverlayConfig={set_circle_overlay_config}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </TooltipProvider>
-  );
-};
+  )
+}
 
-export default MapmodesTray;
+export default MapmodesTray
