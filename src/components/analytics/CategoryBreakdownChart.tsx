@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { DecodedRaster } from '@/lib/geopng/types'
-import { CountryStats } from '@/lib/geopng/polygonBinning'
+import { CountryFeature, CountryStats } from '@/lib/geopng/polygonBinning'
 import { Icon } from '@/components/ui/icon'
 
 export interface CategoryBreakdownChartProps {
@@ -18,6 +18,8 @@ export interface CategoryBreakdownChartProps {
   } | null
   layerId?: string
   raster: DecodedRaster | null
+  selectedCountries?: CountryFeature[]
+  selectedCountry?: CountryFeature | null
 }
 
 export interface SectorItem {
@@ -35,7 +37,8 @@ export const PROFESSION_SECTORS: SectorItem[] = [
 ]
 
 /**
- * CategoryBreakdownChart renders split-up bar charts comparing employment across sectors.
+ * CategoryBreakdownChart renders a split bar share per country when countries are selected,
+ * and a single split bar of the global total when no countries are selected.
  *
  * @param {CategoryBreakdownChartProps} arg0_props
  *
@@ -51,30 +54,56 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
     inspectData: inspect_data,
     layerId: layer_id = 'professions_percentage',
     raster,
+    selectedCountries: selected_countries = [],
+    selectedCountry: selected_country = null,
   } = props
 
   //Declare local instance variables
+  let by_country_data: Record<string, Record<string, number>>
   let container_ref = useRef<HTMLDivElement>(null)
   let echart_ref = useRef<any>(null)
+  let effective_countries: CountryFeature[]
+  let global_sector_data: Record<string, number>
+  let has_countries: boolean
   let is_loading: boolean
   let is_percentage_mode = !layer_id.includes('total')
   let option: any
-  let sector_data: Record<string, number> | null
+  let set_by_country_data: React.Dispatch<React.SetStateAction<Record<string, Record<string, number>>>>
+  let set_global_sector_data: React.Dispatch<React.SetStateAction<Record<string, number>>>
   let set_is_loading: React.Dispatch<React.SetStateAction<boolean>>
-  let set_sector_data: React.Dispatch<React.SetStateAction<Record<string, number> | null>>
-  let total_sum: number
 
   //Function body
-  ;[sector_data, set_sector_data] = useState<Record<string, number> | null>(null)
+  effective_countries = useMemo(() => {
+    if (selected_countries && selected_countries.length > 0)
+      return selected_countries
+    if (selected_country)
+      return [selected_country]
+    return []
+  }, [selected_countries, selected_country])
+
+  has_countries = effective_countries.length > 0
+
+  ;[global_sector_data, set_global_sector_data] = useState<Record<string, number>>({
+    agriculture: 22.0,
+    informal_labour: 12.5,
+    manufacturing: 32.5,
+    not_in_work: 7.0,
+    services: 26.0,
+  })
+  ;[by_country_data, set_by_country_data] = useState<Record<string, Record<string, number>>>({})
   ;[is_loading, set_is_loading] = useState<boolean>(false)
 
-  //Fetch real breakdown from backend API if available, or compute dynamic sectoral models
+  //Fetch breakdown from backend API for requested countries or global view
   useEffect(() => {
     let cancelled = false
     set_is_loading(true)
 
+    let country_names = effective_countries.map((arg0_c) => arg0_c.properties.name).filter(Boolean)
     let url = `/api/raster/breakdown?layer=${layer_id}&year=${Math.round(current_year)}`
-    if (inspect_data && Number.isFinite(inspect_data.pixelX) && Number.isFinite(inspect_data.pixelY)) {
+
+    if (country_names.length > 0) {
+      url += `&countries=${encodeURIComponent(country_names.join(','))}`
+    } else if (inspect_data && Number.isFinite(inspect_data.pixelX) && Number.isFinite(inspect_data.pixelY)) {
       url += `&x=${inspect_data.pixelX}&y=${inspect_data.pixelY}`
     }
 
@@ -87,52 +116,14 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
       .then((arg0_json) => {
         if (cancelled)
           return
-        if (arg0_json && arg0_json.sectors) {
-          set_sector_data(arg0_json.sectors)
-        } else {
-          //Model sectoral transition based on historical year and current raster scale
-          let base_scale = (inspect_data?.value && Number.isFinite(inspect_data.value))
-            ? inspect_data.value
-            : (country_stats?.mean ?? raster?.mean ?? 25)
+        if (arg0_json) {
+          if (arg0_json.global)
+            set_global_sector_data(arg0_json.global)
+          else if (arg0_json.sectors)
+            set_global_sector_data(arg0_json.sectors)
 
-          let map: Record<string, number> = {}
-
-          if (is_percentage_mode) {
-            //Macroeconomic structural transformation model:
-            //Pre-industrial (<=1800): Agriculture ~70%, Manufacturing ~10%, Services ~10%, Informal ~5%, Not in Work ~5%
-            //Industrial (1800-1950): Manufacturing peaks ~35%, Agriculture falls to ~20%, Services ~30%
-            //Post-industrial (>=1950): Services dominate ~55-70%, Agriculture ~3-10%, Manufacturing ~15-20%
-            if (current_year <= 1800) {
-              map.agriculture = 68.5
-              map.informal_labour = 8.2
-              map.manufacturing = 9.4
-              map.services = 8.9
-              map.not_in_work = 5.0
-            } else if (current_year <= 1950) {
-              let t = (current_year - 1800)/150
-              map.agriculture = 68.5*(1 - t) + 22.0*t
-              map.informal_labour = 8.2*(1 - t) + 12.5*t
-              map.manufacturing = 9.4*(1 - t) + 32.5*t
-              map.services = 8.9*(1 - t) + 26.0*t
-              map.not_in_work = 5.0*(1 - t) + 7.0*t
-            } else {
-              let t = Math.min(1, (current_year - 1950)/75)
-              map.agriculture = 22.0*(1 - t) + 4.5*t
-              map.informal_labour = 12.5*(1 - t) + 9.5*t
-              map.manufacturing = 32.5*(1 - t) + 18.0*t
-              map.services = 26.0*(1 - t) + 61.5*t
-              map.not_in_work = 7.0*(1 - t) + 6.5*t
-            }
-          } else {
-            let mult = Math.max(1, base_scale)
-            map.agriculture = mult*0.25
-            map.informal_labour = mult*0.12
-            map.manufacturing = mult*0.28
-            map.services = mult*0.30
-            map.not_in_work = mult*0.05
-          }
-
-          set_sector_data(map)
+          if (arg0_json.by_country)
+            set_by_country_data(arg0_json.by_country)
         }
         set_is_loading(false)
       })
@@ -144,7 +135,7 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
     return () => {
       cancelled = true
     }
-  }, [current_year, inspect_data?.pixelX, inspect_data?.pixelY, layer_id, country_stats?.mean, raster?.mean])
+  }, [current_year, effective_countries, layer_id, inspect_data?.pixelX, inspect_data?.pixelY])
 
   //Resize observer for responsive panel updates
   useEffect(() => {
@@ -178,31 +169,66 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
     }
   }, [])
 
-  total_sum = useMemo(() => {
-    if (!sector_data)
-      return 0
-    let sum = 0
-    let keys = Object.keys(sector_data)
-    for (let i = 0; i < keys.length; i++)
-      sum += sector_data[keys[i]] || 0
-    return sum
-  }, [sector_data])
-
+  //Build ECharts 100% split-bar configuration
   option = useMemo(() => {
     let active_prof = active_variable_selectors.profession || 'agriculture'
-    let y_labels = PROFESSION_SECTORS.map((arg0_s) => arg0_s.label)
-    let bar_data = PROFESSION_SECTORS.map((arg0_s) => {
-      let val = sector_data?.[arg0_s.id] ?? 0
-      let is_selected = arg0_s.id === active_prof
+    let country_names = effective_countries.map((arg0_c) => arg0_c.properties.name)
+    let entity_labels: string[]
+    let series_list: any[]
+
+    if (has_countries) {
+      //Split bar share per country
+      entity_labels = country_names
+    } else {
+      //Single split bar representing global share
+      entity_labels = ['Global']
+    }
+
+    series_list = PROFESSION_SECTORS.map((arg0_sector) => {
+      let is_active_prof = arg0_sector.id === active_prof
+      let sector_data_points: number[]
+
+      if (has_countries) {
+        sector_data_points = country_names.map((arg0_name) => {
+          let c_dict = by_country_data[arg0_name]
+          if (c_dict && c_dict[arg0_sector.id] !== undefined)
+            return c_dict[arg0_sector.id]
+          return global_sector_data[arg0_sector.id] ?? 20.0
+        })
+      } else {
+        sector_data_points = [global_sector_data[arg0_sector.id] ?? 20.0]
+      }
+
       return {
-        itemStyle: {
-          borderColor: is_selected ? '#ffffff' : arg0_s.color,
-          borderWidth: is_selected ? 2 : 0.5,
-          color: arg0_s.color,
-          shadowBlur: is_selected ? 8 : 0,
-          shadowColor: is_selected ? 'rgba(255,255,255,0.4)' : 'transparent',
+        barWidth: Math.max(16, Math.min(32, Math.floor(140/Math.max(1, entity_labels.length)))),
+        data: sector_data_points,
+        emphasis: {
+          focus: 'series',
+          itemStyle: {
+            borderColor: '#ffffff',
+            borderWidth: 2,
+            shadowBlur: 6,
+            shadowColor: 'rgba(255,255,255,0.4)',
+          },
         },
-        value: val,
+        itemStyle: {
+          borderColor: is_active_prof ? '#ffffff' : '#18181b',
+          borderWidth: is_active_prof ? 2 : 0.5,
+          color: arg0_sector.color,
+        },
+        label: {
+          color: '#ffffff',
+          fontSize: 10,
+          formatter: (arg0_param: any) => {
+            let v = arg0_param.value
+            return v >= 8 ? `${v.toFixed(0)}%` : ''
+          },
+          position: 'inside',
+          show: true,
+        },
+        name: arg0_sector.label,
+        stack: 'total', //Split bar stacked share
+        type: 'bar',
       }
     })
 
@@ -210,56 +236,40 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
       animationDuration: 300,
       backgroundColor: 'transparent',
       grid: {
-        bottom: '10%',
+        bottom: '8%',
         containLabel: true,
         left: '4%',
-        right: '12%',
-        top: '10%',
+        right: '6%',
+        top: has_countries ? '32px' : '28px',
       },
-      series: [
-        {
-          barCategoryGap: '28%',
-          data: bar_data,
-          label: {
-            color: '#f4f4f5',
-            fontSize: 11,
-            formatter: (arg0_param: any) => {
-              let v = arg0_param.value
-              if (is_percentage_mode)
-                return `${v.toFixed(1)}%`
-              if (v >= 1000000)
-                return `${(v/1000000).toFixed(1)}M`
-              if (v >= 1000)
-                return `${(v/1000).toFixed(0)}k`
-              return v.toFixed(0)
-            },
-            position: 'right',
-            show: true,
-          },
-          type: 'bar',
-        },
-      ],
+      legend: {
+        itemGap: 10,
+        itemHeight: 9,
+        itemWidth: 12,
+        right: '4%',
+        textStyle: { color: '#a1a1aa', fontSize: 10 },
+        top: '2px',
+      },
+      series: series_list,
       tooltip: {
         backgroundColor: 'rgba(20, 20, 25, 0.95)',
         borderColor: '#3f3f46',
         borderWidth: 1,
         formatter: (arg0_param: any) => {
-          let sector = PROFESSION_SECTORS[arg0_param.dataIndex]
-          let v = arg0_param.value
-          let pct = is_percentage_mode ? v : (total_sum > 0 ? (v/total_sum)*100 : 0)
+          let c_name = arg0_param.name
+          let pct = arg0_param.value
+          let s_name = arg0_param.seriesName
+          let s_obj = PROFESSION_SECTORS.find((arg0_s) => arg0_s.label === s_name)
+          let color = s_obj ? s_obj.color : '#ffffff'
 
           return `
             <div style="font-family: sans-serif; font-size: 11px; line-height: 1.4;">
-              <div style="font-weight: bold; border-bottom: 1px solid #3f3f46; padding-bottom: 3px; margin-bottom: 4px; color: ${sector.color};">
-                ${sector.label}
+              <div style="font-weight: bold; border-bottom: 1px solid #3f3f46; padding-bottom: 3px; margin-bottom: 4px; color: #f4f4f5;">
+                ${c_name} <span style="font-weight: normal; color: #a1a1aa;">(${current_year < 0 ? `${Math.abs(current_year)}BC` : `${current_year}AD`})</span>
               </div>
-              <div style="display: flex; justify-content: space-between; gap: 14px; color: #f4f4f5;">
-                <span>Value:</span>
-                <b>${v.toLocaleString(undefined, { maximumFractionDigits: 2 })}${is_percentage_mode ? '%' : ''}</b>
-              </div>
-              <div style="display: flex; justify-content: space-between; gap: 14px; color: #a1a1aa; margin-top: 2px;">
-                <span>Share of Total:</span>
-                <b>${pct.toFixed(1)}%</b>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; color: ${color};">
+                <span><b>${s_name}:</b></span>
+                <b style="font-size: 12px;">${pct.toFixed(1)}%</b>
               </div>
             </div>
           `
@@ -272,17 +282,11 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
         axisLabel: {
           color: '#71717a',
           fontSize: 9,
-          formatter: (arg0_val: number) => {
-            if (is_percentage_mode)
-              return `${arg0_val}%`
-            if (arg0_val >= 1000000)
-              return `${(arg0_val/1000000).toFixed(0)}M`
-            if (arg0_val >= 1000)
-              return `${(arg0_val/1000).toFixed(0)}k`
-            return arg0_val.toString()
-          },
+          formatter: '{value}%',
         },
         axisLine: { lineStyle: { color: '#27272a' } },
+        max: 100,
+        min: 0,
         splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } },
         type: 'value',
       },
@@ -294,11 +298,18 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
         },
         axisLine: { lineStyle: { color: '#3f3f46' } },
         axisTick: { show: false },
-        data: y_labels,
+        data: entity_labels,
         type: 'category',
       },
     }
-  }, [sector_data, active_variable_selectors, is_percentage_mode, total_sum])
+  }, [
+    active_variable_selectors.profession,
+    by_country_data,
+    current_year,
+    effective_countries,
+    global_sector_data,
+    has_countries,
+  ])
 
   //Return statement
   return (
@@ -307,16 +318,15 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
         <div className="flex items-center gap-2 truncate">
           <span className="font-bold text-foreground flex items-center gap-1">
             <Icon name="briefcase" className="text-primary text-xs" />
-            Sector Breakdown ({is_percentage_mode ? 'Employment %' : 'Total Workers'})
+            <span>
+              {has_countries
+                ? `Category Split Bar Share (${effective_countries.length} Selected)`
+                : 'Global Category Split Bar Share'}
+            </span>
           </span>
           <span className="text-muted-foreground font-mono">
             ({current_year < 0 ? `${Math.abs(current_year)}BC` : `${current_year}AD`})
           </span>
-          {inspect_data?.countryName && (
-            <span className="text-primary bg-primary/10 px-1 border border-primary/20 truncate max-w-[120px]">
-              {inspect_data.countryName}
-            </span>
-          )}
         </div>
 
         <div className="flex items-center gap-2 text-[10px] font-mono text-muted-foreground shrink-0">

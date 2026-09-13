@@ -295,7 +295,8 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_pr
           </div>
         ) : (
           (() => {
-            let derived_key = `${raster_key ?? ''}-${raster ? `${raster.width}x${raster.height}-${raster.min}-${raster.max}` : 'none'}-${country_stats ? country_stats.name : 'all'}-${active_layer?.id ?? 'default'}`
+            let country_id_str = effective_countries.map((arg0_c) => arg0_c.properties.name).join('_') || (country_stats ? country_stats.name : 'all')
+            let derived_key = `${raster_key ?? ''}-${raster ? `${raster.width}x${raster.height}-${raster.min}-${raster.max}` : 'none'}-${country_id_str}-${active_layer?.id ?? 'default'}`
             return (
               <>
                 {active_tab === 'pyramid' && (
@@ -303,6 +304,8 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_pr
                     key={`pyramid-${derived_key}-${current_year}`}
                     raster={raster}
                     countryStats={country_stats}
+                    selectedCountries={effective_countries}
+                    selectedCountry={selected_country}
                     currentYear={current_year}
                     activeVariableSelectors={active_variable_selectors}
                     inspectData={inspect_data}
@@ -314,6 +317,8 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_pr
                     key={`breakdown-${derived_key}-${current_year}`}
                     raster={raster}
                     countryStats={country_stats}
+                    selectedCountries={effective_countries}
+                    selectedCountry={selected_country}
                     currentYear={current_year}
                     layerId={active_layer?.id}
                     activeVariableSelectors={active_variable_selectors}

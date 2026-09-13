@@ -4,6 +4,7 @@ import url from 'url'
 import type { IncomingMessage, ServerResponse } from 'http'
 import JSON5 from 'json5'
 import { loadAndParseLayers, type LayerRegistryCache, type ParsedDataLayer } from './layerParser.ts'
+import { getCountryDemographicPyramid, getCountrySectorBreakdown } from './countryBreakdown.ts'
 
 export interface ApiMiddlewareOptions {
   configDir: string
@@ -255,12 +256,14 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
 
     //Route 5: GET /api/raster/breakdown
     if (pathname === '/raster/breakdown' || pathname === '/api/raster/breakdown') {
+      let country = ((query.country as string) || '').trim()
+      let countries_str = ((query.countries as string) || '').trim()
       let layer = (query.layer as string) || 'age_sex'
-      let year = parseInt(query.year as string, 10) || 1950
       let raw_x = query.x !== undefined ? parseInt(query.x as string, 10) : undefined
       let raw_y = query.y !== undefined ? parseInt(query.y as string, 10) : undefined
+      let year = parseInt(query.year as string, 10) || 1950
 
-      let cache_key = `${layer}:${year}:${raw_x ?? 'all'}:${raw_y ?? 'all'}`
+      let cache_key = `${layer}:${year}:${country}:${countries_str}:${raw_x ?? 'all'}:${raw_y ?? 'all'}`
       if (breakdown_cache.has(cache_key)) {
         res.statusCode = 200
         res.setHeader('Content-Type', 'application/json')
@@ -269,26 +272,16 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
       }
 
       if (layer === 'age_sex') {
-        let age_ids = ['00', '01', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55', '60', '65', '70', '75', '80']
-        let female_map: Record<string, number> = {}
-        let male_map: Record<string, number> = {}
-
-        //Generate demographic transition cohort proportions based on historical year
-        for (let i = 0; i < age_ids.length; i++) {
-          let cid = age_ids[i]
-          let base_taper = Math.exp(-i*0.088)
-          if (year >= 1950 && i >= 4 && i <= 11)
-            base_taper *= 1.22
-          let m_val = Math.max(0.01, 100*base_taper*(1.025 - i*0.005))
-          let f_val = Math.max(0.01, 100*base_taper*(0.975 + i*0.007))
-          male_map[cid] = m_val
-          female_map[cid] = f_val
-        }
-
+        let demo_res = getCountryDemographicPyramid(country || 'global', year)
         let result = {
-          female: female_map,
+          country: demo_res.country,
+          dependencyRatio: demo_res.dependencyRatio,
+          female: demo_res.female,
           layer,
-          male: male_map,
+          male: demo_res.male,
+          sexRatio: demo_res.sexRatio,
+          totalFemale: demo_res.totalFemale,
+          totalMale: demo_res.totalMale,
           x: raw_x,
           y: raw_y,
           year,
@@ -301,50 +294,21 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
       }
 
       if (layer.includes('profession')) {
-        let sectors_map: Record<string, number> = {}
         let is_pct = !layer.includes('total')
+        let target_countries: string[] = []
 
-        if (is_pct) {
-          if (year <= 1800) {
-            sectors_map = {
-              agriculture: 68.5,
-              informal_labour: 8.2,
-              manufacturing: 9.4,
-              not_in_work: 5.0,
-              services: 8.9,
-            }
-          } else if (year <= 1950) {
-            let t = (year - 1800)/150
-            sectors_map = {
-              agriculture: 68.5*(1 - t) + 22.0*t,
-              informal_labour: 8.2*(1 - t) + 12.5*t,
-              manufacturing: 9.4*(1 - t) + 32.5*t,
-              not_in_work: 5.0*(1 - t) + 7.0*t,
-              services: 8.9*(1 - t) + 26.0*t,
-            }
-          } else {
-            let t = Math.min(1, (year - 1950)/75)
-            sectors_map = {
-              agriculture: 22.0*(1 - t) + 4.5*t,
-              informal_labour: 12.5*(1 - t) + 9.5*t,
-              manufacturing: 32.5*(1 - t) + 18.0*t,
-              not_in_work: 7.0*(1 - t) + 6.5*t,
-              services: 26.0*(1 - t) + 61.5*t,
-            }
-          }
-        } else {
-          sectors_map = {
-            agriculture: 250000,
-            informal_labour: 120000,
-            manufacturing: 280000,
-            not_in_work: 50000,
-            services: 300000,
-          }
+        if (countries_str) {
+          target_countries = countries_str.split(',').map((arg0_c) => arg0_c.trim()).filter(Boolean)
+        } else if (country) {
+          target_countries = [country]
         }
 
+        let sector_res = getCountrySectorBreakdown(target_countries, year, is_pct)
         let result = {
+          by_country: sector_res.byCountry,
+          global: sector_res.global,
           layer,
-          sectors: sectors_map,
+          sectors: sector_res.global,
           x: raw_x,
           y: raw_y,
           year,

@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { DecodedRaster } from '@/lib/geopng/types'
-import { CountryStats } from '@/lib/geopng/polygonBinning'
+import { CountryFeature, CountryStats } from '@/lib/geopng/polygonBinning'
 import { Icon } from '@/components/ui/icon'
 
 export interface PopulationPyramidChartProps {
@@ -17,6 +17,8 @@ export interface PopulationPyramidChartProps {
     value: number | null
   } | null
   raster: DecodedRaster | null
+  selectedCountries?: CountryFeature[]
+  selectedCountry?: CountryFeature | null
 }
 
 export interface AgeCohortItem {
@@ -46,7 +48,8 @@ export const AGE_COHORTS: AgeCohortItem[] = [
 ]
 
 /**
- * PopulationPyramidChart renders an ECharts bidirectional horizontal population pyramid for age_sex cohorts.
+ * PopulationPyramidChart renders bidirectional population pyramids with support for
+ * individual country analysis and country switching.
  *
  * @param {PopulationPyramidChartProps} arg0_props
  *
@@ -61,32 +64,72 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
     currentYear: current_year,
     inspectData: inspect_data,
     raster,
+    selectedCountries: selected_countries = [],
+    selectedCountry: selected_country = null,
   } = props
 
   //Declare local instance variables
+  let active_country_name: string | null
   let container_ref = useRef<HTMLDivElement>(null)
+  let dependency_ratio: number
   let echart_ref = useRef<any>(null)
+  let effective_countries: CountryFeature[]
   let female_values: number[]
   let is_loading: boolean
   let male_values: number[]
   let option: any
   let pyramid_data: { female: Record<string, number>; male: Record<string, number> } | null
+  let set_active_country_name: React.Dispatch<React.SetStateAction<string | null>>
+  let set_dependency_ratio: React.Dispatch<React.SetStateAction<number>>
   let set_is_loading: React.Dispatch<React.SetStateAction<boolean>>
   let set_pyramid_data: React.Dispatch<React.SetStateAction<{ female: Record<string, number>; male: Record<string, number> } | null>>
+  let set_sex_ratio: React.Dispatch<React.SetStateAction<number>>
+  let set_total_female: React.Dispatch<React.SetStateAction<number>>
+  let set_total_male: React.Dispatch<React.SetStateAction<number>>
+  let sex_ratio: number
   let total_female: number
   let total_male: number
 
   //Function body
+  effective_countries = useMemo(() => {
+    if (selected_countries && selected_countries.length > 0)
+      return selected_countries
+    if (selected_country)
+      return [selected_country]
+    return []
+  }, [selected_countries, selected_country])
+
+  ;[active_country_name, set_active_country_name] = useState<string | null>(
+    effective_countries.length > 0 ? effective_countries[effective_countries.length - 1].properties.name : null
+  )
   ;[pyramid_data, set_pyramid_data] = useState<{ female: Record<string, number>; male: Record<string, number> } | null>(null)
   ;[is_loading, set_is_loading] = useState<boolean>(false)
+  ;[total_male, set_total_male] = useState<number>(0)
+  ;[total_female, set_total_female] = useState<number>(0)
+  ;[sex_ratio, set_sex_ratio] = useState<number>(1.0)
+  ;[dependency_ratio, set_dependency_ratio] = useState<number>(50.0)
 
-  //Fetch real breakdown from backend API if available, or compute dynamic cohort models
+  //Auto-synchronize active country selection when user selects or clicks countries
+  useEffect(() => {
+    if (effective_countries.length > 0) {
+      let names = effective_countries.map((arg0_c) => arg0_c.properties.name)
+      if (!active_country_name || !names.includes(active_country_name)) {
+        set_active_country_name(names[names.length - 1])
+      }
+    } else {
+      set_active_country_name(null)
+    }
+  }, [effective_countries])
+
+  //Fetch individual country or global pyramid breakdown
   useEffect(() => {
     let cancelled = false
     set_is_loading(true)
 
     let url = `/api/raster/breakdown?layer=age_sex&year=${Math.round(current_year)}`
-    if (inspect_data && Number.isFinite(inspect_data.pixelX) && Number.isFinite(inspect_data.pixelY)) {
+    if (active_country_name) {
+      url += `&country=${encodeURIComponent(active_country_name)}`
+    } else if (inspect_data && Number.isFinite(inspect_data.pixelX) && Number.isFinite(inspect_data.pixelY)) {
       url += `&x=${inspect_data.pixelX}&y=${inspect_data.pixelY}`
     }
 
@@ -101,29 +144,39 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
           return
         if (arg0_json && arg0_json.male && arg0_json.female) {
           set_pyramid_data({ female: arg0_json.female, male: arg0_json.male })
+          if (arg0_json.totalMale !== undefined)
+            set_total_male(arg0_json.totalMale)
+          if (arg0_json.totalFemale !== undefined)
+            set_total_female(arg0_json.totalFemale)
+          if (arg0_json.sexRatio !== undefined)
+            set_sex_ratio(arg0_json.sexRatio)
+          if (arg0_json.dependencyRatio !== undefined)
+            set_dependency_ratio(arg0_json.dependencyRatio)
         } else {
-          //Model realistic demographic pyramid weights based on active raster scale and historical epoch
-          let base_scale = (inspect_data?.value && Number.isFinite(inspect_data.value))
-            ? inspect_data.value*10
-            : (country_stats?.mean ?? raster?.mean ?? 10)
+          //Fallback demographic model
+          let base_scale = (country_stats?.mean ?? raster?.mean ?? 10)*10
           let female_map: Record<string, number> = {}
           let male_map: Record<string, number> = {}
+          let sum_f = 0
+          let sum_m = 0
 
           for (let i = 0; i < AGE_COHORTS.length; i++) {
             let cid = AGE_COHORTS[i].id
-            let age_factor = Math.exp(-i*0.09) //Traditional demographic pyramid tapering
-            if (current_year >= 1950) {
-              //Modern bulge around working ages 20-50
-              if (i >= 4 && i <= 10)
-                age_factor *= 1.25
-            }
-            let m_val = Math.max(0.01, base_scale*age_factor*(1.02 - i*0.005))
-            let f_val = Math.max(0.01, base_scale*age_factor*(0.98 + i*0.008))
-            male_map[cid] = m_val
-            female_map[cid] = f_val
+            let age_factor = Math.exp(-i*0.09)
+            if (current_year >= 1950 && i >= 4 && i <= 10)
+              age_factor *= 1.25
+            let m_val = Math.max(0.1, base_scale*age_factor*(1.02 - i*0.005))
+            let f_val = Math.max(0.1, base_scale*age_factor*(0.98 + i*0.008))
+            male_map[cid] = Math.round(m_val*10)/10
+            female_map[cid] = Math.round(f_val*10)/10
+            sum_m += male_map[cid]
+            sum_f += female_map[cid]
           }
 
           set_pyramid_data({ female: female_map, male: male_map })
+          set_total_male(Math.round(sum_m*10)/10)
+          set_total_female(Math.round(sum_f*10)/10)
+          set_sex_ratio(sum_f > 0 ? Math.round((sum_m/sum_f)*1000)/1000 : 1.0)
         }
         set_is_loading(false)
       })
@@ -135,7 +188,7 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
     return () => {
       cancelled = true
     }
-  }, [current_year, inspect_data?.pixelX, inspect_data?.pixelY, country_stats?.mean, raster?.mean])
+  }, [active_country_name, current_year, inspect_data?.pixelX, inspect_data?.pixelY, country_stats?.mean, raster?.mean])
 
   //Resize observer for responsive panel updates
   useEffect(() => {
@@ -170,87 +223,101 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
   }, [])
 
   male_values = useMemo(() => {
-    return AGE_COHORTS.map((arg0_c) => -(pyramid_data?.male[arg0_c.id] ?? 0))
+    if (!pyramid_data?.male)
+      return AGE_COHORTS.map(() => 0)
+    return AGE_COHORTS.map((arg0_c) => -(pyramid_data!.male[arg0_c.id] || 0))
   }, [pyramid_data])
 
   female_values = useMemo(() => {
-    return AGE_COHORTS.map((arg0_c) => pyramid_data?.female[arg0_c.id] ?? 0)
+    if (!pyramid_data?.female)
+      return AGE_COHORTS.map(() => 0)
+    return AGE_COHORTS.map((arg0_c) => pyramid_data!.female[arg0_c.id] || 0)
   }, [pyramid_data])
 
-  total_male = useMemo(() => {
-    let sum = 0
-    for (let i = 0; i < male_values.length; i++)
-      sum += Math.abs(male_values[i])
-    return sum
-  }, [male_values])
-
-  total_female = useMemo(() => {
-    let sum = 0
-    for (let i = 0; i < female_values.length; i++)
-      sum += female_values[i]
-    return sum
-  }, [female_values])
-
   option = useMemo(() => {
+    let active_gender = active_variable_selectors.gender || 't'
+    let max_abs_val = 1
+    for (let i = 0; i < AGE_COHORTS.length; i++) {
+      let m = Math.abs(male_values[i] || 0)
+      let f = female_values[i] || 0
+      if (m > max_abs_val)
+        max_abs_val = m
+      if (f > max_abs_val)
+        max_abs_val = f
+    }
+    let axis_limit = Math.ceil(max_abs_val*1.15)
     let y_labels = AGE_COHORTS.map((arg0_c) => arg0_c.label)
-    let active_gender = active_variable_selectors.gender || 'f'
-    let active_age = active_variable_selectors.age || '00'
 
     return {
-      animationDuration: 300,
+      animationDuration: 250,
       backgroundColor: 'transparent',
-      grid: {
-        bottom: '12%',
-        containLabel: true,
-        left: '4%',
-        right: '4%',
-        top: '16%',
-      },
+      grid: [
+        {
+          bottom: '8%',
+          containLabel: false,
+          left: '4%',
+          right: '54%',
+          top: effective_countries.length > 0 ? '34px' : '28px',
+        },
+        {
+          bottom: '8%',
+          containLabel: false,
+          left: '54%',
+          right: '4%',
+          top: effective_countries.length > 0 ? '34px' : '28px',
+        },
+      ],
       legend: {
         data: ['Male Cohorts', 'Female Cohorts'],
-        itemGap: 18,
-        itemHeight: 8,
-        itemWidth: 14,
-        textStyle: {
-          color: '#a1a1aa',
-          fontSize: 11,
-        },
-        top: '2%',
+        itemGap: 14,
+        itemHeight: 10,
+        itemWidth: 12,
+        right: '4%',
+        textStyle: { color: '#a1a1aa', fontSize: 11 },
+        top: '2px',
       },
       series: [
         {
-          barCategoryGap: '20%',
-          data: male_values.map((arg0_val, arg0_idx) => {
-            let is_selected = active_gender === 'm' && AGE_COHORTS[arg0_idx].id === active_age
-            return {
-              itemStyle: {
-                borderColor: is_selected ? '#ffffff' : '#1d4ed8',
-                borderWidth: is_selected ? 1.5 : 0.5,
-                color: is_selected ? '#60a5fa' : '#3b82f6',
-              },
-              value: arg0_val,
-            }
-          }),
+          barCategoryGap: '18%',
+          data: male_values.map((arg0_v) => Math.abs(arg0_v)),
+          emphasis: {
+            itemStyle: {
+              borderColor: '#ffffff',
+              borderWidth: 1.5,
+              shadowBlur: 8,
+              shadowColor: 'rgba(59, 130, 246, 0.5)',
+            },
+          },
+          itemStyle: {
+            borderColor: active_gender === 'm' ? '#ffffff' : 'transparent',
+            borderWidth: active_gender === 'm' ? 1.5 : 0,
+            color: '#3b82f6',
+          },
           name: 'Male Cohorts',
-          stack: 'total',
           type: 'bar',
+          xAxisIndex: 0,
+          yAxisIndex: 0,
         },
         {
-          barCategoryGap: '20%',
-          data: female_values.map((arg0_val, arg0_idx) => {
-            let is_selected = active_gender === 'f' && AGE_COHORTS[arg0_idx].id === active_age
-            return {
-              itemStyle: {
-                borderColor: is_selected ? '#ffffff' : '#be123c',
-                borderWidth: is_selected ? 1.5 : 0.5,
-                color: is_selected ? '#fb7185' : '#f43f5e',
-              },
-              value: arg0_val,
-            }
-          }),
+          barCategoryGap: '18%',
+          data: female_values,
+          emphasis: {
+            itemStyle: {
+              borderColor: '#ffffff',
+              borderWidth: 1.5,
+              shadowBlur: 8,
+              shadowColor: 'rgba(236, 72, 153, 0.5)',
+            },
+          },
+          itemStyle: {
+            borderColor: active_gender === 'f' ? '#ffffff' : 'transparent',
+            borderWidth: active_gender === 'f' ? 1.5 : 0,
+            color: '#ec4899',
+          },
           name: 'Female Cohorts',
-          stack: 'total',
           type: 'bar',
+          xAxisIndex: 1,
+          yAxisIndex: 1,
         },
       ],
       tooltip: {
@@ -259,35 +326,29 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
         borderColor: '#3f3f46',
         borderWidth: 1,
         formatter: (arg0_params: any) => {
-          if (!Array.isArray(arg0_params) || arg0_params.length === 0)
-            return ''
-          let idx = arg0_params[0].dataIndex
+          let param = Array.isArray(arg0_params) ? arg0_params[0] : arg0_params
+          let idx = param.dataIndex
           let cohort = AGE_COHORTS[idx]
-          let m_num = Math.abs(male_values[idx] || 0)
-          let f_num = Math.abs(female_values[idx] || 0)
-          let total_cohort = m_num + f_num
-          let sex_ratio = f_num > 0 ? (m_num/f_num)*100 : 100
+          let f = female_values[idx] || 0
+          let m = Math.abs(male_values[idx] || 0)
+          let ratio = f > 0 ? (m/f).toFixed(2) : 'N/A'
 
           return `
             <div style="font-family: sans-serif; font-size: 11px; line-height: 1.4;">
               <div style="font-weight: bold; border-bottom: 1px solid #3f3f46; padding-bottom: 3px; margin-bottom: 4px; color: #f4f4f5;">
-                Age Cohort: ${cohort.label}
+                Cohort: ${cohort.label} <span style="font-weight: normal; color: #a1a1aa;">(${active_country_name || 'Global'})</span>
               </div>
-              <div style="display: flex; justify-content: space-between; gap: 12px; color: #60a5fa;">
+              <div style="display: flex; justify-content: space-between; gap: 14px; color: #60a5fa;">
                 <span>Male:</span>
-                <b>${m_num.toLocaleString(undefined, { maximumFractionDigits: 2 })}</b>
+                <b>${m.toLocaleString()}</b>
               </div>
-              <div style="display: flex; justify-content: space-between; gap: 12px; color: #fb7185;">
+              <div style="display: flex; justify-content: space-between; gap: 14px; color: #f472b6;">
                 <span>Female:</span>
-                <b>${f_num.toLocaleString(undefined, { maximumFractionDigits: 2 })}</b>
+                <b>${f.toLocaleString()}</b>
               </div>
-              <div style="display: flex; justify-content: space-between; gap: 12px; color: #a1a1aa; border-top: 1px dashed #3f3f46; margin-top: 4px; padding-top: 2px;">
-                <span>Total:</span>
-                <b>${total_cohort.toLocaleString(undefined, { maximumFractionDigits: 2 })}</b>
-              </div>
-              <div style="display: flex; justify-content: space-between; gap: 12px; color: #d4d4d8;">
-                <span>Sex Ratio (M/100F):</span>
-                <b>${sex_ratio.toFixed(1)}</b>
+              <div style="display: flex; justify-content: space-between; gap: 14px; color: #a1a1aa; margin-top: 2px;">
+                <span>Sex Ratio (M/F):</span>
+                <b>${ratio}</b>
               </div>
             </div>
           `
@@ -296,66 +357,134 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
         textStyle: { color: '#ffffff', fontSize: 11 },
         trigger: 'axis',
       },
-      xAxis: {
-        axisLabel: {
-          color: '#71717a',
-          fontSize: 9,
-          formatter: (arg0_val: number) => {
-            let abs_val = Math.abs(arg0_val)
-            if (abs_val >= 1000000)
-              return `${(abs_val/1000000).toFixed(1)}M`
-            if (abs_val >= 1000)
-              return `${(abs_val/1000).toFixed(0)}k`
-            return abs_val.toFixed(1)
+      xAxis: [
+        {
+          axisLabel: {
+            color: '#71717a',
+            fontSize: 9,
+            formatter: (arg0_val: number) => arg0_val.toLocaleString(),
           },
+          axisLine: { lineStyle: { color: '#27272a' } },
+          gridIndex: 0,
+          inverse: true, //Male points to the left
+          max: axis_limit,
+          min: 0,
+          splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } },
+          type: 'value',
         },
-        axisLine: { lineStyle: { color: '#27272a' } },
-        splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } },
-        type: 'value',
-      },
-      yAxis: {
-        axisLabel: {
-          color: '#d4d4d8',
-          fontSize: 10,
-          formatter: (arg0_val: string) => arg0_val.split(',')[0],
+        {
+          axisLabel: {
+            color: '#71717a',
+            fontSize: 9,
+            formatter: (arg0_val: number) => arg0_val.toLocaleString(),
+          },
+          axisLine: { lineStyle: { color: '#27272a' } },
+          gridIndex: 1,
+          max: axis_limit,
+          min: 0,
+          splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } },
+          type: 'value',
         },
-        axisLine: { lineStyle: { color: '#3f3f46' } },
-        axisTick: { show: false },
-        data: y_labels,
-        type: 'category',
-      },
+      ],
+      yAxis: [
+        {
+          axisLabel: { show: false },
+          axisLine: { lineStyle: { color: '#3f3f46' } },
+          axisTick: { show: false },
+          data: y_labels,
+          gridIndex: 0,
+          position: 'right',
+          type: 'category',
+        },
+        {
+          axisLabel: {
+            color: '#d4d4d8',
+            fontSize: 10,
+            margin: 8,
+          },
+          axisLine: { lineStyle: { color: '#3f3f46' } },
+          axisTick: { show: false },
+          data: y_labels,
+          gridIndex: 1,
+          position: 'left',
+          type: 'category',
+        },
+      ],
     }
-  }, [male_values, female_values, active_variable_selectors])
+  }, [
+    active_country_name,
+    active_variable_selectors.gender,
+    effective_countries.length,
+    female_values,
+    male_values,
+  ])
 
   //Return statement
   return (
     <div ref={container_ref} className="h-full w-full flex flex-col min-h-0 select-none">
+      {/* Header bar with demographic summary metrics */}
       <div className="flex items-center justify-between px-2 pt-1 pb-1 border-b border-border/40 text-[11px] bg-muted/20">
         <div className="flex items-center gap-2 truncate">
           <span className="font-bold text-foreground flex items-center gap-1">
             <Icon name="people" className="text-primary text-xs" />
-            Population Pyramid
+            <span>Population Pyramid: {active_country_name || 'Global'}</span>
           </span>
           <span className="text-muted-foreground font-mono">
             ({current_year < 0 ? `${Math.abs(current_year)}BC` : `${current_year}AD`})
           </span>
-          {inspect_data?.countryName && (
-            <span className="text-primary bg-primary/10 px-1 border border-primary/20 truncate max-w-[120px]">
-              {inspect_data.countryName}
-            </span>
-          )}
         </div>
 
-        <div className="flex items-center gap-3 text-[10px] font-mono shrink-0">
-          <span className="text-blue-400">
-            M: {total_male.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+        <div className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground shrink-0">
+          <span>
+            Sex Ratio: <b className="text-foreground">{sex_ratio.toFixed(2)}</b> M/F
           </span>
-          <span className="text-rose-400">
-            F: {total_female.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+          <span>
+            Dependency: <b className="text-foreground">{dependency_ratio.toFixed(1)}%</b>
           </span>
         </div>
       </div>
 
+      {/* Country Selector Switcher Bar when countries are selected */}
+      {effective_countries.length > 0 && (
+        <div className="flex items-center gap-1 px-2 py-1 bg-muted/40 border-b border-border/40 overflow-x-auto select-none shrink-0 scrollbar-thin">
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mr-1 shrink-0">
+            View Pyramid:
+          </span>
+          <button
+            type="button"
+            onClick={() => set_active_country_name(null)}
+            className={`px-2 py-0.5 text-[11px] rounded-none cursor-pointer transition-colors shrink-0 ${
+              !active_country_name
+                ? 'bg-primary text-primary-foreground font-bold shadow-sm'
+                : 'bg-background/60 text-muted-foreground hover:text-foreground border border-border/40'
+            }`}
+          >
+            Global
+          </button>
+          {effective_countries.map((arg0_c) => {
+            let name = arg0_c.properties.name
+            let is_active = active_country_name === name
+            return (
+              <button
+                key={name}
+                type="button"
+                onClick={() => set_active_country_name(name)}
+                className={`px-2 py-0.5 text-[11px] rounded-none cursor-pointer transition-colors truncate max-w-[140px] flex items-center gap-1 shrink-0 ${
+                  is_active
+                    ? 'bg-primary text-primary-foreground font-bold shadow-sm'
+                    : 'bg-background/60 text-muted-foreground hover:text-foreground border border-border/40'
+                }`}
+                title={`View ${name} individual population pyramid`}
+              >
+                <Icon name="flag" className="text-[10px]" />
+                <span className="truncate">{name}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Chart Canvas */}
       <div className="flex-1 min-h-0 relative">
         {is_loading && (
           <div className="absolute inset-0 z-10 bg-background/40 flex items-center justify-center">

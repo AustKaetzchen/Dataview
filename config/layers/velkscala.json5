@@ -1,4 +1,5 @@
 {
+    name: "Velkscala (Demographics)",
     root_folders: {
         nwm: "D:/Project 1509 - SVEA/histmap/", //Determines root folder on the server device
         h1: "${nwm}/histmap/1.data_raw/",
