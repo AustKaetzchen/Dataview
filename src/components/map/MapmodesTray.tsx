@@ -32,6 +32,7 @@ export interface MapmodesTrayProps {
   activeLayerId?: string | null
   activeVariableSelectors?: Record<string, string>
   allCountries: CountryFeature[]
+  analyticsOpen?: boolean
   cameraTilt?: number
   circleOverlayConfig: CircleOverlayConfig
   countriesMode: boolean
@@ -52,6 +53,7 @@ export interface MapmodesTrayProps {
   selectedCountries: CountryFeature[]
   setCircleOverlayConfig: React.Dispatch<React.SetStateAction<CircleOverlayConfig>>
   setHeightmapConfig: React.Dispatch<React.SetStateAction<HeightmapConfig>>
+  settingsOpen?: boolean
   userRole?: UserRole
 }
 
@@ -69,6 +71,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
     activeLayerId: active_layer_id = null,
     activeVariableSelectors: active_variable_selectors = {},
     allCountries: all_countries,
+    analyticsOpen: analytics_open = false,
     cameraTilt: camera_tilt,
     circleOverlayConfig: circle_overlay_config,
     countriesMode: countries_mode,
@@ -89,17 +92,21 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
     selectedCountries: selected_countries,
     setCircleOverlayConfig: set_circle_overlay_config,
     setHeightmapConfig: set_heightmap_config,
+    settingsOpen: settings_open = false,
     userRole: user_role = 'developer',
   } = props
 
   //Declare local instance variables
   let all_layer_entries: ParsedDataLayer[]
+  let dataset_folders: Record<string, ParsedDataLayer[]>
   let expanded_nodes: Record<string, boolean>
   let filtered_layers: ParsedDataLayer[]
   let filtered_overlays: MapModeItem[]
   let is_layer_accessible: (arg0_layer: ParsedDataLayer) => boolean
   let is_tray_collapsed: boolean
+  let max_height_style: string
   let render_data_layer_node: (arg0_layer: ParsedDataLayer, arg1_depth?: number) => React.ReactNode
+  let render_dataset_folder_node: (arg0_folder_name: string, arg1_folder_layers: ParsedDataLayer[]) => React.ReactNode
   let render_variable_selectors: (arg0_layer: ParsedDataLayer) => React.ReactNode
   let search_query: string
   let set_expanded_nodes: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
@@ -139,6 +146,14 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
     return Object.values(layers)
   }, [layers])
 
+  max_height_style = useMemo(() => {
+    if (analytics_open)
+      return 'calc(100vh - 376px - 24px)'
+    if (settings_open)
+      return 'calc(100vh - 300px - 24px)'
+    return 'calc(100vh - 200px - 24px)'
+  }, [analytics_open, settings_open])
+
   //Filter layers by search
   filtered_layers = useMemo(() => {
     let q = search_query.toLowerCase().trim()
@@ -146,14 +161,28 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
       return all_layer_entries
 
     return all_layer_entries.filter((arg0_layer) => {
+      let matches_category = arg0_layer.category?.toLowerCase().includes(q)
       let matches_name = arg0_layer.name.toLowerCase().includes(q)
       let matches_id = arg0_layer.id.toLowerCase().includes(q)
       let matches_sub = arg0_layer.sub_layers?.some(
         (arg0_sub) => arg0_sub.name.toLowerCase().includes(q) || arg0_sub.id.toLowerCase().includes(q)
       )
-      return matches_name || matches_id || matches_sub
+      return matches_name || matches_id || matches_sub || matches_category
     })
   }, [all_layer_entries, search_query])
+
+  //Group filtered layers by dataset folder name
+  dataset_folders = useMemo(() => {
+    let folders: Record<string, ParsedDataLayer[]> = {}
+    for (let i = 0; i < filtered_layers.length; i++) {
+      let layer = filtered_layers[i]
+      let group_name = layer.category || 'Other Layers'
+      if (!folders[group_name])
+        folders[group_name] = []
+      folders[group_name].push(layer)
+    }
+    return folders
+  }, [filtered_layers])
 
   //Filter overlays by search
   filtered_overlays = useMemo(() => {
@@ -177,6 +206,9 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
         {selector_keys.map((arg0_key) => {
           let sel = layer.variable_selectors![arg0_key]
           let opts = Object.entries(sel.options)
+          if (opts.length > 0 && opts.every(([arg0_k]) => !Number.isNaN(parseInt(arg0_k, 10)))) {
+            opts.sort((arg0_a, arg0_b) => parseInt(arg0_a[0], 10) - parseInt(arg0_b[0], 10))
+          }
           let current_val = active_variable_selectors[arg0_key] || opts[0]?.[0] || ''
 
           return (
@@ -302,10 +334,58 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
     )
   }
 
+  render_dataset_folder_node = function (arg0_folder_name: string, arg1_folder_layers: ParsedDataLayer[]) {
+    let folder_name = arg0_folder_name
+    let folder_layers = arg1_folder_layers
+    let node_id = `dataset_${folder_name}`
+    let is_open = expanded_nodes[node_id] !== undefined ? expanded_nodes[node_id] : true
+
+    return (
+      <div key={node_id} className="border border-border/60 bg-muted/10 mb-1">
+        <div
+          onClick={() => toggle_node(node_id)}
+          className="flex items-center justify-between px-2 py-1 bg-muted/30 hover:bg-muted/50 cursor-pointer transition-colors select-none"
+        >
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Icon
+              name={is_open ? 'folder_open' : 'folder'}
+              className="text-primary text-[11px] shrink-0"
+            />
+            <span className="font-semibold text-[11px] text-foreground truncate">
+              {folder_name}
+            </span>
+          </div>
+          <div className="flex items-center gap-1 shrink-0 ml-1">
+            <span className="text-[9px] text-muted-foreground font-mono">
+              {folder_layers.length}
+            </span>
+            <Icon
+              name={is_open ? 'expand_less' : 'expand_more'}
+              className="text-[11px] text-muted-foreground"
+            />
+          </div>
+        </div>
+
+        {is_open && (
+          <div className="p-1 space-y-1 bg-card/20">
+            {folder_layers.map((arg0_l) => render_data_layer_node(arg0_l, 1))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   //Return statement
   return (
     <TooltipProvider delayDuration={150}>
-      <div className="absolute bottom-3 right-3 z-20 w-80 max-h-[calc(100vh-140px)] flex flex-col bg-card/95 backdrop-blur-md border border-border shadow-2xl p-2.5 space-y-2 text-[var(--body-font-size)] select-none font-sans overflow-hidden transition-all">
+      <div
+        style={{
+          bottom: '12px',
+          maxHeight: is_tray_collapsed ? 'auto' : max_height_style,
+          right: '12px',
+        }}
+        className="absolute z-20 w-80 flex flex-col bg-card/95 backdrop-blur-md border border-border shadow-2xl p-2.5 space-y-2 text-[var(--body-font-size)] select-none font-sans overflow-hidden transition-all"
+      >
         {/* Tray Header */}
         <div className="flex items-center justify-between border-b border-border pb-1.5 shrink-0">
           <div className="flex items-center gap-2">
@@ -387,12 +467,14 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
                         Loading raster layers...
                       </div>
                     )}
-                    {filtered_layers.length === 0 && !is_loading_layers && (
+                    {Object.keys(dataset_folders).length === 0 && !is_loading_layers && (
                       <div className="p-2 text-center text-xs text-muted-foreground">
                         No matching layers found.
                       </div>
                     )}
-                    {filtered_layers.map((arg0_layer) => render_data_layer_node(arg0_layer))}
+                    {Object.entries(dataset_folders).map(([arg0_folder_name, arg0_folder_layers]) =>
+                      render_dataset_folder_node(arg0_folder_name, arg0_folder_layers)
+                    )}
                   </div>
                 )}
               </div>

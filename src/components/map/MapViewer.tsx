@@ -703,7 +703,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
       <TooltipProvider delayDuration={150}>
         <div
           style={{ top: `${UI_LAYOUT.margin}px`, right: `${UI_LAYOUT.margin}px` }}
-          className="absolute z-20 flex flex-col gap-[var(--cell-padding)] bg-card/95 backdrop-blur-md p-[var(--cell-padding)] rounded-none border border-border shadow-md"
+          className="absolute z-30 flex flex-col gap-[var(--cell-padding)] bg-card/95 backdrop-blur-md p-[var(--cell-padding)] rounded-none border border-border shadow-md"
         >
           {/* Map Display Settings Toggle (Basemaps & Projections) */}
           <Tooltip>
@@ -804,7 +804,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
               right: `${UI_LAYOUT.settingsDrawerRight}px`,
               width: `${UI_LAYOUT.settingsDrawerWidth}px`,
             }}
-            className="absolute z-30 bg-card/98 backdrop-blur-md border border-border rounded-none p-[var(--padding)] shadow-2xl text-[var(--body-font-size)] text-card-foreground animate-in fade-in-0 zoom-in-95 duration-100 font-sans space-y-[var(--padding)]"
+            className="absolute z-35 bg-card/98 backdrop-blur-md border border-border rounded-none p-[var(--padding)] shadow-2xl text-[var(--body-font-size)] text-card-foreground animate-in fade-in-0 zoom-in-95 duration-100 font-sans space-y-[var(--padding)]"
           >
             {/* Header */}
             <div className="flex items-center justify-between pb-1.5 border-b border-border">
@@ -874,6 +874,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
           activeLayerId={props.activeLayerId}
           activeVariableSelectors={props.activeVariableSelectors}
           allCountries={country_features}
+          analyticsOpen={props.analyticsOpen}
           circleOverlayConfig={circle_overlay_config}
           countriesMode={Boolean(countries_mode)}
           countryStats={country_stats}
@@ -892,6 +893,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
           selectedCountries={selected_countries || []}
           setCircleOverlayConfig={set_circle_overlay_config || (() => { })}
           setHeightmapConfig={set_heightmap_config || (() => { })}
+          settingsOpen={flyout_open}
           userRole={props.userRole}
         />
       )}

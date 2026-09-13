@@ -22,29 +22,30 @@ export interface PopulationPyramidChartProps {
 }
 
 export interface AgeCohortItem {
+  compactLabel: string
   id: string
   label: string
 }
 
 export const AGE_COHORTS: AgeCohortItem[] = [
-  { id: '00', label: '0-1yo, Infants' },
-  { id: '01', label: '1-5yo' },
-  { id: '05', label: '5-10yo' },
-  { id: '10', label: '10-15yo' },
-  { id: '15', label: '15-20yo' },
-  { id: '20', label: '20-25yo' },
-  { id: '25', label: '25-30yo' },
-  { id: '30', label: '30-35yo' },
-  { id: '35', label: '35-40yo' },
-  { id: '40', label: '40-45yo' },
-  { id: '45', label: '45-50yo' },
-  { id: '50', label: '50-55yo' },
-  { id: '55', label: '55-60yo' },
-  { id: '60', label: '60-65yo' },
-  { id: '65', label: '65-70yo' },
-  { id: '70', label: '70-75yo' },
-  { id: '75', label: '75-80yo' },
-  { id: '80', label: '80+, Seniors' },
+  { compactLabel: '0-1', id: '00', label: '0-1yo, Infants' },
+  { compactLabel: '1-5', id: '01', label: '1-5yo' },
+  { compactLabel: '5-10', id: '05', label: '5-10yo' },
+  { compactLabel: '10-15', id: '10', label: '10-15yo' },
+  { compactLabel: '15-20', id: '15', label: '15-20yo' },
+  { compactLabel: '20-25', id: '20', label: '20-25yo' },
+  { compactLabel: '25-30', id: '25', label: '25-30yo' },
+  { compactLabel: '30-35', id: '30', label: '30-35yo' },
+  { compactLabel: '35-40', id: '35', label: '35-40yo' },
+  { compactLabel: '40-45', id: '40', label: '40-45yo' },
+  { compactLabel: '45-50', id: '45', label: '45-50yo' },
+  { compactLabel: '50-55', id: '50', label: '50-55yo' },
+  { compactLabel: '55-60', id: '55', label: '55-60yo' },
+  { compactLabel: '60-65', id: '60', label: '60-65yo' },
+  { compactLabel: '65-70', id: '65', label: '65-70yo' },
+  { compactLabel: '70-75', id: '70', label: '70-75yo' },
+  { compactLabel: '75-80', id: '75', label: '75-80yo' },
+  { compactLabel: '80+', id: '80', label: '80+, Seniors' },
 ]
 
 /**
@@ -256,13 +257,13 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
           bottom: '8%',
           containLabel: false,
           left: '4%',
-          right: '54%',
+          right: '58%',
           top: effective_countries.length > 0 ? '34px' : '28px',
         },
         {
           bottom: '8%',
           containLabel: false,
-          left: '54%',
+          left: '58%',
           right: '4%',
           top: effective_countries.length > 0 ? '34px' : '28px',
         },
@@ -398,9 +399,15 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
         },
         {
           axisLabel: {
-            color: '#d4d4d8',
-            fontSize: 10,
-            margin: 8,
+            align: 'center',
+            color: '#e4e4e7',
+            fontFamily: 'sans-serif',
+            fontSize: 9.5,
+            formatter: (arg0_val: string, arg1_idx: number) => {
+              let cohort = AGE_COHORTS[arg1_idx]
+              return cohort ? (cohort.compactLabel || cohort.label) : arg0_val
+            },
+            margin: 50,
           },
           axisLine: { lineStyle: { color: '#3f3f46' } },
           axisTick: { show: false },

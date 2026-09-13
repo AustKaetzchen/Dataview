@@ -149,7 +149,7 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_pr
         right: `${right_offset}px`,
         top: `${UI_LAYOUT.margin}px`,
       }}
-      className="absolute z-30 w-[640px] max-w-[calc(100vw-720px)] h-[340px] bg-card/95 backdrop-blur-md border border-border rounded-none text-card-foreground shadow-2xl flex flex-col font-sans transition-all duration-200 ease-out animate-in fade-in-0 zoom-in-95 duration-150"
+      className="absolute z-40 w-[640px] max-w-[calc(100vw-720px)] h-[340px] bg-card/95 backdrop-blur-md border border-border rounded-none text-card-foreground shadow-2xl flex flex-col font-sans transition-all duration-200 ease-out animate-in fade-in-0 zoom-in-95 duration-150"
     >
       {/* Panel Header */}
       <div className="h-[var(--navbar-height)] px-[var(--padding)] flex items-center justify-between border-b border-border select-none gap-[var(--padding)] bg-card/90">

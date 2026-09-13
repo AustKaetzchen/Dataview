@@ -243,6 +243,8 @@ export const scanLayerTemplate = function (
       continue
     }
 
+    let has_hyde_suffix = /(\$\{year\}\$\{hs\}|\{year\}\{hs\}|\$\{year\}\{hs\}|\{year\}\$\{hs\}|\$\{hs\}|\{hs\})/.test(file_pattern)
+
     //Construct regex from file pattern supporting both ${token} and {token} formats
     let regex_str = file_pattern
       .replace(/[.*+?^${}()|[\]\\]/g, (arg0_match) => {
@@ -250,11 +252,13 @@ export const scanLayerTemplate = function (
           return arg0_match
         return `\\${arg0_match}`
       })
+      .replace(/(\$\{year\}\$\{hs\}|\{year\}\{hs\}|\$\{year\}\{hs\}|\{year\}\$\{hs\})/g, '(\\d+)(BC|AD)_number')
       .replace(/(\$\{year\}|\{year\})/g, '(-?\\d+)')
       .replace(/(\$\{profession\}|\{profession\})/g, '([a-zA-Z0-9_-]+)')
       .replace(/(\$\{gender\}|\{gender\})/g, '([a-zA-Z0-9_-]+)')
       .replace(/(\$\{indicator\}|\{indicator\})/g, '([a-zA-Z0-9_-]+)')
       .replace(/(\$\{age\}|\{age\})/g, '([a-zA-Z0-9_-]+)')
+      .replace(/(\$\{hs\}|\{hs\})/g, '(BC|AD)_number')
 
     let is_first_combo = i === 0
     let scan_regex = new RegExp(`^${regex_str}$`, 'i')
@@ -264,7 +268,15 @@ export const scanLayerTemplate = function (
       let match = filename.match(scan_regex)
       if (match) {
         let full_path = path.join(dir_path, filename)
-        let yr = parseInt(match[1], 10)
+        let yr: number
+
+        if (has_hyde_suffix && match[2]) {
+          let era = match[2].toUpperCase()
+          let num_val = parseInt(match[1], 10)
+          yr = (era === 'BC') ? -num_val : num_val
+        } else {
+          yr = parseInt(match[1], 10)
+        }
 
         if (!Number.isNaN(yr)) {
           available_years_set.add(yr)
@@ -371,6 +383,16 @@ export const getLayerIcon = function (arg0_layer_id: string): string {
     return 'groups'
   if (id.includes('wealth') || id.includes('income'))
     return 'payments'
+  if (id.includes('cropland') || id.includes('cultivation') || id.includes('crop'))
+    return 'agriculture'
+  if (id.includes('pasture') || id.includes('grazing') || id.includes('rangeland'))
+    return 'grass'
+  if (id.includes('rice'))
+    return 'grain'
+  if (id.includes('irri') || id.includes('rainfed'))
+    return 'water_drop'
+  if (id.includes('alcc') || id.includes('landuse') || id.includes('shifting'))
+    return 'terrain'
   return 'layers'
 }
 
@@ -406,6 +428,7 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
     let full_path = path.join(layers_dir, file_name)
     let raw_text = fs.readFileSync(full_path, 'utf-8')
     let parsed_json = JSON5.parse(raw_text)
+    let dataset_name = (typeof parsed_json.name === 'string') ? parsed_json.name : path.basename(file_name, '.json5')
 
     //Extract root_folders
     let raw_roots = parsed_json.root_folders || {}
@@ -413,7 +436,9 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
     resolved_roots = { ...resolved_roots, ...file_roots }
 
     //Iterate over layer definitions
-    let layer_keys = Object.keys(parsed_json).filter((arg0_k) => arg0_k !== 'root_folders')
+    let layer_keys = Object.keys(parsed_json).filter(
+      (arg0_k) => !['root_folders', 'name', 'expressions'].includes(arg0_k)
+    )
     let metadata_keys = [
       'description',
       'encoding',
@@ -466,6 +491,8 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
             let sk = sel_keys[z]
             let sel_def = item.variable_selectors[sk]
             let opt_keys = Object.keys(sel_def).filter((arg0_opt) => arg0_opt !== 'name')
+            if (opt_keys.length > 0 && opt_keys.every((arg0_opt) => !Number.isNaN(parseInt(arg0_opt, 10))))
+              opt_keys.sort((arg0_a, arg0_b) => parseInt(arg0_a, 10) - parseInt(arg0_b, 10))
             let options_record: Record<string, LayerVariableOption> = {}
 
             for (let a = 0; a < opt_keys.length; a++) {
@@ -494,6 +521,8 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
             if (typeof candidate_sel === 'object' && candidate_sel !== null && !candidate_sel.filepath) {
               let opt_keys = Object.keys(candidate_sel).filter((arg0_opt) => arg0_opt !== 'name')
               if (opt_keys.length > 0) {
+                if (opt_keys.every((arg0_opt) => !Number.isNaN(parseInt(arg0_opt, 10))))
+                  opt_keys.sort((arg0_a, arg0_b) => parseInt(arg0_a, 10) - parseInt(arg0_b, 10))
                 if (!selectors)
                   selectors = {}
                 let options_record: Record<string, LayerVariableOption> = {}
@@ -557,7 +586,7 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
 
           sub_layer_list.push({
             available_years: sub_years,
-            category: item.name,
+            category: dataset_name,
             encoding: sub_item.encoding || 'float32',
             filepath_template: sub_template,
             icon: getLayerIcon(sub_k),
@@ -584,20 +613,9 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
           resolved_template = sub_layer_list[0].filepath_template
         }
 
-        let category_name = 'Historical Macroeconomic Rasters'
-        if (layer_type.startsWith('raster.category_')) {
-          category_name = 'Occupations & Categories'
-        } else if (layer_type === 'raster.age_sex' || k.includes('age_sex')) {
-          category_name = 'Demographic Cohorts (Age & Sex)'
-        } else if (k.includes('birth') || k.includes('death') || k.includes('migration')) {
-          category_name = 'Vital Statistics & Migration'
-        } else if (k.includes('population') || k.includes('stad')) {
-          category_name = 'Population & Settlement Dynamics'
-        }
-
         parsed_layers[k] = {
           available_years: years,
-          category: category_name,
+          category: dataset_name,
           description: desc_text,
           encoding: item.encoding || 'float32',
           filepath_template: resolved_template,
