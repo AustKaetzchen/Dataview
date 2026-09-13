@@ -46,12 +46,12 @@ if /i "%~1"=="--rebuild" goto do_rebuild
 :: Interactive startup menu
 echo Choose server mode to run:
 echo.
-echo   [1] Production Build Server (vite preview) [Default in 10s]
+echo   [1] Production Build Server (vite preview)
 echo   [2] Development Server      (vite dev with HMR live reload)
 echo   [3] Rebuild Production      (npm run build, then preview)
 echo   [4] Exit
 echo.
-choice /c 1234 /t 10 /d 1 /m "Select option [1-4]: "
+choice /c 1234 /m "Select option"
 if errorlevel 4 goto do_exit
 if errorlevel 3 goto do_rebuild
 if errorlevel 2 goto start_dev
