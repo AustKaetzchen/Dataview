@@ -52,6 +52,11 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
 
     //Route 1: GET /api/layers
     if (pathname === '/layers' || pathname === '/api/layers') {
+      try {
+        registry = loadAndParseLayers(config_dir)
+      } catch (arg0_err) {
+        console.error('[ApiMiddleware] Error reloading layer registry:', arg0_err)
+      }
       res.setHeader('Content-Type', 'application/json')
       res.statusCode = 200
       res.end(JSON.stringify({ layers: registry.layers, total: Object.keys(registry.layers).length }))
@@ -150,8 +155,6 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
     if (pathname === '/raster/file' || pathname === '/api/raster/file') {
       let layer = query.layer as string
       let year = query.year as string
-      let profession = query.profession as string
-      let gender = query.gender as string
 
       if (!layer || !year) {
         res.statusCode = 400
@@ -160,6 +163,7 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
         return
       }
 
+      let file_path: string | undefined = undefined
       let target_layer: ParsedDataLayer | undefined = registry.layers[layer]
       if (!target_layer && layer.includes('.')) {
         let parent_id = layer.split('.')[0]
@@ -167,22 +171,43 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
         if (parent && parent.sub_layers)
           target_layer = parent.sub_layers.find((arg0_sub) => arg0_sub.id === layer)
       }
-      let cache_key: string
 
-      if (target_layer && target_layer.variable_selectors) {
-        let prof = profession || 'agriculture'
-        let gen = gender || 't'
-        cache_key = `${layer}:${prof}:${gen}:${year}`
-      } else {
-        cache_key = `${layer}:${year}`
+      //Collect selector query parameters
+      let selector_param_keys = Object.keys(query).filter(
+        (arg0_k) => arg0_k !== 'layer' && arg0_k !== 'year' && typeof query[arg0_k] === 'string'
+      ).sort()
+
+      //Strategy 1: Canonical sorted key (e.g. layer:indicator=net_wealth:1950)
+      if (selector_param_keys.length > 0) {
+        let combo_str = selector_param_keys.map((arg0_k) => `${arg0_k}=${query[arg0_k]}`).join(':')
+        file_path = registry.file_cache.get(`${layer}:${combo_str}:${year}`)
       }
 
-      let file_path = registry.file_cache.get(cache_key)
+      //Strategy 2: Values-only key (e.g. layer:net_wealth:1950)
+      if (!file_path && selector_param_keys.length > 0) {
+        let vals_str = selector_param_keys.map((arg0_k) => query[arg0_k]).join(':')
+        file_path = registry.file_cache.get(`${layer}:${vals_str}:${year}`)
+      }
 
-      //Fallback lookup: try basic layer:year or layer:agriculture:t:year
-      if (!file_path && cache_key !== `${layer}:${year}`) {
+      //Strategy 3: Legacy positional (e.g. layer:profession:gender:1950)
+      if (!file_path && (query.profession || query.gender)) {
+        let prof = (query.profession as string) || 'agriculture'
+        let gen = (query.gender as string) || 't'
+        file_path = registry.file_cache.get(`${layer}:${prof}:${gen}:${year}`)
+      }
+
+      //Strategy 4: Single parameter fallback
+      if (!file_path && selector_param_keys.length === 1) {
+        let val = query[selector_param_keys[0]] as string
+        file_path = registry.file_cache.get(`${layer}:${val}:${year}`)
+      }
+
+      //Strategy 5: Default layer:year key
+      if (!file_path) {
         file_path = registry.file_cache.get(`${layer}:${year}`)
       }
+
+      //Strategy 6: Legacy default fallback
       if (!file_path) {
         file_path = registry.file_cache.get(`${layer}:agriculture:t:${year}`)
       }
@@ -192,8 +217,8 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
         res.setHeader('Content-Type', 'application/json')
         res.end(
           JSON.stringify({
-            cache_key,
             error: `GeoPNG raster file not found for layer: ${layer}, year: ${year}`,
+            query,
           })
         )
         return

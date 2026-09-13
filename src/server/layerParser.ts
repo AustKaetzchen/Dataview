@@ -123,6 +123,174 @@ export const resolveRootFolders = function (
 }
 
 /**
+ * Generates all Cartesian combinations of selector key-value pairs for a layer.
+ *
+ * @param {Record<string, LayerVariableSelector>} [arg0_selectors]
+ *
+ * @returns {Array<Record<string, string>>}
+ */
+export const generateSelectorCombinations = function (
+  arg0_selectors?: Record<string, LayerVariableSelector>
+): Array<Record<string, string>> {
+  //Convert from parameters
+  let selectors = arg0_selectors
+
+  //Declare local instance variables
+  let all_combos: Array<Record<string, string>> = [{}]
+  let sel_keys: string[]
+
+  //Guard clauses
+  if (!selectors)
+    return [{}]
+
+  //Function body
+  sel_keys = Object.keys(selectors)
+  if (sel_keys.length === 0)
+    return [{}]
+
+  for (let i = 0; i < sel_keys.length; i++) {
+    let key = sel_keys[i]
+    let new_combos: Array<Record<string, string>> = []
+    let opt_keys = Object.keys(selectors[key].options)
+
+    for (let x = 0; x < all_combos.length; x++) {
+      let base = all_combos[x]
+      for (let y = 0; y < opt_keys.length; y++) {
+        let opt = opt_keys[y]
+        new_combos.push({
+          ...base,
+          [key]: opt,
+        })
+      }
+    }
+
+    all_combos = new_combos
+  }
+
+  //Return statement
+  return all_combos
+}
+
+/**
+ * Scans filesystem for raster files matching a layer template and its variable selectors, populating the cache.
+ *
+ * @param {string} arg0_template
+ * @param {string} arg1_layer_id
+ * @param {Map<string, string>} arg2_file_cache
+ * @param {Record<string, LayerVariableSelector>} [arg3_selectors]
+ *
+ * @returns {number[]} - List of unique sorted available years
+ */
+export const scanLayerTemplate = function (
+  arg0_template: string,
+  arg1_layer_id: string,
+  arg2_file_cache: Map<string, string>,
+  arg3_selectors?: Record<string, LayerVariableSelector>
+): number[] {
+  //Convert from parameters
+  let file_cache = arg2_file_cache
+  let layer_id = arg1_layer_id
+  let selectors = arg3_selectors
+  let template = arg0_template
+
+  //Declare local instance variables
+  let all_combos: Array<Record<string, string>> = []
+  let available_years_set = new Set<number>()
+
+  //Function body
+  all_combos = generateSelectorCombinations(selectors)
+
+  for (let i = 0; i < all_combos.length; i++) {
+    let combo = all_combos[i]
+    let concrete_template = template
+    let keys = Object.keys(combo)
+
+    for (let x = 0; x < keys.length; x++) {
+      let k = keys[x]
+      concrete_template = concrete_template.replace(new RegExp(`\\$\\{${k}\\}`, 'g'), combo[k])
+    }
+    concrete_template = normaliseLayerPath(concrete_template)
+
+    let dir_path = path.dirname(concrete_template)
+    let file_pattern = path.basename(concrete_template)
+
+    if (!fs.existsSync(dir_path)) {
+      console.warn(`[LayerParser] Directory does not exist on disk: ${dir_path}`)
+      continue
+    }
+
+    let dir_files: string[] = []
+    try {
+      dir_files = fs.readdirSync(dir_path)
+    } catch (arg0_err) {
+      console.error(`[LayerParser] Error reading directory ${dir_path}:`, arg0_err)
+      continue
+    }
+
+    //Construct regex from file pattern
+    let regex_str = file_pattern
+      .replace(/[.*+?^${}()|[\]\\]/g, (arg0_match) => {
+        if (arg0_match === '$' || arg0_match === '{' || arg0_match === '}')
+          return arg0_match
+        return `\\${arg0_match}`
+      })
+      .replace(/\$\{year\}/g, '(-?\\d+)')
+      .replace(/\$\{profession\}/g, '([a-zA-Z0-9_-]+)')
+      .replace(/\$\{gender\}/g, '([a-zA-Z0-9_-]+)')
+      .replace(/\$\{indicator\}/g, '([a-zA-Z0-9_-]+)')
+
+    let is_first_combo = i === 0
+    let scan_regex = new RegExp(`^${regex_str}$`, 'i')
+
+    for (let x = 0; x < dir_files.length; x++) {
+      let filename = dir_files[x]
+      let match = filename.match(scan_regex)
+      if (match) {
+        let full_path = path.join(dir_path, filename)
+        let yr = parseInt(match[1], 10)
+
+        if (!Number.isNaN(yr)) {
+          available_years_set.add(yr)
+
+          //Cache mapping strategies
+          if (keys.length > 0) {
+            //Strategy 1: Canonical sorted key (e.g. layer:indicator=net_wealth:1950)
+            let sorted_pairs = Object.keys(combo).sort().map((arg0_k) => `${arg0_k}=${combo[arg0_k]}`).join(':')
+            file_cache.set(`${layer_id}:${sorted_pairs}:${yr}`, full_path)
+
+            //Strategy 2: Sorted values key (e.g. layer:net_wealth:1950)
+            let sorted_values = Object.keys(combo).sort().map((arg0_k) => combo[arg0_k]).join(':')
+            file_cache.set(`${layer_id}:${sorted_values}:${yr}`, full_path)
+
+            //Strategy 3: Legacy positional (e.g. layer:profession:gender:1950)
+            if (combo.profession && combo.gender) {
+              file_cache.set(`${layer_id}:${combo.profession}:${combo.gender}:${yr}`, full_path)
+            }
+            if (keys.length === 1) {
+              let single_val = combo[keys[0]]
+              file_cache.set(`${layer_id}:${single_val}:${yr}`, full_path)
+            }
+
+            //Strategy 4: Default fallback key (first combo)
+            if (is_first_combo) {
+              file_cache.set(`${layer_id}:${yr}`, full_path)
+              if (combo.profession && combo.gender) {
+                file_cache.set(`${layer_id}:agriculture:t:${yr}`, full_path)
+              }
+            }
+          } else {
+            file_cache.set(`${layer_id}:${yr}`, full_path)
+          }
+        }
+      }
+    }
+  }
+
+  //Return statement
+  return Array.from(available_years_set).sort((arg0_a, arg0_b) => arg0_a - arg0_b)
+}
+
+/**
  * Parses and indexes a directory of GeoPNG files corresponding to a data layer.
  *
  * @param {string} arg0_dir_path
@@ -144,69 +312,8 @@ export const scanLayerDirectory = function (
   let layer_id = arg2_layer_id
   let pattern = arg1_pattern
 
-  //Declare local instance variables
-  let all_files: string[] = []
-  let available_years_set = new Set<number>()
-  let regex_str: string
-  let scan_regex: RegExp
-
-  //Guard clauses
-  if (!fs.existsSync(dir_path)) {
-    console.warn(`[LayerParser] Directory does not exist on disk: ${dir_path}`)
-    return []
-  }
-
-  //Function body
-  try {
-    all_files = fs.readdirSync(dir_path)
-  } catch (arg0_err) {
-    console.error(`[LayerParser] Error reading directory ${dir_path}:`, arg0_err)
-    return []
-  }
-
-  //Construct regex from pattern (e.g. "GDP_pc_${year}.png" -> "^GDP_pc_(-?\\d+)\\.png$")
-  regex_str = pattern
-    .replace(/[.*+?^${}()|[\]\\]/g, (arg0_match) => {
-      if (arg0_match === '$')
-        return '$'
-      if (arg0_match === '{')
-        return '{'
-      if (arg0_match === '}')
-        return '}'
-      return `\\${arg0_match}`
-    })
-    .replace(/\$\{year\}/g, '(-?\\d+)')
-    .replace(/\$\{profession\}/g, '([a-zA-Z0-9_-]+)')
-    .replace(/\$\{gender\}/g, '([a-zA-Z0-9_-]+)')
-
-  scan_regex = new RegExp(`^${regex_str}$`, 'i')
-
-  for (let i = 0; i < all_files.length; i++) {
-    let filename = all_files[i]
-    let match = filename.match(scan_regex)
-    if (match) {
-      let full_path = path.join(dir_path, filename)
-      let parsed_year: number | null = null
-
-      if (pattern.includes('${profession}') && pattern.includes('${gender}') && pattern.includes('${year}')) {
-        let prof = match[1]
-        let gen = match[2]
-        let yr = parseInt(match[3], 10)
-        parsed_year = yr
-        file_cache.set(`${layer_id}:${prof}:${gen}:${yr}`, full_path)
-      } else if (pattern.includes('${year}')) {
-        let yr = parseInt(match[1], 10)
-        parsed_year = yr
-        file_cache.set(`${layer_id}:${yr}`, full_path)
-      }
-
-      if (parsed_year !== null && !Number.isNaN(parsed_year))
-        available_years_set.add(parsed_year)
-    }
-  }
-
   //Return statement
-  return Array.from(available_years_set).sort((arg0_a, arg0_b) => arg0_a - arg0_b)
+  return scanLayerTemplate(path.join(dir_path, pattern), layer_id, file_cache)
 }
 
 /**
@@ -231,6 +338,8 @@ export const getLayerIcon = function (arg0_layer_id: string): string {
     return 'briefcase'
   if (id.includes('population'))
     return 'user-check'
+  if (id.includes('wealth') || id.includes('income'))
+    return 'payments'
   return 'layers'
 }
 
@@ -290,30 +399,6 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
         }
         resolved_template = normaliseLayerPath(resolved_template)
 
-        let dir_part = path.dirname(resolved_template)
-        let file_part = path.basename(resolved_template)
-
-        //Scan files and discover available years
-        let years = scanLayerDirectory(dir_part, file_part, k, file_cache)
-
-        //Determine layer type
-        let layer_type = 'raster'
-        if (k.includes('professions') || k.includes('profession')) {
-          layer_type = 'raster.category_profession'
-        } else if (k.includes('population')) {
-          layer_type = 'raster.population'
-        } else if (k.includes('age_sex')) {
-          layer_type = 'raster.age_sex'
-        }
-
-        //Determine description
-        let desc_text: string | undefined = undefined
-        if (Array.isArray(item.description)) {
-          desc_text = item.description.join('\n\n')
-        } else if (typeof item.description === 'string') {
-          desc_text = item.description
-        }
-
         //Extract variable selectors
         let selectors: Record<string, LayerVariableSelector> | undefined = undefined
         if (item.variable_selectors) {
@@ -342,6 +427,27 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
           }
         }
 
+        //Scan files and discover available years using generalized scanLayerTemplate
+        let years = scanLayerTemplate(resolved_template, k, file_cache, selectors)
+
+        //Determine layer type
+        let layer_type = 'raster'
+        if (k.includes('professions') || k.includes('profession')) {
+          layer_type = 'raster.category_profession'
+        } else if (k.includes('population')) {
+          layer_type = 'raster.population'
+        } else if (k.includes('age_sex')) {
+          layer_type = 'raster.age_sex'
+        }
+
+        //Determine description
+        let desc_text: string | undefined = undefined
+        if (Array.isArray(item.description)) {
+          desc_text = item.description.join('\n\n')
+        } else if (typeof item.description === 'string') {
+          desc_text = item.description
+        }
+
         //Check for sub-layers (e.g. labourforce_female, labourforce_male in labourforce_total)
         let sub_layer_list: ParsedDataLayer[] = []
         let sub_keys = Object.keys(item).filter(
@@ -364,10 +470,8 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
           }
           sub_template = normaliseLayerPath(sub_template)
 
-          let sub_dir = path.dirname(sub_template)
-          let sub_file = path.basename(sub_template)
           let sub_full_id = `${k}.${sub_k}`
-          let sub_years = scanLayerDirectory(sub_dir, sub_file, sub_full_id, file_cache)
+          let sub_years = scanLayerTemplate(sub_template, sub_full_id, file_cache, sub_item.variable_selectors || selectors)
 
           sub_layer_list.push({
             available_years: sub_years,

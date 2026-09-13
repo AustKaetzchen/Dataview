@@ -252,7 +252,9 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
                     }`}>
                       {is_active && <span className="w-1 h-1 rounded-full bg-primary-foreground" />}
                     </span>
-                    <span className="text-xs truncate">{layer.name} (Total)</span>
+                    <span className="text-xs truncate">
+                      {layer.name.endsWith('(Total)') ? layer.name : `${layer.name} (Total)`}
+                    </span>
                   </div>
                   {layer.unit && (
                     <span className="text-[10px] text-muted-foreground shrink-0 ml-1">{layer.unit}</span>

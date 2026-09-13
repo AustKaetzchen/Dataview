@@ -55,13 +55,17 @@ export const TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
   let handle_step_backward: () => void
   let handle_step_forward: () => void
   let is_collapsed: boolean
+  let is_looping: boolean
+  let is_looping_ref = useRef<boolean>(false)
   let is_settings_open: boolean
   let keyframe_positions: { left_pct: number; year: number }[]
   let keyframes_ref = useRef<number[]>(available_keyframes)
   let last_snap_time_ref = useRef<number>(0)
   let last_tick_ref = useRef<number>(performance.now())
   let on_change_year_ref = useRef(on_change_year)
+  let on_toggle_play_ref = useRef(on_toggle_play)
   let set_is_collapsed: React.Dispatch<React.SetStateAction<boolean>>
+  let set_is_looping: React.Dispatch<React.SetStateAction<boolean>>
   let set_is_settings_open: React.Dispatch<React.SetStateAction<boolean>>
   let settings_popover_ref = useRef<HTMLDivElement | null>(null)
   let slider_normalised_val: number
@@ -69,13 +73,16 @@ export const TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
   let speed_options = [0.5, 1, 2, 5, 10]
 
   //Function body
+  ;[is_collapsed, set_is_collapsed] = useState(false)
+  ;[is_looping, set_is_looping] = useState(false)
+  ;[is_settings_open, set_is_settings_open] = useState(false)
+
   current_year_ref.current = current_year
+  is_looping_ref.current = is_looping
   keyframes_ref.current = available_keyframes
   on_change_year_ref.current = on_change_year
+  on_toggle_play_ref.current = on_toggle_play
   snap_ref.current = snap_to_keyframes
-
-  ;[is_collapsed, set_is_collapsed] = useState(false)
-  ;[is_settings_open, set_is_settings_open] = useState(false)
 
   //Close settings pop-out on click outside
   useEffect(() => {
@@ -198,18 +205,35 @@ export const TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
           let curr = current_year_ref.current
           let kfs = keyframes_ref.current
           let next_candidates = kfs.filter((arg0_y) => arg0_y > curr + 0.05)
-          let next_kf = next_candidates.length > 0 ? next_candidates[0] : kfs[0]
-          on_change_year_ref.current(next_kf)
+          if (next_candidates.length > 0) {
+            on_change_year_ref.current(next_candidates[0])
+          } else if (is_looping_ref.current) {
+            on_change_year_ref.current(kfs[0])
+          } else {
+            on_change_year_ref.current(kfs[kfs.length - 1])
+            on_toggle_play_ref.current()
+            return
+          }
         }
       } else {
         let delta_pos = (delta_ms/1000)*(1/25)*playback_speed
         let curr_pos = UfDate.yearToTimelinePosition(current_year_ref.current)
         let next_pos = curr_pos + delta_pos
-        if (next_pos > 1)
-          next_pos = 0
-
-        let next_year = UfDate.timelinePositionToYear(next_pos)
-        on_change_year_ref.current(next_year)
+        if (next_pos >= 1) {
+          if (is_looping_ref.current) {
+            next_pos = 0
+            let next_year = UfDate.timelinePositionToYear(next_pos)
+            on_change_year_ref.current(next_year)
+          } else {
+            let end_year = UfDate.timelinePositionToYear(1)
+            on_change_year_ref.current(end_year)
+            on_toggle_play_ref.current()
+            return
+          }
+        } else {
+          let next_year = UfDate.timelinePositionToYear(next_pos)
+          on_change_year_ref.current(next_year)
+        }
       }
 
       anim_frame_ref.current = requestAnimationFrame(tick)
@@ -328,6 +352,25 @@ export const TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
                         onClick={() => on_toggle_snap_to_keyframes && on_toggle_snap_to_keyframes(!snap_to_keyframes)}
                         className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors cursor-pointer ${
                           snap_to_keyframes ? 'bg-primary justify-end' : 'bg-muted justify-start border border-border'
+                        }`}
+                      >
+                        <div className="w-4 h-4 rounded-full bg-card shadow-xs transition-all" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Loop Playback */}
+                  <div className="pt-2 border-t border-border/40">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-medium text-foreground">Loop Playback</div>
+                        <div className="text-[10px] text-muted-foreground">Restart from beginning at end</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => set_is_looping((arg0_prev) => !arg0_prev)}
+                        className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors cursor-pointer ${
+                          is_looping ? 'bg-primary justify-end' : 'bg-muted justify-start border border-border'
                         }`}
                       >
                         <div className="w-4 h-4 rounded-full bg-card shadow-xs transition-all" />

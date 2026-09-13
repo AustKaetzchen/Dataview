@@ -132,7 +132,8 @@ const applyLayerLegend = function (
     let sel_keys = Object.keys(layer.variable_selectors)
     for (let i = 0; i < sel_keys.length; i++) {
       let sk = sel_keys[i]
-      let chosen_val = selectors[sk]
+      let opt_keys = Object.keys(layer.variable_selectors[sk]?.options || {})
+      let chosen_val = selectors[sk] || opt_keys[0] || ''
       if (chosen_val && layer.variable_selectors[sk]?.options[chosen_val]) {
         let opt = layer.variable_selectors[sk].options[chosen_val]
         if (opt.legend)
@@ -203,10 +204,15 @@ const fetchRasterKeyframe = async function (
   let year = arg1_year
 
   //Declare local instance variables
-  let cache_key = has_selectors
-    ? `${layer_id}:${selectors.profession || 'agriculture'}:${selectors.gender || 't'}:${year}:${format}`
-    : `${layer_id}:${year}:${format}`
+  let cache_key: string
   let pending_promise: Promise<DecodedRaster | null>
+  let sel_keys = has_selectors ? Object.keys(selectors).sort() : []
+  let sel_part = sel_keys.map((arg0_k) => `${arg0_k}=${selectors[arg0_k]}`).join(':')
+
+  //Construct cache_key
+  cache_key = has_selectors && sel_part.length > 0
+    ? `${layer_id}:${sel_part}:${year}:${format}`
+    : `${layer_id}:${year}:${format}`
 
   //Return statement
   if (cache.has(cache_key))
@@ -222,10 +228,11 @@ const fetchRasterKeyframe = async function (
         year: year.toString(),
       })
       if (has_selectors) {
-        if (selectors.profession)
-          query_params.set('profession', selectors.profession)
-        if (selectors.gender)
-          query_params.set('gender', selectors.gender)
+        for (let i = 0; i < sel_keys.length; i++) {
+          let sk = sel_keys[i]
+          if (selectors[sk])
+            query_params.set(sk, selectors[sk])
+        }
       }
 
       let resp = await fetch(`/api/raster/file?${query_params.toString()}`)
@@ -524,6 +531,28 @@ export const App: React.FC = function () {
     }
   }, [active_layer, active_variable_selectors])
 
+  //Populate missing selector defaults when active layer changes
+  useEffect(() => {
+    if (active_layer && active_layer.variable_selectors) {
+      let sel_keys = Object.keys(active_layer.variable_selectors)
+      set_active_variable_selectors((arg0_prev) => {
+        let changed = false
+        let updated = { ...arg0_prev }
+        for (let i = 0; i < sel_keys.length; i++) {
+          let sk = sel_keys[i]
+          if (!updated[sk]) {
+            let opt_keys = Object.keys(active_layer!.variable_selectors![sk].options)
+            if (opt_keys.length > 0) {
+              updated[sk] = opt_keys[0]
+              changed = true
+            }
+          }
+        }
+        return changed ? updated : arg0_prev
+      })
+    }
+  }, [active_layer])
+
   //Fetch all available layers from backend API on startup
   useEffect(() => {
     let cancelled = false
@@ -604,8 +633,22 @@ export const App: React.FC = function () {
 
       let has_selectors = Boolean(active_layer.variable_selectors && Object.keys(active_layer.variable_selectors).length > 0)
       let primary_year = (t === 0 || prev_year === next_year) ? prev_year : (t < 0.5 ? prev_year : next_year)
-      let cache_key = has_selectors
-        ? `${requested_layer_id}:${requested_selectors.profession || 'agriculture'}:${requested_selectors.gender || 't'}:${primary_year}:${data_format}`
+
+      //Resolve effective selectors with fallback to first option
+      let effective_selectors: Record<string, string> = {}
+      if (has_selectors && active_layer.variable_selectors) {
+        let sel_keys = Object.keys(active_layer.variable_selectors)
+        for (let i = 0; i < sel_keys.length; i++) {
+          let sk = sel_keys[i]
+          let opt_keys = Object.keys(active_layer.variable_selectors[sk].options)
+          effective_selectors[sk] = requested_selectors[sk] || opt_keys[0] || ''
+        }
+      }
+
+      let sel_keys = has_selectors ? Object.keys(effective_selectors).sort() : []
+      let sel_part = sel_keys.map((arg0_k) => `${arg0_k}=${effective_selectors[arg0_k]}`).join(':')
+      let cache_key = has_selectors && sel_part.length > 0
+        ? `${requested_layer_id}:${sel_part}:${primary_year}:${data_format}`
         : `${requested_layer_id}:${primary_year}:${data_format}`
       let is_cached = raster_cache_ref.current.has(cache_key)
 
@@ -620,8 +663,8 @@ export const App: React.FC = function () {
           set_raster_version((arg0_v) => arg0_v + 1)
         } else {
           let other_year = primary_year === prev_year ? next_year : prev_year
-          let other_cache_key = has_selectors
-            ? `${requested_layer_id}:${requested_selectors.profession || 'agriculture'}:${requested_selectors.gender || 't'}:${other_year}:${data_format}`
+          let other_cache_key = has_selectors && sel_part.length > 0
+            ? `${requested_layer_id}:${sel_part}:${other_year}:${data_format}`
             : `${requested_layer_id}:${other_year}:${data_format}`
           if (raster_cache_ref.current.has(other_cache_key)) {
             let other_raster = raster_cache_ref.current.get(other_cache_key)!
@@ -648,7 +691,7 @@ export const App: React.FC = function () {
         fetchRasterKeyframe(
           requested_layer_id,
           primary_year,
-          requested_selectors,
+          effective_selectors,
           data_format,
           raster_cache_ref.current,
           has_selectors
@@ -684,7 +727,7 @@ export const App: React.FC = function () {
             fetchRasterKeyframe(
               requested_layer_id,
               future_year,
-              requested_selectors,
+              effective_selectors,
               data_format,
               raster_cache_ref.current,
               has_selectors
