@@ -2,102 +2,182 @@ import { DecodedRaster, DownsampleMethod } from './types'
 
 export interface DownsampledRasterResult {
   data: Float32Array
-  width: number
   height: number
-  min: number
   max: number
   mean: number
+  min: number
   validCount: number
+  width: number
 }
 
 /**
- * Downsamples a 2D Float32Array raster to (dstW, dstH) using average, minimum, maximum, or nearest neighbor.
+ * Creates a new DecodedRaster with downsampling applied according to target dimensions and method.
+ *
+ * @param {DecodedRaster} arg0_raster
+ * @param {number} arg1_target_width
+ * @param {number} arg2_target_height
+ * @param {DownsampleMethod} arg3_method
+ *
+ * @returns {DecodedRaster}
  */
-export function downsampleRaster(
-  srcData: Float32Array,
-  srcW: number,
-  srcH: number,
-  dstW: number,
-  dstH: number,
-  method: DownsampleMethod
+export function createBinnedRaster (
+  arg0_raster: DecodedRaster,
+  arg1_target_width: number,
+  arg2_target_height: number,
+  arg3_method: DownsampleMethod
+): DecodedRaster {
+  //Convert from parameters
+  let method = arg3_method
+  let raster = arg0_raster
+  let target_height = arg2_target_height
+  let target_width = arg1_target_width
+
+  //Guard clauses
+  if (target_width === raster.width && target_height === raster.height)
+    return raster
+
+  //Declare local instance variables
+  let res: DownsampledRasterResult
+
+  //Function body
+  res = downsampleRaster(
+    raster.data,
+    raster.width,
+    raster.height,
+    target_width,
+    target_height,
+    method
+  )
+
+  //Return statement
+  return {
+    bounds: raster.bounds,
+    data: res.data,
+    height: res.height,
+    histogram: raster.histogram,
+    max: res.max,
+    mean: res.mean,
+    min: res.min,
+    quantiles: raster.quantiles,
+    stdDev: raster.stdDev,
+    totalCells: res.width*res.height,
+    validCount: res.validCount,
+    width: res.width,
+  }
+}
+
+/**
+ * Downsamples a 2D Float32Array raster to (dstW, dstH) using average, minimum, maximum, or nearest neighbour.
+ *
+ * @param {Float32Array} arg0_src_data
+ * @param {number} arg1_src_w
+ * @param {number} arg2_src_h
+ * @param {number} arg3_dst_w
+ * @param {number} arg4_dst_h
+ * @param {DownsampleMethod} arg5_method
+ *
+ * @returns {DownsampledRasterResult}
+ */
+export function downsampleRaster (
+  arg0_src_data: Float32Array,
+  arg1_src_w: number,
+  arg2_src_h: number,
+  arg3_dst_w: number,
+  arg4_dst_h: number,
+  arg5_method: DownsampleMethod
 ): DownsampledRasterResult {
-  if (dstW === srcW && dstH === srcH) {
-    let min = Infinity
+  //Convert from parameters
+  let dst_h = arg4_dst_h
+  let dst_w = arg3_dst_w
+  let method = arg5_method
+  let src_data = arg0_src_data
+  let src_h = arg2_src_h
+  let src_w = arg1_src_w
+
+  //Guard clauses
+  if (dst_w === src_w && dst_h === src_h) {
     let max = -Infinity
+    let min = Infinity
     let sum = 0
-    let validCount = 0
-    for (let i = 0; i < srcData.length; i++) {
-      const v = srcData[i]
+    let valid_count = 0
+    for (let i = 0; i < src_data.length; i++) {
+      let v = src_data[i]
       if (Number.isFinite(v)) {
-        if (v < min) min = v
-        if (v > max) max = v
+        if (v < min)
+          min = v
+        if (v > max)
+          max = v
         sum += v
-        validCount++
+        valid_count++
       }
     }
     return {
-      data: srcData,
-      width: srcW,
-      height: srcH,
-      min: Number.isFinite(min) ? min : 0,
+      data: src_data,
+      height: src_h,
       max: Number.isFinite(max) ? max : 0,
-      mean: validCount > 0 ? sum / validCount : 0,
-      validCount,
+      mean: valid_count > 0 ? sum/valid_count : 0,
+      min: Number.isFinite(min) ? min : 0,
+      validCount: valid_count,
+      width: src_w,
     }
   }
 
-  const dstData = new Float32Array(dstW * dstH)
-  const xRatio = srcW / dstW
-  const yRatio = srcH / dstH
+  //Declare local instance variables
+  let dst_data = new Float32Array(dst_w*dst_h)
+  let global_max = -Infinity
+  let global_min = Infinity
+  let global_sum = 0
+  let global_valid = 0
+  let x_ratio = src_w/dst_w
+  let y_ratio = src_h/dst_h
 
-  let globalMin = Infinity
-  let globalMax = -Infinity
-  let globalSum = 0
-  let globalValid = 0
-
-  for (let dy = 0; dy < dstH; dy++) {
-    const dstRowOffset = dy * dstW
+  //Function body
+  for (let i = 0; i < dst_h; i++) {
+    let dst_row_offset = i*dst_w
 
     if (method === 'near') {
-      const sy = Math.min(srcH - 1, Math.floor((dy + 0.5) * yRatio))
-      const srcRowOffset = sy * srcW
+      let sy = Math.min(src_h - 1, Math.floor((i + 0.5)*y_ratio))
+      let src_row_offset = sy*src_w
 
-      for (let dx = 0; dx < dstW; dx++) {
-        const sx = Math.min(srcW - 1, Math.floor((dx + 0.5) * xRatio))
-        const val = srcData[srcRowOffset + sx]
-        dstData[dstRowOffset + dx] = val
+      for (let x = 0; x < dst_w; x++) {
+        let sx = Math.min(src_w - 1, Math.floor((x + 0.5)*x_ratio))
+        let val = src_data[src_row_offset + sx]
+        dst_data[dst_row_offset + x] = val
 
         if (Number.isFinite(val)) {
-          if (val < globalMin) globalMin = val
-          if (val > globalMax) globalMax = val
-          globalSum += val
-          globalValid++
+          if (val < global_min)
+            global_min = val
+          if (val > global_max)
+            global_max = val
+          global_sum += val
+          global_valid++
         }
       }
       continue
     }
 
-    const sy0 = Math.floor(dy * yRatio)
-    const sy1 = Math.min(srcH - 1, Math.max(sy0, Math.floor((dy + 1) * yRatio - 1e-6)))
+    let sy0 = Math.floor(i*y_ratio)
+    let sy1 = Math.min(src_h - 1, Math.max(sy0, Math.floor((i + 1)*y_ratio - 1e-6)))
 
-    for (let dx = 0; dx < dstW; dx++) {
-      const sx0 = Math.floor(dx * xRatio)
-      const sx1 = Math.min(srcW - 1, Math.max(sx0, Math.floor((dx + 1) * xRatio - 1e-6)))
-
-      let sum = 0
+    for (let x = 0; x < dst_w; x++) {
       let count = 0
-      let min = Infinity
       let max = -Infinity
+      let min = Infinity
+      let sum = 0
+      let sx0 = Math.floor(x*x_ratio)
+      let sx1 = Math.min(src_w - 1, Math.max(sx0, Math.floor((x + 1)*x_ratio - 1e-6)))
 
-      for (let sy = sy0; sy <= sy1; sy++) {
-        const rowOffset = sy * srcW
-        for (let sx = sx0; sx <= sx1; sx++) {
-          const v = srcData[rowOffset + sx]
+      for (let y = sy0; y <= sy1; y++) {
+        let row_offset = y*src_w
+        for (let z = sx0; z <= sx1; z++) {
+          let v = src_data[row_offset + z]
           if (Number.isFinite(v)) {
             sum += v
             count++
-            if (v < min) min = v
-            if (v > max) max = v
+            if (v < min)
+              min = v
+            if (v > max)
+              max = v
           }
         }
       }
@@ -106,71 +186,36 @@ export function downsampleRaster(
       if (count === 0) {
         val = NaN
       } else if (method === 'average') {
-        val = sum / count
+        val = sum/count
       } else if (method === 'minimum') {
         val = min
       } else if (method === 'maximum') {
         val = max
       } else {
-        val = srcData[sy0 * srcW + sx0]
+        val = src_data[sy0*src_w + sx0]
       }
 
-      dstData[dstRowOffset + dx] = val
+      dst_data[dst_row_offset + x] = val
 
       if (Number.isFinite(val)) {
-        if (val < globalMin) globalMin = val
-        if (val > globalMax) globalMax = val
-        globalSum += val
-        globalValid++
+        if (val < global_min)
+          global_min = val
+        if (val > global_max)
+          global_max = val
+        global_sum += val
+        global_valid++
       }
     }
   }
 
+  //Return statement
   return {
-    data: dstData,
-    width: dstW,
-    height: dstH,
-    min: Number.isFinite(globalMin) ? globalMin : 0,
-    max: Number.isFinite(globalMax) ? globalMax : 0,
-    mean: globalValid > 0 ? globalSum / globalValid : 0,
-    validCount: globalValid,
-  }
-}
-
-/**
- * Creates a new DecodedRaster with downsampling applied according to target dimensions and method.
- */
-export function createBinnedRaster(
-  raster: DecodedRaster,
-  targetWidth: number,
-  targetHeight: number,
-  method: DownsampleMethod
-): DecodedRaster {
-  if (targetWidth === raster.width && targetHeight === raster.height) {
-    return raster
-  }
-
-  const res = downsampleRaster(
-    raster.data,
-    raster.width,
-    raster.height,
-    targetWidth,
-    targetHeight,
-    method
-  )
-
-  return {
-    data: res.data,
-    width: res.width,
-    height: res.height,
-    bounds: raster.bounds,
-    min: res.min,
-    max: res.max,
-    mean: res.mean,
-    stdDev: raster.stdDev,
-    validCount: res.validCount,
-    totalCells: res.width * res.height,
-    histogram: raster.histogram,
-    quantiles: raster.quantiles,
+    data: dst_data,
+    height: dst_h,
+    max: Number.isFinite(global_max) ? global_max : 0,
+    mean: global_valid > 0 ? global_sum/global_valid : 0,
+    min: Number.isFinite(global_min) ? global_min : 0,
+    validCount: global_valid,
+    width: dst_w,
   }
 }

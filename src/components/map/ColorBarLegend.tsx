@@ -3,7 +3,7 @@ import { ColorPalette, ScaleType } from '@/lib/geopng/types'
 import { getPaletteCssGradient } from '@/lib/geopng/palettes'
 import { transformValue } from '@/lib/geopng/scales'
 
-interface ColorBarLegendProps {
+export interface ColorBarLegendProps {
   palette: ColorPalette
   invertPalette?: boolean
   minVal: number
@@ -20,55 +20,102 @@ interface ColorBarLegendProps {
   onResizeWidth?: (width: number) => void
 }
 
-// Inverse transform for pseudo-log: y = asinh(x / (2 * sigma)) / ln(10)
-function inversePseudoLog(y: number, sigma: number): number {
-  return 2 * sigma * Math.sinh(y * Math.LN10)
+/**
+ * Inverse transform for pseudo-log: y = asinh(x / (2 * sigma)) / ln(10)
+ *
+ * @param {number} arg0_y
+ * @param {number} arg1_sigma
+ * @returns {number}
+ */
+const inversePseudoLog = function (arg0_y: number, arg1_sigma: number): number {
+  //Convert from parameters
+  let y = arg0_y
+  let sigma = arg1_sigma
+
+  //Return statement
+  return 2*sigma*Math.sinh(y*Math.LN10)
 }
 
-function inverseTransform(val: number, scaleType: ScaleType, logSigma: number): number {
-  if (scaleType === 'pseudo-log') {
-    return inversePseudoLog(val, logSigma)
-  }
+/**
+ * Performs inverse transformation back to real scalar value based on scale type.
+ *
+ * @param {number} arg0_val
+ * @param {ScaleType} arg1_scale_type
+ * @param {number} arg2_log_sigma
+ * @returns {number}
+ */
+const inverseTransform = function (arg0_val: number, arg1_scale_type: ScaleType, arg2_log_sigma: number): number {
+  //Convert from parameters
+  let val = arg0_val
+  let scale_type = arg1_scale_type
+  let log_sigma = arg2_log_sigma
+
+  //Guard clauses
+  if (scale_type === 'pseudo-log')
+    return inversePseudoLog(val, log_sigma)
+
+  //Return statement
   return val
 }
 
-// Helper to cleanly format numbers using abbreviated notation (k, M, B, T)
-export function formatLegendValue(val: number): string {
-  if (val === null || val === undefined || !Number.isFinite(val)) return ''
-  const absVal = Math.abs(val)
-  if (absVal === 0) return '0'
+/**
+ * Cleanly formats numbers using abbreviated semantic notation (k, M, B, T).
+ *
+ * @param {number} arg0_val
+ * @returns {string}
+ */
+export const formatLegendValue = function (arg0_val: number): string {
+  //Convert from parameters
+  let val = arg0_val
 
-  const units = [
+  //Declare local instance variables
+  let abs_val: number
+  let units_array = [
     { suffix: 'T', factor: 1e12 },
     { suffix: 'B', factor: 1e9 },
     { suffix: 'M', factor: 1e6 },
     { suffix: 'k', factor: 1e3 },
   ]
 
-  for (const { suffix, factor } of units) {
-    if (absVal >= factor) {
-      const scaled = val / factor
-      const absScaled = Math.abs(scaled)
-      const maxDecimals = absScaled >= 100 ? 1 : 2
-      const formatted = Number(scaled.toFixed(maxDecimals)).toLocaleString(undefined, {
+  //Guard clauses
+  if (val === null || val === undefined || !Number.isFinite(val))
+    return ''
+
+  //Function body
+  abs_val = Math.abs(val)
+  if (abs_val === 0)
+    return '0'
+
+  for (let i = 0; i < units_array.length; i++) {
+    let local_factor = units_array[i].factor
+    let local_suffix = units_array[i].suffix
+
+    if (abs_val >= local_factor) {
+      let local_abs_scaled: number
+      let local_formatted: string
+      let local_max_decimals: number
+      let local_scaled = val/local_factor
+      local_abs_scaled = Math.abs(local_scaled)
+      local_max_decimals = (local_abs_scaled >= 100) ? 1 : 2
+      local_formatted = Number(local_scaled.toFixed(local_max_decimals)).toLocaleString(undefined, {
         minimumFractionDigits: 0,
-        maximumFractionDigits: maxDecimals,
+        maximumFractionDigits: local_max_decimals,
       })
-      return `${formatted}${suffix}`
+      return `${local_formatted}${local_suffix}`
     }
   }
 
-  if (absVal >= 100) {
+  if (abs_val >= 100) {
     return Number(val.toFixed(1)).toLocaleString(undefined, {
       minimumFractionDigits: 0,
       maximumFractionDigits: 1,
     })
-  } else if (absVal >= 1) {
+  } else if (abs_val >= 1) {
     return Number(val.toFixed(2)).toLocaleString(undefined, {
       minimumFractionDigits: 0,
       maximumFractionDigits: 2,
     })
-  } else if (absVal >= 0.01) {
+  } else if (abs_val >= 0.01) {
     return Number(val.toFixed(3)).toLocaleString(undefined, {
       minimumFractionDigits: 0,
       maximumFractionDigits: 3,
@@ -78,92 +125,125 @@ export function formatLegendValue(val: number): string {
   }
 }
 
-export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
-  palette,
-  invertPalette = false,
-  minVal,
-  maxVal,
-  legendTitle,
-  legendSubtitle,
-  scaleType,
-  logSigma,
-  currentVal,
-  breaks,
-  countryName,
-  onUpdateBreaks,
-  width,
-  onResizeWidth,
-}) => {
-  const [editingIndex, setEditingIndex] = useState<number | null>(null)
-  const [editingValue, setEditingValue] = useState<string>('')
-  const currentWidth = width ?? 336
+/**
+ * Value colourbar legend component with interactive tick breaks and needle indicator.
+ *
+ * @param {ColorBarLegendProps} arg0_props
+ * @returns {React.ReactElement}
+ */
+export const ColorBarLegend: React.FC<ColorBarLegendProps> = function (arg0_props: ColorBarLegendProps) {
+  //Convert from parameters
+  let props = (arg0_props) ? arg0_props : ({} as ColorBarLegendProps)
 
-  const handleResizeMouseDown = (e: React.MouseEvent) => {
+  //Declare local instance variables
+  let break_points: any[]
+  let breaks = props.breaks
+  let country_name = props.countryName
+  let current_val = props.currentVal
+  let current_width = props.width ?? 336
+  let editing_index: number | null
+  let editing_value: string
+  let gradient: string
+  let handle_resize_mouse_down: (e: React.MouseEvent) => void
+  let indicator_pct: number | null
+  let invert_palette = props.invertPalette ?? false
+  let legend_subtitle = props.legendSubtitle
+  let legend_title = props.legendTitle
+  let log_sigma = props.logSigma
+  let max_val = props.maxVal
+  let min_val = props.minVal
+  let on_resize_width = props.onResizeWidth
+  let on_update_breaks = props.onUpdateBreaks
+  let palette = props.palette
+  let range: number
+  let scale_type = props.scaleType
+  let set_editing_index: React.Dispatch<React.SetStateAction<number | null>>
+  let set_editing_value: React.Dispatch<React.SetStateAction<string>>
+  let t_max: number
+  let t_min: number
+
+  //Function body
+  let [edit_idx, set_edit_idx] = useState<number | null>(null)
+  editing_index = edit_idx
+  set_editing_index = set_edit_idx
+
+  let [edit_val, set_edit_val] = useState<string>('')
+  editing_value = edit_val
+  set_editing_value = set_edit_val
+
+  handle_resize_mouse_down = function (e: React.MouseEvent) {
     e.preventDefault()
     e.stopPropagation()
-    const startX = e.clientX
-    const startW = currentWidth
+    let start_w = current_width
+    let start_x = e.clientX
 
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      const delta = moveEvent.clientX - startX
-      const nextW = Math.max(260, Math.min(650, startW + delta))
-      onResizeWidth?.(nextW)
+    let on_mouse_move = function (move_event: MouseEvent) {
+      let delta = move_event.clientX - start_x
+      let next_w = Math.max(260, Math.min(650, start_w + delta))
+      on_resize_width?.(next_w)
     }
 
-    const onMouseUp = () => {
-      window.removeEventListener('mousemove', onMouseMove)
-      window.removeEventListener('mouseup', onMouseUp)
+    let on_mouse_up = function () {
+      window.removeEventListener('mousemove', on_mouse_move)
+      window.removeEventListener('mouseup', on_mouse_up)
     }
 
-    window.addEventListener('mousemove', onMouseMove)
-    window.addEventListener('mouseup', onMouseUp)
+    window.addEventListener('mousemove', on_mouse_move)
+    window.addEventListener('mouseup', on_mouse_up)
   }
 
-  const gradient = getPaletteCssGradient(palette, invertPalette)
+  gradient = getPaletteCssGradient(palette, invert_palette)
 
-  const tMin = useMemo(() => transformValue(minVal, scaleType as ScaleType, logSigma), [minVal, scaleType, logSigma])
-  const tMax = useMemo(() => transformValue(maxVal, scaleType as ScaleType, logSigma), [maxVal, scaleType, logSigma])
-  const range = tMax - tMin
+  t_min = useMemo(() => transformValue(min_val, scale_type as ScaleType, log_sigma), [min_val, scale_type, log_sigma])
+  t_max = useMemo(() => transformValue(max_val, scale_type as ScaleType, log_sigma), [max_val, scale_type, log_sigma])
+  range = t_max - t_min
 
-  // Compute position of active hover value along the color scale
-  const indicatorPct = useMemo(() => {
-    if (currentVal === null || currentVal === undefined || !Number.isFinite(currentVal)) {
+  indicator_pct = useMemo(() => {
+    if (current_val === null || current_val === undefined || !Number.isFinite(current_val))
       return null
-    }
 
     if (breaks && breaks.length >= 2) {
-      const sorted = [...breaks].sort((a, b) => a - b)
-      const n = sorted.length - 1
-      if (currentVal <= sorted[0]) return 0
-      if (currentVal >= sorted[n]) return 100
+      let n: number
       let seg = 0
-      while (seg < n - 1 && currentVal >= sorted[seg + 1]) {
-        seg++
+      let seg_range: number
+      let seg_t: number
+      let sorted = [...breaks].sort((a, b) => a - b)
+      n = sorted.length - 1
+
+      if (current_val <= sorted[0]) return 0
+      if (current_val >= sorted[n]) return 100
+
+      for (let i = 0; i < n - 1; i++) {
+        if (current_val >= sorted[i + 1]) {
+          seg = i + 1
+        } else {
+          break
+        }
       }
-      const segRange = sorted[seg + 1] - sorted[seg]
-      const segT = segRange > 0 ? (currentVal - sorted[seg]) / segRange : 0
-      return Math.max(0, Math.min(100, ((seg + segT) / n) * 100))
+
+      seg_range = sorted[seg + 1] - sorted[seg]
+      seg_t = (seg_range > 0) ? (current_val - sorted[seg])/seg_range : 0
+      return Math.max(0, Math.min(100, ((seg + seg_t)/n)*100))
     }
 
-    const tVal = transformValue(currentVal, scaleType as ScaleType, logSigma)
+    let t_val = transformValue(current_val, scale_type as ScaleType, log_sigma)
     if (range <= 0) return 50
-    const normalized = (tVal - tMin) / range
-    return Math.max(0, Math.min(100, normalized * 100))
-  }, [currentVal, breaks, tMin, range, scaleType, logSigma])
+    let normalised = (t_val - t_min)/range
+    return Math.max(0, Math.min(100, normalised*100))
+  }, [current_val, breaks, t_min, range, scale_type, log_sigma])
 
-  // Compute break points and their percentage positions along the colourbar
-  const breakPoints = useMemo(() => {
+  break_points = useMemo(() => {
     if (range <= 0) {
       return [
-        { val: minVal, pct: 0, label: formatLegendValue(minVal) },
-        { val: maxVal, pct: 100, label: formatLegendValue(maxVal) },
+        { val: min_val, pct: 0, label: formatLegendValue(min_val) },
+        { val: max_val, pct: 100, label: formatLegendValue(max_val) },
       ]
     }
 
     if (breaks && breaks.length >= 2) {
-      const sorted = [...breaks].sort((a, b) => a - b)
+      let sorted = [...breaks].sort((a, b) => a - b)
       return sorted.map((b, idx) => {
-        const pct = (idx / (sorted.length - 1)) * 100
+        let pct = (idx/(sorted.length - 1))*100
         return {
           val: b,
           pct,
@@ -172,66 +252,68 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
       })
     }
 
-    // Default continuous: 5 evenly spaced ticks
-    const steps = [0, 0.25, 0.5, 0.75, 1]
-    return steps.map((s) => {
-      const tVal = tMin + s * range
-      const realVal = inverseTransform(tVal, scaleType as ScaleType, logSigma)
+    let steps_array = [0, 0.25, 0.5, 0.75, 1]
+    return steps_array.map((s) => {
+      let real_val: number
+      let t_val = t_min + s*range
+      real_val = inverseTransform(t_val, scale_type as ScaleType, log_sigma)
       return {
-        val: realVal,
-        pct: s * 100,
-        label: formatLegendValue(realVal),
+        val: real_val,
+        pct: s*100,
+        label: formatLegendValue(real_val),
       }
     })
-  }, [breaks, minVal, maxVal, tMin, range, scaleType, logSigma])
+  }, [breaks, min_val, max_val, t_min, range, scale_type, log_sigma])
 
+  //Return statement
   return (
     <div
-      style={{ width: `${currentWidth}px` }}
+      style={{ width: `${current_width}px` }}
       className="relative rounded-none border border-border bg-card/95 backdrop-blur-md p-[var(--padding)] pb-3 shadow-lg text-[var(--body-font-size)] text-card-foreground select-none font-sans"
     >
       {/* Draggable Right Border Resize Handle */}
-      {onResizeWidth && (
+      {on_resize_width && (
         <div
-          onMouseDown={handleResizeMouseDown}
+          onMouseDown={handle_resize_mouse_down}
           className="absolute top-0 right-0 bottom-0 w-2 cursor-col-resize hover:bg-primary/50 active:bg-primary transition-colors z-30 group"
           title="Drag right border to resize Value colourbar"
         >
           <div className="w-[2px] h-6 bg-border group-hover:bg-primary absolute top-1/2 -translate-y-1/2 right-0.5" />
         </div>
       )}
+
       {/* Legend Title, Subtitle & Hover Value Readout */}
       <div className="flex items-start justify-between mb-2 gap-[var(--padding)]">
         <div className="flex flex-col gap-0.5 flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="font-bold text-foreground text-[var(--header-font-size)] whitespace-pre-line leading-tight">
-              {legendTitle}
+              {legend_title}
             </span>
             <span className="text-[var(--body-font-size)] text-muted-foreground capitalize bg-muted px-2 py-0.5 rounded-none shrink-0">
-              {scaleType}
+              {scale_type}
             </span>
-            {countryName && (
+            {country_name && (
               <span className="text-[var(--body-font-size)] font-bold text-white bg-primary/20 border border-primary/40 px-2 py-0.5 rounded-none flex items-center gap-1 shrink-0">
                 <span className="w-1.5 h-1.5 rounded-none bg-primary animate-pulse" />
-                {countryName}
+                {country_name}
               </span>
             )}
           </div>
-          {legendSubtitle && legendSubtitle.trim().length > 0 && (
+          {legend_subtitle && legend_subtitle.trim().length > 0 && (
             <p className="text-[11px] text-muted-foreground font-light whitespace-pre-line leading-tight mt-0.5">
-              {legendSubtitle}
+              {legend_subtitle}
             </p>
           )}
         </div>
 
         <div className="shrink-0 pt-0.5">
-          {currentVal !== null && currentVal !== undefined && Number.isFinite(currentVal) ? (
+          {current_val !== null && current_val !== undefined && Number.isFinite(current_val) ? (
             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-none bg-primary text-primary-foreground font-bold text-[var(--body-font-size)] shadow-sm animate-in fade-in-0 duration-100">
-              <span>{formatLegendValue(currentVal)}</span>
+              <span>{formatLegendValue(current_val)}</span>
             </div>
           ) : (
             <span className="text-[var(--body-font-size)] text-muted-foreground font-light">
-              {formatLegendValue(minVal)} → {formatLegendValue(maxVal)}
+              {formatLegendValue(min_val)} → {formatLegendValue(max_val)}
             </span>
           )}
         </div>
@@ -243,7 +325,7 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
           className="relative h-4.5 w-full rounded-none border border-border/80 shadow-inner overflow-hidden"
           style={{ background: gradient }}
         >
-          {breakPoints.map((bp, i) => {
+          {break_points.map((bp, i) => {
             if (bp.pct <= 1 || bp.pct >= 99) return null
             return (
               <div
@@ -256,10 +338,10 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
           })}
         </div>
 
-        {indicatorPct !== null && (
+        {indicator_pct !== null && (
           <div
             className="absolute top-[-4px] bottom-[-4px] pointer-events-none transition-all duration-75 ease-out z-20 flex flex-col items-center justify-between"
-            style={{ left: `${indicatorPct}%` }}
+            style={{ left: `${indicator_pct}%` }}
           >
             <div className="w-0 h-0 border-l-[4.5px] border-l-transparent border-r-[4.5px] border-r-transparent border-t-[6px] border-t-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]" />
             <div className="w-[2.5px] flex-1 bg-white rounded-none shadow-[0_0_6px_rgba(0,0,0,0.9)] border border-black/30" />
@@ -270,16 +352,15 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
 
       {/* Ticks and aligned break values with click-to-edit */}
       <div className="relative w-full h-7 mt-1">
-        {breakPoints.map((bp, i) => {
-          const isFirst = i === 0
-          const isLast = i === breakPoints.length - 1
-          const alignment = isFirst
+        {break_points.map((bp, i) => {
+          let is_editing = (editing_index === i)
+          let is_first = (i === 0)
+          let is_last = (i === break_points.length - 1)
+          let alignment = (is_first)
             ? 'items-start -translate-x-0'
-            : isLast
-            ? 'items-end -translate-x-full'
-            : 'items-center -translate-x-1/2'
-
-          const isEditing = editingIndex === i
+            : (is_last)
+              ? 'items-end -translate-x-full'
+              : 'items-center -translate-x-1/2'
 
           return (
             <div
@@ -288,36 +369,36 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
               style={{ left: `${bp.pct}%` }}
             >
               <div className="w-[1px] h-1 bg-border/80 mb-0.5" />
-              {isEditing ? (
+              {is_editing ? (
                 <input
                   type="text"
                   inputMode="decimal"
                   autoFocus
-                  value={editingValue}
-                  onChange={(e) => setEditingValue(e.target.value)}
+                  value={editing_value}
+                  onChange={(e) => set_editing_value(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
-                      const parsed = parseFloat(editingValue)
-                      if (Number.isFinite(parsed) && onUpdateBreaks) {
-                        const currentBreaks = breakPoints.map((b) => b.val)
-                        const newBreaks = currentBreaks.map((b, idx) => (idx === i ? parsed : b))
-                        newBreaks.sort((a, b) => a - b)
-                        onUpdateBreaks(newBreaks)
+                      let parsed = parseFloat(editing_value)
+                      if (Number.isFinite(parsed) && on_update_breaks) {
+                        let current_breaks = break_points.map((b) => b.val)
+                        let new_breaks = current_breaks.map((b, idx) => ((idx === i) ? parsed : b))
+                        new_breaks.sort((a, b) => a - b)
+                        on_update_breaks(new_breaks)
                       }
-                      setEditingIndex(null)
+                      set_editing_index(null)
                     } else if (e.key === 'Escape') {
-                      setEditingIndex(null)
+                      set_editing_index(null)
                     }
                   }}
                   onBlur={() => {
-                    const parsed = parseFloat(editingValue)
-                    if (Number.isFinite(parsed) && onUpdateBreaks) {
-                      const currentBreaks = breakPoints.map((b) => b.val)
-                      const newBreaks = currentBreaks.map((b, idx) => (idx === i ? parsed : b))
-                      newBreaks.sort((a, b) => a - b)
-                      onUpdateBreaks(newBreaks)
+                    let parsed = parseFloat(editing_value)
+                    if (Number.isFinite(parsed) && on_update_breaks) {
+                      let current_breaks = break_points.map((b) => b.val)
+                      let new_breaks = current_breaks.map((b, idx) => ((idx === i) ? parsed : b))
+                      new_breaks.sort((a, b) => a - b)
+                      on_update_breaks(new_breaks)
                     }
-                    setEditingIndex(null)
+                    set_editing_index(null)
                   }}
                   className="w-16 h-6 px-1 text-[var(--body-font-size)] font-bold bg-background border border-primary text-foreground text-center rounded-none z-30 shadow-lg focus:outline-none"
                   title="Enter absolute break number"
@@ -326,8 +407,8 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    setEditingIndex(i)
-                    setEditingValue(bp.val.toString())
+                    set_editing_index(i)
+                    set_editing_value(bp.val.toString())
                   }}
                   className="whitespace-nowrap px-1 py-0.2 cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted rounded-none transition-colors underline decoration-dotted decoration-muted-foreground/60 underline-offset-2"
                   title="Click to set break value by typing number"
@@ -342,3 +423,5 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = ({
     </div>
   )
 }
+
+export default ColorBarLegend

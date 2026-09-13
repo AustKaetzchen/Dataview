@@ -2,62 +2,96 @@ import React from 'react'
 import { DecodedRaster } from '@/lib/geopng/types'
 import { CountryStats } from '@/lib/geopng/polygonBinning'
 
-interface StatsSummaryProps {
+export interface StatsSummaryProps {
   raster: DecodedRaster | null
   countryStats?: CountryStats | null
 }
 
-const formatLocalizedNumber = (val: number | undefined | null, fractionDigits: number = 4): string => {
-  if (val === undefined || val === null || !Number.isFinite(val)) return 'N/A'
+/**
+ * Formats a localized number to fixed decimal places.
+ *
+ * @param {number | undefined | null} arg0_val
+ * @param {number} [arg1_fraction_digits=4]
+ *
+ * @returns {string}
+ */
+export function formatLocalizedNumber (arg0_val: number | undefined | null, arg1_fraction_digits?: number): string {
+  //Convert from parameters
+  let fraction_digits = (arg1_fraction_digits !== undefined) ? arg1_fraction_digits : 4
+  let val = arg0_val
+
+  //Guard clauses
+  if (val === undefined || val === null || !Number.isFinite(val))
+    return 'N/A'
+
+  //Return statement
   return val.toLocaleString(undefined, {
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits,
+    maximumFractionDigits: fraction_digits,
+    minimumFractionDigits: fraction_digits,
   })
 }
 
-export const StatsSummary: React.FC<StatsSummaryProps> = ({ raster, countryStats }) => {
-  if (!raster && !countryStats) return null
+/**
+ * StatsSummary displays numerical aggregates and quantiles for rasters or country masks.
+ *
+ * @param {StatsSummaryProps} arg0_props
+ *
+ * @returns {React.ReactElement | null}
+ */
+export const StatsSummary: React.FC<StatsSummaryProps> = function (arg0_props) {
+  //Convert from parameters
+  let props = arg0_props
+  let {
+    countryStats: country_stats,
+    raster,
+  } = props
 
-  if (countryStats) {
-    const validPctNum =
-      countryStats.totalCells > 0 ? (countryStats.validCount / countryStats.totalCells) * 100 : 0
-    const validPct = validPctNum.toLocaleString(undefined, {
-      minimumFractionDigits: 1,
+  //Guard clauses
+  if (!raster && !country_stats)
+    return null
+
+  //Function body
+  if (country_stats) {
+    let median = formatLocalizedNumber(country_stats.median, 3)
+    let total =
+      country_stats.total !== undefined && Number.isFinite(country_stats.total)
+        ? country_stats.total
+        : country_stats.mean*country_stats.validCount
+    let valid_pct_num =
+      country_stats.totalCells > 0 ? (country_stats.validCount/country_stats.totalCells)*100 : 0
+    let valid_pct = valid_pct_num.toLocaleString(undefined, {
       maximumFractionDigits: 1,
+      minimumFractionDigits: 1,
     })
-    const median = formatLocalizedNumber(countryStats.median, 3)
-    const total =
-      countryStats.total !== undefined && Number.isFinite(countryStats.total)
-        ? countryStats.total
-        : countryStats.mean * countryStats.validCount
 
-    const statItems = [
-      { label: 'Scope', value: `${countryStats.name} (${countryStats.isoA3 || 'N/A'})` },
+    let stat_items = [
+      { label: 'Scope', value: `${country_stats.name} (${country_stats.isoA3 || 'N/A'})` },
       {
         label: 'Total (Sum)',
         value: total.toLocaleString(undefined, {
-          minimumFractionDigits: 2,
           maximumFractionDigits: 2,
+          minimumFractionDigits: 2,
         }),
       },
-      { label: 'Valid Cells', value: `${countryStats.validCount.toLocaleString()} (${validPct}%)` },
-      { label: 'Polygon Cells', value: countryStats.totalCells.toLocaleString() },
-      { label: 'Min Value', value: formatLocalizedNumber(countryStats.min, 4) },
-      { label: 'Max Value', value: formatLocalizedNumber(countryStats.max, 4) },
-      { label: 'Mean', value: formatLocalizedNumber(countryStats.mean, 4) },
-      { label: 'Std Dev', value: formatLocalizedNumber(countryStats.stdDev, 4) },
+      { label: 'Valid Cells', value: `${country_stats.validCount.toLocaleString()} (${valid_pct}%)` },
+      { label: 'Polygon Cells', value: country_stats.totalCells.toLocaleString() },
+      { label: 'Min Value', value: formatLocalizedNumber(country_stats.min, 4) },
+      { label: 'Max Value', value: formatLocalizedNumber(country_stats.max, 4) },
+      { label: 'Mean', value: formatLocalizedNumber(country_stats.mean, 4) },
+      { label: 'Std Dev', value: formatLocalizedNumber(country_stats.stdDev, 4) },
       { label: 'Median (P50)', value: median },
     ]
 
+    //Return statement
     return (
       <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-[var(--cell-padding)] list-disc list-outside pl-5 text-[var(--body-font-size)] select-text">
-        {statItems.map((stat, i) => (
-          <li key={i} className="leading-snug">
+        {stat_items.map((arg0_stat, arg0_i) => (
+          <li key={arg0_i} className="leading-snug">
             <span className="text-muted-foreground uppercase text-[var(--body-font-size)] font-bold tracking-wider mr-2 whitespace-nowrap">
-              {stat.label}:
+              {arg0_stat.label}:
             </span>
             <span className="text-foreground break-all font-light">
-              {stat.value}
+              {arg0_stat.value}
             </span>
           </li>
         ))}
@@ -65,28 +99,29 @@ export const StatsSummary: React.FC<StatsSummaryProps> = ({ raster, countryStats
     )
   }
 
-  if (!raster) return null
+  if (!raster)
+    return null
 
-  const validPctNum = raster.totalCells > 0 ? (raster.validCount / raster.totalCells) * 100 : 0
-  const validPct = validPctNum.toLocaleString(undefined, {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  })
-  const median = formatLocalizedNumber(raster.quantiles?.[50], 3)
-  const total =
+  let median = formatLocalizedNumber(raster.quantiles?.[50], 3)
+  let total =
     raster.total !== undefined && Number.isFinite(raster.total)
       ? raster.total
-      : raster.mean * raster.validCount
+      : raster.mean*raster.validCount
+  let valid_pct_num = raster.totalCells > 0 ? (raster.validCount/raster.totalCells)*100 : 0
+  let valid_pct = valid_pct_num.toLocaleString(undefined, {
+    maximumFractionDigits: 1,
+    minimumFractionDigits: 1,
+  })
 
-  const statItems = [
+  let stat_items = [
     {
       label: 'Total (Sum)',
       value: total.toLocaleString(undefined, {
-        minimumFractionDigits: 2,
         maximumFractionDigits: 2,
+        minimumFractionDigits: 2,
       }),
     },
-    { label: 'Valid Cells', value: `${raster.validCount.toLocaleString()} (${validPct}%)` },
+    { label: 'Valid Cells', value: `${raster.validCount.toLocaleString()} (${valid_pct}%)` },
     { label: 'Resolution', value: `${raster.width.toLocaleString()} × ${raster.height.toLocaleString()}` },
     { label: 'Total Cells', value: raster.totalCells.toLocaleString() },
     { label: 'Min Value', value: formatLocalizedNumber(raster.min, 4) },
@@ -96,18 +131,21 @@ export const StatsSummary: React.FC<StatsSummaryProps> = ({ raster, countryStats
     { label: 'Median (P50)', value: median },
   ]
 
+  //Return statement
   return (
     <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-[var(--cell-padding)] list-disc list-outside pl-5 text-[var(--body-font-size)] select-text">
-      {statItems.map((stat, i) => (
-        <li key={i} className="leading-snug">
+      {stat_items.map((arg0_stat, arg0_i) => (
+        <li key={arg0_i} className="leading-snug">
           <span className="text-muted-foreground uppercase text-[var(--body-font-size)] font-bold tracking-wider mr-2 whitespace-nowrap">
-            {stat.label}:
+            {arg0_stat.label}:
           </span>
           <span className="text-foreground break-all font-light">
-            {stat.value}
+            {arg0_stat.value}
           </span>
         </li>
       ))}
     </ul>
   )
 }
+
+export default StatsSummary

@@ -1,53 +1,70 @@
 /**
- * UI Layout Anchor & Dimension Registry
- * 
- * Centralizes layout tracking for all docked bars and floating panels:
- * - leftbar: sidebar width
- * - rightbar: toolbar, settings drawer, analytics panel
- * - topbar: standard top margin & header elements
- * - bottombar: bottom margin & mapmodes tray
+ * UI Layout Anchor & Dimension Registry.
+ *
+ * Centralises layout tracking for docked bars and floating panels.
  */
 
 export interface UILayoutMetrics {
-  margin: number
   gap: number
+  margin: number
+  settingsDrawerRight: number
+  settingsDrawerWidth: number
   sidebarWidth: number
   toolbarWidth: number
-  settingsDrawerWidth: number
-  settingsDrawerRight: number
 }
 
-export const UI_LAYOUT: UILayoutMetrics = {
-  margin: 12, // 12px standard outer margin
-  gap: 12, // 12px standard gap between adjacent panels
-  sidebarWidth: 336, // w-84 = 336px
-  toolbarWidth: 38, // 28px button + 8px padding + 2px border = 38px
-  settingsDrawerWidth: 288, // w-72 = 288px
-  settingsDrawerRight: 62, // margin (12) + toolbarWidth (38) + gap (12) = 62px
-}
-
-/**
- * Computes total taken width from the right edge for right-docked elements
- */
-export function getRightbarTakenWidth(isSettingsDrawerOpen: boolean): number {
-  if (isSettingsDrawerOpen) {
-    return UI_LAYOUT.settingsDrawerRight + UI_LAYOUT.settingsDrawerWidth
-  }
-  return UI_LAYOUT.margin + UI_LAYOUT.toolbarWidth
+export let UI_LAYOUT: UILayoutMetrics = {
+  gap: 12,
+  margin: 12,
+  settingsDrawerRight: 62,
+  settingsDrawerWidth: 288,
+  sidebarWidth: 336,
+  toolbarWidth: 38,
 }
 
 /**
- * Computes right offset for the Analytics view panel with guaranteed standard gap
+ * Computes right offset for the Analytics view panel with guaranteed standard gap.
+ *
+ * @param {boolean} arg0_is_settings_drawer_open
+ *
+ * @returns {number}
  */
-export function getAnalyticsPanelRightOffset(isSettingsDrawerOpen: boolean): number {
-  const taken = getRightbarTakenWidth(isSettingsDrawerOpen)
+export function getAnalyticsPanelRightOffset (arg0_is_settings_drawer_open: boolean): number {
+  //Convert from parameters
+  let is_settings_drawer_open = arg0_is_settings_drawer_open
+
+  //Declare local instance variables
+  let taken = getRightbarTakenWidth(is_settings_drawer_open)
+
+  //Return statement
   return taken + UI_LAYOUT.gap
 }
 
 /**
- * Offset from left screen edge for overlays adjacent to the floating sidebar
+ * Computes total taken width from the right edge for right-docked elements.
+ *
+ * @param {boolean} arg0_is_settings_drawer_open
+ *
+ * @returns {number}
  */
-export function getSidebarOverlayLeft(): number {
-  return UI_LAYOUT.margin + UI_LAYOUT.sidebarWidth + UI_LAYOUT.gap
+export function getRightbarTakenWidth (arg0_is_settings_drawer_open: boolean): number {
+  //Convert from parameters
+  let is_settings_drawer_open = arg0_is_settings_drawer_open
+
+  //Guard clauses
+  if (is_settings_drawer_open)
+    return UI_LAYOUT.settingsDrawerRight + UI_LAYOUT.settingsDrawerWidth
+
+  //Return statement
+  return UI_LAYOUT.margin + UI_LAYOUT.toolbarWidth
 }
 
+/**
+ * Offset from left screen edge for overlays adjacent to the floating sidebar.
+ *
+ * @returns {number}
+ */
+export function getSidebarOverlayLeft (): number {
+  //Return statement
+  return UI_LAYOUT.margin + UI_LAYOUT.sidebarWidth + UI_LAYOUT.gap
+}

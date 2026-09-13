@@ -7,7 +7,7 @@ import { StatsSummary } from './StatsSummary'
 import { Button } from '../ui/button'
 import { Icon } from '../ui/icon'
 
-interface AnalyticsDrawerProps {
+export interface AnalyticsDrawerProps {
   isOpen: boolean
   onToggleOpen: () => void
   raster: DecodedRaster | null
@@ -26,64 +26,85 @@ interface AnalyticsDrawerProps {
   onForceRefresh?: () => void
 }
 
-export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
-  isOpen,
-  onToggleOpen,
-  raster,
-  scaleType,
-  logSigma,
-  minOverride,
-  maxOverride,
-  selectedCountry,
-  selectedCountries,
-  onSelectCountry,
-  onClearCountries,
-  countryStats,
-  isCalculatingStats = false,
-  isSettingsDrawerOpen = false,
-  rasterKey,
-  onForceRefresh,
-}) => {
-  const [activeTab, setActiveTab] = useState<'histogram' | 'stats'>('histogram')
-  const rightOffset = getAnalyticsPanelRightOffset(isSettingsDrawerOpen)
+/**
+ * AnalyticsDrawer slide-in container providing raster metrics, distribution histograms, and summary statistics.
+ *
+ * @param {AnalyticsDrawerProps} arg0_props
+ *
+ * @returns {React.ReactElement | null}
+ */
+export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_props) {
+  //Convert from parameters
+  let props = arg0_props
+  let {
+    countryStats: country_stats,
+    isCalculatingStats: is_calculating_stats = false,
+    isOpen: is_open,
+    isSettingsDrawerOpen: is_settings_drawer_open = false,
+    logSigma: log_sigma,
+    maxOverride: max_override,
+    minOverride: min_override,
+    onClearCountries: on_clear_countries,
+    onForceRefresh: on_force_refresh,
+    onSelectCountry: on_select_country,
+    onToggleOpen: on_toggle_open,
+    raster,
+    rasterKey: raster_key,
+    scaleType: scale_type,
+    selectedCountries: selected_countries,
+    selectedCountry: selected_country,
+  } = props
 
-  // Staggered resize events when opening panel or when raster changes to notify ECharts
+  //Declare local instance variables
+  let active_tab: 'histogram' | 'stats'
+  let effective_countries: CountryFeature[]
+  let handle_clear: () => void
+  let right_offset = getAnalyticsPanelRightOffset(is_settings_drawer_open)
+  let set_active_tab: React.Dispatch<React.SetStateAction<'histogram' | 'stats'>>
+
+  //Function body
+  ;[active_tab, set_active_tab] = useState<'histogram' | 'stats'>('histogram')
+
+  //Staggered resize events when opening panel or when raster changes to notify ECharts
   useEffect(() => {
-    if (isOpen) {
-      const t1 = setTimeout(() => window.dispatchEvent(new Event('resize')), 50)
-      const t2 = setTimeout(() => window.dispatchEvent(new Event('resize')), 200)
+    if (is_open) {
+      let t1 = setTimeout(() => window.dispatchEvent(new Event('resize')), 50)
+      let t2 = setTimeout(() => window.dispatchEvent(new Event('resize')), 200)
       return () => {
         clearTimeout(t1)
         clearTimeout(t2)
       }
     }
-  }, [isOpen, rightOffset, raster, rasterKey])
+  }, [is_open, right_offset, raster, raster_key])
 
-  if (!isOpen) return null
+  //Guard clauses
+  if (!is_open)
+    return null
 
-  const effectiveCountries =
-    selectedCountries && selectedCountries.length > 0
-      ? selectedCountries
-      : selectedCountry
-        ? [selectedCountry]
+  effective_countries =
+    selected_countries && selected_countries.length > 0
+      ? selected_countries
+      : selected_country
+        ? [selected_country]
         : []
 
-  const handleClear = () => {
-    if (onClearCountries) {
-      onClearCountries()
-    } else if (onSelectCountry) {
-      onSelectCountry(null)
+  handle_clear = function () {
+    if (on_clear_countries) {
+      on_clear_countries()
+    } else if (on_select_country) {
+      on_select_country(null)
     }
   }
 
+  //Return statement
   return (
     <div
       onTransitionEnd={() => {
         window.dispatchEvent(new Event('resize'))
       }}
       style={{
+        right: `${right_offset}px`,
         top: `${UI_LAYOUT.margin}px`,
-        right: `${rightOffset}px`,
       }}
       className="absolute z-30 w-[640px] max-w-[calc(100vw-720px)] h-[340px] bg-card/95 backdrop-blur-md border border-border rounded-none text-card-foreground shadow-2xl flex flex-col font-sans transition-all duration-200 ease-out animate-in fade-in-0 zoom-in-95 duration-150"
     >
@@ -98,8 +119,8 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
           <div className="flex items-center gap-1 bg-muted p-[var(--cell-padding)] rounded-none shrink-0">
             <button
               type="button"
-              onClick={() => setActiveTab('histogram')}
-              className={`px-2 py-0.5 text-[var(--body-font-size)] rounded-none transition-colors flex items-center gap-1.5 cursor-pointer ${activeTab === 'histogram'
+              onClick={() => set_active_tab('histogram')}
+              className={`px-2 py-0.5 text-[var(--body-font-size)] rounded-none transition-colors flex items-center gap-1.5 cursor-pointer ${active_tab === 'histogram'
                   ? 'bg-background text-foreground shadow-sm font-bold'
                   : 'text-muted-foreground hover:text-foreground font-light'
                 }`}
@@ -110,8 +131,8 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveTab('stats')}
-              className={`px-2 py-0.5 text-[var(--body-font-size)] rounded-none transition-colors flex items-center gap-1.5 cursor-pointer ${activeTab === 'stats'
+              onClick={() => set_active_tab('stats')}
+              className={`px-2 py-0.5 text-[var(--body-font-size)] rounded-none transition-colors flex items-center gap-1.5 cursor-pointer ${active_tab === 'stats'
                   ? 'bg-background text-foreground shadow-sm font-bold'
                   : 'text-muted-foreground hover:text-foreground font-light'
                 }`}
@@ -122,22 +143,22 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
           </div>
 
           {/* Active country filter badge */}
-          {effectiveCountries.length > 0 && (
+          {effective_countries.length > 0 && (
             <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-none bg-primary/15 text-primary text-[var(--body-font-size)] font-medium border border-primary/30 truncate">
-              <span className={`w-1.5 h-1.5 rounded-none ${isCalculatingStats ? 'bg-amber-400 animate-pulse' : 'bg-primary'} shrink-0`} />
+              <span className={`w-1.5 h-1.5 rounded-none ${is_calculating_stats ? 'bg-amber-400 animate-pulse' : 'bg-primary'} shrink-0`} />
               <span className="truncate max-w-[140px]">
-                {effectiveCountries.length === 1
-                  ? effectiveCountries[0].properties.name
-                  : `${effectiveCountries[0].properties.name} (+${effectiveCountries.length - 1})`}
+                {effective_countries.length === 1
+                  ? effective_countries[0].properties.name
+                  : `${effective_countries[0].properties.name} (+${effective_countries.length - 1})`}
               </span>
-              {isCalculatingStats && (
+              {is_calculating_stats && (
                 <span className="text-[10px] text-amber-400 font-normal ml-0.5 animate-pulse shrink-0">
                   (calculating...)
                 </span>
               )}
               <button
                 type="button"
-                onClick={handleClear}
+                onClick={handle_clear}
                 className="ml-0.5 hover:text-foreground opacity-70 hover:opacity-100 cursor-pointer text-xs rounded-none"
                 title="Clear country filter"
               >
@@ -153,9 +174,8 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
             size="sm"
             className="h-6 w-6 p-0 rounded-none text-muted-foreground hover:text-foreground cursor-pointer"
             onClick={() => {
-              if (onForceRefresh) {
-                onForceRefresh()
-              }
+              if (on_force_refresh)
+                on_force_refresh()
               window.dispatchEvent(new Event('resize'))
             }}
             title="Force Refresh Raster Calculator"
@@ -168,7 +188,7 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
             variant="ghost"
             size="sm"
             className="h-6 w-6 p-0 rounded-none text-muted-foreground hover:text-foreground cursor-pointer"
-            onClick={onToggleOpen}
+            onClick={on_toggle_open}
             title="Close Analytics Panel"
           >
             <Icon name="close" className="text-white" />
@@ -186,7 +206,7 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
               Upload a GeoPNG file in the sidebar to inspect statistics & distributions.
             </span>
           </div>
-        ) : isCalculatingStats && !countryStats ? (
+        ) : is_calculating_stats && !country_stats ? (
           <div className="h-full flex flex-col items-center justify-center text-muted-foreground text-[var(--body-font-size)] space-y-2">
             <div className="flex items-center gap-2 text-primary font-medium">
               <span className="w-2 h-2 rounded-full bg-primary animate-ping" />
@@ -198,24 +218,24 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = ({
           </div>
         ) : (
           (() => {
-            const derivedKey = `${rasterKey ?? ''}-${raster ? `${raster.width}x${raster.height}-${raster.min}-${raster.max}` : 'none'}-${countryStats ? countryStats.name : 'all'}`
+            let derived_key = `${raster_key ?? ''}-${raster ? `${raster.width}x${raster.height}-${raster.min}-${raster.max}` : 'none'}-${country_stats ? country_stats.name : 'all'}`
             return (
               <>
-                {activeTab === 'histogram' && (
+                {active_tab === 'histogram' && (
                   <HistogramChart
-                    key={`hist-${derivedKey}`}
+                    key={`hist-${derived_key}`}
                     raster={raster}
-                    scaleType={scaleType}
-                    logSigma={logSigma}
-                    minOverride={minOverride}
-                    maxOverride={maxOverride}
-                    countryStats={countryStats}
+                    scaleType={scale_type}
+                    logSigma={log_sigma}
+                    minOverride={min_override}
+                    maxOverride={max_override}
+                    countryStats={country_stats}
                   />
                 )}
 
-                {activeTab === 'stats' && (
+                {active_tab === 'stats' && (
                   <div className="h-full w-full p-[var(--padding)] overflow-y-auto">
-                    <StatsSummary key={`stats-${derivedKey}`} raster={raster} countryStats={countryStats} />
+                    <StatsSummary key={`stats-${derived_key}`} raster={raster} countryStats={country_stats} />
                   </div>
                 )}
               </>

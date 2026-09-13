@@ -1,26 +1,18 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import DeckGL from '@deck.gl/react'
-import { MapView, OrbitView, OrthographicView, COORDINATE_SYSTEM } from '@deck.gl/core'
-import { BitmapLayer, PathLayer, PolygonLayer, GeoJsonLayer, ScatterplotLayer, ColumnLayer, SolidPolygonLayer } from '@deck.gl/layers'
-import { TileLayer, _Tileset2D as Tileset2D } from '@deck.gl/geo-layers'
-import { lngLatToWorld } from '@math.gl/web-mercator'
+import { MapView, OrbitView } from '@deck.gl/core'
 import {
   CountryFeature,
   CountryStats,
   loadCountriesGeoJson,
   findCountryAtLngLat,
   isPointInGeometry,
-  pointInRing,
-  computeGeometryBBox,
 } from '@/lib/geopng/polygonBinning'
 import {
-  projectEqualEarth,
   invertEqualEarth,
   transformGeometryToEqualEarth,
   generateEqualEarthGraticule,
 } from '@/lib/geopng/equalEarth'
-import { computeQuantiles, transformValue, createPercentileRankCalculator } from '@/lib/geopng/scales'
-import { getPaletteLUT } from '@/lib/geopng/palettes'
 import {
   DecodedRaster,
   InspectionData,
@@ -50,8 +42,11 @@ import {
   SmoothGlobeController,
   SmoothGlobeView,
 } from './SmoothControllers'
+import { useElevationSpikes } from './useElevationSpikes'
+import { useCircleOverlay } from './useCircleOverlay'
+import { useDeckLayers } from './useDeckLayers'
 
-interface MapViewerProps {
+export interface MapViewerProps {
   raster: DecodedRaster | null
   renderedCanvas: HTMLCanvasElement | null
   rasterBounds: [number, number, number, number]
@@ -100,238 +95,84 @@ interface MapViewerProps {
   onCloseInfoPanel?: () => void
 }
 
-// Basemaps driven by MAP_CONFIG (config/map.json5)
-const ESRI_BASEMAP_URLS: Record<string, string> = {}
-for (const layer of MAP_CONFIG.basemapLayers) {
-  if (layer.url) {
-    ESRI_BASEMAP_URLS[layer.id] = layer.url
-  }
-}
+/**
+ * Main map viewer component rendering multi-projection deck.gl views with 2D/3D overlays.
+ *
+ * @param {MapViewerProps} arg0_props
+ * @returns {React.ReactElement}
+ */
+export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewerProps) {
+  //Convert from parameters
+  let props = (arg0_props) ? arg0_props : ({} as MapViewerProps)
 
-// Custom Tileset2D for Equirectangular
-class EquirectangularTileset2D extends Tileset2D {
-  getTileIndices({ viewport, maxZoom = 18, minZoom = 0 }: any) {
-    if (!viewport || !viewport.unproject) return []
+  //Declare local instance variables
+  let analytics_open = props.analyticsOpen
+  let breaks = props.breaks
+  let camera_tilt: number
+  let circle_overlay_config = props.circleOverlayConfig
+  let circle_pixel_data: any
+  let colourbar_width = props.colourbarWidth
+  let countries_mode = props.countriesMode
+  let country_stats = props.countryStats
+  let elevation_spikes_data: any
+  let equal_earth_land_geo_json: any
+  let flyout_open: boolean
+  let graticule_paths: { path: [number, number][] }[]
+  let handle_container_pointer_move: (e: React.PointerEvent<HTMLDivElement>) => void
+  let handle_double_click: () => void
+  let handle_hover: (info: any) => void
+  let handle_click: (info: any) => void
+  let handle_view_state_change: (e: any) => void
+  let heightmap_config = props.heightmapConfig
+  let hovered_country = props.hoveredCountry
+  let info_panel_open = props.infoPanelOpen ?? false
+  let invert_palette = props.invertPalette
+  let is_calculating_stats = props.isCalculatingStats
+  let last_country_ref = useRef<CountryFeature | null>(null)
+  let last_hovered_country_code_ref = useRef<string | null | undefined>(null)
+  let layers: any[]
+  let legend_subtitle = props.legendSubtitle
+  let legend_title = props.legendTitle
+  let log_sigma = props.logSigma
+  let map_modes = props.mapModes
+  let max_val = props.maxVal
+  let min_val = props.minVal
+  let on_clear_countries = props.onClearCountries
+  let on_close_info_panel = props.onCloseInfoPanel
+  let on_hover_country = props.onHoverCountry
+  let on_inspect = props.onInspect
+  let on_reorder_map_modes = props.onReorderMapModes
+  let on_resize_colourbar_width = props.onResizeColourbarWidth
+  let on_select_country = props.onSelectCountry
+  let on_toggle_analytics = props.onToggleAnalytics
+  let on_toggle_countries_mode = props.onToggleCountriesMode
+  let on_toggle_country = props.onToggleCountry
+  let on_toggle_map_mode = props.onToggleMapMode
+  let on_toggle_settings_drawer = props.onToggleSettingsDrawer
+  let on_update_breaks = props.onUpdateBreaks
+  let opacity = props.opacity
+  let palette = props.palette
+  let projection = props.projection
+  let raster = props.raster
+  let raster_bounds = props.rasterBounds
+  let rendered_canvas = props.renderedCanvas
+  let sample_raster_at: (coordX: number, coordY: number) => InspectionData | null
+  let scale_type = props.scaleType
+  let selected_countries = props.selectedCountries
+  let selected_country = props.selectedCountry
+  let set_circle_overlay_config = props.setCircleOverlayConfig
+  let set_flyout_open: (open: boolean) => void
+  let set_heightmap_config = props.setHeightmapConfig
+  let set_projection = props.setProjection
+  let sidebar_width = props.sidebarWidth
+  let views: any
 
-    const tl = viewport.unproject([0, 0], { targetZ: 0 }) || [-180, 85]
-    const br = viewport.unproject([viewport.width, viewport.height], { targetZ: 0 }) || [180, -85]
+  //Function body
+  let [internal_flyout_open, set_internal_flyout_open] = useState(false)
+  flyout_open = (props.settingsDrawerOpen !== undefined) ? props.settingsDrawerOpen : internal_flyout_open
+  set_flyout_open = on_toggle_settings_drawer || set_internal_flyout_open
 
-    const minLng = Math.max(-180, Math.min(Number.isFinite(tl[0]) ? tl[0] : -180, Number.isFinite(br[0]) ? br[0] : 180))
-    const maxLng = Math.min(180, Math.max(Number.isFinite(tl[0]) ? tl[0] : -180, Number.isFinite(br[0]) ? br[0] : 180))
-    const minLat = Math.max(-85.051128, Math.min(Number.isFinite(tl[1]) ? tl[1] : -85, Number.isFinite(br[1]) ? br[1] : 85))
-    const maxLat = Math.min(85.051128, Math.max(Number.isFinite(tl[1]) ? tl[1] : -85, Number.isFinite(br[1]) ? br[1] : 85))
-
-    if (minLng >= maxLng || minLat >= maxLat) return []
-
-    const pixelsPerDegree = Math.pow(2, viewport.zoom)
-    const worldWidthPixels = 360 * pixelsPerDegree
-    const calculatedZ = Math.round(Math.log2(worldWidthPixels / 256))
-    const z = Math.max(minZoom, Math.min(maxZoom, Math.max(0, calculatedZ)))
-
-    const n = Math.pow(2, z)
-    const xMin = Math.max(0, Math.min(n - 1, Math.floor(((minLng + 180) / 360) * n)))
-    const xMax = Math.max(0, Math.min(n - 1, Math.floor(((maxLng + 180) / 360) * n)))
-
-    const latToY = (lat: number) => {
-      const clampedLat = Math.max(-85.051128, Math.min(85.051128, lat))
-      const rad = (clampedLat * Math.PI) / 180
-      return Math.floor(((1 - Math.log(Math.tan(Math.PI / 4 + rad / 2)) / Math.PI) / 2) * n)
-    }
-
-    const yMin = Math.max(0, Math.min(n - 1, latToY(maxLat)))
-    const yMax = Math.max(0, Math.min(n - 1, latToY(minLat)))
-
-    const indices: { x: number; y: number; z: number }[] = []
-    for (let x = xMin; x <= xMax; x++) {
-      for (let y = yMin; y <= yMax; y++) {
-        indices.push({ x, y, z })
-      }
-    }
-    return indices
-  }
-
-  getTileMetadata(index: any) {
-    const { x, y, z } = index
-    const n = Math.pow(2, z)
-    const west = (x / n) * 360 - 180
-    const east = ((x + 1) / n) * 360 - 180
-
-    const yToLat = (yIdx: number) => {
-      const rad = 2 * Math.atan(Math.exp(Math.PI * (1 - (2 * yIdx) / n))) - Math.PI / 2
-      return (rad * 180) / Math.PI
-    }
-
-    const north = yToLat(y)
-    const south = yToLat(y + 1)
-
-    return { bbox: { west, south, east, north } }
-  }
-
-  getParentIndex(index: any) {
-    return {
-      x: Math.floor(index.x / 2),
-      y: Math.floor(index.y / 2),
-      z: index.z - 1,
-    }
-  }
-}
-
-class WarpedTileBitmapLayer extends BitmapLayer {
-  static layerName = 'WarpedTileBitmapLayer'
-
-  _getCoordinateUniforms() {
-    const { bounds } = this.props as any
-    const west = bounds[0]
-    const south = Math.max(-85.051128, bounds[1])
-    const east = bounds[2]
-    const north = Math.min(85.051128, bounds[3])
-    const bottomLeft = lngLatToWorld([west, south])
-    const topRight = lngLatToWorld([east, north])
-    return {
-      coordinateConversion: 1,
-      bounds: [bottomLeft[0], bottomLeft[1], topRight[0], topRight[1]],
-    }
-  }
-}
-
-interface TesselatedBitmapLayerProps {
-  bounds?: any
-  projection?: any
-  heightmapEnabled?: boolean
-  elevationScale?: number
-  rasterData?: any
-  rasterWidth?: number
-  rasterHeight?: number
-  minVal?: number
-  maxVal?: number
-  [key: string]: any
-}
-
-// Dynamic Tesselated mesh supporting 3D elevation displacement & Equal Earth projection
-class TesselatedBitmapLayer extends BitmapLayer<TesselatedBitmapLayerProps> {
-  static layerName = 'TesselatedBitmapLayer'
-
-  _createMesh() {
-    const { bounds, projection, heightmapEnabled } = this.props as any
-
-    let minX = -180, minY = -90, maxX = 180, maxY = 90
-    if (bounds && Number.isFinite(bounds[0])) {
-      minX = bounds[0]
-      minY = bounds[1]
-      maxX = bounds[2]
-      maxY = bounds[3]
-    }
-
-    // Step size for mesh grid (finer step for Globe & 3D relief)
-    // On Globe, 0.4 degree grid ensures maximum chord sag is < 38m, preventing basemap puncture.
-    const stepDeg = projection === 'Globe' ? 0.4 : heightmapEnabled ? 1.5 : 2.0
-    const xSpan = maxX - minX
-    const ySpan = maxY - minY
-    const uCount = Math.max(16, Math.ceil(xSpan / stepDeg) + 1)
-    const vCount = Math.max(16, Math.ceil(ySpan / stepDeg) + 1)
-
-    const vertexCount = (uCount - 1) * (vCount - 1) * 6
-    const indices = new Uint32Array(vertexCount)
-    const texCoords = new Float32Array(uCount * vCount * 2)
-    const positions = new Float64Array(uCount * vCount * 3)
-
-    // On Globe, offset altitude slightly (150m) so raster surface floats cleanly above the basemap sphere
-    const altitudeOffset = projection === 'Globe' ? 150 : 0
-
-    let vertex = 0
-    let index = 0
-    for (let u = 0; u < uCount; u++) {
-      const ut = u / (uCount - 1)
-      const lng = minX + ut * xSpan
-
-      for (let v = 0; v < vCount; v++) {
-        const vt = v / (vCount - 1)
-        const lat = minY + vt * ySpan
-
-        let px = lng
-        let py = lat
-
-        if (projection === 'EqualEarth') {
-          const [eqX, eqY] = projectEqualEarth(lng, lat)
-          px = eqX
-          py = eqY
-        }
-
-        positions[vertex * 3 + 0] = px
-        positions[vertex * 3 + 1] = py
-        positions[vertex * 3 + 2] = altitudeOffset
-
-        texCoords[vertex * 2 + 0] = ut
-        texCoords[vertex * 2 + 1] = 1 - vt
-
-        if (u > 0 && v > 0) {
-          indices[index++] = vertex - vCount
-          indices[index++] = vertex - vCount - 1
-          indices[index++] = vertex - 1
-          indices[index++] = vertex - vCount
-          indices[index++] = vertex - 1
-          indices[index++] = vertex
-        }
-        vertex++
-      }
-    }
-
-    return { vertexCount, positions, indices, texCoords }
-  }
-}
-
-export const MapViewer: React.FC<MapViewerProps> = ({
-  raster,
-  renderedCanvas,
-  rasterBounds,
-  projection,
-  setProjection,
-  opacity,
-  palette,
-  invertPalette,
-  minVal,
-  maxVal,
-  legendTitle,
-  legendSubtitle,
-  scaleType,
-  logSigma,
-  breaks,
-  onUpdateBreaks,
-  mapModes,
-  onToggleMapMode,
-  onReorderMapModes,
-  heightmapConfig,
-  setHeightmapConfig,
-  circleOverlayConfig,
-  setCircleOverlayConfig,
-  analyticsOpen,
-  onToggleAnalytics,
-  selectedCountry,
-  selectedCountries,
-  deferredSelectedCountries,
-  isCalculatingStats,
-  onSelectCountry,
-  onToggleCountry,
-  onClearCountries,
-  countriesMode,
-  onToggleCountriesMode,
-  hoveredCountry,
-  onHoverCountry,
-  countryStats,
-  onInspect,
-  settingsDrawerOpen,
-  onToggleSettingsDrawer,
-  sidebarWidth,
-  colourbarWidth,
-  onResizeColourbarWidth,
-  infoPanelOpen = false,
-  onCloseInfoPanel,
-}) => {
-  const [internalFlyoutOpen, setInternalFlyoutOpen] = useState(false)
-  const flyoutOpen = settingsDrawerOpen !== undefined ? settingsDrawerOpen : internalFlyoutOpen
-  const setFlyoutOpen = onToggleSettingsDrawer || setInternalFlyoutOpen
-
-  const [projViewStates, setProjViewStates] = useState<Record<ProjectionType, any>>({
+  let [proj_view_states, set_proj_view_states] = useState<Record<ProjectionType, any>>({
     Mercator: MAP_CONFIG.mapDefines?.initialMercator || {
       longitude: 0,
       latitude: 20,
@@ -376,10 +217,9 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     },
   })
 
-  // When heightmap is toggled on, tilt camera up to 45 degrees so relief is immediately visible across all projections
   useEffect(() => {
-    if (heightmapConfig.enabled) {
-      setProjViewStates((prev) => ({
+    if (heightmap_config.enabled) {
+      set_proj_view_states((prev) => ({
         ...prev,
         Mercator: { ...prev.Mercator, pitch: Math.max(35, prev.Mercator?.pitch || 45) },
         Globe: { ...prev.Globe, pitch: Math.max(35, prev.Globe?.pitch || 45), bearing: 0 },
@@ -387,227 +227,245 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         EqualEarth: { ...prev.EqualEarth, rotationX: Math.min(-35, prev.EqualEarth?.rotationX || -45) },
       }))
     }
-  }, [heightmapConfig.enabled])
+  }, [heightmap_config.enabled, set_proj_view_states])
 
-  const [basemap, setBasemap] = useState<string>(MAP_CONFIG.basemapLayers[0]?.id || 'dark')
-  const [showGraticule, setShowGraticule] = useState(true)
+  let [basemap, set_basemap] = useState<string>(MAP_CONFIG.basemapLayers[0]?.id || 'dark')
+  let [show_graticule, set_show_graticule] = useState(true)
+  let [inspect_data, set_inspect_data] = useState<InspectionData | null>(null)
+  let [cursor_pos, set_cursor_pos] = useState<{ x: number; y: number } | null>(null)
 
-  const [inspectData, setInspectData] = useState<InspectionData | null>(null)
-  const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null)
-  const lastCountryRef = useRef<CountryFeature | null>(null)
-  const lastHoveredCountryCodeRef = useRef<string | null | undefined>(null)
+  handle_container_pointer_move = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    let local_rect = e.currentTarget.getBoundingClientRect()
+    set_cursor_pos({ x: e.clientX - local_rect.left, y: e.clientY - local_rect.top })
+  }, [set_cursor_pos])
 
-  const handleContainerPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    setCursorPos({ x: e.clientX - rect.left, y: e.clientY - rect.top })
-  }, [])
-
-
-
-  // NaturalEarth Land & Countries data
-  const [landGeoJson, setLandGeoJson] = useState<any>(null)
-  const [countryFeatures, setCountryFeatures] = useState<CountryFeature[]>([])
+  let [land_geo_json, set_land_geo_json] = useState<any>(null)
+  let [country_features, set_country_features] = useState<CountryFeature[]>([])
 
   useEffect(() => {
     fetch('/data/ne_50m_land.geojson')
       .then((r) => r.json())
-      .then((data) => setLandGeoJson(data))
+      .then((data) => set_land_geo_json(data))
       .catch((err) => console.error('Failed to load land geojson:', err))
 
-    loadCountriesGeoJson().then((feats) => setCountryFeatures(feats))
+    loadCountriesGeoJson().then((feats) => set_country_features(feats))
   }, [])
 
-  // Projected Land GeoJSON for Equal Earth
-  const equalEarthLandGeoJson = useMemo(() => {
-    if (!landGeoJson) return null
+  equal_earth_land_geo_json = useMemo(() => {
+    if (!land_geo_json)
+      return null
     try {
       return {
         type: 'FeatureCollection',
-        features: landGeoJson.features.map((f: any) => ({
+        features: land_geo_json.features.map((f: any) => ({
           ...f,
           geometry: transformGeometryToEqualEarth(f.geometry),
         })),
       }
     } catch {
-      return landGeoJson
+      return land_geo_json
     }
-  }, [landGeoJson])
+  }, [land_geo_json])
 
-  // Graticule lines
-  const graticulePaths = useMemo(() => {
-    if (projection === 'EqualEarth') {
+  graticule_paths = useMemo(() => {
+    if (projection === 'EqualEarth')
       return generateEqualEarthGraticule(10, 20)
+
+    let lat_interval = MAP_CONFIG.mapDefines?.graticule?.latInterval || 10
+    let lng_interval = MAP_CONFIG.mapDefines?.graticule?.lngInterval || 20
+    let paths_array: { path: [number, number][] }[] = []
+
+    for (let i = -80; i <= 80; i += lat_interval) {
+      let local_line: [number, number][] = []
+      for (let x = -180; x <= 180; x += 5)
+        local_line.push([x, i])
+      paths_array.push({ path: local_line })
     }
 
-    const latInterval = MAP_CONFIG.mapDefines?.graticule?.latInterval || 10
-    const lngInterval = MAP_CONFIG.mapDefines?.graticule?.lngInterval || 20
-    const paths: { path: [number, number][] }[] = []
-
-    for (let lat = -80; lat <= 80; lat += latInterval) {
-      const line: [number, number][] = []
-      for (let lon = -180; lon <= 180; lon += 5) {
-        line.push([lon, lat])
-      }
-      paths.push({ path: line })
+    for (let i = -180; i <= 180; i += lng_interval) {
+      let local_line: [number, number][] = []
+      for (let x = -85; x <= 85; x += 5)
+        local_line.push([i, x])
+      paths_array.push({ path: local_line })
     }
 
-    for (let lon = -180; lon <= 180; lon += lngInterval) {
-      const line: [number, number][] = []
-      for (let lat = -85; lat <= 85; lat += 5) {
-        line.push([lon, lat])
-      }
-      paths.push({ path: line })
-    }
-
-    return paths
+    return paths_array
   }, [projection])
 
-  // Sample raster value at coordinate
-  const sampleRasterAt = useCallback(
+  sample_raster_at = useCallback(
     (coordX: number, coordY: number): InspectionData | null => {
-      if (!raster) return null
-
-      let lng = coordX
+      let cached_country: CountryFeature | null
+      let clamped_x: number
+      let clamped_y: number
+      let country_name: string | null = null
+      let eff_lat: number
       let lat = coordY
+      let lng = coordX
+      let offset: number
+      let pixel_height: number
+      let pixel_offset: number
+      let pixel_x: number
+      let pixel_y: number
+      let raster_val: number
+
+      if (!raster)
+        return null
 
       if (projection === 'EqualEarth') {
-        const [invLng, invLat] = invertEqualEarth(coordX, coordY)
-        lng = invLng
-        lat = invLat
+        let local_inverted = invertEqualEarth(coordX, coordY)
+        lng = local_inverted[0]
+        lat = local_inverted[1]
       }
 
-      if (lng < -180 || lng > 180 || lat < -90 || lat > 90) return null
+      if (lng < -180 || lng > 180 || lat < -90 || lat > 90)
+        return null
 
-      const pixelHeight = 180 / raster.height
-      const pixelX = Math.floor(((lng + 180) / 360) * raster.width)
-      const pixelOffset = getPixelOffset(projection)
-      const offset = pixelOffset * pixelHeight
-      const effLat = lat - offset
-      const pixelY = Math.floor(((90 - effLat) / 180) * raster.height)
+      pixel_height = 180/raster.height
+      pixel_x = Math.floor(((lng + 180)/360)*raster.width)
+      pixel_offset = getPixelOffset(projection)
+      offset = pixel_offset*pixel_height
+      eff_lat = lat - offset
+      pixel_y = Math.floor(((90 - eff_lat)/180)*raster.height)
 
-      const clampedX = Math.max(0, Math.min(raster.width - 1, pixelX))
-      const clampedY = Math.max(0, Math.min(raster.height - 1, pixelY))
+      clamped_x = Math.max(0, Math.min(raster.width - 1, pixel_x))
+      clamped_y = Math.max(0, Math.min(raster.height - 1, pixel_y))
 
-      const idx = clampedY * raster.width + clampedX
-      const val = raster.data[idx]
+      raster_val = raster.data[clamped_y*raster.width + clamped_x]
 
-      let countryName: string | null = null
-      if (countryFeatures.length > 0) {
-        const cached = lastCountryRef.current
-        if (cached && cached.bbox) {
-          const [minX, minY, maxX, maxY] = cached.bbox
-          if (lng >= minX && lng <= maxX && lat >= minY && lat <= maxY && isPointInGeometry(lng, lat, cached.geometry)) {
-            countryName = cached.properties.name || cached.properties.name_long || null
-          }
+      if (country_features.length > 0) {
+        cached_country = last_country_ref.current
+        if (cached_country && cached_country.bbox) {
+          let local_b_max_x = cached_country.bbox[2]
+          let local_b_max_y = cached_country.bbox[3]
+          let local_b_min_x = cached_country.bbox[0]
+          let local_b_min_y = cached_country.bbox[1]
+          if (lng >= local_b_min_x && lng <= local_b_max_x && lat >= local_b_min_y && lat <= local_b_max_y && isPointInGeometry(lng, lat, cached_country.geometry))
+            country_name = cached_country.properties.name || cached_country.properties.name_long || null
         }
-        if (!countryName) {
-          const c = findCountryAtLngLat(lng, lat, countryFeatures)
-          lastCountryRef.current = c
-          if (c) countryName = c.properties.name || c.properties.name_long || null
+        if (!country_name) {
+          let local_c = findCountryAtLngLat(lng, lat, country_features)
+          last_country_ref.current = local_c
+          if (local_c)
+            country_name = local_c.properties.name || local_c.properties.name_long || null
         }
       }
 
       return {
-        pixelX: clampedX,
-        pixelY: clampedY,
+        pixelX: clamped_x,
+        pixelY: clamped_y,
         lng,
         lat,
-        value: Number.isNaN(val) ? null : val,
-        countryName,
+        value: Number.isNaN(raster_val) ? null : raster_val,
+        countryName: country_name,
       }
     },
-    [raster, countryFeatures, projection]
+    [raster, country_features, projection]
   )
 
-  const handleClick = useCallback(
+  handle_click = useCallback(
     (info: any) => {
-      if (!info.coordinate) return
-      const [x, y] = info.coordinate
+      let insp: InspectionData | null
+      let x_coord: number
+      let y_coord: number
 
-      const insp = sampleRasterAt(x, y)
-      setInspectData(insp)
-      setCursorPos({ x: info.x, y: info.y })
-      if (onInspect) onInspect(insp)
+      if (!info.coordinate)
+        return
 
-      if (insp && countryFeatures.length > 0) {
-        const country = findCountryAtLngLat(insp.lng, insp.lat, countryFeatures)
-        if (country) {
-          if (onToggleCountry) onToggleCountry(country)
-          else if (onSelectCountry) onSelectCountry(country)
+      x_coord = info.coordinate[0]
+      y_coord = info.coordinate[1]
+
+      insp = sample_raster_at(x_coord, y_coord)
+      set_inspect_data(insp)
+      set_cursor_pos({ x: info.x, y: info.y })
+      if (on_inspect)
+        on_inspect(insp)
+
+      if (insp && country_features.length > 0) {
+        let local_country = findCountryAtLngLat(insp.lng, insp.lat, country_features)
+        if (local_country) {
+          if (on_toggle_country) {
+            on_toggle_country(local_country)
+          } else if (on_select_country) {
+            on_select_country(local_country)
+          }
         }
       }
     },
-    [sampleRasterAt, onInspect, countryFeatures, onToggleCountry, onSelectCountry]
+    [sample_raster_at, on_inspect, country_features, on_toggle_country, on_select_country, set_inspect_data, set_cursor_pos]
   )
 
-  const handleHover = useCallback(
+  handle_hover = useCallback(
     (info: any) => {
+      let insp: InspectionData | null
+      let x_coord: number
+      let y_coord: number
+
       if (!info.coordinate) {
-        setInspectData(null)
-        setCursorPos(null)
-        lastHoveredCountryCodeRef.current = null
-        if (countriesMode && onHoverCountry) onHoverCountry(null)
+        set_inspect_data(null)
+        set_cursor_pos(null)
+        last_hovered_country_code_ref.current = null
+        if (countries_mode && on_hover_country)
+          on_hover_country(null)
         return
       }
-      const [x, y] = info.coordinate
-      const insp = sampleRasterAt(x, y)
-      setInspectData(insp)
-      if (info.x !== undefined && info.y !== undefined) {
-        setCursorPos({ x: info.x, y: info.y })
-      }
-      if (onInspect) onInspect(insp)
 
-      if (countriesMode && insp && countryFeatures.length > 0 && onHoverCountry) {
-        const nextCode = insp.countryName
-        if (lastHoveredCountryCodeRef.current !== nextCode) {
-          lastHoveredCountryCodeRef.current = nextCode
-          const country = findCountryAtLngLat(insp.lng, insp.lat, countryFeatures)
-          onHoverCountry(country)
+      x_coord = info.coordinate[0]
+      y_coord = info.coordinate[1]
+      insp = sample_raster_at(x_coord, y_coord)
+      set_inspect_data(insp)
+
+      if (info.x !== undefined && info.y !== undefined)
+        set_cursor_pos({ x: info.x, y: info.y })
+      if (on_inspect)
+        on_inspect(insp)
+
+      if (countries_mode && insp && country_features.length > 0 && on_hover_country) {
+        let next_code = insp.countryName
+        if (last_hovered_country_code_ref.current !== next_code) {
+          last_hovered_country_code_ref.current = next_code
+          let local_country = findCountryAtLngLat(insp.lng, insp.lat, country_features)
+          on_hover_country(local_country)
         }
       }
     },
-    [sampleRasterAt, onInspect, countriesMode, countryFeatures, onHoverCountry]
+    [sample_raster_at, on_inspect, countries_mode, country_features, on_hover_country, set_inspect_data, set_cursor_pos]
   )
 
-  const handleDoubleClick = useCallback(() => {
-    setProjViewStates((prev) => ({
+  handle_double_click = useCallback(() => {
+    set_proj_view_states((prev) => ({
       ...prev,
       [projection]:
-        projection === 'Equirectangular' || projection === 'EqualEarth'
+        (projection === 'Equirectangular' || projection === 'EqualEarth')
           ? { target: [0, 0, 0], zoom: 2.0, minZoom: 0.2, maxZoom: 10, rotationX: 0, rotationOrbit: 0, minRotationX: -85, maxRotationX: 0 }
-          : projection === 'Globe'
+          : (projection === 'Globe')
             ? { longitude: 0, latitude: 20, zoom: 0, pitch: 0, bearing: 0, maxZoom: 18, minZoom: 0, minPitch: 0, maxPitch: 85 }
             : { longitude: 0, latitude: 20, zoom: 1.2, pitch: 0, bearing: 0, maxZoom: 18, minZoom: 0, minPitch: 0, maxPitch: 85 },
     }))
-  }, [projection])
+  }, [projection, set_proj_view_states])
 
-  const handleViewStateChange = useCallback(
+  handle_view_state_change = useCallback(
     (e: any) => {
-      let nextViewState = e.viewState
+      let next_view_state = e.viewState
       if (projection === 'Globe') {
-        // Clamp latitude to [-85, 85] to prevent polar singularities where orientation flips
-        const clampedLat = Math.max(-85, Math.min(85, nextViewState.latitude ?? 0))
-        // Keep bearing normalized to [-180, 180] while allowing diagonal drags to adjust bearing freely
-        let bearing = nextViewState.bearing ?? 0
-        while (bearing > 180) bearing -= 360
-        while (bearing < -180) bearing += 360
+        let bearing = next_view_state.bearing ?? 0
+        let clamped_lat = Math.max(-85, Math.min(85, next_view_state.latitude ?? 0))
+        bearing = ((bearing + 180)%360 + 360)%360 - 180
 
-        nextViewState = {
-          ...nextViewState,
-          latitude: clampedLat,
+        next_view_state = {
+          ...next_view_state,
+          latitude: clamped_lat,
           bearing,
         }
       }
-      setProjViewStates((prev) => ({
+      set_proj_view_states((prev) => ({
         ...prev,
-        [projection]: nextViewState,
+        [projection]: next_view_state,
       }))
     },
-    [projection]
+    [projection, set_proj_view_states]
   )
 
-  // Configure deck.gl view with SmoothControllers (Ctrl + Left Drag pitch & rotate, Left Drag pan)
-  const views = useMemo(() => {
+  views = useMemo(() => {
     if (projection === 'Globe') {
       return new SmoothGlobeView({
         id: 'globe-view',
@@ -656,867 +514,152 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     })
   }, [projection])
 
-  const cameraTilt =
-    projection === 'Mercator' || projection === 'Globe'
-      ? projViewStates[projection]?.pitch || 0
-      : Math.abs(projViewStates[projection]?.rotationX || 0)
+  camera_tilt = (projection === 'Mercator' || projection === 'Globe')
+    ? proj_view_states[projection]?.pitch || 0
+    : Math.abs(proj_view_states[projection]?.rotationX || 0)
 
-  const handleSetCameraTilt = useCallback(
-    (tilt: number) => {
-      setProjViewStates((prev) => ({
-        ...prev,
-        [projection]:
-          projection === 'Mercator' || projection === 'Globe'
-            ? { ...prev[projection], pitch: tilt }
-            : { ...prev[projection], rotationX: -tilt },
-      }))
-    },
-    [projection]
-  )
-
-  // 3D Elevation Spike Map Data Generator (deck.gl SolidPolygonLayer with Flat-Facing Uniform Rectangular Geometry)
-  const elevationSpikesData = useMemo(() => {
-    if (!heightmapConfig.enabled || !raster || !raster.data) {
-      return { points: [] as any[] }
-    }
-
-    const W = raster.width
-    const H = raster.height
-    const tMin = transformValue(minVal, scaleType as any, logSigma)
-    const tMax = transformValue(maxVal, scaleType as any, logSigma)
-    const tRange = tMax - tMin || 1
-    const lut = getPaletteLUT(palette, Boolean(invertPalette))
-    const isCartesian = projection === 'Equirectangular' || projection === 'EqualEarth'
-
-    // Resolution / granularity in arcminutes: bounded to 5-arcmin at most (finest granularity)
-    const resArcmin = Math.max(5, heightmapConfig.resolutionArcmin ?? 60)
-    // 360 degrees = 21,600 arcminutes
-    const targetCols = Math.round(21600 / resArcmin)
-    const step = Math.max(1, Math.round(W / targetCols))
-    const gridW = Math.ceil(W / step)
-    const gridH = Math.ceil(H / step)
-
-    const cellLngWidth = 360 / gridW
-    const cellLatHeight = 180 / gridH
-
-    // Uniform parent pixel sizing with 0.93 coverage for a subtle clean margin
-    const cov = 0.93
-    const halfW = (cellLngWidth / 2) * cov
-    const halfH = (cellLatHeight / 2) * cov
-
-    const points: any[] = []
-
-    const effectiveSelected =
-      selectedCountries && selectedCountries.length > 0
-        ? selectedCountries
-        : selectedCountry
-          ? [selectedCountry]
-          : []
-
-    // If Country Analysis mode is active and no countries are selected, de-render spikes completely
-    if (countriesMode && effectiveSelected.length === 0) {
-      return { points: [] }
-    }
-
-    const maxScale = heightmapConfig.elevationScale || 800000
-    // Continuous base pedestal so all valid grid cells form a cohesive terrain carpet without empty holes
-    const baseElevation = isCartesian ? (maxScale / 111000) * 0.35 : maxScale * 0.035
-    const heightScaleMode = heightmapConfig.heightScaleMode ?? 'linear'
-    const needsPercentileRank = Boolean(
-      heightmapConfig.opacityByPercentile || heightScaleMode === 'percentile' || heightScaleMode === 'blend'
-    )
-    const getPercentileRank = needsPercentileRank
-      ? createPercentileRankCalculator(
-          raster,
-          countriesMode && countryStats?.histogram ? countryStats.histogram : undefined
-        )
-      : null
-    const opacityVal = heightmapConfig.opacity ?? 0.9
-    const alpha = Math.round(255 * opacityVal)
-
-    const pixelOffset = getPixelOffset(projection)
-    const latOffset = pixelOffset * (180 / H)
-    const visitedCells = new Set<number>()
-
-    const processCell = (gr: number, gc: number) => {
-      const cellIdx = gr * gridW + gc
-      if (visitedCells.has(cellIdx)) return
-      visitedCells.add(cellIdx)
-
-      const startR = gr * step
-      const endR = Math.min(H, startR + step)
-      const startC = gc * step
-      const endC = Math.min(W, startC + step)
-
-      let sumVal = 0
-      let countVal = 0
-      let maxBlockVal = -Infinity
-
-      if (step === 1) {
-        const v = raster.data[startR * W + startC]
-        if (Number.isFinite(v)) {
-          sumVal = v
-          countVal = 1
-          maxBlockVal = v
-        }
-      } else {
-        for (let r = startR; r < endR; r++) {
-          const rowOffset = r * W
-          for (let c = startC; c < endC; c++) {
-            const v = raster.data[rowOffset + c]
-            if (Number.isFinite(v)) {
-              sumVal += v
-              countVal++
-              if (v > maxBlockVal) maxBlockVal = v
-            }
-          }
-        }
-      }
-
-      if (countVal === 0) return
-
-      const v = countVal > 1 ? (sumVal / countVal) * 0.4 + maxBlockVal * 0.6 : maxBlockVal
-
-      const maxAllowedLat = projection === 'Mercator' ? 84.9 : 89.9
-      const minAllowedLat = projection === 'Mercator' ? -84.9 : -89.9
-
-      const rawCenterLat = 90 - ((gr + 0.5) / gridH) * 180 + latOffset
-      if (rawCenterLat < minAllowedLat - halfH || rawCenterLat > maxAllowedLat + halfH) return
-
-      const centerLat = Math.max(minAllowedLat, Math.min(maxAllowedLat, rawCenterLat))
-      const centerLng = Math.max(-180, Math.min(180, -180 + ((gc + 0.5) / gridW) * 360))
-      const minLng = Math.max(-180, centerLng - halfW)
-      const maxLng = Math.min(180, centerLng + halfW)
-      const minLat = Math.max(minAllowedLat, centerLat - halfH)
-      const maxLat = Math.min(maxAllowedLat, centerLat + halfH)
-
-      let polygon: [number, number][]
-      if (projection === 'EqualEarth') {
-        polygon = [
-          projectEqualEarth(minLng, minLat),
-          projectEqualEarth(maxLng, minLat),
-          projectEqualEarth(maxLng, maxLat),
-          projectEqualEarth(minLng, maxLat),
-        ]
-      } else {
-        polygon = [
-          [minLng, minLat],
-          [maxLng, minLat],
-          [maxLng, maxLat],
-          [minLng, maxLat],
-        ]
-      }
-
-      const tVal = transformValue(v, scaleType as any, logSigma)
-      const norm = Math.max(0, Math.min(1, (tVal - tMin) / tRange))
-
-      let heightNorm = 0
-      const cbRange = maxVal - minVal || 1
-      const linNorm = Math.max(0, Math.min(1, (v - minVal) / cbRange))
-
-      if (heightScaleMode === 'percentile') {
-        const rank = getPercentileRank ? getPercentileRank(v) : linNorm
-        heightNorm = Math.max(0, Math.min(1, rank))
-      } else if (heightScaleMode === 'blend') {
-        const rank = getPercentileRank ? getPercentileRank(v) : linNorm
-        const pctNorm = Math.max(0, Math.min(1, rank))
-        const w = Math.max(0, Math.min(1, heightmapConfig.blendWeight ?? 0.5))
-        heightNorm = (1 - w) * linNorm + w * pctNorm
-      } else {
-        heightNorm = linNorm
-      }
-
-      const spikeHeight = isCartesian
-        ? heightNorm * ((maxScale / 111000) * 12)
-        : heightNorm * maxScale
-
-      const latRad = (Math.min(85, Math.max(-85, centerLat)) * Math.PI) / 180
-      const latCorrection = projection === 'Mercator' ? Math.max(0.08, Math.cos(latRad)) : 1.0
-
-      const elev = (baseElevation + spikeHeight) * latCorrection
-
-      const lutIdx = Math.floor(norm * 255) * 3
-      let cellAlpha = alpha
-      if (heightmapConfig.opacityByPercentile && getPercentileRank) {
-        const rank = Math.max(0.01, Math.min(1, getPercentileRank(v)))
-        const strength = heightmapConfig.opacityByPercentileStrength ?? 1.0
-        const factor = Math.pow(rank, strength)
-        cellAlpha = Math.round(255 * opacityVal * Math.max(0.02, factor))
-      }
-      const color: [number, number, number, number] = [
-        lut[lutIdx],
-        lut[lutIdx + 1],
-        lut[lutIdx + 2],
-        cellAlpha,
-      ]
-
-      points.push({
-        polygon,
-        elevation: elev,
-        color,
-        value: v,
-        lng: centerLng,
-        lat: centerLat,
-      })
-    }
-
-    if (countriesMode && effectiveSelected.length > 0) {
-      // High-performance country-by-country polygon scanning (only scans each country's tight bboxes)
-      for (const country of effectiveSelected) {
-        const geom = country.geometry
-        if (!geom) continue
-
-        const polyList: number[][][][] =
-          geom.type === 'Polygon'
-            ? [geom.coordinates as number[][][]]
-            : geom.type === 'MultiPolygon'
-              ? (geom.coordinates as number[][][][])
-              : []
-
-        for (const rings of polyList) {
-          if (!rings || rings.length === 0) continue
-          const outerRing = rings[0]
-          if (!outerRing || outerRing.length === 0) continue
-
-          let pMinX = Infinity, pMinY = Infinity, pMaxX = -Infinity, pMaxY = -Infinity
-          for (let i = 0; i < outerRing.length; i++) {
-            const pt = outerRing[i]
-            if (pt[0] < pMinX) pMinX = pt[0]
-            if (pt[1] < pMinY) pMinY = pt[1]
-            if (pt[0] > pMaxX) pMaxX = pt[0]
-            if (pt[1] > pMaxY) pMaxY = pt[1]
-          }
-
-          if (!Number.isFinite(pMinX)) continue
-
-          const crosses180 = pMaxX - pMinX > 180
-          const minC = crosses180 ? 0 : Math.max(0, Math.floor(((pMinX + 180) / 360) * gridW) - 1)
-          const maxC = crosses180 ? gridW : Math.min(gridW, Math.ceil(((pMaxX + 180) / 360) * gridW) + 1)
-          const minR = Math.max(0, Math.floor(((90 - pMaxY) / 180) * gridH) - 1)
-          const maxR = Math.min(gridH, Math.ceil(((90 - pMinY) / 180) * gridH) + 1)
-
-          const holes = rings.slice(1)
-
-          for (let gr = minR; gr < maxR; gr++) {
-            const centerLat = 90 - ((gr + 0.5) / gridH) * 180 + latOffset
-            if (centerLat < pMinY - halfH || centerLat > pMaxY + halfH) continue
-
-            for (let gc = minC; gc < maxC; gc++) {
-              const centerLng = -180 + ((gc + 0.5) / gridW) * 360
-              if (!crosses180 && (centerLng < pMinX - halfW || centerLng > pMaxX + halfW)) continue
-
-              const cellIdx = gr * gridW + gc
-              if (visitedCells.has(cellIdx)) continue
-
-              if (!pointInRing(centerLng, centerLat, outerRing)) continue
-
-              let inHole = false
-              for (let h = 0; h < holes.length; h++) {
-                if (pointInRing(centerLng, centerLat, holes[h])) {
-                  inHole = true
-                  break
-                }
-              }
-              if (inHole) continue
-
-              processCell(gr, gc)
-            }
-          }
-        }
-      }
-    } else {
-      // Global mode: scan all grid cells bounded by valid projection latitudes
-      const minAllowedLat = projection === 'Mercator' ? -84.9 : -89.9
-      const maxAllowedLat = projection === 'Mercator' ? 84.9 : 89.9
-      for (let gr = 0; gr < gridH; gr++) {
-        const rawCenterLat = 90 - ((gr + 0.5) / gridH) * 180 + latOffset
-        if (rawCenterLat < minAllowedLat || rawCenterLat > maxAllowedLat) continue
-        for (let gc = 0; gc < gridW; gc++) {
-          processCell(gr, gc)
-        }
-      }
-    }
-
-    return { points }
-  }, [
-    heightmapConfig.enabled,
-    heightmapConfig.elevationScale,
-    heightmapConfig.opacity,
-    heightmapConfig.opacityByPercentile,
-    heightmapConfig.opacityByPercentileStrength,
-    heightmapConfig.resolutionArcmin,
-    heightmapConfig.heightScaleMode,
-    heightmapConfig.blendWeight,
+  elevation_spikes_data = useElevationSpikes({
+    heightmapConfig: heightmap_config,
     raster,
-    minVal,
-    maxVal,
-    scaleType,
-    logSigma,
+    minVal: min_val,
+    maxVal: max_val,
+    scaleType: scale_type,
+    logSigma: log_sigma,
     palette,
-    invertPalette,
+    invertPalette: invert_palette,
     projection,
-    countriesMode,
-    countryStats,
-    selectedCountries,
-    selectedCountry,
-  ])
+    countriesMode: countries_mode,
+    countryStats: country_stats,
+    selectedCountries: selected_countries,
+    selectedCountry: selected_country,
+  })
 
-  // Extract high-value proportional circles (equal area: A ∝ Value => r ∝ sqrt(Value))
-  const circlePixelData = useMemo(() => {
-    if (!circleOverlayConfig.enabled || !raster) return []
-
-    // Calculate cutoff value
-    const pCutoff = circleOverlayConfig.percentileCutoff / 100
-    const [cutoffVal] = computeQuantiles(raster.data, [pCutoff])
-    if (!Number.isFinite(cutoffVal)) return []
-
-    const W = raster.width
-    const H = raster.height
-    const valRange = raster.max - raster.min || 1
-    const cutoffRange = raster.max - cutoffVal || 1
-    const lut = getPaletteLUT(palette, Boolean(invertPalette))
-
-    const points: any[] = []
-    const isCartesian = projection === 'Equirectangular' || projection === 'EqualEarth'
-    const scaleFactor = circleOverlayConfig.baseRadius || 1.0
-
-    const effectiveSelected =
-      selectedCountries && selectedCountries.length > 0
-        ? selectedCountries
-        : selectedCountry
-          ? [selectedCountry]
-          : []
-
-    // De-render circles if Country Analysis mode is active and no countries are selected
-    if (countriesMode && effectiveSelected.length === 0) return []
-
-    // Downsample loop stride to prevent UI lockup on huge rasters
-    const stride = Math.max(1, Math.floor(Math.sqrt((W * H) / 100000)))
-
-    const pixelOffset = getPixelOffset(projection)
-    const latOffset = pixelOffset * (180 / H)
-
-    for (let r = 0; r < H; r += stride) {
-      const rowOffset = r * W
-      const lat = 90 - ((r + 0.5) / H) * 180 + latOffset
-
-      for (let c = 0; c < W; c += stride) {
-        const v = raster.data[rowOffset + c]
-        if (Number.isFinite(v) && v >= cutoffVal) {
-          const lng = -180 + ((c + 0.5) / W) * 360
-
-          // Item 1: Subject to bitmap isolation mode in Country Analysis
-          if (countriesMode && effectiveSelected.length > 0) {
-            let isInside = false
-            for (const country of effectiveSelected) {
-              const bbox = country.bbox || computeGeometryBBox(country.geometry)
-              if (bbox) {
-                const [bMinX, bMinY, bMaxX, bMaxY] = bbox
-                if (lng < bMinX || lng > bMaxX || lat < bMinY || lat > bMaxY) continue
-              }
-              if (isPointInGeometry(lng, lat, country.geometry)) {
-                isInside = true
-                break
-              }
-            }
-            if (!isInside) continue
-          }
-
-          let px = lng
-          let py = lat
-          if (projection === 'EqualEarth') {
-            const [eqX, eqY] = projectEqualEarth(lng, lat)
-            px = eqX
-            py = eqY
-          }
-
-          // Heightmap altitude
-          let alt = 0
-          if (heightmapConfig.enabled) {
-            const norm = Math.max(0, (v - minVal) / valRange)
-            if (isCartesian) {
-              alt = norm * ((heightmapConfig.elevationScale || 250000) / 111000) * 12
-            } else {
-              alt = norm * (heightmapConfig.elevationScale || 250000)
-            }
-          }
-
-          // Equal-area scaling: Linear with area (1 unit of value = 1 hectare = 10,000 m^2 * scaleFactor)
-          // Area = pi * r^2  ==>  r = sqrt(Area / pi) = sqrt(v * 10000 * scaleFactor / pi)
-          const posV = Math.max(0, v)
-          const radiusMeters = posV > 0 ? Math.sqrt((posV * 10000 * scaleFactor) / Math.PI) : 0
-          const radius = isCartesian ? radiusMeters / 111320 : radiusMeters
-
-          // Color from palette
-          const normAll = Math.max(0, Math.min(1, (v - minVal) / valRange))
-          const lutIdx = Math.floor(normAll * 255) * 3
-          const color: [number, number, number, number] = [
-            lut[lutIdx],
-            lut[lutIdx + 1],
-            lut[lutIdx + 2],
-            230,
-          ]
-
-          points.push({
-            position: [px, py, alt],
-            value: v,
-            radius,
-            color,
-          })
-        }
-      }
-    }
-
-    return points
-  }, [
-    circleOverlayConfig,
+  circle_pixel_data = useCircleOverlay({
+    circleOverlayConfig: circle_overlay_config,
     raster,
     palette,
-    invertPalette,
-    minVal,
-    maxVal,
+    invertPalette: invert_palette,
+    minVal: min_val,
+    maxVal: max_val,
     projection,
-    heightmapConfig,
-    countriesMode,
-    selectedCountries,
-    selectedCountry,
-  ])
+    heightmapConfig: heightmap_config,
+    countriesMode: countries_mode,
+    selectedCountries: selected_countries,
+    selectedCountry: selected_country,
+  })
 
-  // Build deck.gl layer stack
-  const layers = useMemo(() => {
-    const list: any[] = []
-    const isCartesian = projection === 'Equirectangular' || projection === 'EqualEarth'
-    const effectiveSelected =
-      selectedCountries && selectedCountries.length > 0
-        ? selectedCountries
-        : selectedCountry
-          ? [selectedCountry]
-          : []
-
-    // 1. Basemap Layer (ESRI or Land/Sea when "None" or Equal Earth)
-    if (basemap === 'none' || projection === 'EqualEarth') {
-      // Ocean background
-      if (projection !== 'EqualEarth') {
-        list.push(
-          new PolygonLayer({
-            id: `ocean-base-${projection}`,
-            data: [
-              {
-                polygon: [
-                  [-180, -90],
-                  [180, -90],
-                  [180, 90],
-                  [-180, 90],
-                  [-180, -90],
-                ],
-              },
-            ],
-            coordinateSystem: isCartesian ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
-            _imageCoordinateSystem: projection === 'Globe' ? 'lnglat' : undefined,
-            filled: true,
-            getPolygon: (d: any) => d.polygon,
-            getFillColor: [14, 18, 26, 255],
-            stroked: false,
-            parameters: { depthTest: false },
-          })
-        )
-      }
-
-      // Land fill
-      const landData = projection === 'EqualEarth' ? equalEarthLandGeoJson : landGeoJson
-      if (landData) {
-        list.push(
-          new GeoJsonLayer({
-            id: `ne-land-${projection}`,
-            data: landData,
-            coordinateSystem: isCartesian ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
-            filled: true,
-            getFillColor: [32, 36, 46, 255],
-            stroked: true,
-            getLineColor: [55, 62, 78, 255],
-            getLineWidth: 1,
-            lineWidthUnits: 'pixels',
-            parameters: { depthTest: false },
-          })
-        )
-      }
-    } else {
-      if (projection === 'Mercator') {
-        list.push(
-          new TileLayer({
-            id: `esri-basemap-mercator-${basemap}`,
-            data: ESRI_BASEMAP_URLS[basemap],
-            minZoom: 0,
-            maxZoom: 18,
-            tileSize: 256,
-            renderSubLayers: (props: any) => {
-              const { boundingBox } = props.tile
-              return new BitmapLayer(props, {
-                data: undefined,
-                image: props.data,
-                bounds: [
-                  boundingBox[0][0],
-                  boundingBox[0][1],
-                  boundingBox[1][0],
-                  boundingBox[1][1],
-                ],
-              })
-            },
-          })
-        )
-      } else if (projection === 'Globe') {
-        list.push(
-          new TileLayer({
-            id: `esri-basemap-globe-${basemap}`,
-            data: ESRI_BASEMAP_URLS[basemap],
-            minZoom: 0,
-            maxZoom: 18,
-            tileSize: 256,
-            renderSubLayers: (props: any) => {
-              const { boundingBox } = props.tile
-              return new BitmapLayer(props, {
-                data: undefined,
-                image: props.data,
-                bounds: [
-                  boundingBox[0][0],
-                  boundingBox[0][1],
-                  boundingBox[1][0],
-                  boundingBox[1][1],
-                ],
-                _imageCoordinateSystem: 'cartesian',
-              })
-            },
-          })
-        )
-      } else if (projection === 'Equirectangular') {
-        list.push(
-          new TileLayer({
-            id: `esri-basemap-equirectangular-${basemap}`,
-            data: ESRI_BASEMAP_URLS[basemap],
-            TilesetClass: EquirectangularTileset2D,
-            minZoom: 0,
-            maxZoom: 18,
-            tileSize: 256,
-            renderSubLayers: (props: any) => {
-              const bbox = props.tile.bbox
-              if (!bbox) return null
-              return new WarpedTileBitmapLayer(props, {
-                data: undefined,
-                image: props.data,
-                bounds: [bbox.west, bbox.south, bbox.east, bbox.north],
-              })
-            },
-          })
-        )
-      }
-    }
-
-    // 2. Graticule Lines Layer
-    if (showGraticule) {
-      list.push(
-        new PathLayer({
-          id: `graticule-layer-${projection}`,
-          data: graticulePaths,
-          getPath: (d: any) => d.path,
-          getColor: [255, 255, 255, 38],
-          coordinateSystem: isCartesian ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
-          widthUnits: 'pixels',
-          widthMinPixels: 1,
-          widthMaxPixels: 1,
-          getWidth: 1,
-          pickable: false,
-        })
-      )
-    }
-
-    // 3. GeoPNG Raster Layer (Tesselated 3D mesh draped with renderedCanvas)
-    if (renderedCanvas) {
-      list.push(
-        new TesselatedBitmapLayer({
-          id: `geopng-raster-${projection}-${heightmapConfig.enabled ? '3d' : '2d'}-${heightmapConfig.elevationScale}`,
-          bounds: rasterBounds,
-          image: renderedCanvas,
-          opacity: opacity,
-          pickable: true,
-          coordinateSystem: isCartesian ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
-          _imageCoordinateSystem: projection === 'Globe' ? 'lnglat' : undefined,
-          projection,
-          heightmapEnabled: heightmapConfig.enabled,
-          elevationScale: heightmapConfig.elevationScale,
-          rasterData: raster?.data,
-          rasterWidth: raster?.width,
-          rasterHeight: raster?.height,
-          minVal,
-          maxVal,
-          parameters: {
-            depthTest: true,
-            polygonOffset: [-2, -2],
-          } as any,
-          textureParameters: {
-            minFilter: 'nearest',
-            magFilter: 'nearest',
-            mipmapFilter: 'nearest',
-          },
-        })
-      )
-    }
-
-    if (heightmapConfig.enabled && elevationSpikesData.points && elevationSpikesData.points.length > 0) {
-      const spikeKey = (countriesMode && effectiveSelected.length > 0)
-        ? `iso-${effectiveSelected.map((c) => c.properties.iso_a3 || c.properties.name).sort().join('_') || 'empty'}`
-        : 'global'
-      list.push(
-        new SolidPolygonLayer({
-          id: `elevation-spikes-${projection}-${spikeKey}-${heightmapConfig.resolutionArcmin ?? 60}-${heightmapConfig.heightScaleMode ?? 'linear'}-${heightmapConfig.blendWeight ?? 0.5}`,
-          data: elevationSpikesData.points,
-          getPolygon: (d: any) => d.polygon,
-          getElevation: (d: any) => d.elevation,
-          getFillColor: (d: any) => d.color,
-          updateTriggers: {
-            getPolygon: [elevationSpikesData.points, spikeKey, countriesMode, effectiveSelected.length, heightmapConfig.resolutionArcmin],
-            getElevation: [elevationSpikesData.points, spikeKey, heightmapConfig.elevationScale, heightmapConfig.resolutionArcmin, heightmapConfig.heightScaleMode, heightmapConfig.blendWeight],
-            getFillColor: [elevationSpikesData.points, spikeKey, palette, invertPalette, heightmapConfig.opacity, heightmapConfig.opacityByPercentile, heightmapConfig.opacityByPercentileStrength],
-          },
-          extruded: true,
-          flatShading: true,
-          opacity: 1,
-          elevationScale: 1,
-          coordinateSystem: isCartesian ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
-          pickable: true,
-          material: {
-            ambient: 0.35,
-            diffuse: 0.7,
-            shininess: 40,
-            specularColor: [85, 90, 100],
-          },
-        })
-      )
-    }
-
-    // 4. High-Value Equal-Area Circle Pixels (Hollow interior, coloured outline, adjustable black halo)
-    if (circlePixelData.length > 0) {
-      const strokeW = circleOverlayConfig.strokeWidth || 2
-      const haloW = circleOverlayConfig.haloWidth ?? 1
-
-      // Outer black halo outline
-      list.push(
-        new ScatterplotLayer({
-          id: `circle-pixels-halo-${projection}-${strokeW}-${haloW}`,
-          data: circlePixelData,
-          getPosition: (d: any) => d.position,
-          getRadius: (d: any) => d.radius,
-          filled: false,
-          stroked: true,
-          getLineColor: [0, 0, 0, 255],
-          getLineWidth: strokeW + haloW * 2,
-          lineWidthUnits: 'pixels',
-          radiusUnits: isCartesian ? 'common' : 'meters',
-          coordinateSystem: isCartesian ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
-          pickable: false,
-          parameters: { depthTest: false },
-        })
-      )
-
-      // Inner coloured stroke outline (transparent/hollow center)
-      list.push(
-        new ScatterplotLayer({
-          id: `circle-pixels-stroke-${projection}-${strokeW}`,
-          data: circlePixelData,
-          getPosition: (d: any) => d.position,
-          getRadius: (d: any) => d.radius,
-          filled: false,
-          stroked: true,
-          getLineColor: (d: any) => d.color,
-          getLineWidth: strokeW,
-          lineWidthUnits: 'pixels',
-          radiusUnits: isCartesian ? 'common' : 'meters',
-          coordinateSystem: isCartesian ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
-          pickable: true,
-          parameters: { depthTest: false },
-        })
-      )
-    }
-
-    // 5. Selected Countries Highlight (Immediate outline rendering)
-    if (effectiveSelected.length > 0) {
-      const selectedData =
-        projection === 'EqualEarth'
-          ? effectiveSelected.map((c) => ({
-            ...c,
-            geometry: transformGeometryToEqualEarth(c.geometry),
-          }))
-          : effectiveSelected.map((c) => ({ ...c, geometry: { ...c.geometry } }))
-
-      const selectedKey = effectiveSelected
-        .map((c) => (c.properties.iso_a3 && c.properties.iso_a3 !== '-99' ? c.properties.iso_a3 : c.properties.name))
-        .join('_')
-
-      list.push(
-        new GeoJsonLayer({
-          id: `countries-selected-${projection}-${selectedKey}`,
-          data: selectedData,
-          coordinateSystem: isCartesian ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
-          filled: true,
-          getFillColor: [240, 60, 60, 30],
-          stroked: true,
-          getLineColor: [240, 60, 60, 220],
-          getLineWidth: 2,
-          lineWidthUnits: 'pixels',
-          updateTriggers: {
-            getFillColor: [selectedKey],
-            getLineColor: [selectedKey],
-          },
-          parameters: { depthTest: false },
-        })
-      )
-    }
-
-    // 6. Hovered Country Highlight in Countries Mode
-    const isHoveredAlreadySelected = effectiveSelected.some(
-      (c) =>
-        (c.properties.iso_a3 && c.properties.iso_a3 !== '-99' && c.properties.iso_a3 === hoveredCountry?.properties.iso_a3) ||
-        c.properties.name === hoveredCountry?.properties.name
-    )
-
-    if (countriesMode && hoveredCountry && !isHoveredAlreadySelected) {
-      const hovKey =
-        (hoveredCountry.properties.iso_a3 && hoveredCountry.properties.iso_a3 !== '-99')
-          ? hoveredCountry.properties.iso_a3
-          : (hoveredCountry.properties.adm0_a3 || hoveredCountry.properties.name || 'hov')
-
-      const hoveredData =
-        projection === 'EqualEarth'
-          ? [{ ...hoveredCountry, geometry: transformGeometryToEqualEarth(hoveredCountry.geometry) }]
-          : [{ ...hoveredCountry, geometry: { ...hoveredCountry.geometry } }]
-
-      list.push(
-        new GeoJsonLayer({
-          id: `country-hovered-${projection}-${hovKey}`,
-          data: hoveredData,
-          coordinateSystem: isCartesian ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
-          filled: true,
-          getFillColor: [255, 255, 255, 45],
-          stroked: true,
-          getLineColor: [255, 255, 255, 220],
-          getLineWidth: 1.5,
-          lineWidthUnits: 'pixels',
-          parameters: { depthTest: false },
-        })
-      )
-    }
-
-    return list
-  }, [
+  layers = useDeckLayers({
     projection,
     basemap,
-    landGeoJson,
-    equalEarthLandGeoJson,
-    showGraticule,
-    graticulePaths,
-    renderedCanvas,
-    rasterBounds,
+    landGeoJson: land_geo_json,
+    equalEarthLandGeoJson: equal_earth_land_geo_json,
+    showGraticule: show_graticule,
+    graticulePaths: graticule_paths,
+    renderedCanvas: rendered_canvas,
+    rasterBounds: raster_bounds,
     opacity,
-    heightmapConfig,
-    elevationSpikesData,
-    circleOverlayConfig,
-    circlePixelData,
+    heightmapConfig: heightmap_config,
+    elevationSpikesData: elevation_spikes_data,
+    circleOverlayConfig: circle_overlay_config,
+    circlePixelData: circle_pixel_data,
     raster,
     palette,
-    invertPalette,
-    minVal,
-    maxVal,
-    selectedCountry,
-    selectedCountries,
-    countriesMode,
-    hoveredCountry,
-  ])
+    invertPalette: invert_palette,
+    minVal: min_val,
+    maxVal: max_val,
+    selectedCountries: selected_countries,
+    selectedCountry: selected_country,
+    countriesMode: countries_mode,
+    hoveredCountry: hovered_country,
+  })
 
+  //Return statement
   return (
     <div
       className="relative w-full h-full overflow-hidden select-none bg-background font-sans"
       style={{ imageRendering: 'pixelated' }}
-      onDoubleClick={handleDoubleClick}
+      onDoubleClick={handle_double_click}
       onContextMenu={(e) => e.preventDefault()}
-      onPointerMove={handleContainerPointerMove}
+      onPointerMove={handle_container_pointer_move}
     >
       <DeckGL
         views={views}
-        viewState={projViewStates[projection]}
-        onViewStateChange={handleViewStateChange}
+        viewState={proj_view_states[projection]}
+        onViewStateChange={handle_view_state_change}
         controller={false}
         layers={layers}
-        onClick={handleClick}
-        onHover={handleHover}
-        getCursor={({ isHovering }) => (isHovering ? 'crosshair' : 'grab')}
+        onClick={handle_click}
+        onHover={handle_hover}
+        getCursor={({ isHovering }) => ((isHovering) ? 'crosshair' : 'grab')}
       />
 
       {/* Floating HUD Inspector */}
-      <ClickInfoPanel info={inspectData} pos={cursorPos} />
+      <ClickInfoPanel info={inspect_data} pos={cursor_pos} />
 
       {/* Top Left: Value Colourbar & Information Flyout Container */}
-      {(Boolean(renderedCanvas) || infoPanelOpen) &&
+      {(Boolean(rendered_canvas) || info_panel_open) &&
         (() => {
-          const hasCanvas = Boolean(renderedCanvas)
-          const isCountryRelative = Boolean(
-            countriesMode &&
-            countryStats &&
-            countryStats.validCount > 0 &&
-            Number.isFinite(countryStats.min) &&
-            Number.isFinite(countryStats.max)
+          let has_canvas = Boolean(rendered_canvas)
+          let is_country_relative = Boolean(
+            countries_mode &&
+            country_stats &&
+            country_stats.validCount > 0 &&
+            Number.isFinite(country_stats.min) &&
+            Number.isFinite(country_stats.max)
           )
-          const legendMin = isCountryRelative ? countryStats!.min : minVal
-          const legendMax = isCountryRelative ? countryStats!.max : maxVal
-          const legendBreaks = isCountryRelative ? undefined : breaks
-          const legendCountryName = isCountryRelative ? countryStats!.name : null
+          let legend_min = (is_country_relative) ? country_stats!.min : min_val
+          let legend_max = (is_country_relative) ? country_stats!.max : max_val
+          let legend_breaks = (is_country_relative) ? undefined : breaks
+          let legend_country_name = (is_country_relative) ? country_stats!.name : null
 
-          const currentSidebarWidth = sidebarWidth ?? UI_LAYOUT.sidebarWidth
-          const currentColourbarWidth = colourbarWidth ?? 336
-          const colourbarLeft = UI_LAYOUT.margin + currentSidebarWidth + UI_LAYOUT.gap
+          let current_sidebar_width = sidebar_width ?? UI_LAYOUT.sidebarWidth
+          let current_colourbar_width = colourbar_width ?? 336
+          let colourbar_left = UI_LAYOUT.margin + current_sidebar_width + UI_LAYOUT.gap
 
           return (
             <div
               style={{
                 top: `${UI_LAYOUT.margin}px`,
-                left: `${colourbarLeft}px`,
-                width: `${currentColourbarWidth}px`,
+                left: `${colourbar_left}px`,
+                width: `${current_colourbar_width}px`,
               }}
               className="absolute z-20 flex flex-col gap-3 pointer-events-none"
             >
               {/* Value Colourbar (when canvas/raster is available) */}
-              {hasCanvas && (
+              {has_canvas && (
                 <div className="pointer-events-auto">
                   <ColorBarLegend
                     palette={palette}
-                    invertPalette={invertPalette}
-                    minVal={legendMin}
-                    maxVal={legendMax}
-                    legendTitle={legendTitle}
-                    legendSubtitle={legendSubtitle}
-                    scaleType={scaleType}
-                    logSigma={logSigma}
-                    currentVal={inspectData?.value ?? null}
-                    breaks={legendBreaks}
-                    countryName={legendCountryName}
-                    onUpdateBreaks={onUpdateBreaks}
-                    width={currentColourbarWidth}
-                    onResizeWidth={onResizeColourbarWidth}
+                    invertPalette={invert_palette}
+                    minVal={legend_min}
+                    maxVal={legend_max}
+                    legendTitle={legend_title}
+                    legendSubtitle={legend_subtitle}
+                    scaleType={scale_type}
+                    logSigma={log_sigma}
+                    currentVal={inspect_data?.value ?? null}
+                    breaks={legend_breaks}
+                    countryName={legend_country_name}
+                    onUpdateBreaks={on_update_breaks}
+                    width={current_colourbar_width}
+                    onResizeWidth={on_resize_colourbar_width}
                   />
                 </div>
               )}
 
-              {/* Information & Controls Flyout Panel (Window component: starts docked with 12px gap, or floats/resizes) */}
-              {infoPanelOpen && (
+              {/* Information & Controls Flyout Panel */}
+              {info_panel_open && (
                 <div className="pointer-events-auto">
                   <InfoFlyoutPanel
-                    isOpen={infoPanelOpen}
-                    onClose={onCloseInfoPanel || (() => {})}
-                    mapModes={mapModes}
-                    heightmapConfig={heightmapConfig}
-                    circleOverlayConfig={circleOverlayConfig}
-                    selectedCountries={selectedCountries || []}
+                    isOpen={info_panel_open}
+                    onClose={on_close_info_panel || (() => {})}
+                    mapModes={map_modes}
+                    heightmapConfig={heightmap_config}
+                    circleOverlayConfig={circle_overlay_config}
+                    selectedCountries={selected_countries || []}
                     projection={projection}
-                    cameraTilt={cameraTilt}
-                    width={currentColourbarWidth}
+                    cameraTilt={camera_tilt}
+                    width={current_colourbar_width}
                   />
                 </div>
               )}
@@ -1530,13 +673,13 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           style={{ top: `${UI_LAYOUT.margin}px`, right: `${UI_LAYOUT.margin}px` }}
           className="absolute z-20 flex flex-col gap-[var(--cell-padding)] bg-card/95 backdrop-blur-md p-[var(--cell-padding)] rounded-none border border-border shadow-md"
         >
-          {/* Map Display Settings Toggle (Basemaps & Projections) - ALWAYS AT TOP with GEAR ICON */}
+          {/* Map Display Settings Toggle (Basemaps & Projections) */}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant={flyoutOpen ? 'secondary' : 'ghost'}
+                variant={(flyout_open) ? 'secondary' : 'ghost'}
                 size="icon"
-                onClick={() => setFlyoutOpen(!flyoutOpen)}
+                onClick={() => set_flyout_open(!flyout_open)}
                 className="h-7 w-7 rounded-none text-white"
                 aria-label="Map Display Settings"
               >
@@ -1552,9 +695,9 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant={analyticsOpen ? 'secondary' : 'ghost'}
+                variant={(analytics_open) ? 'secondary' : 'ghost'}
                 size="icon"
-                onClick={onToggleAnalytics}
+                onClick={on_toggle_analytics}
                 className="h-7 w-7 rounded-none text-white"
                 aria-label="Toggle Raster Calculator"
               >
@@ -1570,9 +713,9 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant={showGraticule ? 'secondary' : 'ghost'}
+                variant={(show_graticule) ? 'secondary' : 'ghost'}
                 size="icon"
-                onClick={() => setShowGraticule(!showGraticule)}
+                onClick={() => set_show_graticule(!show_graticule)}
                 className="h-7 w-7 rounded-none text-white"
                 aria-label="Toggle Graticule Grid"
               >
@@ -1584,13 +727,13 @@ export const MapViewer: React.FC<MapViewerProps> = ({
             </TooltipContent>
           </Tooltip>
 
-          {/* Reset Map View (Center & Zoom) */}
+          {/* Reset Map View (Centre & Zoom) */}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={handleDoubleClick}
+                onClick={handle_double_click}
                 className="h-7 w-7 rounded-none text-white"
                 aria-label="Reset View"
               >
@@ -1598,13 +741,13 @@ export const MapViewer: React.FC<MapViewerProps> = ({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="left">
-              <span>Reset Map View (Center & Zoom)</span>
+              <span>Reset Map View (Centre & Zoom)</span>
             </TooltipContent>
           </Tooltip>
         </div>
 
         {/* Map Display Settings Flyout Panel */}
-        {flyoutOpen && (
+        {flyout_open && (
           <div
             style={{
               top: `${UI_LAYOUT.margin}px`,
@@ -1620,7 +763,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
               </span>
               <button
                 type="button"
-                onClick={() => setFlyoutOpen(false)}
+                onClick={() => set_flyout_open(false)}
                 className="text-muted-foreground hover:text-white cursor-pointer text-[var(--body-font-size)]"
               >
                 ✕
@@ -1635,13 +778,13 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                   <button
                     key={p}
                     type="button"
-                    onClick={() => setProjection(p)}
-                    className={`px-2 py-1 text-[var(--body-font-size)] rounded-none border transition-colors cursor-pointer text-center truncate ${projection === p
+                    onClick={() => set_projection(p)}
+                    className={`px-2 py-1 text-[var(--body-font-size)] rounded-none border transition-colors cursor-pointer text-center truncate ${(projection === p)
                       ? 'bg-primary text-primary-foreground border-primary font-bold shadow-sm'
                       : 'bg-background hover:bg-muted text-muted-foreground hover:text-foreground border-border font-light'
                       }`}
                   >
-                    {p === 'Equirectangular' ? 'Equirect.' : p === 'EqualEarth' ? 'Equal Earth' : p}
+                    {(p === 'Equirectangular') ? 'Equirect.' : (p === 'EqualEarth') ? 'Equal Earth' : p}
                   </button>
                 ))}
               </div>
@@ -1656,8 +799,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => setBasemap(item.id)}
-                    className={`w-full flex items-center justify-between px-2 py-1 rounded-none text-[var(--body-font-size)] transition-colors cursor-pointer text-left ${basemap === item.id
+                    onClick={() => set_basemap(item.id)}
+                    className={`w-full flex items-center justify-between px-2 py-1 rounded-none text-[var(--body-font-size)] transition-colors cursor-pointer text-left ${(basemap === item.id)
                       ? 'bg-muted text-foreground font-bold'
                       : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground font-light'
                       }`}
@@ -1676,23 +819,22 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
       {/* Bottom Right Tray: Unified Mapmodes with Inline Settings */}
       <MapmodesTray
-        mapModes={mapModes}
-        onToggleMapMode={onToggleMapMode}
-        onReorderMapModes={onReorderMapModes}
-        countriesMode={Boolean(countriesMode)}
-        onToggleCountriesMode={onToggleCountriesMode}
-        selectedCountries={selectedCountries || []}
-        onToggleCountry={onToggleCountry || (() => { })}
-        onClearCountries={onClearCountries || (() => { })}
-        countryStats={countryStats}
-        isCalculatingStats={isCalculatingStats}
-        heightmapConfig={heightmapConfig}
-        setHeightmapConfig={setHeightmapConfig || (() => { })}
-        circleOverlayConfig={circleOverlayConfig}
-        setCircleOverlayConfig={setCircleOverlayConfig || (() => { })}
-        allCountries={countryFeatures}
+        mapModes={map_modes}
+        onToggleMapMode={on_toggle_map_mode}
+        onReorderMapModes={on_reorder_map_modes}
+        countriesMode={Boolean(countries_mode)}
+        onToggleCountriesMode={on_toggle_countries_mode}
+        selectedCountries={selected_countries || []}
+        onToggleCountry={on_toggle_country || (() => { })}
+        onClearCountries={on_clear_countries || (() => { })}
+        countryStats={country_stats}
+        isCalculatingStats={is_calculating_stats}
+        heightmapConfig={heightmap_config}
+        setHeightmapConfig={set_heightmap_config || (() => { })}
+        circleOverlayConfig={circle_overlay_config}
+        setCircleOverlayConfig={set_circle_overlay_config || (() => { })}
+        allCountries={country_features}
       />
-
     </div>
   )
 }

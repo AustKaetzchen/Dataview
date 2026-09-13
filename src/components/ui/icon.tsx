@@ -1,13 +1,26 @@
-import React from 'react'
-import { cn } from '@/lib/utils'
+import React from 'react';
+import { cn } from '@/lib/utils';
 
 export interface IconProps extends React.HTMLAttributes<HTMLSpanElement> {
-  name: string
-  size?: number | string
+  name: string;
+  size?: number | string;
 }
 
-export const Icon: React.FC<IconProps> = ({ name, className, style, size, ...props }) => {
-  const iconSize = size ? (typeof size === 'number' ? `${size}px` : size) : '1rem'
+/**
+ * Renders a Google Material Icons glyph with normalised styling and dimensions.
+ *
+ * @param {IconProps} arg0_props
+ *
+ * @returns {React.ReactElement}
+ */
+export function Icon (arg0_props: IconProps) {
+  //Convert from parameters
+  let { name, className, style, size, ...props } = arg0_props;
+
+  //Declare local instance variables
+  let icon_size = size ? (typeof size === 'number' ? `${size}px` : size) : '1rem';
+
+  //Return statement
   return (
     <span
       className={cn(
@@ -15,16 +28,16 @@ export const Icon: React.FC<IconProps> = ({ name, className, style, size, ...pro
         className
       )}
       style={{
-        fontSize: iconSize,
-        width: iconSize,
-        height: iconSize,
+        fontSize: icon_size,
+        width: icon_size,
+        height: icon_size,
         ...style,
       }}
       {...props}
     >
       {name}
     </span>
-  )
+  );
 }
 
-export default Icon
+export default Icon;

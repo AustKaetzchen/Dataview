@@ -23,7 +23,7 @@
   sidebar: {
     folders: {
       image: "Image Settings",
-      palette: "Color & Visualization",
+      palette: "Colour & Visualisation",
       display: "Map Display Settings",
     },
     fileInputMode: "File Input Mode",
@@ -32,9 +32,9 @@
     selectRaster: "Select Raster Image (GeoPNG/PNG)",
     selectRasterB: "Select Subtrahend Image (Image B)",
     binning: "Binning/Downsampling",
-    colorPalette: "Color Palette (D3)",
+    colorPalette: "Colour Palette (D3)",
     invertPalette: "Invert",
-    valueColorScale: "Value Color Scale",
+    valueColorScale: "Value Colour Scale",
     manualRange: "Manual Range",
     basemapLayer: "Basemap Layer",
     projection: "Map Projection",

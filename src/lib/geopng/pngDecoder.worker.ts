@@ -2,41 +2,47 @@ import { decodeRawGeoPngBuffer } from './decoder'
 import { DataFormat, DecodedRaster } from './types'
 
 export type PngDecoderInMessage = {
-  reqId: number
   buffer: ArrayBuffer
   format: DataFormat
+  reqId: number
 }
 
 export type PngDecoderOutMessage =
   | {
-      type: 'PNG_DECODE_SUCCESS'
-      reqId: number
       raster: DecodedRaster
+      reqId: number
+      type: 'PNG_DECODE_SUCCESS'
     }
   | {
-      type: 'PNG_DECODE_ERROR'
-      reqId: number
       error: string
+      reqId: number
+      type: 'PNG_DECODE_ERROR'
     }
 
-self.onmessage = (e: MessageEvent<PngDecoderInMessage>) => {
-  const { reqId, buffer, format } = e.data
+self.onmessage = function (arg0_e: MessageEvent<PngDecoderInMessage>) {
+  //Convert from parameters
+  let e = arg0_e
+
+  //Declare local instance variables
+  let { buffer, format, reqId: req_id } = e.data
+
+  //Function body
   try {
-    const raster = decodeRawGeoPngBuffer(buffer, format)
-    // Transfer output Float32Array buffer back with zero-copy
+    let raster = decodeRawGeoPngBuffer(buffer, format)
+    //Transfer output Float32Array buffer back with zero-copy
     ;(self as any).postMessage(
       {
-        type: 'PNG_DECODE_SUCCESS',
-        reqId,
         raster,
+        reqId: req_id,
+        type: 'PNG_DECODE_SUCCESS',
       } as PngDecoderOutMessage,
       [raster.data.buffer]
     )
-  } catch (err) {
+  } catch (arg0_err) {
     self.postMessage({
+      error: arg0_err instanceof Error ? arg0_err.message : String(arg0_err),
+      reqId: req_id,
       type: 'PNG_DECODE_ERROR',
-      reqId,
-      error: err instanceof Error ? err.message : String(err),
     } as PngDecoderOutMessage)
   }
 }

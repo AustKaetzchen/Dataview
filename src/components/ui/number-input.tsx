@@ -4,58 +4,72 @@ import { cn } from '@/lib/utils'
 
 export interface NumberInputProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
-  value: number | string
-  onChange: (value: string) => void
-  min?: number
-  max?: number
-  step?: number | string
-  precision?: number
   containerClassName?: string
+  max?: number
+  min?: number
+  onChange: (value: string) => void
+  precision?: number
+  step?: number | string
+  value: number | string
 }
 
+/**
+ * NumberInput provides numeric input with integrated increment/decrement stepper controls.
+ */
 export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
-  (
-    {
+  function (arg0_props, arg1_ref) {
+    //Convert from parameters
+    let props = arg0_props
+    let ref = arg1_ref
+    let {
       className,
-      containerClassName,
-      value,
-      onChange,
-      min,
-      max,
-      step = 1,
-      precision,
+      containerClassName: container_class_name,
       disabled,
-      ...props
-    },
-    ref
-  ) => {
-    const numStep = typeof step === 'string' ? (step === 'any' ? 1 : parseFloat(step) || 1) : step
+      max,
+      min,
+      onChange: on_change,
+      precision,
+      step = 1,
+      value,
+      ...rest_props
+    } = props
 
-    const handleStep = (delta: number) => {
-      if (disabled) return
-      const current = typeof value === 'number' ? value : parseFloat(value) || 0
-      let next = current + delta * numStep
+    //Declare local instance variables
+    let handle_step: (arg0_delta: number) => void
+    let num_step = typeof step === 'string' ? (step === 'any' ? 1 : parseFloat(step) || 1) : step
 
-      if (min !== undefined && next < min) next = min
-      if (max !== undefined && next > max) next = max
+    //Function body
+    handle_step = function (arg0_delta: number) {
+      let delta = arg0_delta
+      if (disabled)
+        return
 
-      const p = precision !== undefined ? precision : numStep < 1 ? Math.min(6, (numStep.toString().split('.')[1] || '').length + 1) : 2
-      const formatted = parseFloat(next.toFixed(p)).toString()
-      onChange(formatted)
+      let current = typeof value === 'number' ? value : parseFloat(value) || 0
+      let next = current + delta*num_step
+
+      if (min !== undefined && next < min)
+        next = min
+      if (max !== undefined && next > max)
+        next = max
+
+      let p = precision !== undefined ? precision : num_step < 1 ? Math.min(6, (num_step.toString().split('.')[1] || '').length + 1) : 2
+      let formatted = parseFloat(next.toFixed(p)).toString()
+      on_change(formatted)
     }
 
+    //Return statement
     return (
       <div
         className={cn(
           'relative flex items-center h-8 w-full rounded-none border border-input bg-background shadow-sm transition-colors focus-within:ring-1 focus-within:ring-ring overflow-hidden',
           disabled && 'opacity-50 cursor-not-allowed',
-          containerClassName
+          container_class_name
         )}
       >
         <input
           type="number"
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(arg0_e) => on_change(arg0_e.target.value)}
           min={min}
           max={max}
           step={step}
@@ -65,16 +79,16 @@ export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
             'flex-1 h-full w-full bg-transparent px-2.5 py-1 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none',
             className
           )}
-          {...props}
+          {...rest_props}
         />
 
-        {/* Custom Sleek Stepper Buttons with explicit margin and border divider */}
+        {/* Custom Stepper Buttons */}
         <div className="flex flex-col h-full border-l border-input/60 bg-muted/30 shrink-0 w-5">
           <button
             type="button"
             tabIndex={-1}
             disabled={disabled || (max !== undefined && parseFloat(String(value)) >= max)}
-            onClick={() => handleStep(1)}
+            onClick={() => handle_step(1)}
             aria-label="Increase value"
             className="flex-1 flex items-center justify-center hover:bg-muted/80 text-foreground transition-colors cursor-pointer border-b border-input/40 select-none"
           >
@@ -84,7 +98,7 @@ export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
             type="button"
             tabIndex={-1}
             disabled={disabled || (min !== undefined && parseFloat(String(value)) <= min)}
-            onClick={() => handleStep(-1)}
+            onClick={() => handle_step(-1)}
             aria-label="Decrease value"
             className="flex-1 flex items-center justify-center hover:bg-muted/80 text-foreground transition-colors cursor-pointer select-none"
           >
@@ -96,3 +110,5 @@ export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
   }
 )
 NumberInput.displayName = 'NumberInput'
+
+export default NumberInput

@@ -3,25 +3,45 @@ import { DecodedRaster } from './types'
 import { CountryFeature, CountryStats, binRasterByMultipleCountries } from './polygonBinning'
 import type { WorkerInMessage, WorkerOutMessage } from './countryStats.worker'
 
-interface UseCountryStatsAsyncOptions {
-  activeRaster: DecodedRaster | null
+export interface UseCountryStatsAsyncOptions {
   activeCountries: CountryFeature[]
+  activeRaster: DecodedRaster | null
   isHoverOnly?: boolean
 }
 
-export function useCountryStatsAsync({
-  activeRaster,
-  activeCountries,
-  isHoverOnly = false,
-}: UseCountryStatsAsyncOptions) {
-  const [countryStats, setCountryStats] = useState<CountryStats | null>(null)
-  const [isCalculatingStats, setIsCalculatingStats] = useState<boolean>(false)
+/**
+ * Hook to asynchronously compute raster statistics over active country polygons via Web Worker.
+ *
+ * @param {UseCountryStatsAsyncOptions} arg0_options
+ *
+ * @returns {{ countryStats: CountryStats | null; isCalculatingStats: boolean }}
+ */
+export function useCountryStatsAsync (arg0_options: UseCountryStatsAsyncOptions): {
+  countryStats: CountryStats | null
+  isCalculatingStats: boolean
+} {
+  //Convert from parameters
+  let options = arg0_options
+  let {
+    activeCountries: active_countries,
+    activeRaster: active_raster,
+    isHoverOnly: is_hover_only = false,
+  } = options
 
-  const workerRef = useRef<Worker | null>(null)
-  const reqIdRef = useRef<number>(0)
-  const lastRasterRef = useRef<DecodedRaster | null>(null)
+  //Declare local instance variables
+  let country_stats: CountryStats | null
+  let is_calculating_stats: boolean
+  let last_raster_ref = useRef<DecodedRaster | null>(null)
+  let req_id_ref = useRef<number>(0)
+  let set_country_stats: React.Dispatch<React.SetStateAction<CountryStats | null>>
+  let set_is_calculating_stats: React.Dispatch<React.SetStateAction<boolean>>
+  let worker_ref = useRef<Worker | null>(null)
 
-  // Initialize Web Worker
+  //Function body
+  ;[country_stats, set_country_stats] = useState<CountryStats | null>(null)
+  ;[is_calculating_stats, set_is_calculating_stats] = useState<boolean>(false)
+
+  //Initialise Web Worker
   useEffect(() => {
     let worker: Worker | null = null
     try {
@@ -29,101 +49,97 @@ export function useCountryStatsAsync({
         type: 'module',
       })
 
-      worker.onmessage = (e: MessageEvent<WorkerOutMessage>) => {
-        const msg = e.data
-        if (!msg) return
-        if (msg.reqId === reqIdRef.current) {
+      worker.onmessage = (arg0_e: MessageEvent<WorkerOutMessage>) => {
+        let msg = arg0_e.data
+        if (!msg)
+          return
+        if (msg.reqId === req_id_ref.current) {
           if (msg.type === 'COUNTRY_STATS_RESULT') {
-            setCountryStats(msg.stats)
-            setIsCalculatingStats(false)
+            set_country_stats(msg.stats)
+            set_is_calculating_stats(false)
           } else if (msg.type === 'COUNTRY_STATS_ERROR') {
             console.error('Country stats worker error:', msg.error)
-            setCountryStats(null)
-            setIsCalculatingStats(false)
+            set_country_stats(null)
+            set_is_calculating_stats(false)
           }
         }
       }
 
-      workerRef.current = worker
-    } catch (err) {
-      console.warn('Web Worker initialization failed, will use async fallback:', err)
+      worker_ref.current = worker
+    } catch (arg0_err) {
+      console.warn('Web Worker initialisation failed, will use async fallback:', arg0_err)
     }
 
     return () => {
-      if (worker) {
+      if (worker)
         worker.terminate()
-      }
-      workerRef.current = null
+      worker_ref.current = null
     }
   }, [])
 
-  // Reset stats and invalidate worker raster cache whenever activeRaster changes
+  //Reset stats and invalidate worker raster cache whenever activeRaster changes
   useEffect(() => {
-    // Invalidate any ongoing calculation for the old raster immediately
-    reqIdRef.current++
-    setCountryStats(null)
-    lastRasterRef.current = null
+    req_id_ref.current++
+    set_country_stats(null)
+    last_raster_ref.current = null
 
-    if (!activeRaster) {
-      setIsCalculatingStats(false)
-    }
-  }, [activeRaster])
+    if (!active_raster)
+      set_is_calculating_stats(false)
+  }, [active_raster])
 
-  // Compute stats asynchronously when activeCountries or activeRaster changes
+  //Compute stats asynchronously when activeCountries or activeRaster changes
   useEffect(() => {
-    if (!activeRaster || activeCountries.length === 0) {
-      reqIdRef.current++
-      setCountryStats(null)
-      setIsCalculatingStats(false)
+    if (!active_raster || active_countries.length === 0) {
+      req_id_ref.current++
+      set_country_stats(null)
+      set_is_calculating_stats(false)
       return
     }
 
-    const currentReqId = ++reqIdRef.current
-    setIsCalculatingStats(true)
+    let current_req_id = ++req_id_ref.current
+    set_is_calculating_stats(true)
 
-    // Debounce hover requests slightly (150ms) to prevent flood during rapid mouse movements.
-    // Click selections trigger immediately.
-    const delay = isHoverOnly ? 150 : 0
-    let timeoutId: number | null = null
+    let delay = is_hover_only ? 150 : 0
+    let timeout_id: number | null = null
 
-    timeoutId = window.setTimeout(() => {
-      if (currentReqId !== reqIdRef.current) return
+    timeout_id = window.setTimeout(() => {
+      if (current_req_id !== req_id_ref.current)
+        return
 
-      if (workerRef.current) {
-        // Ensure worker has latest raster before calculating
-        if (lastRasterRef.current !== activeRaster) {
-          workerRef.current.postMessage({
+      if (worker_ref.current) {
+        if (last_raster_ref.current !== active_raster) {
+          worker_ref.current.postMessage({
+            bounds: active_raster.bounds,
+            data: active_raster.data,
+            height: active_raster.height,
+            max: active_raster.max,
+            min: active_raster.min,
             type: 'SET_RASTER',
-            data: activeRaster.data,
-            width: activeRaster.width,
-            height: activeRaster.height,
-            min: activeRaster.min,
-            max: activeRaster.max,
-            bounds: activeRaster.bounds,
+            width: active_raster.width,
           } as WorkerInMessage)
-          lastRasterRef.current = activeRaster
+          last_raster_ref.current = active_raster
         }
 
-        workerRef.current.postMessage({
+        worker_ref.current.postMessage({
+          features: active_countries,
+          reqId: current_req_id,
           type: 'CALCULATE_COUNTRY_STATS',
-          reqId: currentReqId,
-          features: activeCountries,
         } as WorkerInMessage)
       } else {
-        // Asynchronous fallback via requestIdleCallback / setTimeout
         setTimeout(() => {
-          if (currentReqId !== reqIdRef.current) return
+          if (current_req_id !== req_id_ref.current)
+            return
           try {
-            const stats = binRasterByMultipleCountries(activeRaster, activeCountries)
-            if (currentReqId === reqIdRef.current) {
-              setCountryStats(stats)
-              setIsCalculatingStats(false)
+            let stats = binRasterByMultipleCountries(active_raster, active_countries)
+            if (current_req_id === req_id_ref.current) {
+              set_country_stats(stats)
+              set_is_calculating_stats(false)
             }
-          } catch (err) {
-            if (currentReqId === reqIdRef.current) {
-              console.error('Async fallback failed:', err)
-              setCountryStats(null)
-              setIsCalculatingStats(false)
+          } catch (arg0_err) {
+            if (current_req_id === req_id_ref.current) {
+              console.error('Async fallback failed:', arg0_err)
+              set_country_stats(null)
+              set_is_calculating_stats(false)
             }
           }
         }, 0)
@@ -131,11 +147,13 @@ export function useCountryStatsAsync({
     }, delay)
 
     return () => {
-      if (timeoutId !== null) {
-        clearTimeout(timeoutId)
-      }
+      if (timeout_id !== null)
+        clearTimeout(timeout_id)
     }
-  }, [activeRaster, activeCountries, isHoverOnly])
+  }, [active_raster, active_countries, is_hover_only])
 
-  return { countryStats, isCalculatingStats }
+  //Return statement
+  return { countryStats: country_stats, isCalculatingStats: is_calculating_stats }
 }
+
+export default useCountryStatsAsync

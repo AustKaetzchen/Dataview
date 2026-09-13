@@ -3,77 +3,85 @@ import { DecodedRaster } from './types'
 
 export type WorkerInMessage =
   | {
-      type: 'SET_RASTER'
-      data: Float32Array
-      width: number
-      height: number
-      min: number
-      max: number
       bounds?: [number, number, number, number]
+      data: Float32Array
+      height: number
+      max: number
+      min: number
+      type: 'SET_RASTER'
+      width: number
     }
   | {
-      type: 'CALCULATE_COUNTRY_STATS'
-      reqId: number
       features: CountryFeature[]
+      reqId: number
+      type: 'CALCULATE_COUNTRY_STATS'
     }
 
 export type WorkerOutMessage =
   | {
-      type: 'COUNTRY_STATS_RESULT'
       reqId: number
       stats: CountryStats | null
+      type: 'COUNTRY_STATS_RESULT'
     }
   | {
-      type: 'COUNTRY_STATS_ERROR'
-      reqId: number
       error: string
+      reqId: number
+      type: 'COUNTRY_STATS_ERROR'
     }
 
-let currentRaster: DecodedRaster | null = null
+let current_raster: DecodedRaster | null = null
 
-self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
-  const msg = e.data
-  if (!msg) return
+self.onmessage = function (arg0_e: MessageEvent<WorkerInMessage>) {
+  //Convert from parameters
+  let e = arg0_e
 
+  //Declare local instance variables
+  let msg = e.data
+
+  //Guard clauses
+  if (!msg)
+    return
+
+  //Function body
   if (msg.type === 'SET_RASTER') {
-    currentRaster = {
-      data: msg.data,
-      width: msg.width,
-      height: msg.height,
-      min: msg.min,
-      max: msg.max,
+    current_raster = {
       bounds: msg.bounds || [-180, -90, 180, 90],
+      data: msg.data,
+      height: msg.height,
+      max: msg.max,
       mean: 0,
+      min: msg.min,
       stdDev: 0,
+      totalCells: msg.width*msg.height,
       validCount: 0,
-      totalCells: msg.width * msg.height,
+      width: msg.width,
     }
     return
   }
 
   if (msg.type === 'CALCULATE_COUNTRY_STATS') {
-    const { reqId, features } = msg
-    if (!currentRaster || !features || features.length === 0) {
+    let { features, reqId: req_id } = msg
+    if (!current_raster || !features || features.length === 0) {
       self.postMessage({
-        type: 'COUNTRY_STATS_RESULT',
-        reqId,
+        reqId: req_id,
         stats: null,
+        type: 'COUNTRY_STATS_RESULT',
       } as WorkerOutMessage)
       return
     }
 
     try {
-      const stats = binRasterByMultipleCountries(currentRaster, features)
+      let stats = binRasterByMultipleCountries(current_raster, features)
       self.postMessage({
-        type: 'COUNTRY_STATS_RESULT',
-        reqId,
+        reqId: req_id,
         stats,
+        type: 'COUNTRY_STATS_RESULT',
       } as WorkerOutMessage)
-    } catch (err) {
+    } catch (arg0_err) {
       self.postMessage({
+        error: arg0_err instanceof Error ? arg0_err.message : String(arg0_err),
+        reqId: req_id,
         type: 'COUNTRY_STATS_ERROR',
-        reqId,
-        error: err instanceof Error ? err.message : String(err),
       } as WorkerOutMessage)
     }
   }

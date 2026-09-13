@@ -1,137 +1,107 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo } from 'react';
 import {
   MapModeItem,
   MapModeId,
   HeightmapConfig,
   CircleOverlayConfig,
-  SpikeHeightScaleMode,
-} from '@/lib/geopng/types'
-import { CountryFeature, CountryStats } from '@/lib/geopng/polygonBinning'
-import { Icon } from '@/components/ui/icon'
-import { Slider } from '@/components/ui/slider'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+} from '@/lib/geopng/types';
+import { CountryFeature, CountryStats } from '@/lib/geopng/polygonBinning';
+import { Icon } from '@/components/ui/icon';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { LOCALISATION_CONFIG } from '@config';
+import { CountryModeSettings } from './mapmodes/CountryModeSettings';
 import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-  TooltipProvider,
-} from '@/components/ui/tooltip'
-import { MAPMODES_CONFIG, LOCALISATION_CONFIG } from '@config'
-import { pseudoLogTransform, inversePseudoLogTransform } from '@/lib/geopng/scales'
+  SpikeMapSettings,
+  SPIKE_RESOLUTION_OPTIONS,
+  formatSpikeResolution,
+  strengthToSliderPos,
+  sliderPosToStrength,
+} from './mapmodes/SpikeMapSettings';
+import { CircleOverlaySettings } from './mapmodes/CircleOverlaySettings';
 
-interface MapmodesTrayProps {
-  mapModes: MapModeItem[]
-  onToggleMapMode: (id: MapModeId) => void
-  onReorderMapModes: (newModes: MapModeItem[]) => void
-  countriesMode: boolean
-  onToggleCountriesMode?: (enabled: boolean) => void
-  selectedCountries: CountryFeature[]
-  onToggleCountry: (country: CountryFeature) => void
-  onClearCountries: () => void
-  countryStats?: CountryStats | null
-  isCalculatingStats?: boolean
-  heightmapConfig: HeightmapConfig
-  setHeightmapConfig: React.Dispatch<React.SetStateAction<HeightmapConfig>>
-  cameraTilt?: number
-  onSetCameraTilt?: (tilt: number) => void
-  circleOverlayConfig: CircleOverlayConfig
-  setCircleOverlayConfig: React.Dispatch<React.SetStateAction<CircleOverlayConfig>>
-  allCountries: CountryFeature[]
+export {
+  SPIKE_RESOLUTION_OPTIONS,
+  formatSpikeResolution,
+  strengthToSliderPos,
+  sliderPosToStrength,
+};
+
+export interface MapmodesTrayProps {
+  allCountries: CountryFeature[];
+  cameraTilt?: number;
+  circleOverlayConfig: CircleOverlayConfig;
+  countriesMode: boolean;
+  countryStats?: CountryStats | null;
+  heightmapConfig: HeightmapConfig;
+  isCalculatingStats?: boolean;
+  mapModes: MapModeItem[];
+  onClearCountries: () => void;
+  onReorderMapModes: (newModes: MapModeItem[]) => void;
+  onSetCameraTilt?: (tilt: number) => void;
+  onToggleCountriesMode?: (enabled: boolean) => void;
+  onToggleCountry: (country: CountryFeature) => void;
+  onToggleMapMode: (id: MapModeId) => void;
+  selectedCountries: CountryFeature[];
+  setCircleOverlayConfig: React.Dispatch<React.SetStateAction<CircleOverlayConfig>>;
+  setHeightmapConfig: React.Dispatch<React.SetStateAction<HeightmapConfig>>;
 }
 
-const MAX_PERCENTILE_STRENGTH = 10.0
-const PERCENTILE_STRENGTH_SIGMA = 0.5
-const T_MAX_PERCENTILE = pseudoLogTransform(MAX_PERCENTILE_STRENGTH, PERCENTILE_STRENGTH_SIGMA)
+/**
+ * MapmodesTray interactive UI tray for configuring layer stacks and mapmodes.
+ *
+ * @param {MapmodesTrayProps} arg0_props
+ *
+ * @returns {React.ReactElement}
+ */
+export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
+  //Convert from parameters
+  let props = arg0_props;
+  let {
+    allCountries: all_countries,
+    cameraTilt: camera_tilt,
+    circleOverlayConfig: circle_overlay_config,
+    countriesMode: countries_mode,
+    countryStats: country_stats,
+    heightmapConfig: heightmap_config,
+    isCalculatingStats: is_calculating_stats,
+    mapModes: map_modes,
+    onClearCountries: on_clear_countries,
+    onReorderMapModes: on_reorder_map_modes,
+    onSetCameraTilt: on_set_camera_tilt,
+    onToggleCountriesMode: on_toggle_countries_mode,
+    onToggleCountry: on_toggle_country,
+    onToggleMapMode: on_toggle_map_mode,
+    selectedCountries: selected_countries,
+    setCircleOverlayConfig: set_circle_overlay_config,
+    setHeightmapConfig: set_heightmap_config,
+  } = props;
 
-function strengthToSliderPos(strength: number): number {
-  const clamped = Math.max(0, Math.min(MAX_PERCENTILE_STRENGTH, strength))
-  const t = pseudoLogTransform(clamped, PERCENTILE_STRENGTH_SIGMA)
-  const norm = t / T_MAX_PERCENTILE
-  return Math.round(Math.max(0, Math.min(100, norm * 100)))
-}
+  //Declare local instance variables
+  let expanded_mode: MapModeId | null;
+  let filtered_map_modes: MapModeItem[];
+  let mapmode_search: string;
+  let set_expanded_mode: React.Dispatch<React.SetStateAction<MapModeId | null>>;
+  let set_mapmode_search: React.Dispatch<React.SetStateAction<string>>;
+  let toggle_expand: (arg0_id: MapModeId) => void;
 
-function sliderPosToStrength(pos: number): number {
-  const norm = Math.max(0, Math.min(100, pos)) / 100
-  const y = norm * T_MAX_PERCENTILE
-  const strength = inversePseudoLogTransform(y, PERCENTILE_STRENGTH_SIGMA)
-  return Math.max(0, Math.min(MAX_PERCENTILE_STRENGTH, Math.round(strength * 100) / 100))
-}
+  //Function body
+  ;[expanded_mode, set_expanded_mode] = useState<MapModeId | null>(null);
+  ;[mapmode_search, set_mapmode_search] = useState('');
 
-export const SPIKE_RESOLUTION_OPTIONS = [
-  { value: 120, label: "120' (2°)", title: "Low granularity (120-arcminute / 2 degrees)" },
-  { value: 60, label: "60' (1°)", title: "Standard granularity (60-arcminute / 1 degree)" },
-  { value: 30, label: "30'", title: "Medium granularity (30-arcminute / 0.5 degree)" },
-  { value: 15, label: "15'", title: "Fine granularity (15-arcminute / 0.25 degree)" },
-  { value: 10, label: "10'", title: "Very fine granularity (10-arcminute)" },
-  { value: 5, label: "5'", title: "Maximum granularity (5-arcminute) — Warning: can be laggy" },
-]
+  toggle_expand = function (arg0_id: MapModeId) {
+    let id = arg0_id;
+    set_expanded_mode((arg0_prev) => (arg0_prev === id ? null : id));
+  };
 
-export function formatSpikeResolution(arcmin: number): string {
-  if (arcmin === 5) return "5' (0.08° • Max)"
-  if (arcmin === 10) return "10' (0.17° • Very Fine)"
-  if (arcmin === 15) return "15' (0.25° • Fine)"
-  if (arcmin === 30) return "30' (0.50° • Medium)"
-  if (arcmin === 60) return "60' (1.00° • Standard)"
-  if (arcmin === 120) return "120' (2.00° • Coarse)"
-  return `${arcmin}'`
-}
+  //Filter mapmodes based on search
+  filtered_map_modes = useMemo(() => {
+    let q = mapmode_search.toLowerCase().trim();
+    if (!q)
+      return map_modes;
+    return map_modes.filter((arg0_mode) => arg0_mode.label.toLowerCase().includes(q));
+  }, [map_modes, mapmode_search]);
 
-export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
-  mapModes,
-  onToggleMapMode,
-  onReorderMapModes,
-  countriesMode,
-  onToggleCountriesMode,
-  selectedCountries,
-  onToggleCountry,
-  onClearCountries,
-  countryStats,
-  isCalculatingStats,
-  heightmapConfig,
-  setHeightmapConfig,
-  cameraTilt,
-  onSetCameraTilt,
-  circleOverlayConfig,
-  setCircleOverlayConfig,
-  allCountries,
-}) => {
-  // Currently expanded mapmode settings panel (null if all collapsed)
-  const [expandedMode, setExpandedMode] = useState<MapModeId | null>(null)
-  const [countrySearch, setCountrySearch] = useState('')
-  const [mapmodeSearch, setMapmodeSearch] = useState('')
-
-  const getCountryCode = (c: CountryFeature) => {
-    const iso = c.properties.iso_a3
-    if (iso && iso !== '-99') return iso
-    return c.properties.adm0_a3 || c.properties.name || ''
-  }
-
-  // Filtered countries for checklist
-  const filteredCountries = useMemo(() => {
-    const q = countrySearch.toLowerCase().trim()
-    if (!q) return allCountries
-    return allCountries.filter((c) => {
-      const name = (c.properties.name || '').toLowerCase()
-      const code = getCountryCode(c).toLowerCase()
-      return name.includes(q) || code.includes(q)
-    })
-  }, [allCountries, countrySearch])
-
-  const selectedCountryCodeSet = useMemo(() => {
-    return new Set(selectedCountries.map(getCountryCode))
-  }, [selectedCountries])
-
-  const toggleExpand = (id: MapModeId) => {
-    setExpandedMode((prev) => (prev === id ? null : id))
-  }
-
-  // Filtered mapmodes based on search
-  const filteredMapModes = useMemo(() => {
-    const q = mapmodeSearch.toLowerCase().trim()
-    if (!q) return mapModes
-    return mapModes.filter((m) => m.label.toLowerCase().includes(q))
-  }, [mapModes, mapmodeSearch])
-
+  //Return statement
   return (
     <TooltipProvider delayDuration={150}>
       <div className="absolute bottom-[var(--padding)] right-[var(--padding)] z-20 w-80 max-h-[calc(100vh-140px)] flex flex-col bg-card/98 backdrop-blur-md border border-border shadow-2xl p-[var(--padding)] space-y-[var(--padding)] text-[var(--body-font-size)] select-none font-sans overflow-hidden">
@@ -142,7 +112,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
             <span>{LOCALISATION_CONFIG.mapmodes.title}</span>
           </span>
           <span className="text-[var(--body-font-size)] px-2 py-0.5 bg-muted text-muted-foreground border border-border font-medium">
-            {mapModes.filter((m) => m.active).length} {LOCALISATION_CONFIG.mapmodes.activeSuffix}
+            {map_modes.filter((arg0_mode) => arg0_mode.active).length} {LOCALISATION_CONFIG.mapmodes.activeSuffix}
           </span>
         </div>
 
@@ -154,15 +124,15 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
           />
           <input
             type="text"
-            value={mapmodeSearch}
-            onChange={(e) => setMapmodeSearch(e.target.value)}
+            value={mapmode_search}
+            onChange={(arg0_e) => set_mapmode_search(arg0_e.target.value)}
             placeholder={LOCALISATION_CONFIG.mapmodes.searchPlaceholder}
             className="w-full pl-7 pr-7 py-1 text-[var(--body-font-size)] bg-background/70 border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary rounded-none"
           />
-          {mapmodeSearch && (
+          {mapmode_search && (
             <button
               type="button"
-              onClick={() => setMapmodeSearch('')}
+              onClick={() => set_mapmode_search('')}
               className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[var(--body-font-size)] text-muted-foreground hover:text-foreground cursor-pointer px-1"
             >
               ✕
@@ -172,69 +142,72 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
 
         {/* Composable Mode Items Stack */}
         <div className="space-y-1 overflow-y-auto max-h-[50vh] pr-0.5">
-          {filteredMapModes.length === 0 && (
+          {filtered_map_modes.length === 0 && (
             <p className="text-[var(--body-font-size)] text-muted-foreground italic py-2 text-center">
               {LOCALISATION_CONFIG.mapmodes.noResults}
             </p>
           )}
-          {filteredMapModes.map((mode) => {
-            const index = mapModes.findIndex((m) => m.id === mode.id)
-            const isExpanded = expandedMode === mode.id
-            const hasSettings = mode.id !== 'default'
+          {filtered_map_modes.map((arg0_mode) => {
+            let mode = arg0_mode;
+            let has_settings = mode.id !== 'default';
+            let index = map_modes.findIndex((arg0_m) => arg0_m.id === mode.id);
+            let is_expanded = expanded_mode === mode.id;
 
             return (
               <div key={mode.id} className="border border-border/80 bg-background/50">
                 {/* Row Header */}
                 <div
-                  className={`flex items-center justify-between px-[var(--padding)] py-1.5 transition-colors ${mode.active
+                  className={`flex items-center justify-between px-[var(--padding)] py-1.5 transition-colors ${
+                    mode.active
                       ? 'bg-muted/60 text-foreground'
                       : 'bg-background/40 text-muted-foreground'
-                    }`}
+                  }`}
                 >
                   <div className="flex items-center gap-2 min-w-0 flex-1">
                     <input
                       type="checkbox"
                       checked={mode.active}
-                      onChange={() => onToggleMapMode(mode.id)}
+                      onChange={() => on_toggle_map_mode(mode.id)}
                       className="w-[var(--body-font-size)] h-[var(--body-font-size)] rounded-none accent-emerald-500 cursor-pointer shrink-0"
                     />
                     <button
                       type="button"
-                      onClick={() => hasSettings && toggleExpand(mode.id)}
+                      onClick={() => {
+                        if (has_settings)
+                          toggle_expand(mode.id);
+                      }}
                       className="truncate text-[var(--body-font-size)] text-left cursor-pointer flex-1 flex items-center gap-1.5 hover:text-foreground"
                     >
                       <span className={mode.active ? 'font-bold text-foreground' : 'font-light'}>
                         {mode.label}
                       </span>
-                      {mode.id === 'country_analysis' && selectedCountries.length > 0 && (
+                      {mode.id === 'country_analysis' && selected_countries.length > 0 && (
                         <span className="text-[var(--body-font-size)] px-1.5 py-0.2 bg-muted text-muted-foreground border border-border font-medium shrink-0">
-                          {selectedCountries.length}
+                          {selected_countries.length}
                         </span>
                       )}
                       {mode.id === 'spike_map' && mode.active && (
                         <span className="text-[var(--body-font-size)] px-1.5 py-0.2 bg-muted text-muted-foreground border border-border font-medium shrink-0">
-                          {heightmapConfig.opacityByPercentile ? '3D • %' : '3D'}
+                          {heightmap_config.opacityByPercentile ? '3D • %' : '3D'}
                         </span>
                       )}
                       {mode.id === 'circle_sizing' && mode.active && (
                         <span className="text-[var(--body-font-size)] px-1.5 py-0.2 bg-muted text-muted-foreground border border-border font-medium shrink-0">
-                          P{circleOverlayConfig.percentileCutoff}
+                          P{circle_overlay_config.percentileCutoff}
                         </span>
                       )}
                     </button>
                   </div>
 
                   <div className="flex items-center gap-1 shrink-0 ml-1">
-                    {hasSettings && (
+                    {has_settings && (
                       <button
                         type="button"
-                        onClick={() => toggleExpand(mode.id)}
+                        onClick={() => toggle_expand(mode.id)}
                         className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
                         title="Toggle Settings"
                       >
-                        <Icon
-                          name={isExpanded ? 'expand_less' : 'tune'}
-                        />
+                        <Icon name={is_expanded ? 'expand_less' : 'tune'} />
                       </button>
                     )}
                     <button
@@ -242,11 +215,11 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                       disabled={index === 0}
                       onClick={() => {
                         if (index > 0) {
-                          const updated = [...mapModes]
-                          const temp = updated[index]
-                          updated[index] = updated[index - 1]
-                          updated[index - 1] = temp
-                          onReorderMapModes(updated)
+                          let temp = map_modes[index];
+                          let updated = [...map_modes];
+                          updated[index] = updated[index - 1];
+                          updated[index - 1] = temp;
+                          on_reorder_map_modes(updated);
                         }
                       }}
                       className="w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
@@ -256,14 +229,14 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                     </button>
                     <button
                       type="button"
-                      disabled={index === mapModes.length - 1}
+                      disabled={index === map_modes.length - 1}
                       onClick={() => {
-                        if (index < mapModes.length - 1) {
-                          const updated = [...mapModes]
-                          const temp = updated[index]
-                          updated[index] = updated[index + 1]
-                          updated[index + 1] = temp
-                          onReorderMapModes(updated)
+                        if (index < map_modes.length - 1) {
+                          let temp = map_modes[index];
+                          let updated = [...map_modes];
+                          updated[index] = updated[index + 1];
+                          updated[index + 1] = temp;
+                          on_reorder_map_modes(updated);
                         }
                       }}
                       className="w-5 h-5 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
@@ -274,639 +247,48 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = ({
                   </div>
                 </div>
 
-                {/* ========================================================================= */}
-                {/* SETTINGS: COUNTRY ANALYSIS */}
-                {/* ========================================================================= */}
-                {isExpanded && mode.id === 'country_analysis' && (
-                  <div className="p-[var(--padding)] border-t border-border space-y-2 bg-card/80 animate-in fade-in-0 duration-100">
-                    <div className="flex items-center justify-between pb-1 border-b border-border/60">
-                      <span className="text-[var(--body-font-size)] font-bold text-foreground flex items-center gap-1.5">
-                        <Icon name="flag" />
-                        <span>Country Analysis Settings</span>
-                      </span>
-                      {selectedCountries.length > 0 && (
-                        <div className="flex items-center gap-2">
-                          {isCalculatingStats && (
-                            <span className="text-[10px] text-amber-400 font-medium animate-pulse">
-                              Calculating stats...
-                            </span>
-                          )}
-                          <button
-                            type="button"
-                            onClick={onClearCountries}
-                            className="text-[var(--body-font-size)] text-destructive hover:underline cursor-pointer"
-                          >
-                            Clear all ({selectedCountries.length})
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Bitmap Isolation Mode Toggle */}
-                    <div className="flex items-center justify-between p-[var(--cell-padding)] bg-background border border-border">
-                      <div className="flex flex-col">
-                        <span className="font-bold text-foreground text-[var(--body-font-size)]">
-                          Bitmap Isolation Mode
-                        </span>
-                        <span className="text-[var(--body-font-size)] text-muted-foreground font-light">
-                          Clip raster pixels strictly to selected countries
-                        </span>
-                      </div>
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={countriesMode}
-                          onChange={(e) => onToggleCountriesMode && onToggleCountriesMode(e.target.checked)}
-                          className="w-[var(--body-font-size)] h-[var(--body-font-size)] rounded-none accent-emerald-500 cursor-pointer"
-                        />
-                        <span
-                          className={`text-[var(--body-font-size)] font-bold uppercase ${countriesMode ? 'text-emerald-400' : 'text-muted-foreground'
-                            }`}
-                        >
-                          {countriesMode ? 'ON' : 'OFF'}
-                        </span>
-                      </label>
-                    </div>
-
-                    {/* Country Search */}
-                    <div className="relative">
-                      <input
-                        type="text"
-                        placeholder="Filter country by name or ISO..."
-                        value={countrySearch}
-                        onChange={(e) => setCountrySearch(e.target.value)}
-                        className="w-full h-7 px-2 text-[var(--body-font-size)] bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
-                      />
-                      {countrySearch && (
-                        <button
-                          type="button"
-                          onClick={() => setCountrySearch('')}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-[var(--body-font-size)] cursor-pointer"
-                        >
-                          ✕
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Scrollable Checklist */}
-                    <div className="h-32 overflow-y-auto border border-border bg-background/50 divide-y divide-border/40 text-[var(--body-font-size)]">
-                      {filteredCountries.length === 0 ? (
-                        <div className="p-2 text-center text-muted-foreground text-[var(--body-font-size)]">
-                          No matching countries
-                        </div>
-                      ) : (
-                        filteredCountries.map((c) => {
-                          const code = getCountryCode(c)
-                          const isChecked = selectedCountryCodeSet.has(code)
-                          return (
-                            <label
-                              key={code || c.properties.name}
-                              className="flex items-center gap-2 px-2 py-1 hover:bg-muted/50 cursor-pointer"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={() => onToggleCountry(c)}
-                                className="w-[var(--body-font-size)] h-[var(--body-font-size)] rounded-none accent-emerald-500 cursor-pointer shrink-0"
-                              />
-                              <span className="truncate flex-1 text-foreground">
-                                {c.properties.name}
-                              </span>
-                              {c.properties.iso_a3 && c.properties.iso_a3 !== '-99' && (
-                                <span className="text-[var(--body-font-size)] text-muted-foreground">
-                                  {c.properties.iso_a3}
-                                </span>
-                              )}
-                            </label>
-                          )
-                        })
-                      )}
-                    </div>
-
-                    {/* Selected Country Pills */}
-                    {selectedCountries.length > 0 && (
-                      <div className="flex flex-wrap gap-1 max-h-16 overflow-y-auto pt-1">
-                        {selectedCountries.map((c) => (
-                          <span
-                            key={getCountryCode(c)}
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[var(--body-font-size)] bg-primary/20 text-primary border border-primary/40 rounded-none font-medium"
-                          >
-                            <span className="truncate max-w-[90px]">{c.properties.name}</span>
-                            <button
-                              type="button"
-                              onClick={() => onToggleCountry(c)}
-                              className="hover:text-foreground opacity-70 hover:opacity-100 cursor-pointer"
-                            >
-                              ✕
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Country Stats Summary */}
-                    {countryStats && countryStats.validCount > 0 && (
-                      <div className="p-[var(--cell-padding)] bg-background border border-border text-[var(--body-font-size)] space-y-1">
-                        <div className="flex justify-between items-center text-muted-foreground">
-                          <span className="truncate font-bold">{countryStats.name}:</span>
-                          <span className="text-foreground font-semibold">
-                            {countryStats.validCount.toLocaleString()} cells
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center text-muted-foreground">
-                          <span>Range:</span>
-                          <span className="text-foreground font-light">
-                            {countryStats.min.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} → {countryStats.max.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center text-muted-foreground">
-                          <span>Mean:</span>
-                          <span className="text-foreground font-light">
-                            {countryStats.mean.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center text-muted-foreground">
-                          <span>Total:</span>
-                          <span className="text-foreground font-bold">
-                            {(countryStats.total ?? countryStats.mean * countryStats.validCount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                {/* Subpanel settings */}
+                {is_expanded && mode.id === 'country_analysis' && (
+                  <CountryModeSettings
+                    allCountries={all_countries}
+                    countriesMode={countries_mode}
+                    countryStats={country_stats}
+                    isCalculatingStats={is_calculating_stats}
+                    onClearCountries={on_clear_countries}
+                    onToggleCountriesMode={on_toggle_countries_mode}
+                    onToggleCountry={on_toggle_country}
+                    selectedCountries={selected_countries}
+                  />
                 )}
 
-                {/* ========================================================================= */}
-                {/* SETTINGS: 3D SPIKE MAP */}
-                {/* ========================================================================= */}
-                {isExpanded && mode.id === 'spike_map' && (
-                  <div className="p-[var(--padding)] border-t border-border space-y-[var(--padding)] bg-card/80 animate-in fade-in-0 duration-100">
-                    <div className="flex items-center justify-between pb-1 border-b border-border/60">
-                      <span className="text-[var(--body-font-size)] font-bold text-foreground flex items-center gap-1.5">
-                        <Icon name="view_in_ar" />
-                        <span>3D Spike Map Settings</span>
-                      </span>
-                    </div>
-
-                    {/* Spike Height Scale */}
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between items-center text-[var(--body-font-size)]">
-                        <span className="text-muted-foreground">Spike Height Scale</span>
-                        <span className="text-foreground font-bold">
-                          {(heightmapConfig.elevationScale / 1000).toFixed(0)} km
-                        </span>
-                      </div>
-                      <Slider
-                        value={[heightmapConfig.elevationScale]}
-                        min={50000}
-                        max={2500000}
-                        step={25000}
-                        onValueChange={(vals) =>
-                          setHeightmapConfig((prev) => ({ ...prev, elevationScale: vals[0] }))
-                        }
-                      />
-                    </div>
-
-                    {/* Spike Height Scale Mode Dropdown */}
-                    <div className="space-y-1">
-                      <div className="flex justify-between items-center text-[var(--body-font-size)]">
-                        <span className="text-muted-foreground">Height Scaling Mode</span>
-                      </div>
-                      <Select
-                        value={heightmapConfig.heightScaleMode ?? 'linear'}
-                        onValueChange={(v) =>
-                          setHeightmapConfig((prev) => ({
-                            ...prev,
-                            heightScaleMode: v as SpikeHeightScaleMode,
-                          }))
-                        }
-                      >
-                        <SelectTrigger className="rounded-none h-7 text-[var(--body-font-size)] bg-background/50 border border-border/80">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-none">
-                          <SelectItem value="linear" className="rounded-none text-[var(--body-font-size)]">
-                            Linear Scale (Colourbar)
-                          </SelectItem>
-                          <SelectItem value="percentile" className="rounded-none text-[var(--body-font-size)]">
-                            Percentile-based
-                          </SelectItem>
-                          <SelectItem value="blend" className="rounded-none text-[var(--body-font-size)]">
-                            Interpolated (Linear ↔ %ile)
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Interpolation / Blend Slider (only appears when 'blend' mode is selected) */}
-                    {heightmapConfig.heightScaleMode === 'blend' && (
-                      <div className="space-y-1.5 p-2 bg-muted/20 border border-border/70 rounded-none animate-in fade-in duration-200">
-                        <div className="flex justify-between items-center text-[var(--body-font-size)]">
-                          <span className="text-muted-foreground">Interpolation Blend</span>
-                          <span className="text-foreground font-mono text-xs font-semibold">
-                            {Math.round((1 - (heightmapConfig.blendWeight ?? 0.5)) * 100)}% Lin / {Math.round((heightmapConfig.blendWeight ?? 0.5) * 100)}% %ile
-                          </span>
-                        </div>
-                        <Slider
-                          value={[Math.round((heightmapConfig.blendWeight ?? 0.5) * 100)]}
-                          min={0}
-                          max={100}
-                          step={1}
-                          onValueChange={(vals) =>
-                            setHeightmapConfig((prev) => ({ ...prev, blendWeight: vals[0] / 100 }))
-                          }
-                        />
-                        <div className="flex justify-between text-[10px] text-muted-foreground font-light">
-                          <span>0% (Pure Linear)</span>
-                          <span>50%</span>
-                          <span>100% (Pure %ile)</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Spike Resolution (Granularity) */}
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between items-center text-[var(--body-font-size)]">
-                        <span className="text-muted-foreground">Spike Granularity</span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-foreground font-bold font-mono">
-                            {formatSpikeResolution(heightmapConfig.resolutionArcmin ?? 60)}
-                          </span>
-                          {(heightmapConfig.resolutionArcmin ?? 60) === 5 && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="cursor-help text-amber-400 text-[10px] font-semibold px-1 py-0.5 bg-amber-500/20 border border-amber-500/40 rounded-none inline-flex items-center gap-0.5 animate-in fade-in">
-                                  Degraded performance
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" className="bg-amber-950/95 border-amber-500/80 text-amber-200 text-xs max-w-[240px] p-2 leading-tight">
-                                <div className="font-semibold text-amber-300 mb-0.5 flex items-center gap-1">
-                                  <span>⚠ Performance Warning</span>
-                                </div>
-                                5-arcmin resolution renders high-density 3D geometry and can be laggy on some systems.
-                              </TooltipContent>
-                            </Tooltip>
-                          )}
-                        </div>
-                      </div>
-                      <Slider
-                        value={[
-                          Math.max(
-                            0,
-                            SPIKE_RESOLUTION_OPTIONS.findIndex(
-                              (o) => o.value === (heightmapConfig.resolutionArcmin ?? 60)
-                            )
-                          ),
-                        ]}
-                        min={0}
-                        max={SPIKE_RESOLUTION_OPTIONS.length - 1}
-                        step={1}
-                        onValueChange={(vals) => {
-                          const opt = SPIKE_RESOLUTION_OPTIONS[vals[0]]
-                          if (opt) {
-                            setHeightmapConfig((prev) => ({ ...prev, resolutionArcmin: opt.value }))
-                          }
-                        }}
-                      />
-                      <div className="flex justify-between text-[10px] text-muted-foreground font-light">
-                        <span>Coarse (120')</span>
-                        <span>Standard (60')</span>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="cursor-help text-amber-400/90 underline decoration-dotted decoration-amber-500/60 hover:text-amber-300">
-                              Max (5-arcmin) ⚠
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="bg-amber-950/95 border-amber-500/80 text-amber-200 text-xs max-w-[240px] p-2 leading-tight">
-                            <div className="font-semibold text-amber-300 mb-0.5 flex items-center gap-1">
-                              <span>⚠ Performance Warning</span>
-                            </div>
-                            5-arcmin resolution renders high-density 3D geometry and can be laggy on some systems.
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-
-                      {/* Quick preset chips */}
-                      <div className="flex items-center gap-1 pt-0.5 flex-wrap">
-                        {SPIKE_RESOLUTION_OPTIONS.map((opt) => {
-                          const isSelected = (heightmapConfig.resolutionArcmin ?? 60) === opt.value
-                          const is5Arcmin = opt.value === 5
-                          const chipBtn = (
-                            <button
-                              key={opt.value}
-                              type="button"
-                              onClick={() =>
-                                setHeightmapConfig((prev) => ({
-                                  ...prev,
-                                  resolutionArcmin: opt.value,
-                                }))
-                              }
-                              title={opt.title}
-                              className={`px-1.5 py-0.5 text-[10px] rounded-none border transition-colors cursor-pointer ${isSelected
-                                  ? is5Arcmin
-                                    ? 'bg-amber-500 text-black border-amber-400 font-bold shadow-xs'
-                                    : 'bg-primary text-primary-foreground border-primary font-bold shadow-xs'
-                                  : is5Arcmin
-                                    ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border-amber-500/40'
-                                    : 'bg-background hover:bg-muted text-muted-foreground border-border'
-                                }`}
-                            >
-                              {opt.label}
-                              {is5Arcmin && ' ⚠'}
-                            </button>
-                          )
-
-                          if (is5Arcmin) {
-                            return (
-                              <Tooltip key={opt.value}>
-                                <TooltipTrigger asChild>{chipBtn}</TooltipTrigger>
-                                <TooltipContent side="top" className="bg-amber-950/95 border-amber-500/80 text-amber-200 text-xs max-w-[240px] p-2 leading-tight">
-                                  <div className="font-semibold text-amber-300 mb-0.5 flex items-center gap-1">
-                                    <span>⚠ Performance Warning</span>
-                                  </div>
-                                  5-arcmin resolution renders high-density 3D geometry and can be laggy on some systems.
-                                </TooltipContent>
-                              </Tooltip>
-                            )
-                          }
-
-                          return chipBtn
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Camera 3D Tilt / Pitch */}
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between items-center text-[var(--body-font-size)]">
-                        <span className="text-muted-foreground">Camera Tilt (Pitch)</span>
-                        <span className="text-foreground font-bold">
-                          {Math.round(cameraTilt ?? 0)}°
-                        </span>
-                      </div>
-                      <Slider
-                        value={[Math.round(cameraTilt ?? 0)]}
-                        min={0}
-                        max={80}
-                        step={1}
-                        onValueChange={(vals) => onSetCameraTilt?.(vals[0])}
-                      />
-                    </div>
-
-                    {/* Spikes Transparency / Opacity */}
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between items-center text-[var(--body-font-size)]">
-                        <span className="text-muted-foreground">Spikes Opacity</span>
-                        <span className="text-foreground font-bold">
-                          {Math.round((heightmapConfig.opacity ?? 0.9) * 100)}%
-                        </span>
-                      </div>
-                      <Slider
-                        value={[Math.round((heightmapConfig.opacity ?? 0.9) * 100)]}
-                        min={10}
-                        max={100}
-                        step={5}
-                        onValueChange={(vals) =>
-                          setHeightmapConfig((prev) => ({ ...prev, opacity: vals[0] / 100 }))
-                        }
-                      />
-                    </div>
-
-                    {/* Opacity Tied to Percentile Toggle */}
-                    <div className="pt-1">
-                      <label className="flex items-center justify-between gap-2 p-1.5 bg-background/50 border border-border/80 cursor-pointer hover:bg-muted/40 transition-colors">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[var(--body-font-size)] font-medium text-foreground">
-                            Opacity by Percentile
-                          </span>
-                          <span className="text-[10px] text-muted-foreground font-light leading-tight">
-                            Tie spike transparency to empirical cell percentile rank
-                          </span>
-                        </div>
-                        <input
-                          type="checkbox"
-                          checked={Boolean(heightmapConfig.opacityByPercentile)}
-                          onChange={(e) =>
-                            setHeightmapConfig((prev) => ({
-                              ...prev,
-                              opacityByPercentile: e.target.checked,
-                            }))
-                          }
-                          className="w-[var(--body-font-size)] h-[var(--body-font-size)] rounded-none accent-emerald-500 cursor-pointer shrink-0"
-                        />
-                      </label>
-
-                      {/* Adjustable Percentile Opacity Strength Slider with Pseudo-Log Ramp */}
-                      {Boolean(heightmapConfig.opacityByPercentile) && (
-                        <div className="mt-2 pl-2 border-l-2 border-primary/50 space-y-2 animate-in fade-in-0 duration-150">
-                          <div className="flex justify-between items-center text-[var(--body-font-size)]">
-                            <span className="text-muted-foreground">Percentile Effect Strength</span>
-                            <span className="text-foreground font-bold font-mono">
-                              {Math.round((heightmapConfig.opacityByPercentileStrength ?? 1.0) * 100)}%
-                              <span className="text-muted-foreground font-normal text-xs ml-1">
-                                ({(heightmapConfig.opacityByPercentileStrength ?? 1.0).toFixed(1)}x)
-                              </span>
-                            </span>
-                          </div>
-                          <Slider
-                            value={[strengthToSliderPos(heightmapConfig.opacityByPercentileStrength ?? 1.0)]}
-                            min={0}
-                            max={100}
-                            step={1}
-                            onValueChange={(vals) =>
-                              setHeightmapConfig((prev) => ({
-                                ...prev,
-                                opacityByPercentileStrength: sliderPosToStrength(vals[0]),
-                              }))
-                            }
-                          />
-                          <div className="flex justify-between text-[10px] text-muted-foreground font-light">
-                            <span>Uniform (0%)</span>
-                            <span>100% (1.0x)</span>
-                            <span>Max (1000% / 10x)</span>
-                          </div>
-
-                          {/* Quick preset chips */}
-                          <div className="flex items-center gap-1 pt-0.5 flex-wrap">
-                            {[
-                              { label: '0%', val: 0.0 },
-                              { label: '50%', val: 0.5 },
-                              { label: '100%', val: 1.0 },
-                              { label: '300%', val: 3.0 },
-                              { label: '500%', val: 5.0 },
-                              { label: '1000%', val: 10.0 },
-                            ].map((preset) => {
-                              const curr = heightmapConfig.opacityByPercentileStrength ?? 1.0
-                              const isSelected = Math.abs(curr - preset.val) < 0.05
-                              return (
-                                <button
-                                  key={preset.label}
-                                  type="button"
-                                  onClick={() =>
-                                    setHeightmapConfig((prev) => ({
-                                      ...prev,
-                                      opacityByPercentileStrength: preset.val,
-                                    }))
-                                  }
-                                  className={`px-1.5 py-0.5 text-[10px] rounded-none border transition-colors cursor-pointer ${isSelected
-                                      ? 'bg-primary text-primary-foreground border-primary font-bold shadow-xs'
-                                      : 'bg-background hover:bg-muted text-muted-foreground border-border'
-                                    }`}
-                                >
-                                  {preset.label}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <p className="text-[var(--body-font-size)] text-muted-foreground font-light leading-tight">
-                      • Right-click / Ctrl+Drag on map to orbit in 3D perspective across all projections.
-                    </p>
-                  </div>
+                {is_expanded && mode.id === 'spike_map' && (
+                  <SpikeMapSettings
+                    cameraTilt={camera_tilt}
+                    heightmapConfig={heightmap_config}
+                    onSetCameraTilt={on_set_camera_tilt}
+                    setHeightmapConfig={set_heightmap_config}
+                  />
                 )}
 
-                {/* ========================================================================= */}
-                {/* SETTINGS: EQUAL-AREA CIRCLE SIZING */}
-                {/* ========================================================================= */}
-                {isExpanded && mode.id === 'circle_sizing' && (
-                  <div className="p-[var(--padding)] border-t border-border space-y-[var(--padding)] bg-card/80 animate-in fade-in-0 duration-100">
-                    <div className="flex items-center justify-between pb-1 border-b border-border/60">
-                      <span className="text-[var(--body-font-size)] font-bold text-foreground flex items-center gap-1.5">
-                        <Icon name="scatter_plot" />
-                        <span>Circle Sizing Settings</span>
-                      </span>
-                    </div>
-
-                    {/* Custom Percentile Cutoff */}
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between items-center text-[var(--body-font-size)]">
-                        <span className="text-muted-foreground">Custom Percentile Cutoff</span>
-                        <div className="flex items-center gap-1">
-                          <span className="text-muted-foreground font-medium">P</span>
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            step={0.1}
-                            value={circleOverlayConfig.percentileCutoff}
-                            onChange={(e) => {
-                              const val = parseFloat(e.target.value)
-                              if (Number.isFinite(val)) {
-                                setCircleOverlayConfig((prev) => ({
-                                  ...prev,
-                                  percentileCutoff: Math.max(0, Math.min(100, val)),
-                                }))
-                              }
-                            }}
-                            className="w-14 h-6 px-1 font-bold text-center bg-background border border-border text-foreground focus:outline-none focus:border-primary text-[var(--body-font-size)]"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Presets */}
-                      <div className="grid grid-cols-5 gap-1">
-                        {[90, 95, 98, 99, 99.5].map((p) => (
-                          <button
-                            key={p}
-                            type="button"
-                            onClick={() =>
-                              setCircleOverlayConfig((prev) => ({ ...prev, percentileCutoff: p }))
-                            }
-                            className={`px-1 py-0.5 text-[var(--body-font-size)] border rounded-none text-center cursor-pointer transition-colors ${circleOverlayConfig.percentileCutoff === p
-                                ? 'bg-primary text-white font-bold border-accent shadow-sm'
-                                : 'bg-background hover:bg-muted text-muted-foreground border-border'
-                              }`}
-                          >
-                            P{p}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Linear Area Expansion Scale */}
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between items-center text-[var(--body-font-size)]">
-                        <span className="text-muted-foreground">Area Scale (1 ha / unit)</span>
-                        <span className="text-foreground font-bold">
-                          {(circleOverlayConfig.baseRadius || 1.0).toFixed(1)} ha/unit
-                        </span>
-                      </div>
-                      <Slider
-                        value={[Math.round((circleOverlayConfig.baseRadius || 1.0) * 10)]}
-                        min={1}
-                        max={50}
-                        step={1}
-                        onValueChange={(vals) =>
-                          setCircleOverlayConfig((prev) => ({
-                            ...prev,
-                            baseRadius: vals[0] / 10,
-                          }))
-                        }
-                      />
-                    </div>
-
-                    {/* Outline Stroke Width */}
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between items-center text-[var(--body-font-size)]">
-                        <span className="text-muted-foreground">Coloured Outline Stroke</span>
-                        <span className="text-foreground font-bold">
-                          {circleOverlayConfig.strokeWidth || 2} px
-                        </span>
-                      </div>
-                      <Slider
-                        value={[circleOverlayConfig.strokeWidth || 2]}
-                        min={1}
-                        max={6}
-                        step={1}
-                        onValueChange={(vals) =>
-                          setCircleOverlayConfig((prev) => ({
-                            ...prev,
-                            strokeWidth: vals[0],
-                          }))
-                        }
-                      />
-                    </div>
-
-                    {/* Black Halo Thickness (Default 1px) */}
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between items-center text-[var(--body-font-size)]">
-                        <span className="text-muted-foreground">{LOCALISATION_CONFIG.mapmodes.haloThicknessLabel}</span>
-                        <span className="text-foreground font-bold">
-                          {circleOverlayConfig.haloWidth ?? 1} {LOCALISATION_CONFIG.mapmodes.haloThicknessUnit}
-                        </span>
-                      </div>
-                      <Slider
-                        value={[circleOverlayConfig.haloWidth ?? 1]}
-                        min={0}
-                        max={6}
-                        step={1}
-                        onValueChange={(vals) =>
-                          setCircleOverlayConfig((prev) => ({
-                            ...prev,
-                            haloWidth: vals[0],
-                          }))
-                        }
-                      />
-                    </div>
-
-                    <p className="text-[var(--body-font-size)] text-muted-foreground font-light leading-tight">
-                      {LOCALISATION_CONFIG.mapmodes.haloDescription}
-                    </p>
-                  </div>
+                {is_expanded && mode.id === 'circle_sizing' && (
+                  <CircleOverlaySettings
+                    circleOverlayConfig={circle_overlay_config}
+                    setCircleOverlayConfig={set_circle_overlay_config}
+                  />
                 )}
               </div>
-            )
+            );
           })}
         </div>
 
-        {/* Tray Footer - Each hint on its own separate line */}
+        {/* Tray Footer */}
         <div className="pt-[var(--cell-padding)] border-t border-border/80 text-[var(--body-font-size)] text-muted-foreground flex flex-col gap-0.5 shrink-0">
           <span>{LOCALISATION_CONFIG.mapmodes.hintConfigure}</span>
           <span>{LOCALISATION_CONFIG.mapmodes.hintReorder}</span>
         </div>
       </div>
     </TooltipProvider>
-  )
-}
+  );
+};
+
+export default MapmodesTray;

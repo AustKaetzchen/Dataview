@@ -22,7 +22,7 @@ import { Label } from '../ui/label'
 import { Icon } from '../ui/icon'
 import { LOCALISATION_CONFIG } from '@config'
 
-interface SidebarControlsProps {
+export interface SidebarControlsProps {
   appMode: AppMode
   setAppMode: (mode: AppMode) => void
   dataFormat: DataFormat
@@ -68,128 +68,148 @@ interface SidebarControlsProps {
   onToggleInfoPanel?: () => void
 }
 
-export const SidebarControls: React.FC<SidebarControlsProps> = ({
-  appMode,
-  setAppMode,
-  dataFormat,
-  setDataFormat,
-  scaleType,
-  setScaleType,
-  logSigma,
-  setLogSigma,
-  colorPalette,
-  setColorPalette,
-  invertPalette,
-  setInvertPalette,
-  boundsMode,
-  setBoundsMode,
-  minValOverride,
-  setMinValOverride,
-  maxValOverride,
-  setMaxValOverride,
-  percentileList,
-  setPercentileList,
-  absoluteBreaks,
-  setAbsoluteBreaks,
-  legendTitle,
-  setLegendTitle,
-  legendSubtitle = '',
-  setLegendSubtitle,
-  opacity,
-  setOpacity,
-  onFileUpload,
-  activeFileName,
-  diffNameA,
-  diffNameB,
-  binningConfig,
-  setBinningConfig,
-  mapModes,
-  heightmapConfig,
-  circleOverlayConfig,
-  selectedCountries,
-  onToggleMapMode,
-  width,
-  onWidthChange,
-  infoPanelOpen,
-  onToggleInfoPanel,
-}) => {
-  const currentWidth = width ?? 336
+/**
+ * SidebarControls primary control panel component for file input, downsampling, and legend options.
+ *
+ * @param {SidebarControlsProps} arg0_props
+ *
+ * @returns {React.ReactElement}
+ */
+export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_props) {
+  //Convert from parameters
+  let props = arg0_props
+  let {
+    absoluteBreaks: absolute_breaks,
+    activeFileName: active_file_name,
+    appMode: app_mode,
+    binningConfig: binning_config,
+    boundsMode: bounds_mode,
+    colorPalette: color_palette,
+    dataFormat: data_format,
+    diffNameA: diff_name_a,
+    diffNameB: diff_name_b,
+    infoPanelOpen: info_panel_open,
+    invertPalette: invert_palette,
+    legendSubtitle: legend_subtitle = '',
+    legendTitle: legend_title,
+    logSigma: log_sigma,
+    maxValOverride: max_val_override,
+    minValOverride: min_val_override,
+    onFileUpload: on_file_upload,
+    onToggleInfoPanel: on_toggle_info_panel,
+    onWidthChange: on_width_change,
+    opacity,
+    percentileList: percentile_list,
+    scaleType: scale_type,
+    setAbsoluteBreaks: set_absolute_breaks,
+    setAppMode: set_app_mode,
+    setBinningConfig: set_binning_config,
+    setBoundsMode: set_bounds_mode,
+    setColorPalette: set_color_palette,
+    setDataFormat: set_data_format,
+    setInvertPalette: set_invert_palette,
+    setLegendSubtitle: set_legend_subtitle,
+    setLegendTitle: set_legend_title,
+    setLogSigma: set_log_sigma,
+    setMaxValOverride: set_max_val_override,
+    setMinValOverride: set_min_val_override,
+    setOpacity: set_opacity,
+    setPercentileList: set_percentile_list,
+    setScaleType: set_scale_type,
+    width,
+  } = props
 
-  // Right-border resize handler to adjust shared width
-  const handleResizeMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    const startX = e.clientX
-    const startW = currentWidth
+  //Declare local instance variables
+  let binning_presets = [
+    { h: 2160, label: 'Native (4320×2160)', w: 4320 },
+    { h: 1080, label: '2× (2160×1080)', w: 2160 },
+    { h: 540, label: '4× (1080×540)', w: 1080 },
+    { h: 360, label: '6× (720×360)', w: 720 },
+    { h: 180, label: '12× (360×180)', w: 360 },
+  ]
+  let current_width = (width !== undefined) ? width : 336
+  let filtered_palettes: typeof D3_COLOR_SCHEMES
+  let handle_resize_mouse_down: (arg0_e: React.MouseEvent) => void
+  let open_folders: Record<string, boolean>
+  let palette_open: boolean
+  let palette_picker_ref = useRef<HTMLDivElement>(null)
+  let palette_search: string
+  let set_open_folders: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
+  let set_palette_open: React.Dispatch<React.SetStateAction<boolean>>
+  let set_palette_search: React.Dispatch<React.SetStateAction<string>>
+  let toggle_folder: (arg0_folder_key: string) => void
 
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      const delta = moveEvent.clientX - startX
-      const nextW = Math.max(260, Math.min(650, startW + delta))
-      onWidthChange?.(nextW)
-    }
-
-    const onMouseUp = () => {
-      window.removeEventListener('mousemove', onMouseMove)
-      window.removeEventListener('mouseup', onMouseUp)
-    }
-
-    window.addEventListener('mousemove', onMouseMove)
-    window.addEventListener('mouseup', onMouseUp)
-  }
-
-  // Collapsible Folders State
-  const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({
+  //Function body
+  ;[open_folders, set_open_folders] = useState<Record<string, boolean>>({
     image: true,
     legend: true,
   })
+  ;[palette_search, set_palette_search] = useState('')
+  ;[palette_open, set_palette_open] = useState(false)
 
-  const toggleFolder = (folderKey: string) => {
-    setOpenFolders((prev) => ({ ...prev, [folderKey]: !prev[folderKey] }))
+  toggle_folder = function (arg0_folder_key: string) {
+    let folder_key = arg0_folder_key
+    set_open_folders((arg0_prev) => ({ ...arg0_prev, [folder_key]: !arg0_prev[folder_key] }))
   }
 
-  const [paletteSearch, setPaletteSearch] = useState('')
-  const [paletteOpen, setPaletteOpen] = useState(false)
-  const palettePickerRef = useRef<HTMLDivElement>(null)
+  //Right-border resize handler to adjust shared width
+  handle_resize_mouse_down = function (arg0_e: React.MouseEvent) {
+    let e = arg0_e
+    e.preventDefault()
+    e.stopPropagation()
 
-  // Close palette picker when clicking outside
+    let start_w = current_width
+    let start_x = e.clientX
+
+    let on_mouse_move = function (arg0_move_event: MouseEvent) {
+      let delta = arg0_move_event.clientX - start_x
+      let next_w = Math.max(260, Math.min(650, start_w + delta))
+      if (on_width_change)
+        on_width_change(next_w)
+    }
+
+    let on_mouse_up = function () {
+      window.removeEventListener('mousemove', on_mouse_move)
+      window.removeEventListener('mouseup', on_mouse_up)
+    }
+
+    window.addEventListener('mousemove', on_mouse_move)
+    window.addEventListener('mouseup', on_mouse_up)
+  }
+
+  //Close palette picker when clicking outside
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (palettePickerRef.current && !palettePickerRef.current.contains(e.target as Node)) {
-        setPaletteOpen(false)
-      }
+    let handle_click_outside = function (arg0_e: MouseEvent) {
+      let e = arg0_e
+      if (palette_picker_ref.current)
+        if (!palette_picker_ref.current.contains(e.target as Node))
+          set_palette_open(false)
     }
-    if (paletteOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [paletteOpen])
+    if (palette_open)
+      document.addEventListener('mousedown', handle_click_outside)
 
-  // Filtered D3 palettes
-  const filteredPalettes = useMemo(() => {
-    const q = paletteSearch.toLowerCase().trim()
-    if (!q) return D3_COLOR_SCHEMES
+    return () => document.removeEventListener('mousedown', handle_click_outside)
+  }, [palette_open])
+
+  //Filter D3 palettes
+  filtered_palettes = useMemo(() => {
+    let q = palette_search.toLowerCase().trim()
+    if (!q)
+      return D3_COLOR_SCHEMES
     return D3_COLOR_SCHEMES.filter(
-      (s) => s.name.toLowerCase().includes(q) || s.category.toLowerCase().includes(q)
+      (arg0_scheme) => arg0_scheme.name.toLowerCase().includes(q) || arg0_scheme.category.toLowerCase().includes(q)
     )
-  }, [paletteSearch])
+  }, [palette_search])
 
-  // Common binning presets
-  const BINNING_PRESETS = [
-    { label: 'Native (4320×2160)', w: 4320, h: 2160 },
-    { label: '2× (2160×1080)', w: 2160, h: 1080 },
-    { label: '4× (1080×540)', w: 1080, h: 540 },
-    { label: '6× (720×360)', w: 720, h: 360 },
-    { label: '12× (360×180)', w: 360, h: 180 },
-  ]
-
+  //Return statement
   return (
     <div
-      style={{ width: `${currentWidth}px` }}
+      style={{ width: `${current_width}px` }}
       className="absolute top-3 left-3 bottom-3 z-20 flex flex-col bg-card/95 backdrop-blur-md border border-border text-card-foreground overflow-hidden select-none font-sans shadow-2xl transition-shadow"
     >
       {/* Draggable Right Border Resize Handle */}
       <div
-        onMouseDown={handleResizeMouseDown}
+        onMouseDown={handle_resize_mouse_down}
         className="absolute top-0 right-0 bottom-0 w-2 cursor-col-resize hover:bg-primary/50 active:bg-primary transition-colors z-30 group"
         title="Drag right border to resize sidebar"
       >
@@ -215,15 +235,15 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
         <div className="mt-2.5">
           <button
             type="button"
-            onClick={onToggleInfoPanel}
+            onClick={on_toggle_info_panel}
             className={`px-2.5 py-1 text-[var(--body-font-size)] font-medium rounded-none border transition-colors cursor-pointer inline-flex items-center gap-1.5 ${
-              infoPanelOpen
+              info_panel_open
                 ? 'bg-primary text-primary-foreground border-primary font-bold shadow-sm'
                 : 'bg-background hover:bg-muted text-foreground border-border'
             }`}
             title="Toggle Information & Controls flyout"
           >
-            <Icon name="info" className={infoPanelOpen ? 'text-primary-foreground' : 'text-white'} />
+            <Icon name="info" className={info_panel_open ? 'text-primary-foreground' : 'text-white'} />
             <span>Information</span>
           </button>
         </div>
@@ -236,7 +256,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
         <div className="border border-border bg-card/50">
           <button
             type="button"
-            onClick={() => toggleFolder('image')}
+            onClick={() => toggle_folder('image')}
             className="w-full h-8 px-[var(--padding)] flex items-center justify-between text-[var(--body-font-size)] font-bold text-foreground bg-muted/40 hover:bg-muted/70 transition-colors cursor-pointer"
           >
             <div className="flex items-center gap-2">
@@ -244,18 +264,18 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
               <span>Image Settings</span>
             </div>
             <div className="flex items-center gap-1.5">
-              {binningConfig.enabled && (
+              {binning_config.enabled && (
                 <span className="text-[var(--body-font-size)] px-1.5 py-0.5 bg-primary/20 text-primary border border-primary/40 font-medium">
-                  {binningConfig.width}×{binningConfig.height}
+                  {binning_config.width}×{binning_config.height}
                 </span>
               )}
               <Icon
-                name={openFolders.image ? 'expand_less' : 'expand_more'}
+                name={open_folders.image ? 'expand_less' : 'expand_more'}
               />
             </div>
           </button>
 
-          {openFolders.image && (
+          {open_folders.image && (
             <div className="p-[var(--padding)] space-y-[var(--padding)] text-[var(--body-font-size)] border-t border-border">
               {/* File Input Mode Selector (Single Image vs Image Difference) */}
               <div className="space-y-1">
@@ -263,9 +283,9 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                 <div className="grid grid-cols-2 gap-1 bg-muted/50 p-0.5 border border-border">
                   <button
                     type="button"
-                    onClick={() => setAppMode('Single Image')}
+                    onClick={() => set_app_mode('Single Image')}
                     className={`h-7 text-[var(--body-font-size)] font-medium transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
-                      appMode === 'Single Image'
+                      app_mode === 'Single Image'
                         ? 'bg-primary text-primary-foreground font-bold shadow-sm'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
@@ -275,9 +295,9 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setAppMode('Image Difference')}
+                    onClick={() => set_app_mode('Image Difference')}
                     className={`h-7 text-[var(--body-font-size)] font-medium transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
-                      appMode === 'Image Difference'
+                      app_mode === 'Image Difference'
                         ? 'bg-primary text-primary-foreground font-bold shadow-sm'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
@@ -289,7 +309,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
               </div>
 
               {/* File Upload based on active AppMode */}
-              {appMode === 'Single Image' ? (
+              {app_mode === 'Single Image' ? (
                 <div className="space-y-1">
                   <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">Select GeoPNG File (.png)</Label>
                   <input
@@ -297,15 +317,14 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                     accept=".png"
                     id="single-file-upload"
                     className="hidden"
-                    onClick={(e) => {
-                      ;(e.target as HTMLInputElement).value = ''
+                    onClick={(arg0_e) => {
+                      ;(arg0_e.target as HTMLInputElement).value = ''
                     }}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) {
-                        onFileUpload(file, 'single')
-                      }
-                      e.target.value = ''
+                    onChange={(arg0_e) => {
+                      let file = arg0_e.target.files?.[0]
+                      if (file)
+                        on_file_upload(file, 'single')
+                      arg0_e.target.value = ''
                     }}
                   />
                   <label
@@ -313,7 +332,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                     className="flex items-center justify-between w-full h-8 px-2 border border-input rounded-none bg-background text-foreground hover:bg-muted/40 cursor-pointer transition-colors"
                   >
                     <span className="truncate text-[var(--body-font-size)]">
-                      {activeFileName || 'Upload GeoPNG (.png)...'}
+                      {active_file_name || 'Upload GeoPNG (.png)...'}
                     </span>
                     <Icon name="folder_open" className="text-white/80 shrink-0 ml-1" />
                   </label>
@@ -327,22 +346,21 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                       accept=".png"
                       id="diff-file-a"
                       className="hidden"
-                      onClick={(e) => {
-                        ;(e.target as HTMLInputElement).value = ''
+                      onClick={(arg0_e) => {
+                        ;(arg0_e.target as HTMLInputElement).value = ''
                       }}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0]
-                        if (file) {
-                          onFileUpload(file, 'diff_a')
-                        }
-                        e.target.value = ''
+                      onChange={(arg0_e) => {
+                        let file = arg0_e.target.files?.[0]
+                        if (file)
+                          on_file_upload(file, 'diff_a')
+                        arg0_e.target.value = ''
                       }}
                     />
                     <label
                       htmlFor="diff-file-a"
                       className="flex items-center justify-between w-full h-8 px-2 border border-input rounded-none bg-background text-foreground hover:bg-muted/40 cursor-pointer transition-colors"
                     >
-                      <span className="truncate text-[var(--body-font-size)]">{diffNameA || 'Choose Image A...'}</span>
+                      <span className="truncate text-[var(--body-font-size)]">{diff_name_a || 'Choose Image A...'}</span>
                       <Icon name="file_upload" className="text-white/80 shrink-0 ml-1" />
                     </label>
                   </div>
@@ -354,22 +372,21 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                       accept=".png"
                       id="diff-file-b"
                       className="hidden"
-                      onClick={(e) => {
-                        ;(e.target as HTMLInputElement).value = ''
+                      onClick={(arg0_e) => {
+                        ;(arg0_e.target as HTMLInputElement).value = ''
                       }}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0]
-                        if (file) {
-                          onFileUpload(file, 'diff_b')
-                        }
-                        e.target.value = ''
+                      onChange={(arg0_e) => {
+                        let file = arg0_e.target.files?.[0]
+                        if (file)
+                          on_file_upload(file, 'diff_b')
+                        arg0_e.target.value = ''
                       }}
                     />
                     <label
                       htmlFor="diff-file-b"
                       className="flex items-center justify-between w-full h-8 px-2 border border-input rounded-none bg-background text-foreground hover:bg-muted/40 cursor-pointer transition-colors"
                     >
-                      <span className="truncate text-[var(--body-font-size)]">{diffNameB || 'Choose Image B...'}</span>
+                      <span className="truncate text-[var(--body-font-size)]">{diff_name_b || 'Choose Image B...'}</span>
                       <Icon name="file_upload" className="text-white/80 shrink-0 ml-1" />
                     </label>
                   </div>
@@ -379,7 +396,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
               {/* Encoding Format */}
               <div className="space-y-1">
                 <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">Encoding Format</Label>
-                <Select value={dataFormat} onValueChange={(v) => setDataFormat(v as DataFormat)}>
+                <Select value={data_format} onValueChange={(arg0_v) => set_data_format(arg0_v as DataFormat)}>
                   <SelectTrigger className="rounded-none h-7 text-[var(--body-font-size)]">
                     <SelectValue />
                   </SelectTrigger>
@@ -400,37 +417,36 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                   <label className="flex items-center gap-1.5 cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={binningConfig.enabled}
-                      onChange={(e) =>
-                        setBinningConfig((prev) => ({ ...prev, enabled: e.target.checked }))
+                      checked={binning_config.enabled}
+                      onChange={(arg0_e) =>
+                        set_binning_config((arg0_prev) => ({ ...arg0_prev, enabled: arg0_e.target.checked }))
                       }
                       className="w-[var(--body-font-size)] h-[var(--body-font-size)] rounded-none accent-emerald-500 cursor-pointer"
                     />
                     <span
                       className={`text-[var(--body-font-size)] font-bold uppercase ${
-                        binningConfig.enabled ? 'text-emerald-400 font-bold' : 'text-muted-foreground'
+                        binning_config.enabled ? 'text-emerald-400 font-bold' : 'text-muted-foreground'
                       }`}
                     >
-                      {binningConfig.enabled ? 'ON' : 'OFF'}
+                      {binning_config.enabled ? 'ON' : 'OFF'}
                     </span>
                   </label>
                 </div>
 
-                {binningConfig.enabled && (
+                {binning_config.enabled && (
                   <div className="space-y-2 pt-1 border-t border-border/60">
                     <div className="grid grid-cols-2 gap-1.5">
                       <div className="space-y-1">
                         <span className="text-[var(--body-font-size)] text-muted-foreground">Width</span>
                         <NumberInput
-                          value={binningConfig.width}
+                          value={binning_config.width}
                           min={60}
                           max={4320}
                           step={60}
-                          onChange={(val) => {
-                            const parsed = parseInt(val, 10)
-                            if (parsed > 0) {
-                              setBinningConfig((prev) => ({ ...prev, width: parsed }))
-                            }
+                          onChange={(arg0_val) => {
+                            let parsed = parseInt(arg0_val, 10)
+                            if (parsed > 0)
+                              set_binning_config((arg0_prev) => ({ ...arg0_prev, width: parsed }))
                           }}
                           containerClassName="h-7 rounded-none text-[var(--body-font-size)]"
                         />
@@ -438,15 +454,14 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                       <div className="space-y-1">
                         <span className="text-[var(--body-font-size)] text-muted-foreground">Height</span>
                         <NumberInput
-                          value={binningConfig.height}
+                          value={binning_config.height}
                           min={30}
                           max={2160}
                           step={30}
-                          onChange={(val) => {
-                            const parsed = parseInt(val, 10)
-                            if (parsed > 0) {
-                              setBinningConfig((prev) => ({ ...prev, height: parsed }))
-                            }
+                          onChange={(arg0_val) => {
+                            let parsed = parseInt(arg0_val, 10)
+                            if (parsed > 0)
+                              set_binning_config((arg0_prev) => ({ ...arg0_prev, height: parsed }))
                           }}
                           containerClassName="h-7 rounded-none text-[var(--body-font-size)]"
                         />
@@ -457,24 +472,24 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                     <div className="space-y-1">
                       <span className="text-[var(--body-font-size)] text-muted-foreground">Presets</span>
                       <div className="grid grid-cols-3 gap-1">
-                        {BINNING_PRESETS.slice(1).map((pr) => (
+                        {binning_presets.slice(1).map((arg0_preset) => (
                           <button
-                            key={pr.label}
+                            key={arg0_preset.label}
                             type="button"
                             onClick={() =>
-                              setBinningConfig((prev) => ({
-                                ...prev,
-                                width: pr.w,
-                                height: pr.h,
+                              set_binning_config((arg0_prev) => ({
+                                ...arg0_prev,
+                                height: arg0_preset.h,
+                                width: arg0_preset.w,
                               }))
                             }
                             className={`px-1.5 py-1 text-[var(--body-font-size)] border rounded-none text-center truncate transition-colors cursor-pointer ${
-                              binningConfig.width === pr.w && binningConfig.height === pr.h
+                              binning_config.width === arg0_preset.w && binning_config.height === arg0_preset.h
                                 ? 'bg-primary text-primary-foreground border-primary font-bold'
                                 : 'bg-background hover:bg-muted text-muted-foreground border-border'
                             }`}
                           >
-                            {pr.w}×{pr.h}
+                            {arg0_preset.w}×{arg0_preset.h}
                           </button>
                         ))}
                       </div>
@@ -484,11 +499,11 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                     <div className="space-y-1">
                       <span className="text-[var(--body-font-size)] text-muted-foreground">Downsample Method</span>
                       <Select
-                        value={binningConfig.method}
-                        onValueChange={(v) =>
-                          setBinningConfig((prev) => ({
-                            ...prev,
-                            method: v as DownsampleMethod,
+                        value={binning_config.method}
+                        onValueChange={(arg0_v) =>
+                          set_binning_config((arg0_prev) => ({
+                            ...arg0_prev,
+                            method: arg0_v as DownsampleMethod,
                           }))
                         }
                       >
@@ -499,7 +514,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                           <SelectItem value="average" className="rounded-none text-[var(--body-font-size)]">Average (Mean)</SelectItem>
                           <SelectItem value="minimum" className="rounded-none text-[var(--body-font-size)]">Minimum</SelectItem>
                           <SelectItem value="maximum" className="rounded-none text-[var(--body-font-size)]">Maximum</SelectItem>
-                          <SelectItem value="near" className="rounded-none text-[var(--body-font-size)]">Near (Nearest Neighbor)</SelectItem>
+                          <SelectItem value="near" className="rounded-none text-[var(--body-font-size)]">Near (Nearest Neighbour)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -512,15 +527,15 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                 <div className="flex justify-between items-center text-[var(--body-font-size)]">
                   <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">Layer Opacity</Label>
                   <span className="text-foreground font-bold text-[var(--body-font-size)]">
-                    {Math.round(opacity * 100)}%
+                    {Math.round(opacity*100)}%
                   </span>
                 </div>
                 <Slider
-                  value={[opacity * 100]}
+                  value={[opacity*100]}
                   min={10}
                   max={100}
                   step={1}
-                  onValueChange={(vals) => setOpacity(vals[0] / 100)}
+                  onValueChange={(arg0_vals) => set_opacity(arg0_vals[0]/100)}
                 />
               </div>
             </div>
@@ -533,7 +548,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
         <div className="border border-border bg-card/50">
           <button
             type="button"
-            onClick={() => toggleFolder('legend')}
+            onClick={() => toggle_folder('legend')}
             className="w-full h-8 px-[var(--padding)] flex items-center justify-between text-[var(--body-font-size)] font-bold text-foreground bg-muted/40 hover:bg-muted/70 transition-colors cursor-pointer"
           >
             <div className="flex items-center gap-2">
@@ -542,20 +557,20 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
             </div>
             <div className="flex items-center gap-1.5">
               <span className="text-[var(--body-font-size)] text-muted-foreground truncate max-w-[80px]">
-                {colorPalette}
+                {color_palette}
               </span>
               <Icon
-                name={openFolders.legend ? 'expand_less' : 'expand_more'}
+                name={open_folders.legend ? 'expand_less' : 'expand_more'}
               />
             </div>
           </button>
 
-          {openFolders.legend && (
+          {open_folders.legend && (
             <div className="p-[var(--padding)] space-y-[var(--padding)] text-[var(--body-font-size)] border-t border-border">
               {/* Scale Transformation */}
               <div className="space-y-1">
                 <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">Scale Transformation</Label>
-                <Select value={scaleType} onValueChange={(v) => setScaleType(v as ScaleType)}>
+                <Select value={scale_type} onValueChange={(arg0_v) => set_scale_type(arg0_v as ScaleType)}>
                   <SelectTrigger className="rounded-none h-7 text-[var(--body-font-size)]">
                     <SelectValue />
                   </SelectTrigger>
@@ -567,61 +582,62 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
               </div>
 
               {/* Steepness (Sigma) */}
-              {scaleType === 'pseudo-log' && (
+              {scale_type === 'pseudo-log' && (
                 <div className="space-y-2 rounded-none border border-border p-[var(--padding)] bg-muted/20">
                   <div className="flex justify-between items-center text-[var(--body-font-size)]">
                     <Label className="text-muted-foreground text-[var(--body-font-size)] font-normal">
                       Steepness (Sigma)
                     </Label>
                     <NumberInput
-                      value={logSigma}
+                      value={log_sigma}
                       min={0.0001}
-                      step={logSigma >= 100 ? 5 : logSigma >= 10 ? 1 : logSigma >= 1 ? 0.1 : 0.01}
-                      onChange={(val) => {
-                        const parsed = parseFloat(val)
-                        if (!Number.isNaN(parsed) && parsed > 0) setLogSigma(parsed)
+                      step={log_sigma >= 100 ? 5 : log_sigma >= 10 ? 1 : log_sigma >= 1 ? 0.1 : 0.01}
+                      onChange={(arg0_val) => {
+                        let parsed = parseFloat(arg0_val)
+                        if (!Number.isNaN(parsed) && parsed > 0)
+                          set_log_sigma(parsed)
                       }}
                       containerClassName="h-7 w-20 rounded-none text-[var(--body-font-size)]"
                     />
                   </div>
 
                   <Slider
-                    value={[logSigma]}
+                    value={[log_sigma]}
                     min={0.01}
-                    max={Math.max(1000, Math.ceil(logSigma * 1.5))}
-                    step={logSigma >= 100 ? 5 : logSigma >= 10 ? 1 : logSigma >= 1 ? 0.1 : 0.01}
-                    onValueChange={(vals) => setLogSigma(vals[0])}
+                    max={Math.max(1000, Math.ceil(log_sigma*1.5))}
+                    step={log_sigma >= 100 ? 5 : log_sigma >= 10 ? 1 : log_sigma >= 1 ? 0.1 : 0.01}
+                    onValueChange={(arg0_vals) => set_log_sigma(arg0_vals[0])}
                   />
 
                   {/* Preset buttons */}
                   <div className="flex items-center justify-between gap-1 pt-0.5">
-                    {[0.1, 1, 10, 100, 1000].map((preset) => (
+                    {[0.1, 1, 10, 100, 1000].map((arg0_preset) => (
                       <button
-                        key={preset}
+                        key={arg0_preset}
                         type="button"
-                        onClick={() => setLogSigma(preset)}
+                        onClick={() => set_log_sigma(arg0_preset)}
                         className={`px-1.5 py-0.5 text-[var(--body-font-size)] rounded-none border transition-colors ${
-                          Math.abs(logSigma - preset) < 0.001
+                          Math.abs(log_sigma - arg0_preset) < 0.001
                             ? 'bg-primary text-primary-foreground border-primary font-bold'
                             : 'bg-background hover:bg-muted text-muted-foreground border-border'
                         }`}
                       >
-                        {preset}
+                        {arg0_preset}
                       </button>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Color Palette (D3) */}
-              <div className="space-y-1.5" ref={palettePickerRef}>
+              {/* Colour Palette (D3) */}
+              <div className="space-y-1.5" ref={palette_picker_ref}>
                 <div className="flex items-center justify-between">
-                  <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">Color Palette (D3)</Label>
+                  <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">Colour Palette (D3)</Label>
                   <label className="flex items-center gap-1.5 text-[var(--body-font-size)] text-foreground cursor-pointer select-none">
                     <input
                       type="checkbox"
-                      checked={invertPalette}
-                      onChange={(e) => setInvertPalette(e.target.checked)}
+                      checked={invert_palette}
+                      onChange={(arg0_e) => set_invert_palette(arg0_e.target.checked)}
                       className="w-[var(--body-font-size)] h-[var(--body-font-size)] rounded-none accent-emerald-500 cursor-pointer"
                     />
                     <span className="text-[var(--body-font-size)] text-muted-foreground">Invert</span>
@@ -631,42 +647,42 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                 <div className="relative">
                   <button
                     type="button"
-                    onClick={() => setPaletteOpen(!paletteOpen)}
+                    onClick={() => set_palette_open(!palette_open)}
                     className="w-full h-8 px-2.5 flex items-center justify-between border border-input rounded-none bg-background text-foreground hover:bg-muted/40 cursor-pointer transition-colors text-[var(--body-font-size)]"
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <div
                         className="w-16 h-3 rounded-none border border-border/80 shrink-0"
-                        style={{ background: getPaletteCssGradient(colorPalette, invertPalette) }}
+                        style={{ background: getPaletteCssGradient(color_palette, invert_palette) }}
                       />
-                      <span className="truncate font-medium">{colorPalette}</span>
+                      <span className="truncate font-medium">{color_palette}</span>
                     </div>
-                    <Icon name={paletteOpen ? 'expand_less' : 'expand_more'} className="ml-1" />
+                    <Icon name={palette_open ? 'expand_less' : 'expand_more'} className="ml-1" />
                   </button>
 
                   {/* Dropdown Popover */}
-                  {paletteOpen && (
+                  {palette_open && (
                     <div className="absolute top-9 left-0 right-0 z-50 bg-card border border-border shadow-2xl rounded-none p-[var(--padding)] space-y-[var(--padding)] text-[var(--body-font-size)]">
                       <input
                         type="text"
                         placeholder="Search schemes..."
-                        value={paletteSearch}
-                        onChange={(e) => setPaletteSearch(e.target.value)}
+                        value={palette_search}
+                        onChange={(arg0_e) => set_palette_search(arg0_e.target.value)}
                         className="w-full h-7 px-2 border border-input rounded-none bg-background text-foreground text-[var(--body-font-size)] focus:outline-none focus:ring-1 focus:ring-ring"
                         autoFocus
                       />
 
                       <div className="max-h-48 overflow-y-auto space-y-0.5 pr-1">
-                        {filteredPalettes.map((scheme) => (
+                        {filtered_palettes.map((arg0_scheme) => (
                           <button
-                            key={scheme.id}
+                            key={arg0_scheme.id}
                             type="button"
                             onClick={() => {
-                              setColorPalette(scheme.id)
-                              setPaletteOpen(false)
+                              set_color_palette(arg0_scheme.id)
+                              set_palette_open(false)
                             }}
                             className={`w-full flex items-center justify-between px-2 py-1.5 rounded-none cursor-pointer text-left text-[var(--body-font-size)] transition-colors ${
-                              colorPalette === scheme.id
+                              color_palette === arg0_scheme.id
                                 ? 'bg-primary text-primary-foreground font-bold'
                                 : 'hover:bg-muted text-foreground'
                             }`}
@@ -674,11 +690,11 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                             <div className="flex items-center gap-2 min-w-0">
                               <div
                                 className="w-14 h-3 rounded-none border border-black/20 shrink-0"
-                                style={{ background: getPaletteCssGradient(scheme.id, invertPalette) }}
+                                style={{ background: getPaletteCssGradient(arg0_scheme.id, invert_palette) }}
                               />
-                              <span className="truncate">{scheme.name}</span>
+                              <span className="truncate">{arg0_scheme.name}</span>
                             </div>
-                            <span className="text-[var(--body-font-size)] opacity-60 ml-1 shrink-0">{scheme.category.split(' ')[0]}</span>
+                            <span className="text-[var(--body-font-size)] opacity-60 ml-1 shrink-0">{arg0_scheme.category.split(' ')[0]}</span>
                           </button>
                         ))}
                       </div>
@@ -690,7 +706,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
               {/* Visual Bounds Mode */}
               <div className="space-y-2">
                 <Label className="text-[var(--body-font-size)] font-bold text-foreground">Visual Bounds</Label>
-                <Select value={boundsMode} onValueChange={(v) => setBoundsMode(v as BoundsMode)}>
+                <Select value={bounds_mode} onValueChange={(arg0_v) => set_bounds_mode(arg0_v as BoundsMode)}>
                   <SelectTrigger className="rounded-none h-7 text-[var(--body-font-size)]">
                     <SelectValue />
                   </SelectTrigger>
@@ -701,15 +717,15 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                   </SelectContent>
                 </Select>
 
-                {boundsMode === 'Manual' && (
+                {bounds_mode === 'Manual' && (
                   <div className="grid grid-cols-2 gap-2 pt-1">
                     <div className="space-y-1">
                       <span className="text-[var(--body-font-size)] text-muted-foreground">Min Override</span>
                       <NumberInput
                         placeholder="Auto"
-                        value={minValOverride}
+                        value={min_val_override}
                         step="any"
-                        onChange={(val) => setMinValOverride(val)}
+                        onChange={(arg0_val) => set_min_val_override(arg0_val)}
                         containerClassName="rounded-none h-7 text-[var(--body-font-size)]"
                       />
                     </div>
@@ -717,34 +733,34 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                       <span className="text-[var(--body-font-size)] text-muted-foreground">Max Override</span>
                       <NumberInput
                         placeholder="Auto"
-                        value={maxValOverride}
+                        value={max_val_override}
                         step="any"
-                        onChange={(val) => setMaxValOverride(val)}
+                        onChange={(arg0_val) => set_max_val_override(arg0_val)}
                         containerClassName="rounded-none h-7 text-[var(--body-font-size)]"
                       />
                     </div>
                   </div>
                 )}
 
-                {boundsMode === 'Percentile' && (
+                {bounds_mode === 'Percentile' && (
                   <div className="space-y-1 pt-1">
                     <span className="text-[var(--body-font-size)] text-muted-foreground">Percentile Breaks (0-100)</span>
                     <Input
                       type="text"
-                      value={percentileList}
-                      onChange={(e) => setPercentileList(e.target.value)}
+                      value={percentile_list}
+                      onChange={(arg0_e) => set_percentile_list(arg0_e.target.value)}
                       className="rounded-none h-7 text-[var(--body-font-size)]"
                     />
                   </div>
                 )}
 
-                {boundsMode === 'Absolute' && (
+                {bounds_mode === 'Absolute' && (
                   <div className="space-y-1 pt-1">
                     <div className="flex justify-between items-center">
                       <span className="text-[var(--body-font-size)] text-muted-foreground">Absolute Numeric Breaks</span>
                       <button
                         type="button"
-                        onClick={() => setAbsoluteBreaks('0, 10, 50, 100, 500, 1000')}
+                        onClick={() => set_absolute_breaks('0, 10, 50, 100, 500, 1000')}
                         className="text-[var(--body-font-size)] text-primary hover:underline cursor-pointer"
                       >
                         Reset Defaults
@@ -753,12 +769,12 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                     <Input
                       type="text"
                       placeholder="e.g. 0, 10, 50, 100, 500, 1000"
-                      value={absoluteBreaks}
-                      onChange={(e) => setAbsoluteBreaks(e.target.value)}
+                      value={absolute_breaks}
+                      onChange={(arg0_e) => set_absolute_breaks(arg0_e.target.value)}
                       className="rounded-none h-7 text-[var(--body-font-size)]"
                     />
                     <span className="text-[var(--body-font-size)] text-muted-foreground leading-tight block">
-                      Color ramp stretches across these discrete absolute values.
+                      Colour ramp stretches across these discrete absolute values.
                     </span>
                   </div>
                 )}
@@ -773,8 +789,8 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                   <span className="text-[10px] text-muted-foreground/70 font-light">Supports Enter / line breaks</span>
                 </div>
                 <textarea
-                  value={legendTitle}
-                  onChange={(e) => setLegendTitle(e.target.value)}
+                  value={legend_title}
+                  onChange={(arg0_e) => set_legend_title(arg0_e.target.value)}
                   rows={2}
                   placeholder="e.g. Population Density&#10;(people per km²)"
                   className="w-full rounded-none border border-input bg-transparent px-2.5 py-1 text-[var(--body-font-size)] text-foreground shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y font-sans leading-tight"
@@ -790,8 +806,11 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
                   <span className="text-[10px] text-muted-foreground/70 font-light">Optional</span>
                 </div>
                 <textarea
-                  value={legendSubtitle}
-                  onChange={(e) => setLegendSubtitle?.(e.target.value)}
+                  value={legend_subtitle}
+                  onChange={(arg0_e) => {
+                    if (set_legend_subtitle)
+                      set_legend_subtitle(arg0_e.target.value)
+                  }}
                   rows={1}
                   placeholder="Optional subtitle or data source..."
                   className="w-full rounded-none border border-input bg-transparent px-2.5 py-1 text-[var(--body-font-size)] text-foreground shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y font-sans leading-tight"
@@ -801,7 +820,6 @@ export const SidebarControls: React.FC<SidebarControlsProps> = ({
           )}
         </div>
       </div>
-
     </div>
   )
 }

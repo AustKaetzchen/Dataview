@@ -35,7 +35,7 @@
         },
         {
           key: "Double Click",
-          action: "Reset camera center, pitch, and zoom",
+          action: "Reset camera centre, pitch, and zoom",
         },
         {
           key: "Hover",
@@ -52,7 +52,7 @@
         {
           title: "Overview",
           content: [
-            "GeoPNG Dataview is a high-performance geospatial raster visualizer powered by deck.gl and WebGL. It delivers real-time 2D/3D rendering of high-resolution single-band and multi-temporal geospatial datasets directly in the browser with zero server latency.",
+            "GeoPNG Dataview is a high-performance geospatial raster visualiser powered by deck.gl and WebGL. It delivers real-time 2D/3D rendering of high-resolution single-band and multi-temporal geospatial datasets directly in the browser with zero server latency.",
           ],
         },
         {

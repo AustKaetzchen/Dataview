@@ -12,7 +12,7 @@ import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer'
 import { Window } from '@/components/ui/Window'
 import { INFO_PANEL_CONFIG, MAPMODES_CONFIG } from '@config'
 
-interface InfoFlyoutPanelProps {
+export interface InfoFlyoutPanelProps {
   isOpen: boolean
   onClose: () => void
   isPinned?: boolean
@@ -28,46 +28,65 @@ interface InfoFlyoutPanelProps {
   className?: string
 }
 
-export const InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = ({
-  isOpen,
-  onClose,
-  isPinned,
-  defaultPinned = true,
-  onTogglePin,
-  mapModes,
-  heightmapConfig,
-  circleOverlayConfig,
-  selectedCountries,
-  projection,
-  cameraTilt = 0,
-  width = 336,
-  className,
-}) => {
-  const [activeTab, setActiveTab] = useState<string>(
+/**
+ * Information and active modes control flyout window.
+ *
+ * @param {InfoFlyoutPanelProps} arg0_props
+ * @returns {React.ReactElement|null}
+ */
+export const InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = function (arg0_props: InfoFlyoutPanelProps) {
+  //Convert from parameters
+  let props = (arg0_props) ? arg0_props : ({} as InfoFlyoutPanelProps)
+
+  //Declare local instance variables
+  let active_modes_array: MapModeItem[]
+  let active_tab: string
+  let camera_tilt = props.cameraTilt ?? 0
+  let circle_overlay_config = props.circleOverlayConfig
+  let class_name = props.className
+  let default_pinned = props.defaultPinned ?? true
+  let heightmap_config = props.heightmapConfig
+  let is_open = props.isOpen
+  let is_pinned = props.isPinned
+  let map_modes = props.mapModes
+  let on_close = props.onClose
+  let on_toggle_pin = props.onTogglePin
+  let projection = props.projection
+  let selected_countries = props.selectedCountries
+  let set_active_tab: React.Dispatch<React.SetStateAction<string>>
+  let width = props.width ?? 336
+
+  //Function body
+  let [current_tab, set_current_tab] = useState<string>(
     INFO_PANEL_CONFIG.defaultTab || INFO_PANEL_CONFIG.tabs[0]?.id || 'controls'
   )
+  active_tab = current_tab
+  set_active_tab = set_current_tab
 
-  if (!isOpen) return null
+  //Guard clauses
+  if (!is_open)
+    return null
 
-  const activeModes = mapModes.filter((m) => m.active)
+  active_modes_array = map_modes.filter((m) => m.active)
 
+  //Return statement
   return (
     <Window
       id="info-and-controls"
       title={INFO_PANEL_CONFIG.title || 'Information & Controls'}
       icon="info"
-      isOpen={isOpen}
-      onClose={onClose}
-      isPinned={isPinned}
-      defaultPinned={defaultPinned}
-      onTogglePin={onTogglePin}
+      isOpen={is_open}
+      onClose={on_close}
+      isPinned={is_pinned}
+      defaultPinned={default_pinned}
+      onTogglePin={on_toggle_pin}
       defaultWidth={width}
-      className={className}
+      className={class_name}
     >
       {/* Tabs Container */}
       <Tabs
-        value={activeTab}
-        onValueChange={setActiveTab}
+        value={active_tab}
+        onValueChange={set_active_tab}
         className="flex flex-col flex-1 min-h-0 overflow-hidden"
       >
         <TabsList className="w-full flex h-8 bg-muted/60 border border-border rounded-none p-0.5 shrink-0">
@@ -91,10 +110,8 @@ export const InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = ({
               value={tab.id}
               className="m-0 focus-visible:outline-none space-y-3"
             >
-              {tab.type === 'controls' ? (
-                /* ========================================================================= */
-                /* TAB 1: CONTROLS & ACTIVE MODES (Built-in Dynamic View)                     */
-                /* ========================================================================= */
+              {(tab.type === 'controls') ? (
+                /* TAB 1: CONTROLS & ACTIVE MODES */
                 <div className="space-y-3">
                   {/* Live Active Modes Section */}
                   <div className="space-y-1.5">
@@ -104,44 +121,43 @@ export const InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = ({
                         <span>Active Rendering Modes</span>
                       </span>
                       <span className="text-[var(--body-font-size)] px-2 py-0.5 bg-primary/20 text-primary border border-primary/40 font-semibold leading-none flex items-center">
-                        {activeModes.length} Active
+                        {active_modes_array.length} Active
                       </span>
                     </div>
 
                     <div className="space-y-1.5 bg-background/60 p-2 border border-border">
-                      {activeModes.length === 0 ? (
+                      {(active_modes_array.length === 0) ? (
                         <p className="text-muted-foreground text-[var(--body-font-size)] italic">
                           No active mapmodes. Base 2D raster only.
                         </p>
                       ) : (
-                        activeModes.map((m) => {
-                          const configItem = MAPMODES_CONFIG.modes.find((c) => c.id === m.id)
+                        active_modes_array.map((m) => {
+                          let config_item = MAPMODES_CONFIG.modes.find((c) => c.id === m.id)
                           let desc =
-                            configItem?.controlDescription ||
-                            configItem?.description ||
+                            config_item?.controlDescription ||
+                            config_item?.description ||
                             'Active layer'
 
                           if (m.id === 'country_analysis') {
-                            const count = selectedCountries.length
-                            desc =
-                              count > 0
-                                ? `${count} ${count === 1 ? 'country' : 'countries'} isolated`
-                                : configItem?.controlDescription || 'Active (select country)'
+                            let count = selected_countries.length
+                            desc = (count > 0)
+                              ? `${count} ${(count === 1) ? 'country' : 'countries'} isolated`
+                              : config_item?.controlDescription || 'Active (select country)'
                           } else if (m.id === 'spike_map') {
-                            const pctStr = heightmapConfig.opacityByPercentile ? ' (pct opacity)' : ''
-                            const resStr = heightmapConfig.resolutionArcmin ? ` • ${heightmapConfig.resolutionArcmin}' res` : ''
-                            const modeStr =
-                              heightmapConfig.heightScaleMode === 'percentile'
+                            let mode_str =
+                              (heightmap_config.heightScaleMode === 'percentile')
                                 ? ' • % height'
-                                : heightmapConfig.heightScaleMode === 'blend'
-                                  ? ` • blend (${Math.round((heightmapConfig.blendWeight ?? 0.5) * 100)}%)`
+                                : (heightmap_config.heightScaleMode === 'blend')
+                                  ? ` • blend (${Math.round((heightmap_config.blendWeight ?? 0.5)*100)}%)`
                                   : ' • linear height'
+                            let pct_str = (heightmap_config.opacityByPercentile) ? ' (pct opacity)' : ''
+                            let res_str = (heightmap_config.resolutionArcmin) ? ` • ${heightmap_config.resolutionArcmin}' res` : ''
                             desc = `${Math.round(
-                              (heightmapConfig.elevationScale ?? 800000) / 1000
-                            )}km peak • ${Math.round((heightmapConfig.opacity ?? 0.9) * 100)}% opacity${pctStr}${modeStr}${resStr}`
+                              (heightmap_config.elevationScale ?? 800000)/1000
+                            )}km peak • ${Math.round((heightmap_config.opacity ?? 0.9)*100)}% opacity${pct_str}${mode_str}${res_str}`
                           } else if (m.id === 'circle_sizing') {
-                            desc = `≥P${circleOverlayConfig.percentileCutoff ?? 99} cutoff • ${(
-                              circleOverlayConfig.baseRadius ?? 1.0
+                            desc = `≥P${circle_overlay_config.percentileCutoff ?? 99} cutoff • ${(
+                              circle_overlay_config.baseRadius ?? 1.0
                             ).toFixed(1)} ha/unit`
                           }
 
@@ -167,7 +183,7 @@ export const InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = ({
                   {/* Camera & Projection State */}
                   <div className="flex items-center justify-between p-2 bg-background/40 border border-border text-[var(--body-font-size)]">
                     <span className="text-muted-foreground">Projection: <strong className="text-foreground">{projection}</strong></span>
-                    <span className="text-muted-foreground">3D Tilt: <strong className="text-foreground">{Math.round(cameraTilt)}°</strong></span>
+                    <span className="text-muted-foreground">3D Tilt: <strong className="text-foreground">{Math.round(camera_tilt)}°</strong></span>
                   </div>
 
                   {/* Navigation Shortcuts Section */}
@@ -194,12 +210,10 @@ export const InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = ({
                   </div>
                 </div>
               ) : (
-                /* ========================================================================= */
-                /* TAB 2+: CUSTOM CONTENT (About, Policy, or any JSON5 tab)                  */
-                /* ========================================================================= */
+                /* TAB 2+: CUSTOM CONTENT */
                 <div className="space-y-3 text-[var(--body-font-size)]">
                   {(() => {
-                    const data = tab.markdown || tab.content
+                    let data = tab.markdown || tab.content
                     if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object') {
                       return (
                         <div className="space-y-2">

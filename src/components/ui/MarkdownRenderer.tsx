@@ -1,404 +1,292 @@
 import React from 'react'
-import { Icon } from '@/components/ui/icon'
+import { Icon } from './icon'
+import { ALERT_CONFIGS, AlertStyle } from '@config'
 
-interface MarkdownRendererProps {
+export interface MarkdownRendererProps {
   content?: string | string[]
   className?: string
   isNested?: boolean
 }
 
-export interface AlertStyle {
-  title: string
-  icon: string
-  borderColor: string
-  bgColor: string
-  titleColor: string
-  iconColor: string
-}
+export type { AlertStyle }
 
-const ALERT_CONFIGS: Record<string, AlertStyle> = {
-  NOTE: {
-    title: 'Note',
-    icon: 'info',
-    borderColor: 'border-l-sky-500 border-sky-500/30',
-    bgColor: 'bg-sky-950/25',
-    titleColor: 'text-sky-400',
-    iconColor: 'text-sky-400',
-  },
-  INFO: {
-    title: 'Info',
-    icon: 'info',
-    borderColor: 'border-l-sky-500 border-sky-500/30',
-    bgColor: 'bg-sky-950/25',
-    titleColor: 'text-sky-400',
-    iconColor: 'text-sky-400',
-  },
-  TIP: {
-    title: 'Tip',
-    icon: 'lightbulb',
-    borderColor: 'border-l-emerald-500 border-emerald-500/30',
-    bgColor: 'bg-emerald-950/25',
-    titleColor: 'text-emerald-400',
-    iconColor: 'text-emerald-400',
-  },
-  HINT: {
-    title: 'Hint',
-    icon: 'lightbulb',
-    borderColor: 'border-l-emerald-500 border-emerald-500/30',
-    bgColor: 'bg-emerald-950/25',
-    titleColor: 'text-emerald-400',
-    iconColor: 'text-emerald-400',
-  },
-  IMPORTANT: {
-    title: 'Important',
-    icon: 'priority_high',
-    borderColor: 'border-l-purple-500 border-purple-500/30',
-    bgColor: 'bg-purple-950/25',
-    titleColor: 'text-purple-400',
-    iconColor: 'text-purple-400',
-  },
-  WARNING: {
-    title: 'Warning',
-    icon: 'warning',
-    borderColor: 'border-l-amber-500 border-amber-500/30',
-    bgColor: 'bg-amber-950/25',
-    titleColor: 'text-amber-400',
-    iconColor: 'text-amber-400',
-  },
-  CAUTION: {
-    title: 'Caution',
-    icon: 'dangerous',
-    borderColor: 'border-l-rose-500 border-rose-500/30',
-    bgColor: 'bg-rose-950/25',
-    titleColor: 'text-rose-400',
-    iconColor: 'text-rose-400',
-  },
-  DANGER: {
-    title: 'Danger',
-    icon: 'dangerous',
-    borderColor: 'border-l-rose-500 border-rose-500/30',
-    bgColor: 'bg-rose-950/25',
-    titleColor: 'text-rose-400',
-    iconColor: 'text-rose-400',
-  },
-  ERROR: {
-    title: 'Error',
-    icon: 'error',
-    borderColor: 'border-l-rose-500 border-rose-500/30',
-    bgColor: 'bg-rose-950/25',
-    titleColor: 'text-rose-400',
-    iconColor: 'text-rose-400',
-  },
-  SUCCESS: {
-    title: 'Success',
-    icon: 'check_circle',
-    borderColor: 'border-l-emerald-500 border-emerald-500/30',
-    bgColor: 'bg-emerald-950/25',
-    titleColor: 'text-emerald-400',
-    iconColor: 'text-emerald-400',
-  },
-  QUESTION: {
-    title: 'Question',
-    icon: 'help_outline',
-    borderColor: 'border-l-indigo-500 border-indigo-500/30',
-    bgColor: 'bg-indigo-950/25',
-    titleColor: 'text-indigo-400',
-    iconColor: 'text-indigo-400',
-  },
-  FAQ: {
-    title: 'FAQ',
-    icon: 'help_outline',
-    borderColor: 'border-l-indigo-500 border-indigo-500/30',
-    bgColor: 'bg-indigo-950/25',
-    titleColor: 'text-indigo-400',
-    iconColor: 'text-indigo-400',
-  },
-  EXAMPLE: {
-    title: 'Example',
-    icon: 'description',
-    borderColor: 'border-l-cyan-500 border-cyan-500/30',
-    bgColor: 'bg-cyan-950/25',
-    titleColor: 'text-cyan-400',
-    iconColor: 'text-cyan-400',
-  },
-  QUOTE: {
-    title: 'Quote',
-    icon: 'format_quote',
-    borderColor: 'border-l-primary border-primary/30',
-    bgColor: 'bg-primary/10',
-    titleColor: 'text-primary',
-    iconColor: 'text-primary',
-  },
-}
+/**
+ * Parses inline markdown tokens (links, images, bold, italic, inline code, strikethrough).
+ *
+ * @param {string} arg0_text
+ * @returns {Array<React.ReactNode>}
+ */
+const parseInline = function (arg0_text: string): React.ReactNode[] {
+  //Convert from parameters
+  let text = (arg0_text) ? String(arg0_text) : ''
 
-function parseInline(text: string): React.ReactNode[] {
-  const parts: React.ReactNode[] = []
+  //Declare local instance variables
+  let all_matches_array: RegExpExecArray[]
+  let last_index: number = 0
+  let parts_array: React.ReactNode[] = []
+  let token_regex: RegExp
 
-  // Tokens:
-  // 1: Clickable image: [![alt](imgUrl)](linkUrl)
-  // 2: Image: ![alt](imgUrl "title")
-  // 3: Link: [text](linkUrl)
-  // 4: Bold **bold**
-  // 5: Bold __bold__
-  // 6: Inline code `code`
-  // 7: Italic *italic*
-  // 8: Italic _italic_
-  // 9: Strikethrough ~~strike~~
-  const tokenRegex =
-    /(\[!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\]\(([^)]+)\)|!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)|\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*|__([^_]+)__|`([^`]+)`|\*([^*]+)\*|_([^_]+)_|~~([^~]+)~~)/g
+  //Guard clauses
+  if (!text)
+    return []
 
-  let lastIndex = 0
-  let match: RegExpExecArray | null
+  //Function body
+  token_regex = /(\[!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\]\(([^)]+)\)|!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)|\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*|__([^_]+)__|`([^`]+)`|\*([^*]+)\*|_([^_]+)_|~~([^~]+)~~)/g
+  all_matches_array = Array.from(text.matchAll(token_regex))
 
-  while ((match = tokenRegex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index))
-    }
+  for (let i = 0; i < all_matches_array.length; i++) {
+    let local_match = all_matches_array[i]
+    let local_match_index = local_match.index ?? 0
 
-    const fullMatch = match[1]
+    if (local_match_index > last_index)
+      parts_array.push(text.slice(last_index, local_match_index))
 
-    if (fullMatch.startsWith('[![')) {
-      // Clickable image [![alt](imgUrl)](linkUrl)
-      const alt = match[2] || ''
-      const imgUrl = match[3]
-      const imgTitle = match[4] || alt
-      const linkUrl = match[5]
-      parts.push(
+    let local_full_match = local_match[1]
+
+    if (local_full_match.startsWith('[![')) {
+      let local_alt = local_match[2] || ''
+      let local_img_title = local_match[4] || local_alt
+      let local_img_url = local_match[3]
+      let local_link_url = local_match[5]
+
+      parts_array.push(
         <a
-          key={`clickimg-${match.index}`}
-          href={linkUrl}
+          key={`clickimg-${local_match_index}`}
+          href={local_link_url}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-block hover:opacity-85 transition-opacity align-middle my-0.5"
         >
           <img
-            src={imgUrl}
-            alt={alt}
-            title={imgTitle}
+            src={local_img_url}
+            alt={local_alt}
+            title={local_img_title}
             className="inline-block max-h-8 align-middle border border-border bg-background/50 object-contain rounded-none"
             loading="lazy"
           />
         </a>
       )
-    } else if (fullMatch.startsWith('![')) {
-      // Standalone inline image ![alt](imgUrl "title")
-      const alt = match[6] || ''
-      const imgUrl = match[7]
-      const imgTitle = match[8] || alt
-      parts.push(
+    } else if (local_full_match.startsWith('![')) {
+      let local_alt = local_match[6] || ''
+      let local_img_title = local_match[8] || local_alt
+      let local_img_url = local_match[7]
+
+      parts_array.push(
         <img
-          key={`img-${match.index}`}
-          src={imgUrl}
-          alt={alt}
-          title={imgTitle}
+          key={`img-${local_match_index}`}
+          src={local_img_url}
+          alt={local_alt}
+          title={local_img_title}
           className="inline-block max-h-8 align-middle mx-1 border border-border bg-background/50 object-contain rounded-none"
           loading="lazy"
         />
       )
-    } else if (match[9] && match[10]) {
-      // Link [text](url)
-      parts.push(
+    } else if (local_match[9] && local_match[10]) {
+      parts_array.push(
         <a
-          key={`link-${match.index}`}
-          href={match[10]}
+          key={`link-${local_match_index}`}
+          href={local_match[10]}
           target="_blank"
           rel="noopener noreferrer"
           className="text-primary hover:underline font-medium"
         >
-          {match[9]}
+          {local_match[9]}
         </a>
       )
-    } else if (match[11] || match[12]) {
-      // Bold **bold** or __bold__
-      parts.push(
-        <strong key={`bold-${match.index}`} className="font-semibold text-foreground">
-          {match[11] || match[12]}
+    } else if (local_match[11] || local_match[12]) {
+      parts_array.push(
+        <strong key={`bold-${local_match_index}`} className="font-semibold text-foreground">
+          {local_match[11] || local_match[12]}
         </strong>
       )
-    } else if (match[13]) {
-      // Inline code `code`
-      parts.push(
+    } else if (local_match[13]) {
+      parts_array.push(
         <code
-          key={`code-${match.index}`}
+          key={`code-${local_match_index}`}
           className="px-1 py-0.5 bg-muted text-foreground border border-border text-[var(--body-font-size)] font-mono"
         >
-          {match[13]}
+          {local_match[13]}
         </code>
       )
-    } else if (match[14] || match[15]) {
-      // Italic *italic* or _italic_
-      parts.push(
-        <em key={`em-${match.index}`} className="italic">
-          {match[14] || match[15]}
+    } else if (local_match[14] || local_match[15]) {
+      parts_array.push(
+        <em key={`em-${local_match_index}`} className="italic">
+          {local_match[14] || local_match[15]}
         </em>
       )
-    } else if (match[16]) {
-      // Strikethrough ~~text~~
-      parts.push(
-        <del key={`del-${match.index}`} className="line-through text-muted-foreground">
-          {match[16]}
+    } else if (local_match[16]) {
+      parts_array.push(
+        <del key={`del-${local_match_index}`} className="line-through text-muted-foreground">
+          {local_match[16]}
         </del>
       )
     }
 
-    lastIndex = tokenRegex.lastIndex
+    last_index = local_match_index + local_match[0].length
   }
 
-  if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex))
-  }
+  if (last_index < text.length)
+    parts_array.push(text.slice(last_index))
 
-  return parts
+  //Return statement
+  return parts_array
 }
 
-export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
-  content,
-  className = '',
-  isNested = false,
-}) => {
-  if (!content) return null
+/**
+ * High-performance lightweight Markdown and Callout renderer.
+ *
+ * @param {MarkdownRendererProps} arg0_props
+ * @returns {React.ReactElement|null}
+ */
+export const MarkdownRenderer: React.FC<MarkdownRendererProps> = function (arg0_props: MarkdownRendererProps) {
+  //Convert from parameters
+  let props = (arg0_props) ? arg0_props : ({} as MarkdownRendererProps)
 
-  const rawText = Array.isArray(content) ? content.join('\n') : content
-  const lines = rawText.split('\n')
+  //Declare local instance variables
+  let block_key: number = 0
+  let class_name = props.className || ''
+  let code_block_lines_array: string[] = []
+  let content = props.content
+  let elements_array: React.ReactNode[] = []
+  let flush_code_block: () => void
+  let flush_list: () => void
+  let in_code_block: boolean = false
+  let is_nested = props.isNested ?? false
+  let lines_array: string[]
+  let list_items_array: string[] = []
+  let raw_text: string
 
-  const elements: React.ReactNode[] = []
-  let listItems: string[] = []
-  let inCodeBlock = false
-  let codeBlockLines: string[] = []
-  let blockKey = 0
+  //Guard clauses
+  if (!content)
+    return null
 
-  const flushList = () => {
-    if (listItems.length > 0) {
-      elements.push(
+  //Function body
+  raw_text = (Array.isArray(content)) ? content.join('\n') : content
+  lines_array = raw_text.split('\n')
+
+  flush_list = function () {
+    if (list_items_array.length > 0) {
+      elements_array.push(
         <ul
-          key={`ul-${blockKey++}`}
+          key={`ul-${block_key++}`}
           className="space-y-1 my-2 list-disc list-inside text-muted-foreground text-[var(--body-font-size)] font-light leading-relaxed"
         >
-          {listItems.map((item, idx) => (
+          {list_items_array.map((item, idx) => (
             <li key={idx} className="leading-snug">
               {parseInline(item)}
             </li>
           ))}
         </ul>
       )
-      listItems = []
+      list_items_array = []
     }
   }
 
-  const flushCodeBlock = () => {
-    if (codeBlockLines.length > 0) {
-      elements.push(
+  flush_code_block = function () {
+    if (code_block_lines_array.length > 0) {
+      elements_array.push(
         <pre
-          key={`pre-${blockKey++}`}
+          key={`pre-${block_key++}`}
           className="bg-background/80 border border-border p-2.5 my-2 overflow-x-auto text-[var(--body-font-size)] font-mono text-foreground leading-relaxed rounded-none"
         >
-          <code>{codeBlockLines.join('\n')}</code>
+          <code>{code_block_lines_array.join('\n')}</code>
         </pre>
       )
-      codeBlockLines = []
+      code_block_lines_array = []
     }
   }
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
-    const trimmed = line.trim()
+  for (let i = 0; i < lines_array.length; i++) {
+    let local_line = lines_array[i]
+    let local_trimmed = local_line.trim()
 
-    // 1. Code blocks ```
-    if (trimmed.startsWith('```')) {
-      flushList()
-      if (inCodeBlock) {
-        inCodeBlock = false
-        flushCodeBlock()
+    //1. Code blocks
+    if (local_trimmed.startsWith('```')) {
+      flush_list()
+      if (in_code_block) {
+        in_code_block = false
+        flush_code_block()
       } else {
-        inCodeBlock = true
+        in_code_block = true
       }
       continue
     }
 
-    if (inCodeBlock) {
-      codeBlockLines.push(line)
+    if (in_code_block) {
+      code_block_lines_array.push(local_line)
       continue
     }
 
-    // 2. Blank line
-    if (trimmed === '') {
-      flushList()
+    //2. Blank line
+    if (local_trimmed === '') {
+      flush_list()
       continue
     }
 
-    // 3. GitHub-style Alert Callout blockquote: > [!NOTE], > [!WARNING], etc.
-    const alertMatch = trimmed.match(
+    //3. Alert callout: > [!NOTE], > [!WARNING], etc.
+    let local_alert_match = local_trimmed.match(
       /^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|INFO|HINT|DANGER|ERROR|SUCCESS|QUESTION|FAQ|EXAMPLE|QUOTE)\](?:\s+(.*))?$/i
     )
-    if (alertMatch) {
-      flushList()
-      const alertTypeKey = alertMatch[1].toUpperCase()
-      const customTitle = alertMatch[2]?.trim() || undefined
-      const cfg = ALERT_CONFIGS[alertTypeKey] || ALERT_CONFIGS.NOTE
+    if (local_alert_match) {
+      flush_list()
+      let local_alert_key = local_alert_match[1].toUpperCase()
+      let local_custom_title = local_alert_match[2]?.trim() || undefined
+      let local_cfg = ALERT_CONFIGS[local_alert_key] || ALERT_CONFIGS.NOTE
+      let local_alert_body_lines: string[] = []
 
-      const alertBodyLines: string[] = []
+      for (let x = i + 1; x < lines_array.length; x++) {
+        let local_next_trimmed = lines_array[x].trim()
 
-      // Consume subsequent lines belonging to this alert callout
-      while (i + 1 < lines.length) {
-        const nextLine = lines[i + 1]
-        const nextTrimmed = nextLine.trim()
-
-        if (nextTrimmed === '') {
-          // Check if after blank line there's another '>' line or end of alert
-          if (i + 2 < lines.length && lines[i + 2].trim().startsWith('>')) {
-            alertBodyLines.push('')
-            i++
+        if (local_next_trimmed === '') {
+          if (x + 1 < lines_array.length && lines_array[x + 1].trim().startsWith('>')) {
+            local_alert_body_lines.push('')
+            i = x
             continue
           } else {
             break
           }
         }
 
-        // Check if next line is another alert header or major block boundary
-        if (nextTrimmed.match(/^>\s*\[!/i)) {
+        if (local_next_trimmed.match(/^>\s*\[!/i))
           break
-        }
 
-        if (nextTrimmed.startsWith('>')) {
-          // Prefixed with >
-          alertBodyLines.push(nextTrimmed.replace(/^>\s?/, ''))
-          i++
+        if (local_next_trimmed.startsWith('>')) {
+          local_alert_body_lines.push(local_next_trimmed.replace(/^>\s?/, ''))
+          i = x
         } else {
-          // Loose line (e.g. array of strings in JSON without leading > on line 2)
-          // Stop if it starts with another markdown block (list, header, hr, table)
           if (
-            nextTrimmed.startsWith('- ') ||
-            nextTrimmed.startsWith('* ') ||
-            nextTrimmed.startsWith('# ') ||
-            nextTrimmed.startsWith('## ') ||
-            nextTrimmed.startsWith('### ') ||
-            nextTrimmed.startsWith('---') ||
-            nextTrimmed.startsWith('***') ||
-            nextTrimmed.startsWith('|')
+            local_next_trimmed.startsWith('- ') ||
+            local_next_trimmed.startsWith('* ') ||
+            local_next_trimmed.startsWith('# ') ||
+            local_next_trimmed.startsWith('## ') ||
+            local_next_trimmed.startsWith('### ') ||
+            local_next_trimmed.startsWith('---') ||
+            local_next_trimmed.startsWith('***') ||
+            local_next_trimmed.startsWith('|')
           ) {
             break
           }
-          alertBodyLines.push(nextTrimmed)
-          i++
+          local_alert_body_lines.push(local_next_trimmed)
+          i = x
         }
       }
 
-      elements.push(
+      elements_array.push(
         <div
-          key={`alert-${blockKey++}`}
-          className={`my-2.5 p-2.5 border-l-4 border ${cfg.borderColor} ${cfg.bgColor} rounded-none select-text`}
+          key={`alert-${block_key++}`}
+          className={`my-2.5 p-2.5 border-l-4 border ${local_cfg.borderColour} ${local_cfg.bgColour} rounded-none select-text`}
         >
           <div
-            className={`flex items-center gap-1.5 font-bold text-[var(--body-font-size)] mb-1 ${cfg.titleColor}`}
+            className={`flex items-center gap-1.5 font-bold text-[var(--body-font-size)] mb-1 ${local_cfg.titleColour}`}
           >
-            <Icon name={cfg.icon} size={15} className={cfg.iconColor} />
+            <Icon name={local_cfg.icon} size={15} className={local_cfg.iconColour} />
             <span className="uppercase tracking-wider text-xs">
-              {customTitle || cfg.title}
+              {local_custom_title || local_cfg.title}
             </span>
           </div>
-          {alertBodyLines.length > 0 && (
+          {local_alert_body_lines.length > 0 && (
             <div className="text-foreground/90 font-light leading-relaxed pl-0.5">
-              <MarkdownRenderer content={alertBodyLines.join('\n')} isNested />
+              <MarkdownRenderer content={local_alert_body_lines.join('\n')} isNested />
             </div>
           )}
         </div>
@@ -406,67 +294,67 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       continue
     }
 
-    // 4. Standard Blockquote (consecutive > lines)
-    if (trimmed.startsWith('>')) {
-      flushList()
-      const quoteBodyLines: string[] = [trimmed.replace(/^>\s?/, '')]
+    //4. Standard Blockquote
+    if (local_trimmed.startsWith('>')) {
+      flush_list()
+      let local_quote_body_lines: string[] = [local_trimmed.replace(/^>\s?/, '')]
 
-      while (i + 1 < lines.length) {
-        const nextTrimmed = lines[i + 1].trim()
-        if (nextTrimmed.startsWith('>') && !nextTrimmed.match(/^>\s*\[!/i)) {
-          quoteBodyLines.push(nextTrimmed.replace(/^>\s?/, ''))
-          i++
+      for (let x = i + 1; x < lines_array.length; x++) {
+        let local_next_trimmed = lines_array[x].trim()
+        if (local_next_trimmed.startsWith('>') && !local_next_trimmed.match(/^>\s*\[!/i)) {
+          local_quote_body_lines.push(local_next_trimmed.replace(/^>\s?/, ''))
+          i = x
         } else {
           break
         }
       }
 
-      elements.push(
+      elements_array.push(
         <blockquote
-          key={`quote-${blockKey++}`}
+          key={`quote-${block_key++}`}
           className="border-l-2 border-primary/70 bg-muted/20 pl-3 py-1.5 my-2 text-muted-foreground italic text-[var(--body-font-size)] font-light leading-relaxed select-text"
         >
-          <MarkdownRenderer content={quoteBodyLines.join('\n')} isNested />
+          <MarkdownRenderer content={local_quote_body_lines.join('\n')} isNested />
         </blockquote>
       )
       continue
     }
 
-    // 5. Block Images: ![Alt text](url "title")
-    const blockImgMatch = trimmed.match(/^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)$/)
-    if (blockImgMatch) {
-      flushList()
-      const alt = blockImgMatch[1] || ''
-      const url = blockImgMatch[2]
-      const title = blockImgMatch[3] || alt
+    //5. Block Images: ![Alt text](url "title")
+    let local_block_img_match = local_trimmed.match(/^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)$/)
+    if (local_block_img_match) {
+      flush_list()
+      let local_alt = local_block_img_match[1] || ''
+      let local_title = local_block_img_match[3] || local_alt
+      let local_url = local_block_img_match[2]
 
-      elements.push(
+      elements_array.push(
         <figure
-          key={`blockimg-${blockKey++}`}
+          key={`blockimg-${block_key++}`}
           className="my-3 flex flex-col items-center select-none"
         >
           <img
-            src={url}
-            alt={alt}
-            title={title}
+            src={local_url}
+            alt={local_alt}
+            title={local_title}
             className="max-w-full h-auto max-h-72 border border-border bg-background/50 object-contain shadow-sm rounded-none"
             loading="lazy"
             onError={(e) => {
-              const target = e.currentTarget
-              target.style.display = 'none'
-              const parent = target.parentElement
-              if (parent && !parent.querySelector('.img-error-badge')) {
-                const badge = document.createElement('div')
-                badge.className =
+              let local_target = e.currentTarget
+              local_target.style.display = 'none'
+              let local_parent = local_target.parentElement
+              if (local_parent && !local_parent.querySelector('.img-error-badge')) {
+                let local_badge = document.createElement('div')
+                local_badge.className =
                   'img-error-badge p-2 text-xs text-muted-foreground border border-dashed border-border flex items-center gap-1.5 bg-muted/20'
-                badge.innerHTML = `<span class="material-icons text-sm text-destructive">broken_image</span> Image unavailable: ${alt || url}`
-                parent.appendChild(badge)
+                local_badge.innerHTML = `<span class="material-icons text-sm text-destructive">broken_image</span> Image unavailable: ${local_alt || local_url}`
+                local_parent.appendChild(local_badge)
               }
             }}
           />
-          {alt && (
+          {local_alt && (
             <figcaption className="text-[11px] text-muted-foreground/80 italic mt-1 text-center">
-              {alt}
+              {local_alt}
             </figcaption>
           )}
         </figure>
@@ -474,44 +362,44 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       continue
     }
 
-    // 6. GFM Tables: lines starting with | and ending with |
-    if (trimmed.startsWith('|') && trimmed.endsWith('|') && i + 1 < lines.length) {
-      const nextTrimmed = lines[i + 1].trim()
-      const isTableSeparator = /^\|(?:\s*:?-+:?\s*\|)+$/.test(nextTrimmed)
+    //6. GFM Tables
+    if (local_trimmed.startsWith('|') && local_trimmed.endsWith('|') && i + 1 < lines_array.length) {
+      let local_next_trimmed = lines_array[i + 1].trim()
+      let local_is_separator = /^\|(?:\s*:?-+:?\s*\|)+$/.test(local_next_trimmed)
 
-      if (isTableSeparator) {
-        flushList()
-        const parseRow = (rowStr: string) =>
-          rowStr
+      if (local_is_separator) {
+        flush_list()
+        let parse_row_func = function (arg0_row_str: string) {
+          let row_str = arg0_row_str
+          return row_str
             .replace(/^\|/, '')
             .replace(/\|$/, '')
             .split('|')
             .map((c) => c.trim())
+        }
 
-        const headers = parseRow(trimmed)
-        i++ // Skip header
-        i++ // Skip delimiter
+        let local_headers = parse_row_func(local_trimmed)
+        i += 2 //Skip header and delimiter
 
-        const tableRows: string[][] = []
-        while (i < lines.length) {
-          const rTrimmed = lines[i].trim()
-          if (rTrimmed.startsWith('|') && rTrimmed.endsWith('|')) {
-            tableRows.push(parseRow(rTrimmed))
-            i++
+        let local_table_rows_array: string[][] = []
+        for (let x = i; x < lines_array.length; x++) {
+          let local_r_trimmed = lines_array[x].trim()
+          if (local_r_trimmed.startsWith('|') && local_r_trimmed.endsWith('|')) {
+            local_table_rows_array.push(parse_row_func(local_r_trimmed))
+            i = x
           } else {
-            i-- // Let outer loop handle non-table line
             break
           }
         }
 
-        elements.push(
-          <div key={`table-${blockKey++}`} className="my-2.5 overflow-x-auto">
+        elements_array.push(
+          <div key={`table-${block_key++}`} className="my-2.5 overflow-x-auto">
             <table className="w-full border-collapse border border-border text-[var(--body-font-size)] font-sans">
               <thead>
                 <tr className="bg-muted/60 border-b border-border">
-                  {headers.map((h, hIdx) => (
+                  {local_headers.map((h, h_idx) => (
                     <th
-                      key={hIdx}
+                      key={h_idx}
                       className="p-1.5 px-2 text-left font-bold text-foreground border-r border-border last:border-0"
                     >
                       {parseInline(h)}
@@ -520,14 +408,14 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {tableRows.map((row, rIdx) => (
+                {local_table_rows_array.map((row, r_idx) => (
                   <tr
-                    key={rIdx}
+                    key={r_idx}
                     className="border-b border-border/50 hover:bg-muted/30 transition-colors"
                   >
-                    {row.map((cell, cIdx) => (
+                    {row.map((cell, c_idx) => (
                       <td
-                        key={cIdx}
+                        key={c_idx}
                         className="p-1.5 px-2 text-muted-foreground border-r border-border/50 last:border-0"
                       >
                         {parseInline(cell)}
@@ -543,77 +431,74 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       }
     }
 
-    // 7. Bullet list item (- or *)
-    if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-      listItems.push(trimmed.slice(2).trim())
+    //7. Bullet list item (- or *)
+    if (local_trimmed.startsWith('- ') || local_trimmed.startsWith('* ')) {
+      list_items_array.push(local_trimmed.slice(2).trim())
       continue
     } else {
-      flushList()
+      flush_list()
     }
 
-    // 8. Headings
-    if (trimmed.startsWith('# ')) {
-      elements.push(
+    //8. Headings
+    if (local_trimmed.startsWith('# ')) {
+      elements_array.push(
         <h1
-          key={`h1-${blockKey++}`}
+          key={`h1-${block_key++}`}
           className="font-bold text-foreground text-[var(--header-font-size)] mt-3 mb-1.5 first:mt-0"
         >
-          {parseInline(trimmed.slice(2))}
+          {parseInline(local_trimmed.slice(2))}
         </h1>
       )
-    } else if (trimmed.startsWith('## ')) {
-      elements.push(
+    } else if (local_trimmed.startsWith('## ')) {
+      elements_array.push(
         <h2
-          key={`h2-${blockKey++}`}
+          key={`h2-${block_key++}`}
           className="font-bold text-foreground text-[var(--body-font-size)] uppercase tracking-wider mt-3 mb-1 first:mt-0"
         >
-          {parseInline(trimmed.slice(3))}
+          {parseInline(local_trimmed.slice(3))}
         </h2>
       )
-    } else if (trimmed.startsWith('### ')) {
-      elements.push(
+    } else if (local_trimmed.startsWith('### ')) {
+      elements_array.push(
         <h3
-          key={`h3-${blockKey++}`}
+          key={`h3-${block_key++}`}
           className="font-bold text-foreground text-[var(--body-font-size)] mt-2.5 mb-1 first:mt-0"
         >
-          {parseInline(trimmed.slice(4))}
+          {parseInline(local_trimmed.slice(4))}
         </h3>
       )
-    } else if (trimmed.startsWith('#### ')) {
-      elements.push(
+    } else if (local_trimmed.startsWith('#### ')) {
+      elements_array.push(
         <h4
-          key={`h4-${blockKey++}`}
+          key={`h4-${block_key++}`}
           className="font-semibold text-foreground text-[var(--body-font-size)] mt-2 mb-1 first:mt-0"
         >
-          {parseInline(trimmed.slice(5))}
+          {parseInline(local_trimmed.slice(5))}
         </h4>
       )
-    } else if (trimmed === '---' || trimmed === '***' || trimmed === '___') {
-      // Horizontal rule
-      elements.push(<hr key={`hr-${blockKey++}`} className="border-border my-2.5" />)
+    } else if (local_trimmed === '---' || local_trimmed === '***' || local_trimmed === '___') {
+      elements_array.push(<hr key={`hr-${block_key++}`} className="border-border my-2.5" />)
     } else {
-      // Regular paragraph
-      elements.push(
+      elements_array.push(
         <p
-          key={`p-${blockKey++}`}
+          key={`p-${block_key++}`}
           className="text-muted-foreground font-light leading-relaxed my-1.5 text-[var(--body-font-size)]"
         >
-          {parseInline(trimmed)}
+          {parseInline(local_trimmed)}
         </p>
       )
     }
   }
 
-  flushList()
-  flushCodeBlock()
+  flush_list()
+  flush_code_block()
 
+  //Return statement
   return (
     <div
-      className={`space-y-0.5 text-[var(--body-font-size)] ${
-        isNested ? '' : className
-      }`}
+      className={`space-y-0.5 text-[var(--body-font-size)] ${(is_nested) ? '' : class_name}`}
     >
-      {elements}
+      {elements_array}
     </div>
   )
 }

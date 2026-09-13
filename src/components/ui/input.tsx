@@ -1,11 +1,24 @@
-import * as React from 'react'
-import { cn } from '@/lib/utils'
+import * as React from 'react';
+import { cn } from '@/lib/utils';
 
 export interface InputProps
   extends React.InputHTMLAttributes<HTMLInputElement> {}
 
+/**
+ * Styled text / numeric input element.
+ *
+ * @param {InputProps} arg0_props
+ * @param {React.ForwardedRef<HTMLInputElement>} arg1_ref
+ *
+ * @returns {React.ReactElement}
+ */
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, ...props }, ref) => {
+  function (arg0_props, arg1_ref) {
+    //Convert from parameters
+    let { className, type, ...props } = arg0_props;
+    let ref = arg1_ref;
+
+    //Return statement
     return (
       <input
         type={type}
@@ -16,7 +29,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         ref={ref}
         {...props}
       />
-    )
+    );
   }
-)
-Input.displayName = 'Input'
+);
+Input.displayName = 'Input';

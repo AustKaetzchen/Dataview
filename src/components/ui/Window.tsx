@@ -2,20 +2,37 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon } from './icon'
 
-// Global z-index counter for window focus management (ensures active window is always on top)
-let globalTopZIndex = 1000
-export function getNextTopZIndex(): number {
-  globalTopZIndex += 1
-  return globalTopZIndex
+//Global z-index counter for window focus management (ensures active window is always on top)
+let global_top_z_index = 1000
+
+/**
+ * Returns the next top z-index value for window stacking.
+ *
+ * @returns {number}
+ */
+export function getNextTopZIndex (): number {
+  global_top_z_index += 1
+  return global_top_z_index
 }
 
-// Clean, unambiguous Pushpin SVG (VS Code / desktop window style)
-export const PushpinIcon: React.FC<{ isPinned: boolean; className?: string }> = ({
-  isPinned,
-  className = 'w-3.5 h-3.5',
-}) => {
-  if (isPinned) {
-    // Pinned (vertical upright pin)
+/**
+ * Clean pushpin icon component for docking/floating state.
+ *
+ * @param {{ isPinned: boolean; className?: string }} arg0_props
+ *
+ * @returns {React.ReactElement}
+ */
+export const PushpinIcon: React.FC<{ isPinned: boolean; className?: string }> = function (arg0_props) {
+  //Convert from parameters
+  let props = arg0_props
+  let {
+    className = 'w-3.5 h-3.5',
+    isPinned: is_pinned,
+  } = props
+
+  //Guard clauses
+  if (is_pinned) {
+    //Return statement
     return (
       <svg
         viewBox="0 0 24 24"
@@ -32,7 +49,7 @@ export const PushpinIcon: React.FC<{ isPinned: boolean; className?: string }> = 
     )
   }
 
-  // Unpinned (angled / floating pin outline)
+  //Return statement
   return (
     <svg
       viewBox="0 0 24 24"
@@ -66,233 +83,270 @@ export interface WindowProps {
   children: React.ReactNode
 }
 
-export const Window: React.FC<WindowProps> = ({
-  title,
-  icon = 'info',
-  isOpen,
-  onClose,
-  isPinned: controlledPinned,
-  defaultPinned = true,
-  onTogglePin,
-  defaultWidth = 336,
-  defaultHeight = 'auto',
-  minWidth = 280,
-  minHeight = 200,
-  className = '',
-  children,
-}) => {
-  const [internalPinned, setInternalPinned] = useState(defaultPinned)
-  const isPinned = controlledPinned !== undefined ? controlledPinned : internalPinned
+/**
+ * Window component providing draggable, resizable, dockable floating window behaviour.
+ *
+ * @param {WindowProps} arg0_props
+ *
+ * @returns {React.ReactElement | null}
+ */
+export const Window: React.FC<WindowProps> = function (arg0_props) {
+  //Convert from parameters
+  let props = arg0_props
+  let {
+    children,
+    className = '',
+    defaultHeight = 'auto',
+    defaultPinned = true,
+    defaultWidth = 336,
+    icon = 'info',
+    isPinned: controlled_pinned,
+    isOpen: is_open,
+    minHeight = 200,
+    minWidth = 280,
+    onClose: on_close,
+    onTogglePin: on_toggle_pin,
+    title,
+  } = props
 
-  const setPinned = useCallback(
-    (nextPinned: boolean) => {
-      setInternalPinned(nextPinned)
-      onTogglePin?.(nextPinned)
-    },
-    [onTogglePin]
-  )
-
-  const panelRef = useRef<HTMLDivElement>(null)
-
-  // Dynamic window z-index for active window focus
-  const [zIndex, setZIndex] = useState<number>(() => getNextTopZIndex())
-
-  const bringToFront = useCallback(() => {
-    const nextZ = getNextTopZIndex()
-    setZIndex(nextZ)
-    if (panelRef.current) {
-      panelRef.current.style.zIndex = `${nextZ}`
-    }
-  }, [])
-
-  // Floating Window Coordinates and Size
-  const [pos, setPos] = useState<{ x: number; y: number }>({ x: 360, y: 12 })
-  const [size, setSize] = useState<{ width: number; height?: number }>({
-    width: defaultWidth,
-  })
-
-  // Drag state refs
-  const dragRef = useRef<{
+  //Declare local instance variables
+  let bring_to_front: () => void
+  let drag_ref = useRef<{
     active: boolean
-    type: 'move' | 'resize-e' | 'resize-s' | 'resize-se' | null
-    startX: number
-    startY: number
-    initX: number
-    initY: number
-    initW: number
-    initH: number
+    currH: number
+    currW: number
     currX: number
     currY: number
-    currW: number
-    currH: number
+    initH: number
+    initW: number
+    initX: number
+    initY: number
+    startX: number
+    startY: number
+    type: 'move' | 'resize-e' | 'resize-s' | 'resize-se' | null
   }>({
     active: false,
-    type: null,
-    startX: 0,
-    startY: 0,
-    initX: 0,
-    initY: 0,
-    initW: 0,
-    initH: 0,
+    currH: 0,
+    currW: 0,
     currX: 0,
     currY: 0,
-    currW: 0,
-    currH: 0,
+    initH: 0,
+    initW: 0,
+    initX: 0,
+    initY: 0,
+    startX: 0,
+    startY: 0,
+    type: null,
   })
+  let handle_header_mouse_down: (arg0_e: React.MouseEvent) => void
+  let handle_resize_start: (arg0_e: React.MouseEvent, arg1_type: 'resize-e' | 'resize-s' | 'resize-se') => void
+  let internal_pinned: boolean
+  let is_interacting: boolean
+  let is_pinned: boolean
+  let panel_ref = useRef<HTMLDivElement>(null)
+  let pos: { x: number; y: number }
+  let set_internal_pinned: React.Dispatch<React.SetStateAction<boolean>>
+  let set_is_interacting: React.Dispatch<React.SetStateAction<boolean>>
+  let set_pinned: (arg0_next_pinned: boolean) => void
+  let set_pos: React.Dispatch<React.SetStateAction<{ x: number; y: number }>>
+  let set_size: React.Dispatch<React.SetStateAction<{ height?: number; width: number }>>
+  let set_z_index: React.Dispatch<React.SetStateAction<number>>
+  let size: { height?: number; width: number }
+  let unpin_at_current_rect: (arg0_client_x?: number, arg1_client_y?: number) => void
+  let window_element: React.ReactElement
+  let z_index: number
 
-  const [isInteracting, setIsInteracting] = useState(false)
+  //Function body
+  ;[internal_pinned, set_internal_pinned] = useState(defaultPinned)
+  is_pinned = (controlled_pinned !== undefined) ? controlled_pinned : internal_pinned
 
-  // Clean transition to unpinned mode without any 100% full-screen width expansion
-  const unpinAtCurrentRect = useCallback(
-    (clientX?: number, clientY?: number) => {
-      const el = panelRef.current
+  set_pinned = useCallback(
+    (arg0_next_pinned: boolean) => {
+      let next_pinned = arg0_next_pinned
+      set_internal_pinned(next_pinned)
+      if (on_toggle_pin)
+        on_toggle_pin(next_pinned)
+    },
+    [on_toggle_pin]
+  )
+
+  ;[z_index, set_z_index] = useState<number>(() => getNextTopZIndex())
+
+  bring_to_front = useCallback(() => {
+    let next_z = getNextTopZIndex()
+    set_z_index(next_z)
+    if (panel_ref.current)
+      panel_ref.current.style.zIndex = `${next_z}`
+  }, [])
+
+  ;[pos, set_pos] = useState<{ x: number; y: number }>({ x: 360, y: 12 })
+  ;[size, set_size] = useState<{ height?: number; width: number }>({
+    width: defaultWidth,
+  })
+  ;[is_interacting, set_is_interacting] = useState(false)
+
+  //Transition to unpinned mode
+  unpin_at_current_rect = useCallback(
+    (arg0_client_x?: number, arg1_client_y?: number) => {
+      let client_x = arg0_client_x
+      let client_y = arg1_client_y
+      let el = panel_ref.current
       if (!el) {
-        setPinned(false)
+        set_pinned(false)
         return
       }
 
-      const rect = el.getBoundingClientRect()
-      const currentW = Math.max(minWidth, Math.round(rect.width))
-      const currentH = Math.max(minHeight, Math.round(rect.height))
+      let rect = el.getBoundingClientRect()
+      let current_h = Math.max(minHeight, Math.round(rect.height))
+      let current_w = Math.max(minWidth, Math.round(rect.width))
 
-      // Crucial: Set explicit pixel dimensions on DOM before changing position to fixed
-      el.style.width = `${currentW}px`
+      el.style.width = `${current_w}px`
       el.style.left = `${rect.left}px`
       el.style.top = `${rect.top}px`
 
-      const nextZ = getNextTopZIndex()
-      setZIndex(nextZ)
-      el.style.zIndex = `${nextZ}`
+      let next_z = getNextTopZIndex()
+      set_z_index(next_z)
+      el.style.zIndex = `${next_z}`
 
-      setPos({ x: rect.left, y: rect.top })
-      setSize({ width: currentW, height: currentH })
-      setPinned(false)
+      set_pos({ x: rect.left, y: rect.top })
+      set_size({ height: current_h, width: current_w })
+      set_pinned(false)
 
-      if (clientX !== undefined && clientY !== undefined) {
-        dragRef.current = {
+      if (client_x !== undefined && client_y !== undefined) {
+        drag_ref.current = {
           active: true,
-          type: 'move',
-          startX: clientX,
-          startY: clientY,
-          initX: rect.left,
-          initY: rect.top,
-          initW: currentW,
-          initH: currentH,
+          currH: current_h,
+          currW: current_w,
           currX: rect.left,
           currY: rect.top,
-          currW: currentW,
-          currH: currentH,
+          initH: current_h,
+          initW: current_w,
+          initX: rect.left,
+          initY: rect.top,
+          startX: client_x,
+          startY: client_y,
+          type: 'move',
         }
-        setIsInteracting(true)
+        set_is_interacting(true)
       }
     },
-    [minWidth, minHeight, setPinned]
+    [minWidth, minHeight, set_pinned]
   )
 
-  // Header MouseDown (Drag Handler) - Brings to front immediately
-  const handleHeaderMouseDown = (e: React.MouseEvent) => {
-    if (e.button !== 0) return
-    const target = e.target as HTMLElement
-    if (target.closest('button') || target.closest('input') || target.closest('a')) return
+  //Header MouseDown drag handler
+  handle_header_mouse_down = function (arg0_e: React.MouseEvent) {
+    let e = arg0_e
+    if (e.button !== 0)
+      return
+    let target = e.target as HTMLElement
+    if (target.closest('button') || target.closest('input') || target.closest('a'))
+      return
 
     e.preventDefault()
     e.stopPropagation()
 
-    bringToFront()
+    bring_to_front()
 
-    if (isPinned) {
-      // Unpin smoothly and immediately initiate dragging from current position
-      unpinAtCurrentRect(e.clientX, e.clientY)
+    if (is_pinned) {
+      unpin_at_current_rect(e.clientX, e.clientY)
       return
     }
 
-    const el = panelRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
+    let el = panel_ref.current
+    if (!el)
+      return
+    let rect = el.getBoundingClientRect()
 
-    dragRef.current = {
+    drag_ref.current = {
       active: true,
-      type: 'move',
-      startX: e.clientX,
-      startY: e.clientY,
-      initX: rect.left,
-      initY: rect.top,
-      initW: rect.width,
-      initH: rect.height,
+      currH: rect.height,
+      currW: rect.width,
       currX: rect.left,
       currY: rect.top,
-      currW: rect.width,
-      currH: rect.height,
+      initH: rect.height,
+      initW: rect.width,
+      initX: rect.left,
+      initY: rect.top,
+      startX: e.clientX,
+      startY: e.clientY,
+      type: 'move',
     }
-    setIsInteracting(true)
+    set_is_interacting(true)
   }
 
-  // Resize Handlers - Brings to front immediately
-  const handleResizeStart = (
-    e: React.MouseEvent,
-    type: 'resize-e' | 'resize-s' | 'resize-se'
-  ) => {
-    if (isPinned || e.button !== 0) return
+  //Resize Handlers
+  handle_resize_start = function (
+    arg0_e: React.MouseEvent,
+    arg1_type: 'resize-e' | 'resize-s' | 'resize-se'
+  ) {
+    let e = arg0_e
+    let type = arg1_type
+    if (is_pinned || e.button !== 0)
+      return
     e.preventDefault()
     e.stopPropagation()
 
-    bringToFront()
+    bring_to_front()
 
-    const el = panelRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
+    let el = panel_ref.current
+    if (!el)
+      return
+    let rect = el.getBoundingClientRect()
 
-    dragRef.current = {
+    drag_ref.current = {
       active: true,
-      type,
-      startX: e.clientX,
-      startY: e.clientY,
-      initX: rect.left,
-      initY: rect.top,
-      initW: rect.width,
-      initH: rect.height,
+      currH: rect.height,
+      currW: rect.width,
       currX: rect.left,
       currY: rect.top,
-      currW: rect.width,
-      currH: rect.height,
+      initH: rect.height,
+      initW: rect.width,
+      initX: rect.left,
+      initY: rect.top,
+      startX: e.clientX,
+      startY: e.clientY,
+      type,
     }
-    setIsInteracting(true)
+    set_is_interacting(true)
   }
 
-  // Global mousemove and mouseup listeners during drag/resize
+  //Global mousemove and mouseup listeners
   useEffect(() => {
-    if (!isInteracting) return
+    if (!is_interacting)
+      return
 
-    let rafId: number | null = null
+    let raf_id: number | null = null
 
-    const handleMouseMove = (e: MouseEvent) => {
-      const drag = dragRef.current
-      if (!drag.active) return
+    let handle_mouse_move = function (arg0_e: MouseEvent) {
+      let drag = drag_ref.current
+      let e = arg0_e
+      if (!drag.active)
+        return
 
-      const dx = e.clientX - drag.startX
-      const dy = e.clientY - drag.startY
+      let dx = e.clientX - drag.startX
+      let dy = e.clientY - drag.startY
 
       if (drag.type === 'move') {
-        const maxX = Math.max(0, window.innerWidth - 80)
-        const maxY = Math.max(0, window.innerHeight - 60)
-        drag.currX = Math.max(0, Math.min(maxX, drag.initX + dx))
-        drag.currY = Math.max(0, Math.min(maxY, drag.initY + dy))
+        let max_x = Math.max(0, window.innerWidth - 80)
+        let max_y = Math.max(0, window.innerHeight - 60)
+        drag.currX = Math.max(0, Math.min(max_x, drag.initX + dx))
+        drag.currY = Math.max(0, Math.min(max_y, drag.initY + dy))
       } else if (drag.type === 'resize-e') {
-        const maxW = Math.max(minWidth, window.innerWidth - drag.initX - 12)
-        drag.currW = Math.max(minWidth, Math.min(maxW, drag.initW + dx))
+        let max_w = Math.max(minWidth, window.innerWidth - drag.initX - 12)
+        drag.currW = Math.max(minWidth, Math.min(max_w, drag.initW + dx))
       } else if (drag.type === 'resize-s') {
-        const maxH = Math.max(minHeight, window.innerHeight - drag.initY - 12)
-        drag.currH = Math.max(minHeight, Math.min(maxH, drag.initH + dy))
+        let max_h = Math.max(minHeight, window.innerHeight - drag.initY - 12)
+        drag.currH = Math.max(minHeight, Math.min(max_h, drag.initH + dy))
       } else if (drag.type === 'resize-se') {
-        const maxW = Math.max(minWidth, window.innerWidth - drag.initX - 12)
-        const maxH = Math.max(minHeight, window.innerHeight - drag.initY - 12)
-        drag.currW = Math.max(minWidth, Math.min(maxW, drag.initW + dx))
-        drag.currH = Math.max(minHeight, Math.min(maxH, drag.initH + dy))
+        let max_h = Math.max(minHeight, window.innerHeight - drag.initY - 12)
+        let max_w = Math.max(minWidth, window.innerWidth - drag.initX - 12)
+        drag.currW = Math.max(minWidth, Math.min(max_w, drag.initW + dx))
+        drag.currH = Math.max(minHeight, Math.min(max_h, drag.initH + dy))
       }
 
-      if (rafId === null) {
-        rafId = requestAnimationFrame(() => {
-          const el = panelRef.current
+      if (raf_id === null) {
+        raf_id = requestAnimationFrame(() => {
+          let el = panel_ref.current
           if (el) {
             if (drag.type === 'move') {
               el.style.left = `${drag.currX}px`
@@ -306,57 +360,60 @@ export const Window: React.FC<WindowProps> = ({
               el.style.height = `${drag.currH}px`
             }
           }
-          rafId = null
+          raf_id = null
         })
       }
     }
 
-    const handleMouseUp = () => {
-      const drag = dragRef.current
+    let handle_mouse_up = function () {
+      let drag = drag_ref.current
       drag.active = false
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId)
-        rafId = null
+      if (raf_id !== null) {
+        cancelAnimationFrame(raf_id)
+        raf_id = null
       }
 
       if (drag.type === 'move') {
-        setPos({ x: drag.currX, y: drag.currY })
+        set_pos({ x: drag.currX, y: drag.currY })
       } else if (drag.type === 'resize-e') {
-        setSize((prev) => ({ ...prev, width: drag.currW }))
+        set_size((arg0_prev) => ({ ...arg0_prev, width: drag.currW }))
       } else if (drag.type === 'resize-s') {
-        setSize((prev) => ({ ...prev, height: drag.currH }))
+        set_size((arg0_prev) => ({ ...arg0_prev, height: drag.currH }))
       } else if (drag.type === 'resize-se') {
-        setSize({ width: drag.currW, height: drag.currH })
+        set_size({ height: drag.currH, width: drag.currW })
       }
 
-      setIsInteracting(false)
+      set_is_interacting(false)
     }
 
-    window.addEventListener('mousemove', handleMouseMove, { passive: true })
-    window.addEventListener('mouseup', handleMouseUp)
+    window.addEventListener('mousemove', handle_mouse_move, { passive: true })
+    window.addEventListener('mouseup', handle_mouse_up)
 
     return () => {
-      if (rafId !== null) cancelAnimationFrame(rafId)
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
+      if (raf_id !== null)
+        cancelAnimationFrame(raf_id)
+      window.removeEventListener('mousemove', handle_mouse_move)
+      window.removeEventListener('mouseup', handle_mouse_up)
     }
-  }, [isInteracting, minWidth, minHeight])
+  }, [is_interacting, minWidth, minHeight])
 
-  if (!isOpen) return null
+  //Guard clauses
+  if (!is_open)
+    return null
 
-  const windowElement = (
+  window_element = (
     <>
-      {/* Invisible Full-Screen Capture Backdrop during drag/resize to prevent mouse leaking to map */}
-      {isInteracting && (
+      {/* Invisible Full-Screen Capture Backdrop during drag/resize */}
+      {is_interacting && (
         <div
           className="fixed inset-0 z-[99999] select-none"
           style={{
             cursor:
-              dragRef.current.type === 'move'
+              drag_ref.current.type === 'move'
                 ? 'move'
-                : dragRef.current.type === 'resize-e'
+                : drag_ref.current.type === 'resize-e'
                 ? 'ew-resize'
-                : dragRef.current.type === 'resize-s'
+                : drag_ref.current.type === 'resize-s'
                 ? 'ns-resize'
                 : 'nwse-resize',
           }}
@@ -364,33 +421,33 @@ export const Window: React.FC<WindowProps> = ({
       )}
 
       <div
-        ref={panelRef}
-        onMouseDownCapture={bringToFront}
+        ref={panel_ref}
+        onMouseDownCapture={bring_to_front}
         style={
-          isPinned
+          is_pinned
             ? { width: '100%' }
             : {
-                position: 'fixed',
+                height: size.height ? `${size.height}px` : undefined,
                 left: `${pos.x}px`,
+                position: 'fixed',
                 top: `${pos.y}px`,
                 width: `${size.width}px`,
-                height: size.height ? `${size.height}px` : undefined,
-                zIndex,
+                zIndex: z_index,
               }
         }
         className={
-          isPinned
+          is_pinned
             ? `relative z-30 flex flex-col bg-card/98 backdrop-blur-md border border-border shadow-2xl p-[var(--padding)] text-[var(--body-font-size)] font-sans select-none pointer-events-auto max-h-[calc(100vh-160px)] ${className}`
             : `flex flex-col bg-card/98 backdrop-blur-md border border-border shadow-2xl p-[var(--padding)] text-[var(--body-font-size)] font-sans select-none pointer-events-auto max-h-[calc(100vh-32px)] ${className}`
         }
       >
         {/* Window Header (Draggable) */}
         <div
-          onMouseDown={handleHeaderMouseDown}
+          onMouseDown={handle_header_mouse_down}
           className="flex items-center justify-between pb-2 border-b border-border shrink-0 cursor-move select-none"
-          title={isPinned ? 'Click and drag to float window' : 'Drag to move window'}
+          title={is_pinned ? 'Click and drag to float window' : 'Drag to move window'}
         >
-          {/* Left: Drag Handle, Icon, Title (Strictly aligned, white non-interactive elements) */}
+          {/* Left: Drag Handle, Icon, Title */}
           <div className="flex items-center gap-1.5 leading-none min-w-0">
             <Icon name="drag_indicator" className="text-white/40 text-sm shrink-0" />
             <Icon name={icon} className="text-white text-base shrink-0" />
@@ -399,27 +456,27 @@ export const Window: React.FC<WindowProps> = ({
             </span>
           </div>
 
-          {/* Right: Actions (Pin/Unpin toggle and Close button) */}
+          {/* Right: Actions */}
           <div className="flex items-center gap-1 leading-none shrink-0">
             <button
               type="button"
               onClick={() => {
-                if (isPinned) {
-                  unpinAtCurrentRect()
+                if (is_pinned) {
+                  unpin_at_current_rect()
                 } else {
-                  setPinned(true)
+                  set_pinned(true)
                 }
               }}
               className="text-white/80 hover:text-white cursor-pointer p-1 rounded-none hover:bg-muted/50 transition-colors flex items-center justify-center"
-              title={isPinned ? 'Unpin into floating window' : 'Dock under Value colourbar'}
-              aria-label={isPinned ? 'Unpin window' : 'Dock window'}
+              title={is_pinned ? 'Unpin into floating window' : 'Dock under Value colourbar'}
+              aria-label={is_pinned ? 'Unpin window' : 'Dock window'}
             >
-              <PushpinIcon isPinned={isPinned} className="text-white w-3.5 h-3.5" />
+              <PushpinIcon isPinned={is_pinned} className="text-white w-3.5 h-3.5" />
             </button>
 
             <button
               type="button"
-              onClick={onClose}
+              onClick={on_close}
               className="text-white/80 hover:text-white cursor-pointer p-1 rounded-none hover:bg-muted/50 transition-colors flex items-center justify-center"
               aria-label="Close window"
               title="Close window"
@@ -435,23 +492,23 @@ export const Window: React.FC<WindowProps> = ({
         </div>
 
         {/* Resize Handles (Enabled when unpinned) */}
-        {!isPinned && (
+        {!is_pinned && (
           <>
             {/* Right border resize handle */}
             <div
-              onMouseDown={(e) => handleResizeStart(e, 'resize-e')}
+              onMouseDown={(arg0_e) => handle_resize_start(arg0_e, 'resize-e')}
               className="absolute top-0 right-0 bottom-0 w-2 cursor-ew-resize hover:bg-primary/40 active:bg-primary transition-colors z-20"
               title="Resize width"
             />
             {/* Bottom border resize handle */}
             <div
-              onMouseDown={(e) => handleResizeStart(e, 'resize-s')}
+              onMouseDown={(arg0_e) => handle_resize_start(arg0_e, 'resize-s')}
               className="absolute left-0 right-0 bottom-0 h-2 cursor-ns-resize hover:bg-primary/40 active:bg-primary transition-colors z-20"
               title="Resize height"
             />
             {/* Bottom-right corner resize handle */}
             <div
-              onMouseDown={(e) => handleResizeStart(e, 'resize-se')}
+              onMouseDown={(arg0_e) => handle_resize_start(arg0_e, 'resize-se')}
               className="absolute right-0 bottom-0 w-3.5 h-3.5 cursor-nwse-resize hover:bg-primary/60 active:bg-primary transition-colors z-30 flex items-end justify-end p-0.5"
               title="Resize window"
             >
@@ -463,12 +520,12 @@ export const Window: React.FC<WindowProps> = ({
     </>
   )
 
-  // When unpinned, portal directly to document.body to break out of any parent stacking context
-  if (!isPinned && typeof document !== 'undefined') {
-    return createPortal(windowElement, document.body)
-  }
+  //When unpinned, portal directly to document.body
+  if (!is_pinned && typeof document !== 'undefined')
+    return createPortal(window_element, document.body)
 
-  return windowElement
+  //Return statement
+  return window_element
 }
 
 export default Window

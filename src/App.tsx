@@ -29,483 +29,567 @@ import { SidebarControls } from './components/controls/SidebarControls'
 import { MapViewer } from './components/map/MapViewer'
 import { AnalyticsDrawer } from './components/analytics/AnalyticsDrawer'
 
-export const App: React.FC = () => {
-  // Application State
-  const [appMode, setAppMode] = useState<AppMode>('Single Image')
-  const [dataFormat, setDataFormat] = useState<DataFormat>('float32')
-  const [projection, setProjection] = useState<ProjectionType>('Mercator')
-  const [scaleType, setScaleType] = useState<ScaleType>('pseudo-log')
-  const [logSigma, setLogSigma] = useState<number>(1.0)
-  const [colorPalette, setColorPalette] = useState<ColorPalette>('Plasma')
-  const [invertPalette, setInvertPalette] = useState<boolean>(false)
-  const [boundsMode, setBoundsMode] = useState<BoundsMode>('Manual')
-  const [minValOverride, setMinValOverride] = useState<string>('')
-  const [maxValOverride, setMaxValOverride] = useState<string>('')
-  const [percentileList, setPercentileList] = useState<string>(
+/**
+ * Main application root component managing raster datasets, map layers, and reactive view state.
+ *
+ * @returns {React.ReactElement}
+ */
+export const App: React.FC = function () {
+  //Declare local instance variables
+  let absolute_breaks: string
+  let active_countries: CountryFeature[]
+  let active_file_name: string
+  let active_raster: DecodedRaster | null
+  let analytics_open: boolean
+  let app_mode: AppMode
+  let binning_config: BinningConfig
+  let bounds_mode: BoundsMode
+  let circle_overlay_config: CircleOverlayConfig
+  let color_palette: ColorPalette
+  let colourbar_width: number
+  let countries_mode: boolean
+  let data_format: DataFormat
+  let deferred_selected_countries: CountryFeature[]
+  let diff_name_a: string
+  let diff_name_b: string
+  let display_raster: DecodedRaster | null
+  let handle_clear_countries: () => void
+  let handle_file_upload: (arg0_file: File, arg1_target: 'single' | 'diff_a' | 'diff_b') => Promise<void>
+  let handle_force_refresh_analytics: () => void
+  let handle_reorder_map_modes: (arg0_new_modes: MapModeItem[]) => void
+  let handle_select_country: (arg0_c: CountryFeature | null) => void
+  let handle_toggle_countries_mode: (arg0_enabled: boolean) => void
+  let handle_toggle_country: (arg0_c: CountryFeature) => void
+  let handle_toggle_map_mode: (arg0_id: MapModeId) => void
+  let handle_update_breaks: (arg0_new_breaks: number[]) => void
+  let heightmap_config: HeightmapConfig
+  let hovered_country: CountryFeature | null
+  let info_panel_open: boolean
+  let invert_palette: boolean
+  let is_hover_only: boolean
+  let legend_subtitle: string
+  let legend_title: string
+  let log_sigma: number
+  let map_modes: MapModeItem[]
+  let max_val_override: string
+  let min_val_override: string
+  let opacity: number
+  let percentile_list: string
+  let projection: ProjectionType
+  let raster_a: DecodedRaster | null
+  let raster_b: DecodedRaster | null
+  let raster_version: number
+  let raw_bytes_a: Uint8Array | null
+  let raw_bytes_b: Uint8Array | null
+  let scale_type: ScaleType
+  let selected_countries: CountryFeature[]
+  let set_absolute_breaks: React.Dispatch<React.SetStateAction<string>>
+  let set_active_file_name: React.Dispatch<React.SetStateAction<string>>
+  let set_analytics_open: React.Dispatch<React.SetStateAction<boolean>>
+  let set_app_mode: React.Dispatch<React.SetStateAction<AppMode>>
+  let set_binning_config: React.Dispatch<React.SetStateAction<BinningConfig>>
+  let set_bounds_mode: React.Dispatch<React.SetStateAction<BoundsMode>>
+  let set_circle_overlay_config: React.Dispatch<React.SetStateAction<CircleOverlayConfig>>
+  let set_color_palette: React.Dispatch<React.SetStateAction<ColorPalette>>
+  let set_colourbar_width: React.Dispatch<React.SetStateAction<number>>
+  let set_countries_mode: React.Dispatch<React.SetStateAction<boolean>>
+  let set_data_format: React.Dispatch<React.SetStateAction<DataFormat>>
+  let set_diff_name_a: React.Dispatch<React.SetStateAction<string>>
+  let set_diff_name_b: React.Dispatch<React.SetStateAction<string>>
+  let set_heightmap_config: React.Dispatch<React.SetStateAction<HeightmapConfig>>
+  let set_hovered_country: React.Dispatch<React.SetStateAction<CountryFeature | null>>
+  let set_info_panel_open: React.Dispatch<React.SetStateAction<boolean>>
+  let set_invert_palette: React.Dispatch<React.SetStateAction<boolean>>
+  let set_legend_subtitle: React.Dispatch<React.SetStateAction<string>>
+  let set_legend_title: React.Dispatch<React.SetStateAction<string>>
+  let set_log_sigma: React.Dispatch<React.SetStateAction<number>>
+  let set_map_modes: React.Dispatch<React.SetStateAction<MapModeItem[]>>
+  let set_max_val_override: React.Dispatch<React.SetStateAction<string>>
+  let set_min_val_override: React.Dispatch<React.SetStateAction<string>>
+  let set_opacity: React.Dispatch<React.SetStateAction<number>>
+  let set_percentile_list: React.Dispatch<React.SetStateAction<string>>
+  let set_projection: React.Dispatch<React.SetStateAction<ProjectionType>>
+  let set_raster_a: React.Dispatch<React.SetStateAction<DecodedRaster | null>>
+  let set_raster_b: React.Dispatch<React.SetStateAction<DecodedRaster | null>>
+  let set_raster_version: React.Dispatch<React.SetStateAction<number>>
+  let set_raw_bytes_a: React.Dispatch<React.SetStateAction<Uint8Array | null>>
+  let set_raw_bytes_b: React.Dispatch<React.SetStateAction<Uint8Array | null>>
+  let set_scale_type: React.Dispatch<React.SetStateAction<ScaleType>>
+  let set_selected_countries: React.Dispatch<React.SetStateAction<CountryFeature[]>>
+  let set_settings_drawer_open: React.Dispatch<React.SetStateAction<boolean>>
+  let set_sidebar_width: React.Dispatch<React.SetStateAction<number>>
+  let settings_drawer_open: boolean
+  let sidebar_width: number
+
+  //Function body
+  ;[app_mode, set_app_mode] = useState<AppMode>('Single Image')
+  ;[data_format, set_data_format] = useState<DataFormat>('float32')
+  ;[projection, set_projection] = useState<ProjectionType>('Mercator')
+  ;[scale_type, set_scale_type] = useState<ScaleType>('pseudo-log')
+  ;[log_sigma, set_log_sigma] = useState<number>(1.0)
+  ;[color_palette, set_color_palette] = useState<ColorPalette>('Plasma')
+  ;[invert_palette, set_invert_palette] = useState<boolean>(false)
+  ;[bounds_mode, set_bounds_mode] = useState<BoundsMode>('Manual')
+  ;[min_val_override, set_min_val_override] = useState<string>('')
+  ;[max_val_override, set_max_val_override] = useState<string>('')
+  ;[percentile_list, set_percentile_list] = useState<string>(
     MAP_CONFIG.defaultPercentileBreaks || '0, 1, 5, 25, 50, 75, 95, 99, 100'
   )
-  const [absoluteBreaks, setAbsoluteBreaks] = useState<string>('0, 10, 50, 100, 500, 1000')
-  const [legendTitle, setLegendTitle] = useState<string>('Value')
-  const [legendSubtitle, setLegendSubtitle] = useState<string>('')
-  const [opacity, setOpacity] = useState<number>(0.85)
+  ;[absolute_breaks, set_absolute_breaks] = useState<string>('0, 10, 50, 100, 500, 1000')
+  ;[legend_title, set_legend_title] = useState<string>('Value')
+  ;[legend_subtitle, set_legend_subtitle] = useState<string>('')
+  ;[opacity, set_opacity] = useState<number>(0.85)
 
-  // 3D Heightmap, Proportional Circles & Binning
-  const [binningConfig, setBinningConfig] = useState<BinningConfig>({
+  ;[binning_config, set_binning_config] = useState<BinningConfig>({
     enabled: false,
-    width: 720,
     height: 360,
     method: 'average',
+    width: 720,
   })
-  const [heightmapConfig, setHeightmapConfig] = useState<HeightmapConfig>({
-    enabled: false,
+  ;[heightmap_config, set_heightmap_config] = useState<HeightmapConfig>({
+    blendWeight: 0.5,
     elevationScale: 800000,
+    enabled: false,
+    heightScaleMode: 'linear',
     opacity: 0.9,
     opacityByPercentile: false,
     opacityByPercentileStrength: 1.0,
     resolutionArcmin: 60,
-    heightScaleMode: 'linear',
-    blendWeight: 0.5,
   })
-  const [sidebarWidth, setSidebarWidth] = useState<number>(336)
-  const [colourbarWidth, setColourbarWidth] = useState<number>(336)
-  const [infoPanelOpen, setInfoPanelOpen] = useState<boolean>(false)
-  const [circleOverlayConfig, setCircleOverlayConfig] = useState<CircleOverlayConfig>({
-    enabled: false,
-    percentileCutoff: 99,
+  ;[sidebar_width, set_sidebar_width] = useState<number>(336)
+  ;[colourbar_width, set_colourbar_width] = useState<number>(336)
+  ;[info_panel_open, set_info_panel_open] = useState<boolean>(false)
+  ;[circle_overlay_config, set_circle_overlay_config] = useState<CircleOverlayConfig>({
     baseRadius: 1.0,
-    strokeWidth: 2,
+    enabled: false,
     haloWidth: 1,
+    percentileCutoff: 99,
+    strokeWidth: 2,
   })
 
-  // Composable & Reorderable Mapmodes stack initialized from MAPMODES_CONFIG (mapmodes.json5)
-  const [mapModes, setMapModes] = useState<MapModeItem[]>(() =>
-    MAPMODES_CONFIG.modes.map((m) => ({
-      id: m.id,
-      label: m.label,
-      active: m.active ?? false,
+  ;[map_modes, set_map_modes] = useState<MapModeItem[]>(() =>
+    MAPMODES_CONFIG.modes.map((arg0_m) => ({
+      active: arg0_m.active ?? false,
+      id: arg0_m.id,
+      label: arg0_m.label,
     }))
   )
 
-  // Top right view panel for analytics & settings drawer
-  const [analyticsOpen, setAnalyticsOpen] = useState<boolean>(false)
-  const [settingsDrawerOpen, setSettingsDrawerOpen] = useState<boolean>(false)
+  ;[analytics_open, set_analytics_open] = useState<boolean>(false)
+  ;[settings_drawer_open, set_settings_drawer_open] = useState<boolean>(false)
+  ;[raster_version, set_raster_version] = useState<number>(0)
+  ;[raw_bytes_a, set_raw_bytes_a] = useState<Uint8Array | null>(null)
+  ;[raw_bytes_b, set_raw_bytes_b] = useState<Uint8Array | null>(null)
+  ;[raster_a, set_raster_a] = useState<DecodedRaster | null>(null)
+  ;[raster_b, set_raster_b] = useState<DecodedRaster | null>(null)
+  ;[active_file_name, set_active_file_name] = useState<string>('')
+  ;[diff_name_a, set_diff_name_a] = useState<string>('')
+  ;[diff_name_b, set_diff_name_b] = useState<string>('')
+  ;[selected_countries, set_selected_countries] = useState<CountryFeature[]>([])
+  ;[hovered_country, set_hovered_country] = useState<CountryFeature | null>(null)
+  ;[countries_mode, set_countries_mode] = useState<boolean>(false)
 
-  // Raster version key to force synchronized reflow and clear stale caches
-  const [rasterVersion, setRasterVersion] = useState<number>(0)
+  deferred_selected_countries = useDeferredValue(selected_countries)
 
-  // Raw Uint8Arrays for fast format re-decoding
-  const [rawBytesA, setRawBytesA] = useState<Uint8Array | null>(null)
-  const [rawBytesB, setRawBytesB] = useState<Uint8Array | null>(null)
-
-  // Loaded Raster States
-  const [rasterA, setRasterA] = useState<DecodedRaster | null>(null)
-  const [rasterB, setRasterB] = useState<DecodedRaster | null>(null)
-  const [activeFileName, setActiveFileName] = useState<string>('')
-  const [diffNameA, setDiffNameA] = useState<string>('')
-  const [diffNameB, setDiffNameB] = useState<string>('')
-
-  // Multi-Country Selection and Countries Mode
-  const [selectedCountries, setSelectedCountries] = useState<CountryFeature[]>([])
-  const [hoveredCountry, setHoveredCountry] = useState<CountryFeature | null>(null)
-  const [countriesMode, setCountriesMode] = useState<boolean>(false)
-
-  // Asynchronous / deferred values for non-blocking UI reflows
-  const deferredSelectedCountries = useDeferredValue(selectedCountries)
-
-  // Re-decode when user changes format (float32 <-> int32)
   useEffect(() => {
     let cancelled = false
-    async function redecode() {
-      if (rawBytesA) {
-        const decodedA = await decodeRawGeoPngBufferAsync(rawBytesA, dataFormat)
-        if (!cancelled) setRasterA(decodedA)
+    let redecode = async function () {
+      if (raw_bytes_a) {
+        let decoded_a = await decodeRawGeoPngBufferAsync(raw_bytes_a, data_format)
+        if (!cancelled)
+          set_raster_a(decoded_a)
       }
-      if (rawBytesB) {
-        const decodedB = await decodeRawGeoPngBufferAsync(rawBytesB, dataFormat)
-        if (!cancelled) setRasterB(decodedB)
+      if (raw_bytes_b) {
+        let decoded_b = await decodeRawGeoPngBufferAsync(raw_bytes_b, data_format)
+        if (!cancelled)
+          set_raster_b(decoded_b)
       }
-      if (!cancelled) setRasterVersion((v) => v + 1)
+      if (!cancelled)
+        set_raster_version((arg0_v) => arg0_v + 1)
     }
     redecode()
     return () => {
       cancelled = true
     }
-  }, [dataFormat])
+  }, [data_format])
 
-  // File Uploads
-  const handleFileUpload = useCallback(
-    async (file: File, target: 'single' | 'diff_a' | 'diff_b') => {
+  handle_file_upload = useCallback(
+    async function (arg0_file: File, arg1_target: 'single' | 'diff_a' | 'diff_b') {
+      let file = arg0_file
+      let target = arg1_target
       try {
-        const buffer = await file.arrayBuffer()
-        const uint8 = new Uint8Array(buffer)
-        const decoded = await decodeRawGeoPngBufferAsync(uint8, dataFormat)
+        let buffer = await file.arrayBuffer()
+        let uint8 = new Uint8Array(buffer)
+        let decoded = await decodeRawGeoPngBufferAsync(uint8, data_format)
 
         if (target === 'single') {
-          setRawBytesA(uint8)
-          setRasterA(decoded)
-          setActiveFileName(file.name)
+          set_raw_bytes_a(uint8)
+          set_raster_a(decoded)
+          set_active_file_name(file.name)
         } else if (target === 'diff_a') {
-          setRawBytesA(uint8)
-          setRasterA(decoded)
-          setDiffNameA(file.name)
+          set_raw_bytes_a(uint8)
+          set_raster_a(decoded)
+          set_diff_name_a(file.name)
         } else if (target === 'diff_b') {
-          setRawBytesB(uint8)
-          setRasterB(decoded)
-          setDiffNameB(file.name)
+          set_raw_bytes_b(uint8)
+          set_raster_b(decoded)
+          set_diff_name_b(file.name)
         }
-        setRasterVersion((v) => v + 1)
-      } catch (err) {
-        console.error('Failed to load GeoPNG file:', err)
-        alert(`Could not decode GeoPNG file: ${(err as Error).message}`)
+        set_raster_version((arg0_v) => arg0_v + 1)
+      } catch (arg0_err) {
+        console.error('Failed to load GeoPNG file:', arg0_err)
       }
     },
-    [dataFormat]
+    [data_format]
   )
 
-  const handleForceRefreshAnalytics = useCallback(() => {
-    setRasterVersion((v) => v + 1)
+  handle_force_refresh_analytics = useCallback(() => {
+    set_raster_version((arg0_v) => arg0_v + 1)
   }, [])
 
-  // Determine active raw raster
-  const activeRaster = useMemo<DecodedRaster | null>(() => {
-    if (appMode === 'Single Image') {
-      return rasterA
-    } else {
-      if (rasterA && rasterB) {
-        return computeRasterDifference(rasterA, rasterB)
-      }
-      return rasterA
-    }
-  }, [appMode, rasterA, rasterB])
+  active_raster = useMemo<DecodedRaster | null>(() => {
+    if (app_mode === 'Single Image')
+      return raster_a
+    if (raster_a && raster_b)
+      return computeRasterDifference(raster_a, raster_b)
+    return raster_a
+  }, [app_mode, raster_a, raster_b])
 
-  // Downsampled / Binned raster if binning enabled
-  const displayRaster = useMemo<DecodedRaster | null>(() => {
-    if (!activeRaster) return null
-    if (!binningConfig.enabled) return activeRaster
+  display_raster = useMemo<DecodedRaster | null>(() => {
+    if (!active_raster)
+      return null
+    if (!binning_config.enabled)
+      return active_raster
     try {
       return createBinnedRaster(
-        activeRaster,
-        binningConfig.width,
-        binningConfig.height,
-        binningConfig.method
+        active_raster,
+        binning_config.width,
+        binning_config.height,
+        binning_config.method
       )
-    } catch (e) {
-      console.error('Failed to bin raster:', e)
-      return activeRaster
+    } catch (arg0_e) {
+      console.error('Failed to bin raster:', arg0_e)
+      return active_raster
     }
-  }, [activeRaster, binningConfig])
+  }, [active_raster, binning_config])
 
-  // Visual Bounds Calculation (Manual, Percentile, or Absolute)
-  const { minVal, maxVal, breaks } = useMemo(() => {
-    const r = displayRaster || activeRaster
-    if (!r) {
-      return { minVal: 0, maxVal: 1, breaks: [] }
-    }
+  let { breaks, maxVal: max_val, minVal: min_val } = useMemo(() => {
+    let r = display_raster || active_raster
+    if (!r)
+      return { breaks: [], maxVal: 1, minVal: 0 }
 
-    if (boundsMode === 'Percentile') {
-      const parts = percentileList
+    if (bounds_mode === 'Percentile') {
+      let parts = percentile_list
         .split(',')
-        .map((s) => parseFloat(s.trim()))
-        .filter((n) => !Number.isNaN(n))
-        .map((p) => p / 100)
+        .map((arg0_s) => parseFloat(arg0_s.trim()))
+        .filter((arg0_n) => !Number.isNaN(arg0_n))
+        .map((arg0_p) => arg0_p/100)
 
       if (parts.length > 0) {
-        const qBreaks = computeQuantiles(r.data, parts)
-        const pMin = Math.min(...qBreaks)
-        const pMax = Math.max(...qBreaks)
-        return { minVal: pMin, maxVal: pMax, breaks: qBreaks }
+        let q_breaks = computeQuantiles(r.data, parts)
+        let p_max = Math.max(...q_breaks)
+        let p_min = Math.min(...q_breaks)
+        return { breaks: q_breaks, maxVal: p_max, minVal: p_min }
       }
-    } else if (boundsMode === 'Absolute') {
-      const parts = absoluteBreaks
+    } else if (bounds_mode === 'Absolute') {
+      let parts = absolute_breaks
         .split(',')
-        .map((s) => parseFloat(s.trim()))
-        .filter((n) => !Number.isNaN(n))
-        .sort((a, b) => a - b)
+        .map((arg0_s) => parseFloat(arg0_s.trim()))
+        .filter((arg0_n) => !Number.isNaN(arg0_n))
+        .sort((arg0_a, arg0_b) => arg0_a - arg0_b)
 
       if (parts.length >= 2) {
         return {
-          minVal: parts[0],
-          maxVal: parts[parts.length - 1],
           breaks: parts,
+          maxVal: parts[parts.length - 1],
+          minVal: parts[0],
         }
       }
     }
 
-    const parsedMin = minValOverride !== '' ? parseFloat(minValOverride) : r.min
-    const parsedMax = maxValOverride !== '' ? parseFloat(maxValOverride) : r.max
+    let parsed_max = max_val_override !== '' ? parseFloat(max_val_override) : r.max
+    let parsed_min = min_val_override !== '' ? parseFloat(min_val_override) : r.min
 
-    const safeMin = Number.isFinite(parsedMin) ? parsedMin : r.min
-    const safeMax = Number.isFinite(parsedMax) ? parsedMax : r.max
+    let safe_max = Number.isFinite(parsed_max) ? parsed_max : r.max
+    let safe_min = Number.isFinite(parsed_min) ? parsed_min : r.min
 
-    return { minVal: safeMin, maxVal: safeMax, breaks: [] }
-  }, [displayRaster, activeRaster, boundsMode, percentileList, absoluteBreaks, minValOverride, maxValOverride])
+    return { breaks: [], maxVal: safe_max, minVal: safe_min }
+  }, [display_raster, active_raster, bounds_mode, percentile_list, absolute_breaks, min_val_override, max_val_override])
 
-  // Multi-country toggle handler (immediate UI response)
-  const handleToggleCountry = useCallback((c: CountryFeature) => {
-    setSelectedCountries((prev) => {
-      const exists = prev.some(
-        (x) =>
-          (x.properties.iso_a3 && x.properties.iso_a3 !== '-99' && x.properties.iso_a3 === c.properties.iso_a3) ||
-          x.properties.name === c.properties.name
+  handle_toggle_country = useCallback((arg0_c: CountryFeature) => {
+    let c = arg0_c
+    set_selected_countries((arg0_prev) => {
+      let exists = arg0_prev.some(
+        (arg0_x) =>
+          (arg0_x.properties.iso_a3 && arg0_x.properties.iso_a3 !== '-99' && arg0_x.properties.iso_a3 === c.properties.iso_a3) ||
+          arg0_x.properties.name === c.properties.name
       )
       if (exists) {
-        return prev.filter(
-          (x) =>
+        return arg0_prev.filter(
+          (arg0_x) =>
             !(
-              (x.properties.iso_a3 && x.properties.iso_a3 !== '-99' && x.properties.iso_a3 === c.properties.iso_a3) ||
-              x.properties.name === c.properties.name
+              (arg0_x.properties.iso_a3 && arg0_x.properties.iso_a3 !== '-99' && arg0_x.properties.iso_a3 === c.properties.iso_a3) ||
+              arg0_x.properties.name === c.properties.name
             )
         )
-      } else {
-        return [...prev, c]
       }
+      return [...arg0_prev, c]
     })
   }, [])
 
-  const handleClearCountries = useCallback(() => {
-    setSelectedCountries([])
+  handle_clear_countries = useCallback(() => {
+    set_selected_countries([])
   }, [])
 
-  const handleSelectCountry = useCallback(
-    (c: CountryFeature | null) => {
-      if (!c) setSelectedCountries([])
-      else handleToggleCountry(c)
+  handle_select_country = useCallback(
+    (arg0_c: CountryFeature | null) => {
+      let c = arg0_c
+      if (!c) {
+        set_selected_countries([])
+      } else {
+        handle_toggle_country(c)
+      }
     },
-    [handleToggleCountry]
+    [handle_toggle_country]
   )
 
-  // Synchronize countriesMode, heightmapConfig, circleOverlayConfig with mapModes stack
-  const handleToggleCountriesMode = useCallback((enabled: boolean) => {
-    setCountriesMode(enabled)
-    setMapModes((prev) =>
-      prev.map((m) => (m.id === 'country_analysis' ? { ...m, active: enabled } : m))
+  handle_toggle_countries_mode = useCallback((arg0_enabled: boolean) => {
+    let enabled = arg0_enabled
+    set_countries_mode(enabled)
+    set_map_modes((arg0_prev) =>
+      arg0_prev.map((arg0_m) => (arg0_m.id === 'country_analysis' ? { ...arg0_m, active: enabled } : arg0_m))
     )
   }, [])
 
-  const handleToggleMapMode = useCallback((id: MapModeId) => {
-    setMapModes((prev) => {
-      const updated = prev.map((m) => (m.id === id ? { ...m, active: !m.active } : m))
-      const countryActive = updated.find((m) => m.id === 'country_analysis')?.active ?? false
-      const spikeActive = updated.find((m) => m.id === 'spike_map')?.active ?? false
-      const circleActive = updated.find((m) => m.id === 'circle_sizing')?.active ?? false
-      setCountriesMode(countryActive)
-      setHeightmapConfig((h) => ({ ...h, enabled: spikeActive }))
-      setCircleOverlayConfig((c) => ({ ...c, enabled: circleActive }))
+  handle_toggle_map_mode = useCallback((arg0_id: MapModeId) => {
+    let id = arg0_id
+    set_map_modes((arg0_prev) => {
+      let circle_active: boolean
+      let country_active: boolean
+      let spike_active: boolean
+      let updated = arg0_prev.map((arg0_m) => (arg0_m.id === id ? { ...arg0_m, active: !arg0_m.active } : arg0_m))
+
+      country_active = updated.find((arg0_m) => arg0_m.id === 'country_analysis')?.active ?? false
+      spike_active = updated.find((arg0_m) => arg0_m.id === 'spike_map')?.active ?? false
+      circle_active = updated.find((arg0_m) => arg0_m.id === 'circle_sizing')?.active ?? false
+
+      set_countries_mode(country_active)
+      set_heightmap_config((arg0_h) => ({ ...arg0_h, enabled: spike_active }))
+      set_circle_overlay_config((arg0_c) => ({ ...arg0_c, enabled: circle_active }))
       return updated
     })
   }, [])
 
-  const handleReorderMapModes = useCallback((newModes: MapModeItem[]) => {
-    setMapModes(newModes)
+  handle_reorder_map_modes = useCallback((arg0_new_modes: MapModeItem[]) => {
+    let new_modes = arg0_new_modes
+    set_map_modes(new_modes)
   }, [])
 
-  const handleUpdateBreaks = useCallback((newBreaks: number[]) => {
-    setBoundsMode('Absolute')
-    setAbsoluteBreaks(newBreaks.map((n) => (Math.round(n * 1000) / 1000).toString()).join(', '))
+  handle_update_breaks = useCallback((arg0_new_breaks: number[]) => {
+    let new_breaks = arg0_new_breaks
+    set_bounds_mode('Absolute')
+    set_absolute_breaks(new_breaks.map((arg0_n) => (Math.round(arg0_n*1000)/1000).toString()).join(', '))
   }, [])
 
-  // Active countries: prioritize selected countries, fallback to hovered country in countriesMode
-  const activeCountries = useMemo<CountryFeature[]>(() => {
-    if (selectedCountries.length > 0) return selectedCountries
-    if (countriesMode && hoveredCountry) return [hoveredCountry]
+  active_countries = useMemo<CountryFeature[]>(() => {
+    if (selected_countries.length > 0)
+      return selected_countries
+    if (countries_mode && hovered_country)
+      return [hovered_country]
     return []
-  }, [countriesMode, selectedCountries, hoveredCountry])
+  }, [countries_mode, selected_countries, hovered_country])
 
-  const isHoverOnly = selectedCountries.length === 0 && Boolean(hoveredCountry)
+  is_hover_only = selected_countries.length === 0 && Boolean(hovered_country)
 
-  // Asynchronous background Web Worker for heavy polygon binning & country stats
-  const { countryStats, isCalculatingStats } = useCountryStatsAsync({
-    activeRaster,
-    activeCountries,
-    isHoverOnly,
+  let { countryStats: country_stats, isCalculatingStats: is_calculating_stats } = useCountryStatsAsync({
+    activeCountries: active_countries,
+    activeRaster: active_raster,
+    isHoverOnly: is_hover_only,
   })
 
-  // Render raster canvas (uses downsampled raster if binning enabled)
-  const { renderedCanvas, rasterBounds } = useMemo(() => {
-    const r = displayRaster || activeRaster
+  let { rasterBounds: raster_bounds, renderedCanvas: rendered_canvas } = useMemo(() => {
+    let r = display_raster || active_raster
     if (!r) {
       return {
-        renderedCanvas: null,
         rasterBounds: (projection === 'Mercator'
           ? [-180, -85.051129, 180, 85.051129]
           : projection === 'Globe'
           ? [-180, -89.9, 180, 89.9]
           : [-180, -90, 180, 90]) as [number, number, number, number],
+        renderedCanvas: null,
       }
     }
 
-    // In Countries Mode with active countries, isolate the raster pixels to the country outline
-    // Raster isolation applies once countryStats calculation is ready
-    const isCountryIsolated = Boolean(
-      countriesMode &&
-        activeCountries.length > 0 &&
-        countryStats &&
-        countryStats.validCount > 0 &&
-        Number.isFinite(countryStats.min) &&
-        Number.isFinite(countryStats.max)
+    let is_country_isolated = Boolean(
+      countries_mode &&
+        active_countries.length > 0 &&
+        country_stats &&
+        country_stats.validCount > 0 &&
+        Number.isFinite(country_stats.min) &&
+        Number.isFinite(country_stats.max)
     )
 
-    const effectiveMin = isCountryIsolated ? countryStats!.min : minVal
-    const effectiveMax = isCountryIsolated ? countryStats!.max : maxVal
+    let effective_max = is_country_isolated ? country_stats!.max : max_val
+    let effective_min = is_country_isolated ? country_stats!.min : min_val
 
-    const { canvas } = renderRasterToCanvas(
+    let { canvas } = renderRasterToCanvas(
       r.data,
       r.width,
       r.height,
       {
-        palette: colorPalette,
-        invertPalette,
-        scaleType,
-        logSigma,
-        minVal: effectiveMin,
-        maxVal: effectiveMax,
+        activeCountries: is_country_isolated ? active_countries : null,
         breaks,
+        invertPalette: invert_palette,
+        logSigma: log_sigma,
+        maxVal: effective_max,
+        minVal: effective_min,
+        palette: color_palette,
         projection,
-        activeCountries: isCountryIsolated ? activeCountries : null,
+        scaleType: scale_type,
       }
     )
 
-    // Bounds with pixel offset corrections
-    const pixelHeight = 180 / r.height
-    const pixelOffset = getPixelOffset(projection)
-    const offset = pixelOffset * pixelHeight
-    const finalBounds: [number, number, number, number] = [-180, -90 + offset, 180, 90 + offset]
+    let pixel_height = 180/r.height
+    let pixel_offset = getPixelOffset(projection)
+    let offset = pixel_offset*pixel_height
+    let final_bounds: [number, number, number, number] = [-180, -90 + offset, 180, 90 + offset]
 
-    return { renderedCanvas: canvas, rasterBounds: finalBounds }
+    return { rasterBounds: final_bounds, renderedCanvas: canvas }
   }, [
-    displayRaster,
-    activeRaster,
-    colorPalette,
-    invertPalette,
-    scaleType,
-    logSigma,
-    minVal,
-    maxVal,
+    display_raster,
+    active_raster,
+    color_palette,
+    invert_palette,
+    scale_type,
+    log_sigma,
+    min_val,
+    max_val,
     breaks,
     projection,
-    countriesMode,
-    activeCountries,
-    countryStats,
+    countries_mode,
+    active_countries,
+    country_stats,
   ])
 
+  //Return statement
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background text-foreground font-sans">
-      {/* Main Map Viewer (Full viewport scene extending behind floating sidebar) */}
+      {/* Main Map Viewer */}
       <div className="absolute inset-0 w-full h-full overflow-hidden">
         <MapViewer
-          raster={displayRaster || activeRaster}
-          renderedCanvas={renderedCanvas}
-          rasterBounds={rasterBounds}
+          raster={display_raster || active_raster}
+          renderedCanvas={rendered_canvas}
+          rasterBounds={raster_bounds}
           projection={projection}
-          setProjection={setProjection}
+          setProjection={set_projection}
           opacity={opacity}
-          palette={colorPalette}
-          invertPalette={invertPalette}
-          minVal={minVal}
-          maxVal={maxVal}
-          legendTitle={legendTitle}
-          legendSubtitle={legendSubtitle}
-          scaleType={scaleType}
-          logSigma={logSigma}
+          palette={color_palette}
+          invertPalette={invert_palette}
+          minVal={min_val}
+          maxVal={max_val}
+          legendTitle={legend_title}
+          legendSubtitle={legend_subtitle}
+          scaleType={scale_type}
+          logSigma={log_sigma}
           breaks={breaks}
-          onUpdateBreaks={handleUpdateBreaks}
-          mapModes={mapModes}
-          onToggleMapMode={handleToggleMapMode}
-          onReorderMapModes={handleReorderMapModes}
-          heightmapConfig={heightmapConfig}
-          setHeightmapConfig={setHeightmapConfig}
-          circleOverlayConfig={circleOverlayConfig}
-          setCircleOverlayConfig={setCircleOverlayConfig}
-          analyticsOpen={analyticsOpen}
-          onToggleAnalytics={() => setAnalyticsOpen((prev) => !prev)}
-          selectedCountry={selectedCountries[0] || null}
-          selectedCountries={selectedCountries}
-          deferredSelectedCountries={deferredSelectedCountries}
-          isCalculatingStats={isCalculatingStats}
-          onSelectCountry={handleSelectCountry}
-          onToggleCountry={handleToggleCountry}
-          onClearCountries={handleClearCountries}
-          countriesMode={countriesMode}
-          onToggleCountriesMode={handleToggleCountriesMode}
-          hoveredCountry={hoveredCountry}
-          onHoverCountry={setHoveredCountry}
-          countryStats={countryStats}
-          settingsDrawerOpen={settingsDrawerOpen}
-          onToggleSettingsDrawer={setSettingsDrawerOpen}
-          sidebarWidth={sidebarWidth}
-          colourbarWidth={colourbarWidth}
-          onResizeColourbarWidth={setColourbarWidth}
-          infoPanelOpen={infoPanelOpen}
-          onToggleInfoPanel={() => setInfoPanelOpen((prev) => !prev)}
-          onCloseInfoPanel={() => setInfoPanelOpen(false)}
+          onUpdateBreaks={handle_update_breaks}
+          mapModes={map_modes}
+          onToggleMapMode={handle_toggle_map_mode}
+          onReorderMapModes={handle_reorder_map_modes}
+          heightmapConfig={heightmap_config}
+          setHeightmapConfig={set_heightmap_config}
+          circleOverlayConfig={circle_overlay_config}
+          setCircleOverlayConfig={set_circle_overlay_config}
+          analyticsOpen={analytics_open}
+          onToggleAnalytics={() => set_analytics_open((arg0_prev) => !arg0_prev)}
+          selectedCountry={selected_countries[0] || null}
+          selectedCountries={selected_countries}
+          deferredSelectedCountries={deferred_selected_countries}
+          isCalculatingStats={is_calculating_stats}
+          onSelectCountry={handle_select_country}
+          onToggleCountry={handle_toggle_country}
+          onClearCountries={handle_clear_countries}
+          countriesMode={countries_mode}
+          onToggleCountriesMode={handle_toggle_countries_mode}
+          hoveredCountry={hovered_country}
+          onHoverCountry={set_hovered_country}
+          countryStats={country_stats}
+          settingsDrawerOpen={settings_drawer_open}
+          onToggleSettingsDrawer={set_settings_drawer_open}
+          sidebarWidth={sidebar_width}
+          colourbarWidth={colourbar_width}
+          onResizeColourbarWidth={set_colourbar_width}
+          infoPanelOpen={info_panel_open}
+          onToggleInfoPanel={() => set_info_panel_open((arg0_prev) => !arg0_prev)}
+          onCloseInfoPanel={() => set_info_panel_open(false)}
         />
 
         {/* ECharts Analytical View Panel (Top Right) */}
         <AnalyticsDrawer
-          isOpen={analyticsOpen}
-          onToggleOpen={() => setAnalyticsOpen(false)}
-          raster={displayRaster || activeRaster}
-          scaleType={scaleType}
-          logSigma={logSigma}
-          minOverride={minValOverride !== '' ? parseFloat(minValOverride) : undefined}
-          maxOverride={maxValOverride !== '' ? parseFloat(maxValOverride) : undefined}
-          selectedCountry={selectedCountries[0] || null}
-          selectedCountries={selectedCountries}
-          onSelectCountry={handleSelectCountry}
-          onClearCountries={handleClearCountries}
-          countryStats={countryStats}
-          isCalculatingStats={isCalculatingStats}
-          isSettingsDrawerOpen={settingsDrawerOpen}
-          rasterKey={rasterVersion}
-          onForceRefresh={handleForceRefreshAnalytics}
+          isOpen={analytics_open}
+          onToggleOpen={() => set_analytics_open(false)}
+          raster={display_raster || active_raster}
+          scaleType={scale_type}
+          logSigma={log_sigma}
+          minOverride={min_val_override !== '' ? parseFloat(min_val_override) : undefined}
+          maxOverride={max_val_override !== '' ? parseFloat(max_val_override) : undefined}
+          selectedCountry={selected_countries[0] || null}
+          selectedCountries={selected_countries}
+          onSelectCountry={handle_select_country}
+          onClearCountries={handle_clear_countries}
+          countryStats={country_stats}
+          isCalculatingStats={is_calculating_stats}
+          isSettingsDrawerOpen={settings_drawer_open}
+          rasterKey={raster_version}
+          onForceRefresh={handle_force_refresh_analytics}
         />
       </div>
 
       {/* Floating Sidebar Controls Dock */}
       <SidebarControls
-        appMode={appMode}
-        dataFormat={dataFormat}
-        setDataFormat={setDataFormat}
-        scaleType={scaleType}
-        setScaleType={setScaleType}
-        logSigma={logSigma}
-        setLogSigma={setLogSigma}
-        colorPalette={colorPalette}
-        setColorPalette={setColorPalette}
-        invertPalette={invertPalette}
-        setInvertPalette={setInvertPalette}
-        boundsMode={boundsMode}
-        setBoundsMode={setBoundsMode}
-        minValOverride={minValOverride}
-        setMinValOverride={setMinValOverride}
-        maxValOverride={maxValOverride}
-        setMaxValOverride={setMaxValOverride}
-        percentileList={percentileList}
-        setPercentileList={setPercentileList}
-        absoluteBreaks={absoluteBreaks}
-        setAbsoluteBreaks={setAbsoluteBreaks}
-        legendTitle={legendTitle}
-        setLegendTitle={setLegendTitle}
-        legendSubtitle={legendSubtitle}
-        setLegendSubtitle={setLegendSubtitle}
+        appMode={app_mode}
+        dataFormat={data_format}
+        setDataFormat={set_data_format}
+        scaleType={scale_type}
+        setScaleType={set_scale_type}
+        logSigma={log_sigma}
+        setLogSigma={set_log_sigma}
+        colorPalette={color_palette}
+        setColorPalette={set_color_palette}
+        invertPalette={invert_palette}
+        setInvertPalette={set_invert_palette}
+        boundsMode={bounds_mode}
+        setBoundsMode={set_bounds_mode}
+        minValOverride={min_val_override}
+        setMinValOverride={set_min_val_override}
+        maxValOverride={max_val_override}
+        setMaxValOverride={set_max_val_override}
+        percentileList={percentile_list}
+        setPercentileList={set_percentile_list}
+        absoluteBreaks={absolute_breaks}
+        setAbsoluteBreaks={set_absolute_breaks}
+        legendTitle={legend_title}
+        setLegendTitle={set_legend_title}
+        legendSubtitle={legend_subtitle}
+        setLegendSubtitle={set_legend_subtitle}
         opacity={opacity}
-        setOpacity={setOpacity}
-        onFileUpload={handleFileUpload}
-        activeFileName={activeFileName}
-        diffNameA={diffNameA}
-        diffNameB={diffNameB}
-        setAppMode={setAppMode}
-        binningConfig={binningConfig}
-        setBinningConfig={setBinningConfig}
-        mapModes={mapModes}
-        heightmapConfig={heightmapConfig}
-        circleOverlayConfig={circleOverlayConfig}
-        selectedCountries={deferredSelectedCountries}
-        onToggleMapMode={handleToggleMapMode}
-        width={sidebarWidth}
-        onWidthChange={setSidebarWidth}
-        infoPanelOpen={infoPanelOpen}
-        onToggleInfoPanel={() => setInfoPanelOpen((prev) => !prev)}
+        setOpacity={set_opacity}
+        onFileUpload={handle_file_upload}
+        activeFileName={active_file_name}
+        diffNameA={diff_name_a}
+        diffNameB={diff_name_b}
+        setAppMode={set_app_mode}
+        binningConfig={binning_config}
+        setBinningConfig={set_binning_config}
+        mapModes={map_modes}
+        heightmapConfig={heightmap_config}
+        circleOverlayConfig={circle_overlay_config}
+        selectedCountries={deferred_selected_countries}
+        onToggleMapMode={handle_toggle_map_mode}
+        width={sidebar_width}
+        onWidthChange={set_sidebar_width}
+        infoPanelOpen={info_panel_open}
+        onToggleInfoPanel={() => set_info_panel_open((arg0_prev) => !arg0_prev)}
       />
     </div>
   )

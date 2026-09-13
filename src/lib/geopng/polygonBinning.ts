@@ -1,256 +1,166 @@
 import { DecodedRaster } from './types'
 
 export interface CountryProperties {
+  adm0_a3?: string
+  continent?: string
+  iso_a3?: string
   name: string
   name_long?: string
-  iso_a3?: string
-  adm0_a3?: string
   sov_a3?: string
-  continent?: string
   [key: string]: any
 }
 
 export interface CountryFeature {
-  type: 'Feature'
-  properties: CountryProperties
-  geometry: {
-    type: 'Polygon' | 'MultiPolygon'
-    coordinates: any
-  }
   bbox?: [number, number, number, number]
+  geometry: {
+    coordinates: any
+    type: 'Polygon' | 'MultiPolygon'
+  }
+  properties: CountryProperties
+  type: 'Feature'
 }
 
 export interface CountryStats {
-  name: string
-  isoA3: string
-  totalCells: number
-  validCount: number
-  total: number // Sum of all valid cells
-  min: number
-  max: number
-  mean: number
-  stdDev: number
-  median: number
-  quantiles: Record<number, number>
   histogram: {
     bins: number[]
     counts: number[]
-    min: number
     max: number
+    min: number
   }
+  isoA3: string
+  max: number
+  mean: number
+  median: number
+  min: number
+  name: string
+  quantiles: Record<number, number>
+  stdDev: number
+  total: number //Sum of all valid cells
+  totalCells: number
+  validCount: number
 }
 
-let cachedCountriesGeoJson: { type: string; features: CountryFeature[] } | null = null
-
-/**
- * Loads and caches NaturalEarth countries GeoJSON.
- */
-export async function loadCountriesGeoJson(): Promise<CountryFeature[]> {
-  if (cachedCountriesGeoJson) {
-    return cachedCountriesGeoJson.features
-  }
-
-  try {
-    const res = await fetch('/data/ne_50m_admin_0_countries.geojson')
-    if (!res.ok) throw new Error(`HTTP ${res.status} loading countries GeoJSON`)
-    const data = await res.json()
-
-    // Pre-calculate 2D bounding boxes and normalize properties for ultra-fast point/raster queries
-    for (const feat of data.features) {
-      feat.bbox = computeGeometryBBox(feat.geometry)
-      const p = feat.properties
-      p.name = p.name || p.NAME || p.ADMIN || p.NAME_LONG || p.name_long || 'Unknown'
-      p.name_long = p.name_long || p.NAME_LONG || p.name
-      const rawAdm = p.ADM0_A3 || p.adm0_a3 || ''
-      const rawIso = p.ISO_A3 || p.iso_a3 || ''
-      p.adm0_a3 = rawAdm || (rawIso && rawIso !== '-99' ? rawIso : '') || p.name
-      p.iso_a3 = (rawIso && rawIso !== '-99') ? rawIso : p.adm0_a3
-    }
-
-    cachedCountriesGeoJson = data
-    return data.features
-  } catch (err) {
-    console.error('Failed to load countries GeoJSON:', err)
-    return []
-  }
-}
-
-export function computeGeometryBBox(geometry: any): [number, number, number, number] {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-  const processCoords = (coords: any) => {
-    if (typeof coords[0] === 'number') {
-      const [x, y] = coords
-      if (x < minX) minX = x
-      if (y < minY) minY = y
-      if (x > maxX) maxX = x
-      if (y > maxY) maxY = y
-    } else {
-      for (const c of coords) processCoords(c)
-    }
-  }
-  processCoords(geometry.coordinates)
-  return [minX, minY, maxX, maxY]
-}
-
-/**
- * Checks if a point [lng, lat] is inside a polygon ring using ray casting.
- */
-export function pointInRing(x: number, y: number, ring: number[][]): boolean {
-  let inside = false
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const xi = ring[i][0], yi = ring[i][1]
-    const xj = ring[j][0], yj = ring[j][1]
-    const intersect = ((yi > y) !== (yj > y)) && (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi)
-    if (intersect) inside = !inside
-  }
-  return inside
-}
-
-/**
- * Tests whether a point [lng, lat] is inside a GeoJSON geometry (Polygon or MultiPolygon with holes).
- */
-export function isPointInGeometry(lng: number, lat: number, geometry: any): boolean {
-  if (geometry.type === 'Polygon') {
-    const rings = geometry.coordinates as number[][][]
-    if (!pointInRing(lng, lat, rings[0])) return false
-    for (let i = 1; i < rings.length; i++) {
-      if (pointInRing(lng, lat, rings[i])) return false // In hole
-    }
-    return true
-  } else if (geometry.type === 'MultiPolygon') {
-    const polygons = geometry.coordinates as number[][][][]
-    for (const poly of polygons) {
-      if (pointInRing(lng, lat, poly[0])) {
-        let inHole = false
-        for (let i = 1; i < poly.length; i++) {
-          if (pointInRing(lng, lat, poly[i])) {
-            inHole = true
-            break
-          }
-        }
-        if (!inHole) return true
-      }
-    }
-    return false
-  }
-  return false
-}
-
-/**
- * Finds the country feature containing [lng, lat].
- */
-export function findCountryAtLngLat(lng: number, lat: number, features: CountryFeature[]): CountryFeature | null {
-  for (const feat of features) {
-    if (feat.bbox) {
-      const [minX, minY, maxX, maxY] = feat.bbox
-      if (lng < minX || lng > maxX || lat < minY || lat > maxY) {
-        continue
-      }
-    }
-    if (isPointInGeometry(lng, lat, feat.geometry)) {
-      return feat
-    }
-  }
-  return null
-}
+let cached_countries_geojson: { features: CountryFeature[]; type: string } | null = null
+let stats_cache = new Map<string, CountryStats>()
+let last_cached_raster: DecodedRaster | null = null
 
 /**
  * High-performance scanline polygon binning of a GeoPNG raster.
- * Extracts all raster cells falling within the polygon boundaries and computes
- * summary statistics, quantiles, and histogram.
+ *
+ * @param {DecodedRaster} arg0_raster
+ * @param {CountryFeature} arg1_feature
+ *
+ * @returns {CountryStats}
  */
-export function binRasterByCountry(
-  raster: DecodedRaster,
-  feature: CountryFeature
+export function binRasterByCountry (
+  arg0_raster: DecodedRaster,
+  arg1_feature: CountryFeature
 ): CountryStats {
-  const name = feature.properties.name || feature.properties.name_long || 'Unknown'
-  const isoA3 = feature.properties.iso_a3 || feature.properties.adm0_a3 || feature.properties.sov_a3 || ''
+  //Convert from parameters
+  let feature = arg1_feature
+  let raster = arg0_raster
 
-  const geometry = feature.geometry
-  const polygons: number[][][][] =
+  //Declare local instance variables
+  let bin_count = 60
+  let bin_counts: number[] = new Array(bin_count).fill(0)
+  let bin_edges: number[] = []
+  let bin_width: number
+  let geometry = feature.geometry
+  let h = raster.height
+  let iso_a3 = feature.properties.iso_a3 || feature.properties.adm0_a3 || feature.properties.sov_a3 || ''
+  let max = -Infinity
+  let mean: number
+  let median = 0
+  let min = Infinity
+  let name = feature.properties.name || feature.properties.name_long || 'Unknown'
+  let polygons: number[][][][] =
     geometry.type === 'Polygon'
       ? [geometry.coordinates as number[][][]]
       : (geometry.coordinates as number[][][][])
-
-  const W = raster.width
-  const H = raster.height
-
-  let min = Infinity
-  let max = -Infinity
+  let quantiles: Record<number, number> = {}
+  let safe_max: number
+  let safe_min: number
+  let sample_values: number[]
+  let std_dev: number
   let sum = 0
-  let validCount = 0
-  let totalCells = 0
+  let total_cells = 0
+  let valid_count = 0
+  let values: number[] = []
+  let variance_sum = 0
+  let w = raster.width
 
-  // We collect samples for quantile and histogram computation
-  const values: number[] = []
+  //Function body
+  for (let i = 0; i < polygons.length; i++) {
+    let exterior_ring = polygons[i][0]
+    let hole_rings = polygons[i].slice(1)
 
-  for (const poly of polygons) {
-    const exteriorRing = poly[0]
-    const holeRings = poly.slice(1)
+    let p_max_x = -Infinity
+    let p_max_y = -Infinity
+    let p_min_x = Infinity
+    let p_min_y = Infinity
 
-    // Calculate bbox for this specific polygon part
-    let pMinX = Infinity, pMinY = Infinity, pMaxX = -Infinity, pMaxY = -Infinity
-    for (const pt of exteriorRing) {
-      if (pt[0] < pMinX) pMinX = pt[0]
-      if (pt[1] < pMinY) pMinY = pt[1]
-      if (pt[0] > pMaxX) pMaxX = pt[0]
-      if (pt[1] > pMaxY) pMaxY = pt[1]
+    for (let x = 0; x < exterior_ring.length; x++) {
+      let pt = exterior_ring[x]
+      if (pt[0] < p_min_x)
+        p_min_x = pt[0]
+      if (pt[1] < p_min_y)
+        p_min_y = pt[1]
+      if (pt[0] > p_max_x)
+        p_max_x = pt[0]
+      if (pt[1] > p_max_y)
+        p_max_y = pt[1]
     }
 
-    const minRow = Math.max(0, Math.floor(((90 - pMaxY) / 180) * H))
-    const maxRow = Math.min(H - 1, Math.ceil(((90 - pMinY) / 180) * H))
-    const minCol = Math.max(0, Math.floor(((pMinX + 180) / 360) * W))
-    const maxCol = Math.min(W - 1, Math.ceil(((pMaxX + 180) / 360) * W))
+    let max_col = Math.min(w - 1, Math.ceil(((p_max_x + 180)/360)*w))
+    let max_row = Math.min(h - 1, Math.ceil(((90 - p_min_y)/180)*h))
+    let min_col = Math.max(0, Math.floor(((p_min_x + 180)/360)*w))
+    let min_row = Math.max(0, Math.floor(((90 - p_max_y)/180)*h))
 
-    // Scanline rasterization for each row
-    for (let r = minRow; r <= maxRow; r++) {
-      const lat = 90 - ((r + 0.5) / H) * 180
+    for (let r = min_row; r <= max_row; r++) {
+      let lat = 90 - ((r + 0.5)/h)*180
+      let intersections: number[] = []
 
-      // Find all intersections with exterior ring segments
-      const intersections: number[] = []
-      for (let i = 0, j = exteriorRing.length - 1; i < exteriorRing.length; j = i++) {
-        const p1 = exteriorRing[i]
-        const p2 = exteriorRing[j]
+      for (let x = 0, y = exterior_ring.length - 1; x < exterior_ring.length; y = x++) {
+        let p1 = exterior_ring[x]
+        let p2 = exterior_ring[y]
         if ((p1[1] <= lat && p2[1] > lat) || (p2[1] <= lat && p1[1] > lat)) {
-          const t = (lat - p1[1]) / (p2[1] - p1[1])
-          const lng = p1[0] + t * (p2[0] - p1[0])
+          let t = (lat - p1[1])/(p2[1] - p1[1])
+          let lng = p1[0] + t*(p2[0] - p1[0])
           intersections.push(lng)
         }
       }
 
-      if (intersections.length < 2) continue
-      intersections.sort((a, b) => a - b)
+      if (intersections.length < 2)
+        continue
+      intersections.sort((arg0_a, arg0_b) => arg0_a - arg0_b)
 
-      // Traverse pairs of intersections
       for (let k = 0; k < intersections.length - 1; k += 2) {
-        const xStart = intersections[k]
-        const xEnd = intersections[k + 1]
+        let c_end = Math.min(max_col, Math.ceil(((intersections[k + 1] + 180)/360)*w))
+        let c_start = Math.max(min_col, Math.floor(((intersections[k] + 180)/360)*w))
+        let row_offset = r*w
 
-        const cStart = Math.max(minCol, Math.floor(((xStart + 180) / 360) * W))
-        const cEnd = Math.min(maxCol, Math.ceil(((xEnd + 180) / 360) * W))
+        for (let c = c_start; c <= c_end; c++) {
+          let in_hole = false
+          let lng = -180 + ((c + 0.5)/w)*360
 
-        const rowOffset = r * W
-
-        for (let c = cStart; c <= cEnd; c++) {
-          const lng = -180 + ((c + 0.5) / W) * 360
-
-          // Check holes if any
-          let inHole = false
-          for (const hole of holeRings) {
-            if (pointInRing(lng, lat, hole)) {
-              inHole = true
+          for (let z = 0; z < hole_rings.length; z++) {
+            if (pointInRing(lng, lat, hole_rings[z])) {
+              in_hole = true
               break
             }
           }
-          if (inHole) continue
+          if (in_hole)
+            continue
 
-          totalCells++
-          const val = raster.data[rowOffset + c]
+          total_cells++
+          let val = raster.data[row_offset + c]
           if (!Number.isNaN(val) && Number.isFinite(val)) {
-            if (val < min) min = val
-            if (val > max) max = val
+            if (val < min)
+              min = val
+            if (val > max)
+              max = val
             sum += val
-            validCount++
+            valid_count++
             values.push(val)
           }
         }
@@ -258,206 +168,430 @@ export function binRasterByCountry(
     }
   }
 
-  const mean = validCount > 0 ? sum / validCount : 0
+  mean = valid_count > 0 ? sum/valid_count : 0
 
-  // Variance & standard deviation
-  let varianceSum = 0
-  if (validCount > 1) {
-    for (let i = 0; i < values.length; i++) {
-      varianceSum += (values[i] - mean) ** 2
-    }
+  if (valid_count > 1) {
+    for (let i = 0; i < values.length; i++)
+      variance_sum += (values[i] - mean)**2
   }
-  const stdDev = validCount > 1 ? Math.sqrt(varianceSum / (validCount - 1)) : 0
+  std_dev = valid_count > 1 ? Math.sqrt(variance_sum/(valid_count - 1)) : 0
 
-  // Subsample values if excessively large (e.g. > 50,000) for fast quantile calculation
-  let sampleValues = values
+  sample_values = values
   if (values.length > 50000) {
-    const step = Math.ceil(values.length / 50000)
-    sampleValues = []
-    for (let i = 0; i < values.length; i += step) {
-      sampleValues.push(values[i])
-    }
+    let step = Math.ceil(values.length/50000)
+    sample_values = []
+    for (let i = 0; i < values.length; i += step)
+      sample_values.push(values[i])
   }
-  sampleValues.sort((a, b) => a - b)
+  sample_values.sort((arg0_a, arg0_b) => arg0_a - arg0_b)
 
-  const quantiles: Record<number, number> = {}
-  let median = 0
-  if (sampleValues.length > 0) {
-    const pKeys = [0, 5, 10, 25, 50, 75, 90, 95, 100]
-    for (const p of pKeys) {
-      const idx = Math.min(
-        sampleValues.length - 1,
-        Math.max(0, Math.floor((p / 100) * (sampleValues.length - 1)))
+  if (sample_values.length > 0) {
+    let p_keys = [0, 5, 10, 25, 50, 75, 90, 95, 100]
+    for (let i = 0; i < p_keys.length; i++) {
+      let p = p_keys[i]
+      let idx = Math.min(
+        sample_values.length - 1,
+        Math.max(0, Math.floor((p/100)*(sample_values.length - 1)))
       )
-      quantiles[p] = sampleValues[idx]
+      quantiles[p] = sample_values[idx]
     }
     median = quantiles[50] ?? 0
   }
 
-  const safeMin = Number.isFinite(min) ? min : 0
-  const safeMax = Number.isFinite(max) ? max : 1
+  safe_min = Number.isFinite(min) ? min : 0
+  safe_max = Number.isFinite(max) ? max : 1
+  bin_width = (safe_max - safe_min)/bin_count || 1
 
-  // 60-bin histogram
-  const binCount = 60
-  const binEdges: number[] = []
-  const binCounts: number[] = new Array(binCount).fill(0)
-  const binWidth = (safeMax - safeMin) / binCount || 1
+  for (let i = 0; i <= bin_count; i++)
+    bin_edges.push(safe_min + i*bin_width)
 
-  for (let b = 0; b <= binCount; b++) {
-    binEdges.push(safeMin + b * binWidth)
+  for (let i = 0; i < sample_values.length; i++) {
+    let v = sample_values[i]
+    let b_idx = Math.floor((v - safe_min)/bin_width)
+    if (b_idx < 0)
+      b_idx = 0
+    if (b_idx >= bin_count)
+      b_idx = bin_count - 1
+    bin_counts[b_idx]++
   }
 
-  for (let i = 0; i < sampleValues.length; i++) {
-    const v = sampleValues[i]
-    let bIdx = Math.floor((v - safeMin) / binWidth)
-    if (bIdx < 0) bIdx = 0
-    if (bIdx >= binCount) bIdx = binCount - 1
-    binCounts[bIdx]++
-  }
-
+  //Return statement
   return {
-    name,
-    isoA3,
-    totalCells,
-    validCount,
-    total: validCount > 0 ? sum : 0,
-    min: Number.isFinite(min) ? min : 0,
+    histogram: {
+      bins: bin_edges,
+      counts: bin_counts,
+      max: safe_max,
+      min: safe_min,
+    },
+    isoA3: iso_a3,
     max: Number.isFinite(max) ? max : 0,
     mean,
-    stdDev,
     median,
+    min: Number.isFinite(min) ? min : 0,
+    name,
     quantiles,
-    histogram: {
-      bins: binEdges,
-      counts: binCounts,
-      min: safeMin,
-      max: safeMax,
-    },
+    stdDev: std_dev,
+    total: valid_count > 0 ? sum : 0,
+    totalCells: total_cells,
+    validCount: valid_count,
   }
 }
 
-// Global memoization cache for ultra-fast country stats retrieval during hover
-const statsCache = new Map<string, CountryStats>()
-let lastCachedRaster: DecodedRaster | null = null
-
-export function binRasterByCountryMemoized(
-  raster: DecodedRaster,
-  feature: CountryFeature
+/**
+ * Memoized version of binRasterByCountry for rapid hover lookup.
+ *
+ * @param {DecodedRaster} arg0_raster
+ * @param {CountryFeature} arg1_feature
+ *
+ * @returns {CountryStats}
+ */
+export function binRasterByCountryMemoized (
+  arg0_raster: DecodedRaster,
+  arg1_feature: CountryFeature
 ): CountryStats {
-  if (lastCachedRaster !== raster) {
-    statsCache.clear()
-    lastCachedRaster = raster
-  }
-  const key = feature.properties.adm0_a3 || feature.properties.iso_a3 || feature.properties.name
-  const cached = statsCache.get(key)
-  if (cached) return cached
+  //Convert from parameters
+  let feature = arg1_feature
+  let raster = arg0_raster
 
-  const result = binRasterByCountry(raster, feature)
-  statsCache.set(key, result)
+  //Declare local instance variables
+  let cached: CountryStats | undefined
+  let key: string
+  let result: CountryStats
+
+  //Function body
+  if (last_cached_raster !== raster) {
+    stats_cache.clear()
+    last_cached_raster = raster
+  }
+
+  key = feature.properties.adm0_a3 || feature.properties.iso_a3 || feature.properties.name
+  cached = stats_cache.get(key)
+  if (cached)
+    return cached
+
+  result = binRasterByCountry(raster, feature)
+  stats_cache.set(key, result)
+
+  //Return statement
   return result
 }
 
 /**
  * Computes aggregated statistics across multiple selected countries.
+ *
+ * @param {DecodedRaster} arg0_raster
+ * @param {CountryFeature[]} arg1_features
+ *
+ * @returns {CountryStats | null}
  */
-export function binRasterByMultipleCountries(
-  raster: DecodedRaster,
-  features: CountryFeature[]
+export function binRasterByMultipleCountries (
+  arg0_raster: DecodedRaster,
+  arg1_features: CountryFeature[]
 ): CountryStats | null {
-  if (!features || features.length === 0) return null
-  if (features.length === 1) {
+  //Convert from parameters
+  let features = arg1_features
+  let raster = arg0_raster
+
+  //Guard clauses
+  if (!features || features.length === 0)
+    return null
+  if (features.length === 1)
     return binRasterByCountryMemoized(raster, features[0])
-  }
 
-  const name =
-    features.length <= 2
-      ? features.map((f) => f.properties.name).join(', ')
-      : `${features[0].properties.name}, ${features[1].properties.name} (+${features.length - 2} more)`
-  const isoA3 = features.map((f) => f.properties.iso_a3 || f.properties.adm0_a3 || '').join(', ')
-
-  let totalCells = 0
-  let validCount = 0
-  let min = Infinity
+  //Declare local instance variables
+  let bin_count = 60
+  let bin_counts: number[] = new Array(bin_count).fill(0)
+  let bin_edges: number[] = []
+  let bin_width: number
+  let iso_a3 = features.map((arg0_f) => arg0_f.properties.iso_a3 || arg0_f.properties.adm0_a3 || '').join(', ')
   let max = -Infinity
+  let mean: number
+  let min = Infinity
+  let name =
+    features.length <= 2
+      ? features.map((arg0_f) => arg0_f.properties.name).join(', ')
+      : `${features[0].properties.name}, ${features[1].properties.name} (+${features.length - 2} more)`
+  let quantiles: Record<number, number> = {}
+  let running_count = 0
+  let safe_max: number
+  let safe_min: number
   let sum = 0
+  let target_idx = 1
+  let target_percentiles = [0, 1, 5, 25, 50, 75, 95, 99, 100]
+  let total_cells = 0
+  let valid_count = 0
 
-  for (const feat of features) {
-    const stats = binRasterByCountryMemoized(raster, feat)
-    totalCells += stats.totalCells
-    validCount += stats.validCount
-    if (stats.min < min) min = stats.min
-    if (stats.max > max) max = stats.max
-    sum += stats.mean * stats.validCount
+  //Function body
+  for (let i = 0; i < features.length; i++) {
+    let stats = binRasterByCountryMemoized(raster, features[i])
+    total_cells += stats.totalCells
+    valid_count += stats.validCount
+    if (stats.min < min)
+      min = stats.min
+    if (stats.max > max)
+      max = stats.max
+    sum += stats.mean*stats.validCount
   }
 
-  const mean = validCount > 0 ? sum / validCount : 0
-  const safeMin = Number.isFinite(min) ? min : 0
-  const safeMax = Number.isFinite(max) ? max : 1
+  mean = valid_count > 0 ? sum/valid_count : 0
+  safe_min = Number.isFinite(min) ? min : 0
+  safe_max = Number.isFinite(max) ? max : 1
+  bin_width = (safe_max - safe_min)/bin_count || 1
 
-  const binCount = 60
-  const binEdges: number[] = []
-  const binCounts: number[] = new Array(binCount).fill(0)
-  const binWidth = (safeMax - safeMin) / binCount || 1
+  for (let i = 0; i <= bin_count; i++)
+    bin_edges.push(safe_min + i*bin_width)
 
-  for (let b = 0; b <= binCount; b++) {
-    binEdges.push(safeMin + b * binWidth)
-  }
-
-  // Aggregate bin counts from each country's histogram
-  for (const feat of features) {
-    const s = binRasterByCountryMemoized(raster, feat)
+  for (let i = 0; i < features.length; i++) {
+    let s = binRasterByCountryMemoized(raster, features[i])
     if (s.histogram) {
-      for (let i = 0; i < s.histogram.counts.length; i++) {
-        const c = s.histogram.counts[i]
-        if (c === 0) continue
-        const midVal = (s.histogram.bins[i] + s.histogram.bins[i + 1]) / 2
-        let bIdx = Math.floor((midVal - safeMin) / binWidth)
-        if (bIdx < 0) bIdx = 0
-        if (bIdx >= binCount) bIdx = binCount - 1
-        binCounts[bIdx] += c
+      for (let x = 0; x < s.histogram.counts.length; x++) {
+        let c = s.histogram.counts[x]
+        if (c === 0)
+          continue
+        let mid_val = (s.histogram.bins[x] + s.histogram.bins[x + 1])/2
+        let b_idx = Math.floor((mid_val - safe_min)/bin_width)
+        if (b_idx < 0)
+          b_idx = 0
+        if (b_idx >= bin_count)
+          b_idx = bin_count - 1
+        bin_counts[b_idx] += c
       }
     }
   }
 
-  const quantiles: Record<number, number> = {}
-  const targetPercentiles = [0, 1, 5, 25, 50, 75, 95, 99, 100]
-  quantiles[0] = safeMin
-  quantiles[100] = safeMax
+  quantiles[0] = safe_min
+  quantiles[100] = safe_max
 
-  let runningCount = 0
-  let targetIdx = 1
-  for (let b = 0; b < binCount && targetIdx < targetPercentiles.length - 1; b++) {
-    runningCount += binCounts[b]
-    const pVal = (runningCount / (validCount || 1)) * 100
-    while (targetIdx < targetPercentiles.length - 1 && pVal >= targetPercentiles[targetIdx]) {
-      const p = targetPercentiles[targetIdx]
-      quantiles[p] = binEdges[b + 1]
-      targetIdx++
-    }
-  }
-  for (const p of targetPercentiles) {
-    if (quantiles[p] === undefined) {
-      quantiles[p] = (safeMin + safeMax) / 2
+  for (let i = 0; i < bin_count && target_idx < target_percentiles.length - 1; i++) {
+    running_count += bin_counts[i]
+    let p_val = (running_count/(valid_count || 1))*100
+    for (; target_idx < target_percentiles.length - 1 && p_val >= target_percentiles[target_idx]; target_idx++) {
+      let p = target_percentiles[target_idx]
+      quantiles[p] = bin_edges[i + 1]
     }
   }
 
+  for (let i = 0; i < target_percentiles.length; i++) {
+    let p = target_percentiles[i]
+    if (quantiles[p] === undefined)
+      quantiles[p] = (safe_min + safe_max)/2
+  }
+
+  //Return statement
   return {
-    name,
-    isoA3,
-    totalCells,
-    validCount,
-    total: validCount > 0 ? sum : 0,
-    min: Number.isFinite(min) ? min : 0,
+    histogram: {
+      bins: bin_edges,
+      counts: bin_counts,
+      max: safe_max,
+      min: safe_min,
+    },
+    isoA3: iso_a3,
     max: Number.isFinite(max) ? max : 0,
     mean,
-    stdDev: 0,
-    median: quantiles[50] ?? (safeMin + safeMax) / 2,
+    median: quantiles[50] ?? (safe_min + safe_max)/2,
+    min: Number.isFinite(min) ? min : 0,
+    name,
     quantiles,
-    histogram: {
-      bins: binEdges,
-      counts: binCounts,
-      min: safeMin,
-      max: safeMax,
-    },
+    stdDev: 0,
+    total: valid_count > 0 ? sum : 0,
+    totalCells: total_cells,
+    validCount: valid_count,
   }
+}
+
+/**
+ * Computes 2D bounding box [minX, minY, maxX, maxY] for a GeoJSON geometry.
+ *
+ * @param {any} arg0_geometry
+ *
+ * @returns {[number, number, number, number]}
+ */
+export function computeGeometryBBox (arg0_geometry: any): [number, number, number, number] {
+  //Convert from parameters
+  let geometry = arg0_geometry
+
+  //Declare local instance variables
+  let max_x = -Infinity
+  let max_y = -Infinity
+  let min_x = Infinity
+  let min_y = Infinity
+
+  let process_coords = function (arg0_coords: any) {
+    let coords = arg0_coords
+    if (typeof coords[0] === 'number') {
+      let [x, y] = coords
+      if (x < min_x)
+        min_x = x
+      if (y < min_y)
+        min_y = y
+      if (x > max_x)
+        max_x = x
+      if (y > max_y)
+        max_y = y
+    } else {
+      for (let i = 0; i < coords.length; i++)
+        process_coords(coords[i])
+    }
+  }
+
+  //Function body
+  process_coords(geometry.coordinates)
+
+  //Return statement
+  return [min_x, min_y, max_x, max_y]
+}
+
+/**
+ * Finds the country feature containing [lng, lat].
+ *
+ * @param {number} arg0_lng
+ * @param {number} arg1_lat
+ * @param {CountryFeature[]} arg2_features
+ *
+ * @returns {CountryFeature | null}
+ */
+export function findCountryAtLngLat (
+  arg0_lng: number,
+  arg1_lat: number,
+  arg2_features: CountryFeature[]
+): CountryFeature | null {
+  //Convert from parameters
+  let features = arg2_features
+  let lat = arg1_lat
+  let lng = arg0_lng
+
+  //Function body
+  for (let i = 0; i < features.length; i++) {
+    let feat = features[i]
+    if (feat.bbox) {
+      let [min_x, min_y, max_x, max_y] = feat.bbox
+      if (lng < min_x || lng > max_x || lat < min_y || lat > max_y)
+        continue
+    }
+    if (isPointInGeometry(lng, lat, feat.geometry))
+      return feat
+  }
+
+  //Return statement
+  return null
+}
+
+/**
+ * Tests whether a point [lng, lat] is inside a GeoJSON geometry.
+ *
+ * @param {number} arg0_lng
+ * @param {number} arg1_lat
+ * @param {any} arg2_geometry
+ *
+ * @returns {boolean}
+ */
+export function isPointInGeometry (arg0_lng: number, arg1_lat: number, arg2_geometry: any): boolean {
+  //Convert from parameters
+  let geometry = arg2_geometry
+  let lat = arg1_lat
+  let lng = arg0_lng
+
+  //Function body
+  if (geometry.type === 'Polygon') {
+    let rings = geometry.coordinates as number[][][]
+    if (!pointInRing(lng, lat, rings[0]))
+      return false
+    for (let i = 1; i < rings.length; i++) {
+      if (pointInRing(lng, lat, rings[i]))
+        return false //In hole
+    }
+    return true
+  } else if (geometry.type === 'MultiPolygon') {
+    let polygons = geometry.coordinates as number[][][][]
+    for (let i = 0; i < polygons.length; i++) {
+      let poly = polygons[i]
+      if (pointInRing(lng, lat, poly[0])) {
+        let in_hole = false
+        for (let x = 1; x < poly.length; x++) {
+          if (pointInRing(lng, lat, poly[x])) {
+            in_hole = true
+            break
+          }
+        }
+        if (!in_hole)
+          return true
+      }
+    }
+    return false
+  }
+
+  //Return statement
+  return false
+}
+
+/**
+ * Loads and caches NaturalEarth countries GeoJSON.
+ *
+ * @returns {Promise<CountryFeature[]>}
+ */
+export async function loadCountriesGeoJson (): Promise<CountryFeature[]> {
+  //Guard clauses
+  if (cached_countries_geojson)
+    return cached_countries_geojson.features
+
+  //Function body
+  try {
+    let res = await fetch('/data/ne_50m_admin_0_countries.geojson')
+    if (!res.ok) {
+      console.error(`HTTP ${res.status} loading countries GeoJSON`)
+      return []
+    }
+    let data = await res.json()
+
+    for (let i = 0; i < data.features.length; i++) {
+      let feat = data.features[i]
+      feat.bbox = computeGeometryBBox(feat.geometry)
+      let p = feat.properties
+      p.name = p.name || p.NAME || p.ADMIN || p.NAME_LONG || p.name_long || 'Unknown'
+      p.name_long = p.name_long || p.NAME_LONG || p.name
+      let raw_adm = p.ADM0_A3 || p.adm0_a3 || ''
+      let raw_iso = p.ISO_A3 || p.iso_a3 || ''
+      p.adm0_a3 = raw_adm || (raw_iso && raw_iso !== '-99' ? raw_iso : '') || p.name
+      p.iso_a3 = (raw_iso && raw_iso !== '-99') ? raw_iso : p.adm0_a3
+    }
+
+    cached_countries_geojson = data
+    return data.features
+  } catch (arg0_err) {
+    console.error('Failed to load countries GeoJSON:', arg0_err)
+    return []
+  }
+}
+
+/**
+ * Checks if a point [lng, lat] is inside a polygon ring using ray casting.
+ *
+ * @param {number} arg0_x
+ * @param {number} arg1_y
+ * @param {number[][]} arg2_ring
+ *
+ * @returns {boolean}
+ */
+export function pointInRing (arg0_x: number, arg1_y: number, arg2_ring: number[][]): boolean {
+  //Convert from parameters
+  let ring = arg2_ring
+  let x = arg0_x
+  let y = arg1_y
+
+  //Declare local instance variables
+  let inside = false
+
+  //Function body
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    let xi = ring[i][0]
+    let xj = ring[j][0]
+    let yi = ring[i][1]
+    let yj = ring[j][1]
+    let intersect = ((yi > y) !== (yj > y)) && (x < ((xj - xi)*(y - yi))/(yj - yi) + xi)
+    if (intersect)
+      inside = !inside
+  }
+
+  //Return statement
+  return inside
 }
