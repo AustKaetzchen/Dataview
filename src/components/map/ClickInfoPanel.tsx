@@ -29,31 +29,33 @@ export const ClickInfoPanel: React.FC<ClickInfoPanelProps> = ({ info, pos }) => 
   return (
     <div
       ref={panelRef}
-      className="absolute top-0 left-0 pointer-events-none z-50 rounded-none border border-border bg-popover/95 p-[var(--padding)] shadow-md font-sans text-[var(--body-font-size)] text-popover-foreground will-change-transform"
+      className="absolute top-0 left-0 pointer-events-none z-50 rounded-none border border-border bg-popover/95 p-[var(--padding)] shadow-md font-sans text-[var(--body-font-size)] text-popover-foreground will-change-transform whitespace-nowrap"
       style={{
         transform: `translate3d(${pos.x + 14}px, ${pos.y - 70}px, 0)`,
         minWidth: '200px',
+        width: 'max-content',
         transition: 'none',
       }}
     >
-      <div className="font-bold text-white mb-1">
-        X: {info.pixelX.toLocaleString()}, Y: {info.pixelY.toLocaleString()}
+      <div className="font-bold text-white mb-1 flex items-baseline gap-1.5 whitespace-nowrap leading-snug">
+        <span>X: {info.pixelX.toLocaleString()},</span>
+        <span>Y: {info.pixelY.toLocaleString()}</span>
       </div>
-      <div className="space-y-0.5 text-[var(--body-font-size)] font-light">
-        <div>
-          <span className="text-muted-foreground font-bold">Value: </span>
+      <div className="space-y-0.1 text-[var(--body-font-size)] font-light">
+        <div className="flex items-baseline gap-1.5 whitespace-nowrap leading-snug">
+          <span className="text-muted-foreground font-bold shrink-0">Value:</span>
           <span className="font-bold text-foreground">{formattedVal}</span>
         </div>
-        <div>
-          <span className="text-muted-foreground font-bold">Latlng: </span>
+        <div className="flex items-baseline gap-1.5 whitespace-nowrap leading-snug">
+          <span className="text-muted-foreground font-bold shrink-0">Latlng:</span>
           <span className="text-muted-foreground">
             {formattedLat}, {formattedLng}
           </span>
         </div>
         {info.countryName && (
-          <div>
-            <span className="text-muted-foreground font-bold">Country: </span>
-            <span className="font-bold text-foreground text-primary">{info.countryName}</span>
+          <div className="flex items-baseline gap-1.5 whitespace-nowrap leading-snug">
+            <span className="text-muted-foreground font-bold shrink-0">Country:</span>
+            <span className="font-bold text-primary">{info.countryName}</span>
           </div>
         )}
       </div>

@@ -860,7 +860,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       })
     }
 
-    if (countriesMode || effectiveSelected.length > 0) {
+    if (countriesMode && effectiveSelected.length > 0) {
       // High-performance country-by-country polygon scanning (only scans each country's tight bboxes)
       for (const country of effectiveSelected) {
         const geom = country.geometry
@@ -1262,7 +1262,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     }
 
     if (heightmapConfig.enabled && elevationSpikesData.points && elevationSpikesData.points.length > 0) {
-      const spikeKey = (countriesMode || effectiveSelected.length > 0)
+      const spikeKey = (countriesMode && effectiveSelected.length > 0)
         ? `iso-${effectiveSelected.map((c) => c.properties.iso_a3 || c.properties.name).sort().join('_') || 'empty'}`
         : 'global'
       list.push(

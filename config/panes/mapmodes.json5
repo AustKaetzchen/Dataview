@@ -4,7 +4,6 @@
   // Edit map mode metadata, names, default states, and bottom-left control descriptions.
   // Comments and trailing commas are fully supported.
   // =========================================================================
-
   modes: [
     {
       id: "default",
@@ -15,27 +14,26 @@
     },
     {
       id: "country_analysis",
-      label: "Country Analysis",
+      label: "Modern Countries",
       description: "Country polygon masking and relative quantile binning",
       active: false,
       controlDescription: "Isolate countries and calculate polygon-relative statistics",
     },
     {
       id: "spike_map",
-      label: "3D Spike Map",
+      label: "3D Elevation",
       description: "Parent-pixel extruded 3D terrain needle columns",
       active: false,
       controlDescription: "3D needle terrain spikes with altitude scaling",
     },
     {
       id: "circle_sizing",
-      label: "Equal-Area Circle Sizing",
+      label: "Outlier View",
       description: "High-value proportional equal-area circle overlays",
       active: false,
       controlDescription: "High-value circle sizing with equal-area scaling",
     },
   ],
-
   // Control shortcut descriptions
   controlsFooter: [
     "Left Drag: Pan map view",
