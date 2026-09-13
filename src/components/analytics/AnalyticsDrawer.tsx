@@ -4,26 +4,40 @@ import { CountryFeature, CountryStats } from '@/lib/geopng/polygonBinning'
 import { getAnalyticsPanelRightOffset, UI_LAYOUT } from '@/lib/uiLayout'
 import { HistogramChart } from './HistogramChart'
 import { StatsSummary } from './StatsSummary'
+import { PopulationPyramidChart } from './PopulationPyramidChart'
+import { CategoryBreakdownChart } from './CategoryBreakdownChart'
+import { ParsedDataLayer } from '@/server/layerParser'
 import { Button } from '../ui/button'
 import { Icon } from '../ui/icon'
 
 export interface AnalyticsDrawerProps {
+  activeLayer?: ParsedDataLayer | null
+  activeVariableSelectors?: Record<string, string>
+  countryStats?: CountryStats | null
+  currentYear?: number
+  inspectData?: {
+    countryName?: string
+    lat: number
+    lng: number
+    pixelX: number
+    pixelY: number
+    value: number | null
+  } | null
+  isCalculatingStats?: boolean
   isOpen: boolean
+  isSettingsDrawerOpen?: boolean
+  logSigma: number
+  maxOverride?: number
+  minOverride?: number
+  onClearCountries?: () => void
+  onForceRefresh?: () => void
+  onSelectCountry?: (country: CountryFeature | null) => void
   onToggleOpen: () => void
   raster: DecodedRaster | null
-  scaleType: ScaleType
-  logSigma: number
-  minOverride?: number
-  maxOverride?: number
-  selectedCountry?: CountryFeature | null
-  selectedCountries?: CountryFeature[]
-  onSelectCountry?: (country: CountryFeature | null) => void
-  onClearCountries?: () => void
-  countryStats?: CountryStats | null
-  isCalculatingStats?: boolean
-  isSettingsDrawerOpen?: boolean
   rasterKey?: string | number
-  onForceRefresh?: () => void
+  scaleType: ScaleType
+  selectedCountries?: CountryFeature[]
+  selectedCountry?: CountryFeature | null
 }
 
 /**
@@ -37,7 +51,11 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_pr
   //Convert from parameters
   let props = arg0_props
   let {
+    activeLayer: active_layer = null,
+    activeVariableSelectors: active_variable_selectors = {},
     countryStats: country_stats,
+    currentYear: current_year = 1950,
+    inspectData: inspect_data = null,
     isCalculatingStats: is_calculating_stats = false,
     isOpen: is_open,
     isSettingsDrawerOpen: is_settings_drawer_open = false,
@@ -56,14 +74,39 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_pr
   } = props
 
   //Declare local instance variables
-  let active_tab: 'histogram' | 'stats'
+  let active_tab: 'pyramid' | 'breakdown' | 'histogram' | 'stats'
   let effective_countries: CountryFeature[]
   let handle_clear: () => void
+  let has_category_breakdown = Boolean(
+    active_layer?.type === 'raster.category_profession' ||
+    active_layer?.id?.includes('profession')
+  )
+  let has_population_pyramid = Boolean(
+    active_layer?.type === 'raster.age_sex' ||
+    active_layer?.id === 'age_sex'
+  )
   let right_offset = getAnalyticsPanelRightOffset(is_settings_drawer_open)
-  let set_active_tab: React.Dispatch<React.SetStateAction<'histogram' | 'stats'>>
+  let set_active_tab: React.Dispatch<React.SetStateAction<'pyramid' | 'breakdown' | 'histogram' | 'stats'>>
 
   //Function body
-  ;[active_tab, set_active_tab] = useState<'histogram' | 'stats'>('histogram')
+  let initial_tab: 'pyramid' | 'breakdown' | 'histogram' | 'stats' = has_population_pyramid
+    ? 'pyramid'
+    : has_category_breakdown
+      ? 'breakdown'
+      : 'histogram'
+
+  ;[active_tab, set_active_tab] = useState<'pyramid' | 'breakdown' | 'histogram' | 'stats'>(initial_tab)
+
+  //Update active tab automatically when layer type transitions
+  useEffect(() => {
+    if (has_population_pyramid) {
+      set_active_tab('pyramid')
+    } else if (has_category_breakdown) {
+      set_active_tab('breakdown')
+    } else if (active_tab === 'pyramid' || active_tab === 'breakdown') {
+      set_active_tab('histogram')
+    }
+  }, [active_layer?.id, active_layer?.type, has_population_pyramid, has_category_breakdown])
 
   //Staggered resize events when opening panel or when raster changes to notify ECharts
   useEffect(() => {
@@ -75,7 +118,7 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_pr
         clearTimeout(t2)
       }
     }
-  }, [is_open, right_offset, raster, raster_key])
+  }, [is_open, right_offset, raster, raster_key, active_tab])
 
   //Guard clauses
   if (!is_open)
@@ -117,27 +160,61 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_pr
           </span>
 
           <div className="flex items-center gap-1 bg-muted p-[var(--cell-padding)] rounded-none shrink-0">
+            {/* Population Pyramid Tab for raster.age_sex */}
+            {has_population_pyramid && (
+              <button
+                type="button"
+                onClick={() => set_active_tab('pyramid')}
+                className={`px-2 py-0.5 text-[var(--body-font-size)] rounded-none transition-colors flex items-center gap-1.5 cursor-pointer ${
+                  active_tab === 'pyramid'
+                    ? 'bg-background text-foreground shadow-sm font-bold'
+                    : 'text-muted-foreground hover:text-foreground font-light'
+                }`}
+              >
+                <Icon name="people" className="text-white text-xs" />
+                Pyramid
+              </button>
+            )}
+
+            {/* Sector Breakdown Tab for raster.category_profession */}
+            {has_category_breakdown && (
+              <button
+                type="button"
+                onClick={() => set_active_tab('breakdown')}
+                className={`px-2 py-0.5 text-[var(--body-font-size)] rounded-none transition-colors flex items-center gap-1.5 cursor-pointer ${
+                  active_tab === 'breakdown'
+                    ? 'bg-background text-foreground shadow-sm font-bold'
+                    : 'text-muted-foreground hover:text-foreground font-light'
+                }`}
+              >
+                <Icon name="briefcase" className="text-white text-xs" />
+                Sectors
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => set_active_tab('histogram')}
-              className={`px-2 py-0.5 text-[var(--body-font-size)] rounded-none transition-colors flex items-center gap-1.5 cursor-pointer ${active_tab === 'histogram'
+              className={`px-2 py-0.5 text-[var(--body-font-size)] rounded-none transition-colors flex items-center gap-1.5 cursor-pointer ${
+                active_tab === 'histogram'
                   ? 'bg-background text-foreground shadow-sm font-bold'
                   : 'text-muted-foreground hover:text-foreground font-light'
-                }`}
+              }`}
             >
-              <Icon name="bar_chart" className="text-white" />
+              <Icon name="bar_chart" className="text-white text-xs" />
               Distribution
             </button>
 
             <button
               type="button"
               onClick={() => set_active_tab('stats')}
-              className={`px-2 py-0.5 text-[var(--body-font-size)] rounded-none transition-colors flex items-center gap-1.5 cursor-pointer ${active_tab === 'stats'
+              className={`px-2 py-0.5 text-[var(--body-font-size)] rounded-none transition-colors flex items-center gap-1.5 cursor-pointer ${
+                active_tab === 'stats'
                   ? 'bg-background text-foreground shadow-sm font-bold'
                   : 'text-muted-foreground hover:text-foreground font-light'
-                }`}
+              }`}
             >
-              <Icon name="info" className="text-white" />
+              <Icon name="info" className="text-white text-xs" />
               Statistics
             </button>
           </div>
@@ -218,9 +295,32 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_pr
           </div>
         ) : (
           (() => {
-            let derived_key = `${raster_key ?? ''}-${raster ? `${raster.width}x${raster.height}-${raster.min}-${raster.max}` : 'none'}-${country_stats ? country_stats.name : 'all'}`
+            let derived_key = `${raster_key ?? ''}-${raster ? `${raster.width}x${raster.height}-${raster.min}-${raster.max}` : 'none'}-${country_stats ? country_stats.name : 'all'}-${active_layer?.id ?? 'default'}`
             return (
               <>
+                {active_tab === 'pyramid' && (
+                  <PopulationPyramidChart
+                    key={`pyramid-${derived_key}-${current_year}`}
+                    raster={raster}
+                    countryStats={country_stats}
+                    currentYear={current_year}
+                    activeVariableSelectors={active_variable_selectors}
+                    inspectData={inspect_data}
+                  />
+                )}
+
+                {active_tab === 'breakdown' && (
+                  <CategoryBreakdownChart
+                    key={`breakdown-${derived_key}-${current_year}`}
+                    raster={raster}
+                    countryStats={country_stats}
+                    currentYear={current_year}
+                    layerId={active_layer?.id}
+                    activeVariableSelectors={active_variable_selectors}
+                    inspectData={inspect_data}
+                  />
+                )}
+
                 {active_tab === 'histogram' && (
                   <HistogramChart
                     key={`hist-${derived_key}`}

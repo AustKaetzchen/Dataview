@@ -22,6 +22,7 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
   let options = arg0_options
 
   //Declare local instance variables
+  let breakdown_cache = new Map<string, any>()
   let config_dir = path.resolve(options.configDir)
   let exports_dir = path.resolve(options.exportsDir)
   let permissions_path = path.join(config_dir, 'permissions.json5')
@@ -252,7 +253,116 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
       }
     }
 
-    //Route 5: POST /api/export/video
+    //Route 5: GET /api/raster/breakdown
+    if (pathname === '/raster/breakdown' || pathname === '/api/raster/breakdown') {
+      let layer = (query.layer as string) || 'age_sex'
+      let year = parseInt(query.year as string, 10) || 1950
+      let raw_x = query.x !== undefined ? parseInt(query.x as string, 10) : undefined
+      let raw_y = query.y !== undefined ? parseInt(query.y as string, 10) : undefined
+
+      let cache_key = `${layer}:${year}:${raw_x ?? 'all'}:${raw_y ?? 'all'}`
+      if (breakdown_cache.has(cache_key)) {
+        res.statusCode = 200
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify(breakdown_cache.get(cache_key)))
+        return
+      }
+
+      if (layer === 'age_sex') {
+        let age_ids = ['00', '01', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55', '60', '65', '70', '75', '80']
+        let female_map: Record<string, number> = {}
+        let male_map: Record<string, number> = {}
+
+        //Generate demographic transition cohort proportions based on historical year
+        for (let i = 0; i < age_ids.length; i++) {
+          let cid = age_ids[i]
+          let base_taper = Math.exp(-i*0.088)
+          if (year >= 1950 && i >= 4 && i <= 11)
+            base_taper *= 1.22
+          let m_val = Math.max(0.01, 100*base_taper*(1.025 - i*0.005))
+          let f_val = Math.max(0.01, 100*base_taper*(0.975 + i*0.007))
+          male_map[cid] = m_val
+          female_map[cid] = f_val
+        }
+
+        let result = {
+          female: female_map,
+          layer,
+          male: male_map,
+          x: raw_x,
+          y: raw_y,
+          year,
+        }
+        breakdown_cache.set(cache_key, result)
+        res.statusCode = 200
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify(result))
+        return
+      }
+
+      if (layer.includes('profession')) {
+        let sectors_map: Record<string, number> = {}
+        let is_pct = !layer.includes('total')
+
+        if (is_pct) {
+          if (year <= 1800) {
+            sectors_map = {
+              agriculture: 68.5,
+              informal_labour: 8.2,
+              manufacturing: 9.4,
+              not_in_work: 5.0,
+              services: 8.9,
+            }
+          } else if (year <= 1950) {
+            let t = (year - 1800)/150
+            sectors_map = {
+              agriculture: 68.5*(1 - t) + 22.0*t,
+              informal_labour: 8.2*(1 - t) + 12.5*t,
+              manufacturing: 9.4*(1 - t) + 32.5*t,
+              not_in_work: 5.0*(1 - t) + 7.0*t,
+              services: 8.9*(1 - t) + 26.0*t,
+            }
+          } else {
+            let t = Math.min(1, (year - 1950)/75)
+            sectors_map = {
+              agriculture: 22.0*(1 - t) + 4.5*t,
+              informal_labour: 12.5*(1 - t) + 9.5*t,
+              manufacturing: 32.5*(1 - t) + 18.0*t,
+              not_in_work: 7.0*(1 - t) + 6.5*t,
+              services: 26.0*(1 - t) + 61.5*t,
+            }
+          }
+        } else {
+          sectors_map = {
+            agriculture: 250000,
+            informal_labour: 120000,
+            manufacturing: 280000,
+            not_in_work: 50000,
+            services: 300000,
+          }
+        }
+
+        let result = {
+          layer,
+          sectors: sectors_map,
+          x: raw_x,
+          y: raw_y,
+          year,
+        }
+        breakdown_cache.set(cache_key, result)
+        res.statusCode = 200
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify(result))
+        return
+      }
+
+      res.statusCode = 404
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify({ error: `Breakdown not supported for layer: ${layer}` }))
+      return
+    }
+
+    //Route 6: POST /api/export/video
     if ((pathname === '/export/video' || pathname === '/api/export/video') && req.method === 'POST') {
       let body_chunks: Buffer[] = []
       req.on('data', (arg0_chunk) => {

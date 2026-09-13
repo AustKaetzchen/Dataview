@@ -1,7 +1,10 @@
 import React, { useEffect, useRef } from 'react'
 import { InspectionData } from '@/lib/geopng/types'
+import { ParsedDataLayer } from '@/server/layerParser'
 
 export interface ClickInfoPanelProps {
+  activeLayer?: ParsedDataLayer | null
+  activeVariableSelectors?: Record<string, string>
   info: InspectionData | null
   pos: { x: number; y: number } | null
 }
@@ -17,12 +20,25 @@ export const ClickInfoPanel: React.FC<ClickInfoPanelProps> = function (arg0_prop
   let props = (arg0_props) ? arg0_props : ({} as ClickInfoPanelProps)
 
   //Declare local instance variables
+  let active_layer = props.activeLayer
+  let active_selectors = props.activeVariableSelectors || {}
+  let age_label: string
   let formatted_lat: string
   let formatted_lng: string
   let formatted_val: string
+  let gender_label: string
   let info = props.info
+  let is_age_sex = Boolean(
+    active_layer?.type === 'raster.age_sex' ||
+    active_layer?.id === 'age_sex'
+  )
+  let is_profession = Boolean(
+    active_layer?.type === 'raster.category_profession' ||
+    active_layer?.id?.includes('profession')
+  )
   let panel_ref = useRef<HTMLDivElement>(null)
   let pos = props.pos
+  let profession_label: string
 
   //Function body
   useEffect(() => {
@@ -39,6 +55,14 @@ export const ClickInfoPanel: React.FC<ClickInfoPanelProps> = function (arg0_prop
     : 'NA'
   formatted_lat = info.lat.toLocaleString(undefined, { minimumFractionDigits: 5, maximumFractionDigits: 5 })
   formatted_lng = info.lng.toLocaleString(undefined, { minimumFractionDigits: 5, maximumFractionDigits: 5 })
+
+  gender_label = active_selectors.gender === 'm' ? 'Male' : 'Female'
+  age_label = active_selectors.age
+    ? active_layer?.variable_selectors?.age?.options?.[active_selectors.age]?.name || `${active_selectors.age}yo`
+    : 'All Ages'
+  profession_label = active_selectors.profession
+    ? active_layer?.variable_selectors?.profession?.options?.[active_selectors.profession]?.name || active_selectors.profession.replace(/_/g, ' ')
+    : 'Agriculture'
 
   //Return statement
   return (
@@ -60,6 +84,9 @@ export const ClickInfoPanel: React.FC<ClickInfoPanelProps> = function (arg0_prop
         <div className="flex items-baseline gap-1.5 whitespace-nowrap leading-snug">
           <span className="text-muted-foreground font-bold shrink-0">Value:</span>
           <span className="font-bold text-foreground">{formatted_val}</span>
+          {active_layer?.unit && (
+            <span className="text-[10px] text-muted-foreground font-mono ml-0.5">({active_layer.unit})</span>
+          )}
         </div>
         <div className="flex items-baseline gap-1.5 whitespace-nowrap leading-snug">
           <span className="text-muted-foreground font-bold shrink-0">Latlng:</span>
@@ -71,6 +98,24 @@ export const ClickInfoPanel: React.FC<ClickInfoPanelProps> = function (arg0_prop
           <div className="flex items-baseline gap-1.5 whitespace-nowrap leading-snug">
             <span className="text-muted-foreground font-bold shrink-0">Country:</span>
             <span className="font-bold text-primary">{info.countryName}</span>
+          </div>
+        )}
+
+        {is_age_sex && (
+          <div className="flex items-baseline gap-1.5 whitespace-nowrap leading-snug pt-1 border-t border-border/40">
+            <span className="text-muted-foreground font-bold shrink-0">Cohort:</span>
+            <span className={`font-bold ${active_selectors.gender === 'm' ? 'text-blue-400' : 'text-rose-400'}`}>
+              {gender_label} ({age_label})
+            </span>
+          </div>
+        )}
+
+        {is_profession && (
+          <div className="flex items-baseline gap-1.5 whitespace-nowrap leading-snug pt-1 border-t border-border/40">
+            <span className="text-muted-foreground font-bold shrink-0">Sector:</span>
+            <span className="font-bold text-primary">
+              {profession_label}
+            </span>
           </div>
         )}
       </div>

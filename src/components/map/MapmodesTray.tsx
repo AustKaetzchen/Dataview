@@ -235,31 +235,33 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
 
             {is_node_expanded && (
               <div className="mt-1 space-y-1 border-l-2 border-border/40 pl-1.5 ml-2">
-                {/* Parent layer entry itself */}
-                <button
-                  type="button"
-                  disabled={!is_accessible}
-                  onClick={() => on_select_layer && on_select_layer(layer.id)}
-                  className={`w-full flex items-center justify-between px-2 py-1 text-left cursor-pointer border transition-colors ${
-                    is_active
-                      ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
-                      : 'hover:bg-muted/40 text-foreground border-transparent'
-                  } ${!is_accessible ? 'opacity-40 cursor-not-allowed' : ''}`}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className={`w-3 h-3 rounded-full border flex items-center justify-center shrink-0 ${
-                      is_active ? 'border-primary bg-primary' : 'border-muted-foreground/60'
-                    }`}>
-                      {is_active && <span className="w-1 h-1 rounded-full bg-primary-foreground" />}
-                    </span>
-                    <span className="text-xs truncate">
-                      {layer.name.endsWith('(Total)') ? layer.name : `${layer.name} (Total)`}
-                    </span>
-                  </div>
-                  {layer.unit && (
-                    <span className="text-[10px] text-muted-foreground shrink-0 ml-1">{layer.unit}</span>
-                  )}
-                </button>
+                {/* Parent layer entry itself if it has an individual raster */}
+                {layer.id !== 'lfpr' && (
+                  <button
+                    type="button"
+                    disabled={!is_accessible}
+                    onClick={() => on_select_layer && on_select_layer(layer.id)}
+                    className={`w-full flex items-center justify-between px-2 py-1 text-left cursor-pointer border transition-colors ${
+                      is_active
+                        ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
+                        : 'hover:bg-muted/40 text-foreground border-transparent'
+                    } ${!is_accessible ? 'opacity-40 cursor-not-allowed' : ''}`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`w-3 h-3 rounded-full border flex items-center justify-center shrink-0 ${
+                        is_active ? 'border-primary bg-primary' : 'border-muted-foreground/60'
+                      }`}>
+                        {is_active && <span className="w-1 h-1 rounded-full bg-primary-foreground" />}
+                      </span>
+                      <span className="text-xs truncate">
+                        {layer.name.endsWith('(Total)') ? layer.name : `${layer.name} (Total)`}
+                      </span>
+                    </div>
+                    {layer.unit && (
+                      <span className="text-[10px] text-muted-foreground shrink-0 ml-1">{layer.unit}</span>
+                    )}
+                  </button>
+                )}
 
                 {is_active && render_variable_selectors(layer)}
 

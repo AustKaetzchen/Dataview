@@ -301,6 +301,7 @@ export const App: React.FC = function () {
   let hovered_country: CountryFeature | null
   let in_flight_fetches_count_ref: React.MutableRefObject<number>
   let info_panel_open: boolean
+  let inspect_data: any
   let invert_palette: boolean
   let is_hover_only: boolean
   let is_loading_layers: boolean
@@ -344,6 +345,7 @@ export const App: React.FC = function () {
   let set_heightmap_config: React.Dispatch<React.SetStateAction<HeightmapConfig>>
   let set_hovered_country: React.Dispatch<React.SetStateAction<CountryFeature | null>>
   let set_info_panel_open: React.Dispatch<React.SetStateAction<boolean>>
+  let set_inspect_data: React.Dispatch<React.SetStateAction<any>>
   let set_invert_palette: React.Dispatch<React.SetStateAction<boolean>>
   let set_is_loading_layers: React.Dispatch<React.SetStateAction<boolean>>
   let set_is_loading_raster: React.Dispatch<React.SetStateAction<boolean>>
@@ -449,6 +451,7 @@ export const App: React.FC = function () {
   ;[selected_countries, set_selected_countries] = useState<CountryFeature[]>([])
   ;[hovered_country, set_hovered_country] = useState<CountryFeature | null>(null)
   ;[countries_mode, set_countries_mode] = useState<boolean>(false)
+  ;[inspect_data, set_inspect_data] = useState<any>(null)
 
   ;[layers, set_layers] = useState<Record<string, ParsedDataLayer>>({})
   ;[active_layer_id, set_active_layer_id] = useState<string | null>('GDP_nominal_pc')
@@ -511,6 +514,8 @@ export const App: React.FC = function () {
 
   handle_select_layer = useCallback((arg0_layer_id: string) => {
     let layer_id = arg0_layer_id
+    if (layer_id === 'lfpr')
+      layer_id = 'lfpr.lfpr_female'
     set_active_layer_id(layer_id)
   }, [])
 
@@ -1077,6 +1082,7 @@ export const App: React.FC = function () {
           dataLayers={layers}
           isLoadingLayers={is_loading_layers || is_loading_raster}
           onChangeVariableSelector={handle_change_variable_selector}
+          onInspect={set_inspect_data}
           onSelectLayer={handle_select_layer}
           onToggleUi={() => set_ui_visible((arg0_prev) => !arg0_prev)}
           uiVisible={ui_visible}
@@ -1101,6 +1107,10 @@ export const App: React.FC = function () {
           isSettingsDrawerOpen={settings_drawer_open}
           rasterKey={raster_version}
           onForceRefresh={handle_force_refresh_analytics}
+          activeLayer={active_layer}
+          activeVariableSelectors={active_variable_selectors}
+          currentYear={timeline_year}
+          inspectData={inspect_data}
         />
       </div>
 

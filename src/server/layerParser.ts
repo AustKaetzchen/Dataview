@@ -207,12 +207,28 @@ export const scanLayerTemplate = function (
 
     for (let x = 0; x < keys.length; x++) {
       let k = keys[x]
-      concrete_template = concrete_template.replace(new RegExp(`\\$\\{${k}\\}`, 'g'), combo[k])
+      concrete_template = concrete_template.replace(new RegExp(`(\\$\\{${k}\\}|\\{${k}\\})`, 'g'), combo[k])
     }
     concrete_template = normaliseLayerPath(concrete_template)
 
     let dir_path = path.dirname(concrete_template)
     let file_pattern = path.basename(concrete_template)
+
+    if (!fs.existsSync(dir_path)) {
+      //Attempt fallback: look for similarly named directory in parent folder
+      let parent_dir = path.dirname(dir_path)
+      let target_dir_name = path.basename(dir_path)
+      if (fs.existsSync(parent_dir)) {
+        let sub_dirs = fs.readdirSync(parent_dir)
+        let matched_dir = sub_dirs.find((arg0_d) =>
+          arg0_d.toLowerCase().includes(target_dir_name.toLowerCase()) ||
+          target_dir_name.toLowerCase().includes(arg0_d.toLowerCase())
+        )
+        if (matched_dir) {
+          dir_path = path.join(parent_dir, matched_dir)
+        }
+      }
+    }
 
     if (!fs.existsSync(dir_path)) {
       console.warn(`[LayerParser] Directory does not exist on disk: ${dir_path}`)
@@ -227,17 +243,18 @@ export const scanLayerTemplate = function (
       continue
     }
 
-    //Construct regex from file pattern
+    //Construct regex from file pattern supporting both ${token} and {token} formats
     let regex_str = file_pattern
       .replace(/[.*+?^${}()|[\]\\]/g, (arg0_match) => {
         if (arg0_match === '$' || arg0_match === '{' || arg0_match === '}')
           return arg0_match
         return `\\${arg0_match}`
       })
-      .replace(/\$\{year\}/g, '(-?\\d+)')
-      .replace(/\$\{profession\}/g, '([a-zA-Z0-9_-]+)')
-      .replace(/\$\{gender\}/g, '([a-zA-Z0-9_-]+)')
-      .replace(/\$\{indicator\}/g, '([a-zA-Z0-9_-]+)')
+      .replace(/(\$\{year\}|\{year\})/g, '(-?\\d+)')
+      .replace(/(\$\{profession\}|\{profession\})/g, '([a-zA-Z0-9_-]+)')
+      .replace(/(\$\{gender\}|\{gender\})/g, '([a-zA-Z0-9_-]+)')
+      .replace(/(\$\{indicator\}|\{indicator\})/g, '([a-zA-Z0-9_-]+)')
+      .replace(/(\$\{age\}|\{age\})/g, '([a-zA-Z0-9_-]+)')
 
     let is_first_combo = i === 0
     let scan_regex = new RegExp(`^${regex_str}$`, 'i')
@@ -336,8 +353,22 @@ export const getLayerIcon = function (arg0_layer_id: string): string {
     return 'users'
   if (id.includes('profession'))
     return 'briefcase'
+  if (id.includes('age_sex'))
+    return 'people'
+  if (id.includes('birth'))
+    return 'child_care'
+  if (id.includes('death'))
+    return 'heart_broken'
+  if (id.includes('migration'))
+    return 'flight_takeoff'
+  if (id.includes('density'))
+    return 'grain'
+  if (id.includes('rural'))
+    return 'park'
+  if (id.includes('urban'))
+    return 'apartment'
   if (id.includes('population'))
-    return 'user-check'
+    return 'groups'
   if (id.includes('wealth') || id.includes('income'))
     return 'payments'
   return 'layers'
@@ -383,23 +414,50 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
 
     //Iterate over layer definitions
     let layer_keys = Object.keys(parsed_json).filter((arg0_k) => arg0_k !== 'root_folders')
+    let metadata_keys = [
+      'description',
+      'encoding',
+      'filepath',
+      'legend',
+      'name',
+      'permissions',
+      'root_folders',
+      'type',
+      'unit',
+      'variable_selectors',
+    ]
 
     for (let x = 0; x < layer_keys.length; x++) {
       let k = layer_keys[x]
       let item = parsed_json[k]
 
-      if (typeof item === 'object' && item !== null && item.filepath) {
+      if (typeof item !== 'object' || item === null)
+        continue
+
+      let has_filepath = Boolean(item.filepath)
+      let sub_keys = Object.keys(item).filter(
+        (arg0_sk) =>
+          typeof item[arg0_sk] === 'object' &&
+          item[arg0_sk] !== null &&
+          item[arg0_sk].filepath &&
+          !metadata_keys.includes(arg0_sk)
+      )
+      let has_sub_layers = sub_keys.length > 0
+
+      if (has_filepath || has_sub_layers) {
         //Resolve filepath template with root folders
-        let resolved_template = item.filepath
+        let resolved_template = item.filepath || ''
         let root_keys = Object.keys(resolved_roots)
 
-        for (let y = 0; y < root_keys.length; y++) {
-          let rk = root_keys[y]
-          resolved_template = resolved_template.replace(new RegExp(`\\$\\{${rk}\\}`, 'g'), resolved_roots[rk])
+        if (has_filepath) {
+          for (let y = 0; y < root_keys.length; y++) {
+            let rk = root_keys[y]
+            resolved_template = resolved_template.replace(new RegExp(`(\\$\\{${rk}\\}|\\{${rk}\\})`, 'g'), resolved_roots[rk])
+          }
+          resolved_template = normaliseLayerPath(resolved_template)
         }
-        resolved_template = normaliseLayerPath(resolved_template)
 
-        //Extract variable selectors
+        //Extract variable selectors (either from variable_selectors or top-level properties)
         let selectors: Record<string, LayerVariableSelector> | undefined = undefined
         if (item.variable_selectors) {
           selectors = {}
@@ -425,19 +483,51 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
               options: options_record,
             }
           }
+        } else {
+          //Check top-level properties for selectors (e.g. gender and age in age_sex)
+          let item_keys = Object.keys(item)
+          for (let z = 0; z < item_keys.length; z++) {
+            let ik = item_keys[z]
+            if (metadata_keys.includes(ik))
+              continue
+            let candidate_sel = item[ik]
+            if (typeof candidate_sel === 'object' && candidate_sel !== null && !candidate_sel.filepath) {
+              let opt_keys = Object.keys(candidate_sel).filter((arg0_opt) => arg0_opt !== 'name')
+              if (opt_keys.length > 0) {
+                if (!selectors)
+                  selectors = {}
+                let options_record: Record<string, LayerVariableOption> = {}
+                for (let a = 0; a < opt_keys.length; a++) {
+                  let ok = opt_keys[a]
+                  let opt_val = candidate_sel[ok]
+                  options_record[ok] = {
+                    discounted: opt_val.discounted,
+                    legend: opt_val.legend,
+                    name: opt_val.name || ok,
+                  }
+                }
+                selectors[ik] = {
+                  name: candidate_sel.name || ik,
+                  options: options_record,
+                }
+              }
+            }
+          }
         }
 
-        //Scan files and discover available years using generalized scanLayerTemplate
-        let years = scanLayerTemplate(resolved_template, k, file_cache, selectors)
+        //Scan files and discover available years using scanLayerTemplate if template exists
+        let years = has_filepath ? scanLayerTemplate(resolved_template, k, file_cache, selectors) : []
 
         //Determine layer type
         let layer_type = 'raster'
         if (k.includes('professions') || k.includes('profession')) {
           layer_type = 'raster.category_profession'
-        } else if (k.includes('population')) {
-          layer_type = 'raster.population'
-        } else if (k.includes('age_sex')) {
+        } else if (k.includes('age_sex') || item.type === 'raster.age_sex') {
           layer_type = 'raster.age_sex'
+        } else if (k.includes('population') || k.includes('birth') || k.includes('death') || k.includes('migration')) {
+          layer_type = 'raster.population'
+        } else if (item.type) {
+          layer_type = item.type
         }
 
         //Determine description
@@ -448,16 +538,8 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
           desc_text = item.description
         }
 
-        //Check for sub-layers (e.g. labourforce_female, labourforce_male in labourforce_total)
+        //Check for sub-layers (e.g. labourforce_female/male, lfpr_female/male)
         let sub_layer_list: ParsedDataLayer[] = []
-        let sub_keys = Object.keys(item).filter(
-          (arg0_sk) =>
-            typeof item[arg0_sk] === 'object' &&
-            item[arg0_sk] !== null &&
-            item[arg0_sk].filepath &&
-            arg0_sk !== 'legend' &&
-            arg0_sk !== 'variable_selectors'
-        )
 
         for (let b = 0; b < sub_keys.length; b++) {
           let sub_k = sub_keys[b]
@@ -466,7 +548,7 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
 
           for (let y = 0; y < root_keys.length; y++) {
             let rk = root_keys[y]
-            sub_template = sub_template.replace(new RegExp(`\\$\\{${rk}\\}`, 'g'), resolved_roots[rk])
+            sub_template = sub_template.replace(new RegExp(`(\\$\\{${rk}\\}|\\{${rk}\\})`, 'g'), resolved_roots[rk])
           }
           sub_template = normaliseLayerPath(sub_template)
 
@@ -485,14 +567,37 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
             name: sub_item.name || sub_k,
             parent_id: k,
             permissions: sub_item.permissions ? (Array.isArray(sub_item.permissions) ? sub_item.permissions : [sub_item.permissions]) : ['default'],
-            type: layer_type,
+            type: sub_item.type || layer_type,
             unit: sub_item.unit || item.unit,
           })
         }
 
+        //If parent has no direct filepath, inherit years from sublayers
+        if (!has_filepath && sub_layer_list.length > 0) {
+          let year_set = new Set<number>()
+          for (let s = 0; s < sub_layer_list.length; s++) {
+            for (let y = 0; y < sub_layer_list[s].available_years.length; y++) {
+              year_set.add(sub_layer_list[s].available_years[y])
+            }
+          }
+          years = Array.from(year_set).sort((arg0_a, arg0_b) => arg0_a - arg0_b)
+          resolved_template = sub_layer_list[0].filepath_template
+        }
+
+        let category_name = 'Historical Macroeconomic Rasters'
+        if (layer_type.startsWith('raster.category_')) {
+          category_name = 'Occupations & Categories'
+        } else if (layer_type === 'raster.age_sex' || k.includes('age_sex')) {
+          category_name = 'Demographic Cohorts (Age & Sex)'
+        } else if (k.includes('birth') || k.includes('death') || k.includes('migration')) {
+          category_name = 'Vital Statistics & Migration'
+        } else if (k.includes('population') || k.includes('stad')) {
+          category_name = 'Population & Settlement Dynamics'
+        }
+
         parsed_layers[k] = {
           available_years: years,
-          category: layer_type.startsWith('raster.category_') ? 'Occupations & Categories' : 'Historical Macroeconomic Rasters',
+          category: category_name,
           description: desc_text,
           encoding: item.encoding || 'float32',
           filepath_template: resolved_template,

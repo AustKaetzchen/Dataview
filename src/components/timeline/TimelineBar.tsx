@@ -255,7 +255,7 @@ export const TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
     >
       <div className="bg-card/95 backdrop-blur-md border border-border shadow-2xl p-2.5 transition-all">
         {/* Top Header Row: Date Badge, Controls, & Settings */}
-        <div className="flex items-center justify-between gap-3 pb-2 border-b border-border/60">
+        <div className="relative flex items-center justify-between gap-3 pb-2 border-b border-border/60 min-h-[36px]">
           <div className="flex items-center gap-2">
             {/* Play/Pause Button */}
             <button
@@ -390,8 +390,8 @@ export const TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
             )}
           </div>
 
-          {/* Centre Date Badge */}
-          <div className="flex items-center gap-2 bg-background/90 border border-border px-4 py-1 shadow-inner">
+          {/* Centre Date Badge - strictly anchored to exact horizontal center */}
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 bg-background/90 border border-border px-4 py-1 shadow-inner pointer-events-auto">
             <Icon name="event" className="text-primary text-sm" />
             <span className="text-sm font-bold tracking-tight text-foreground font-mono">
               {formatted_date}

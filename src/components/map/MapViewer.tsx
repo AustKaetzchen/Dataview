@@ -119,6 +119,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
   let ui_visible = props.uiVisible !== undefined ? props.uiVisible : true
 
   //Declare local instance variables
+  let active_layer: ParsedDataLayer | null = null
   let analytics_open = props.analyticsOpen
   let breaks = props.breaks
   let camera_tilt: number
@@ -586,6 +587,17 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
     hoveredCountry: hovered_country,
   })
 
+  if (props.activeLayerId && props.dataLayers) {
+    active_layer = props.dataLayers[props.activeLayerId] || null
+    if (!active_layer && props.activeLayerId.includes('.')) {
+      let parent_id = props.activeLayerId.split('.')[0]
+      let parent = props.dataLayers[parent_id]
+      if (parent && parent.sub_layers) {
+        active_layer = parent.sub_layers.find((arg0_sub) => arg0_sub.id === props.activeLayerId) || null
+      }
+    }
+  }
+
   //Return statement
   return (
     <div
@@ -607,7 +619,14 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
       />
 
       {/* Floating HUD Inspector */}
-      {ui_visible && <ClickInfoPanel info={inspect_data} pos={cursor_pos} />}
+      {ui_visible && (
+        <ClickInfoPanel
+          info={inspect_data}
+          pos={cursor_pos}
+          activeLayer={active_layer}
+          activeVariableSelectors={props.activeVariableSelectors}
+        />
+      )}
 
       {/* Top Left: Value Colourbar & Information Flyout Container */}
       {ui_visible && (Boolean(rendered_canvas) || info_panel_open) &&
