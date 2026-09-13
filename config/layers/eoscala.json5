@@ -209,16 +209,20 @@
             indicator: {
                 name: "Indicator",
                 net_wealth: {
-                    name: "Net Wealth"
+                    name: "Net Wealth",
+                    discounted: true
                 },
                 net_income: {
-                    name: "Net Income"
+                    name: "Net Income",
+                    discounted: true
                 },
                 disposable_income: {
-                    name: "Disposable Income"
+                    name: "Disposable Income",
+                    discounted: true
                 },
                 discretionary_income: {
-                    name: "Discretionary Income"
+                    name: "Discretionary Income",
+                    discounted: true
                 }
             }
         }
