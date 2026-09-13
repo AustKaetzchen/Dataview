@@ -12,7 +12,7 @@ import { Icon } from '../ui/icon'
 
 export interface AnalyticsDrawerProps {
   activeLayer?: ParsedDataLayer | null
-  activeVariableSelectors?: Record<string, string>
+  activeVariableSelectors?: Record<string, string | string[]>
   countryStats?: CountryStats | null
   currentYear?: number
   inspectData?: {

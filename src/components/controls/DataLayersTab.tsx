@@ -7,11 +7,11 @@ export type UserRole = 'developer' | 'privileged' | 'default'
 
 export interface DataLayersTabProps {
   activeLayerId: string | null
-  activeVariableSelectors: Record<string, string>
+  activeVariableSelectors: Record<string, string | string[]>
   isLoadingLayers?: boolean
   layers: Record<string, ParsedDataLayer>
   onChangeUserRole?: (arg0_role: UserRole) => void
-  onChangeVariableSelector: (arg0_key: string, arg1_option: string) => void
+  onChangeVariableSelector: (arg0_key: string, arg1_option: string | string[]) => void
   onOpenVideoExport?: () => void
   onSelectLayer: (arg0_layer_id: string) => void
   userRole?: UserRole
@@ -371,33 +371,58 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
               </div>
 
               {Object.keys(active_layer.variable_selectors).map((arg0_sel_key) => {
-                let sel = active_layer!.variable_selectors![arg0_sel_key]
-                let current_val = active_variable_selectors[arg0_sel_key] || Object.keys(sel.options)[0]
+                let sel = active_layer.variable_selectors![arg0_sel_key]
+                let raw_val = active_variable_selectors[arg0_sel_key]
+                let selected_vals: string[] = []
+                if (Array.isArray(raw_val)) {
+                  selected_vals = raw_val
+                } else if (typeof raw_val === 'string' && raw_val.length > 0) {
+                  selected_vals = [raw_val]
+                } else if (Object.keys(sel.options)[0]) {
+                  selected_vals = [Object.keys(sel.options)[0]]
+                }
+
+                let display_label = selected_vals.map((arg0_k) => sel.options[arg0_k]?.name || arg0_k).join(', ')
 
                 return (
                   <div key={arg0_sel_key} className="space-y-1 bg-muted/20 p-1.5 border border-border">
                     <div className="flex justify-between text-[11px]">
                       <span className="font-medium text-foreground">{sel.name}</span>
-                      <span className="text-primary font-mono font-bold">{sel.options[current_val]?.name || current_val}</span>
+                      <span className="text-primary font-mono font-bold truncate max-w-[150px]">{display_label}</span>
                     </div>
 
                     <div className="flex items-center gap-1 flex-wrap">
                       {Object.keys(sel.options).map((arg0_opt_key) => {
                         let opt = sel.options[arg0_opt_key]
-                        let is_opt_active = current_val === arg0_opt_key
+                        let is_opt_active = selected_vals.includes(arg0_opt_key)
 
                         return (
                           <button
                             key={arg0_opt_key}
                             type="button"
-                            onClick={() => on_change_variable_selector(arg0_sel_key, arg0_opt_key)}
-                            className={`px-2 py-0.5 text-[10px] border transition-colors cursor-pointer ${
+                            onClick={() => {
+                              let next_vals: string[]
+                              if (is_opt_active) {
+                                next_vals = selected_vals.filter((arg0_v) => arg0_v !== arg0_opt_key)
+                                if (next_vals.length === 0)
+                                  next_vals = [arg0_opt_key]
+                              } else {
+                                next_vals = [...selected_vals, arg0_opt_key]
+                              }
+                              on_change_variable_selector(arg0_sel_key, next_vals)
+                            }}
+                            className={`px-2 py-0.5 text-[10px] border transition-colors cursor-pointer flex items-center gap-1 ${
                               is_opt_active
                                 ? 'bg-primary text-primary-foreground border-primary font-bold shadow-xs'
                                 : 'bg-background text-muted-foreground hover:text-foreground border-border'
                             }`}
                           >
-                            {opt.name}
+                            <span className={`w-2.5 h-2.5 border rounded-none flex items-center justify-center shrink-0 ${
+                              is_opt_active ? 'bg-primary-foreground/20 border-primary-foreground' : 'border-muted-foreground/60'
+                            }`}>
+                              {is_opt_active && <Icon name="check" className="text-[8px] text-white" />}
+                            </span>
+                            <span>{opt.name}</span>
                             {opt.discounted && <span className="ml-0.5 opacity-60 text-[9px]">*</span>}
                           </button>
                         )

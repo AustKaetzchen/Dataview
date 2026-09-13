@@ -337,7 +337,6 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
         try {
           let raw_body = Buffer.concat(body_chunks).toString('utf-8')
           let payload = JSON.parse(raw_body)
-          let filename = payload.filename || `export_${Date.now()}.mp4`
           let base64_data = payload.data as string
 
           if (!base64_data) {
@@ -347,9 +346,19 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
             return
           }
 
+          let is_webm = base64_data.startsWith('data:video/webm') || (payload.metadata?.mimeType && payload.metadata.mimeType.includes('webm'))
+          let default_ext = is_webm ? '.webm' : '.mp4'
+          let filename = payload.filename || `export_${Date.now()}${default_ext}`
+          if (!filename.endsWith('.mp4') && !filename.endsWith('.webm'))
+            filename = `${filename}${default_ext}`
+
+          if (!fs.existsSync(exports_dir))
+            fs.mkdirSync(exports_dir, { recursive: true })
+
           let out_path = path.join(exports_dir, filename)
           let clean_base64 = base64_data.replace(/^data:[^;]+;base64,/, '')
-          fs.writeFileSync(out_path, Buffer.from(clean_base64, 'base64'))
+          let video_buffer = Buffer.from(clean_base64, 'base64')
+          fs.writeFileSync(out_path, video_buffer)
 
           res.statusCode = 200
           res.setHeader('Content-Type', 'application/json')
@@ -358,6 +367,7 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
               filename,
               message: 'Video export successfully saved to exports directory.',
               path: out_path,
+              sizeBytes: video_buffer.length,
               success: true,
             })
           )

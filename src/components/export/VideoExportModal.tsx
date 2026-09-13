@@ -8,6 +8,15 @@ import { UfDate } from '@/lib/ufDate'
 export type VideoExportMode = 'stationary' | 'cycling'
 export type TimestepUnit = 'years' | 'months' | 'days'
 
+export interface StartTimelapseExportOptions {
+  endYear: number
+  filename: string
+  fps: number
+  keyframesOnly: boolean
+  startYear: number
+  timestepStep: number
+}
+
 export interface VideoExportModalProps {
   activeLayerId: string | null
   availableKeyframes: number[]
@@ -16,6 +25,7 @@ export interface VideoExportModalProps {
   maxYear: number
   minYear: number
   onClose: () => void
+  onStartTimelapseExport?: (arg0_options: StartTimelapseExportOptions) => Promise<void>
 }
 
 /**
@@ -258,215 +268,29 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   }, [])
 
   handle_start_export = useCallback(async () => {
-    set_is_exporting(true)
-    set_export_error(null)
-    set_export_success(null)
-    set_progress_pct(5)
-    set_progress_status('Initialising video export sequence...')
+    let ext = 'webm'
+    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported('video/mp4'))
+      ext = 'mp4'
+    let clean_filename = export_filename.replace(/\.(mp4|webm)$/i, '') + `.${ext}`
 
-    try {
-      //Determine sequence frames
-      let sequence_years: number[] = []
-      if (keyframes_only && available_keyframes.length > 0) {
-        sequence_years = available_keyframes.filter((arg0_y) => arg0_y >= start_year && arg0_y <= end_year)
-      } else {
-        let step = Math.max(1, timestep_step)
-        for (let yr = start_year; yr <= end_year; yr += step)
-          sequence_years.push(yr)
-      }
-
-      if (sequence_years.length === 0)
-        throw new Error('No valid keyframes found in selected date range.')
-
-      let sequence_steps: Array<{ category: string; layer_id: string; layer_name: string; year: number }> = []
-
-      if (export_mode === 'stationary') {
-        let target_layer_id = active_layer_id || Object.keys(available_layers)[0]
-        let target_layer = available_layers[target_layer_id]
-        let category = target_layer?.category || 'Layer'
-        let layer_name = target_layer?.name || target_layer_id
-        for (let i = 0; i < sequence_years.length; i++) {
-          sequence_steps.push({
-            category,
-            layer_id: target_layer_id,
-            layer_name,
-            year: sequence_years[i],
-          })
-        }
-      } else {
-        let cycling_layer_keys =
-          selected_cycling_layers.length > 0
-            ? selected_cycling_layers
-            : Object.keys(available_layers).slice(0, 5)
-        for (let i = 0; i < sequence_years.length; i++) {
-          let yr = sequence_years[i]
-          for (let x = 0; x < cycling_layer_keys.length; x++) {
-            let lid = cycling_layer_keys[x]
-            let lyr = available_layers[lid]
-            sequence_steps.push({
-              category: lyr?.category || 'Cycling',
-              layer_id: lid,
-              layer_name: lyr?.name || lid,
-              year: yr,
-            })
-          }
-        }
-      }
-
-      let total_frames = sequence_steps.length
-      set_progress_status(`Initialising canvas recorder for ${total_frames} frames...`)
-
-      //Create offscreen canvas
-      let canvas = document.createElement('canvas')
-      canvas.width = 1280
-      canvas.height = 720
-      let ctx = canvas.getContext('2d')
-      if (!ctx)
-        throw new Error('Canvas 2D context not supported.')
-
-      //Detect supported MIME type
-      let mime_type = 'video/webm'
-      if (typeof MediaRecorder !== 'undefined') {
-        if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1')) {
-          mime_type = 'video/mp4;codecs=avc1'
-        } else if (MediaRecorder.isTypeSupported('video/mp4')) {
-          mime_type = 'video/mp4'
-        } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
-          mime_type = 'video/webm;codecs=vp9'
-        } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8')) {
-          mime_type = 'video/webm;codecs=vp8'
-        } else if (MediaRecorder.isTypeSupported('video/webm')) {
-          mime_type = 'video/webm'
-        }
-      }
-
-      let stream = canvas.captureStream(fps)
-      let recorder = new MediaRecorder(stream, {
-        mimeType: mime_type,
-        videoBitsPerSecond: 5000000,
+    if (props.onStartTimelapseExport) {
+      on_close()
+      await props.onStartTimelapseExport({
+        endYear: end_year,
+        filename: clean_filename,
+        fps,
+        keyframesOnly: keyframes_only,
+        startYear: start_year,
+        timestepStep: timestep_step,
       })
-
-      let recorded_chunks: Blob[] = []
-      recorder.ondataavailable = function (arg0_event: BlobEvent) {
-        if (arg0_event.data && arg0_event.data.size > 0)
-          recorded_chunks.push(arg0_event.data)
-      }
-
-      recorder.start()
-
-      //Determine frame hold duration (at least 100ms per frame so timelapse is legible)
-      let frame_hold_ms = Math.max(100, Math.floor(1000/Math.min(15, fps)))
-
-      //Render each frame
-      for (let i = 0; i < sequence_steps.length; i++) {
-        let step = sequence_steps[i]
-        set_progress_pct(Math.round(((i + 1)/total_frames)*80))
-        set_progress_status(`Rendering ${step.layer_name} (${UfDate.formatYear(step.year)})...`)
-
-        let img_url = `/api/raster/file?layer=${encodeURIComponent(step.layer_id)}&year=${step.year}`
-        let img = await loadImageAsync(img_url)
-
-        renderTimelapseCanvasFrame(
-          ctx,
-          img,
-          step.layer_name,
-          step.category,
-          step.year,
-          i,
-          total_frames,
-          start_year,
-          end_year
-        )
-
-        //Sleep to allow stream frame capture
-        await new Promise((arg0_r) => setTimeout(arg0_r, frame_hold_ms))
-      }
-
-      set_progress_pct(85)
-      set_progress_status('Finalising video stream encoding...')
-
-      //Stop recorder and wait for blob
-      recorder.stop()
-      let video_blob: Blob = await new Promise((arg0_resolve) => {
-        recorder.onstop = function () {
-          let final_blob = new Blob(recorded_chunks, { type: mime_type })
-          arg0_resolve(final_blob)
-        }
-      })
-
-      set_progress_pct(90)
-      set_progress_status('Saving video to exports directory...')
-
-      //Read as Data URL
-      let file_reader = new FileReader()
-      let base64_payload: string = await new Promise((arg0_resolve, arg1_reject) => {
-        file_reader.onloadend = () => arg0_resolve(file_reader.result as string)
-        file_reader.onerror = arg1_reject
-        file_reader.readAsDataURL(video_blob)
-      })
-
-      let ext = mime_type.includes('mp4') ? '.mp4' : '.webm'
-      let clean_filename = export_filename.replace(/\.(mp4|webm)$/i, '') + ext
-
-      let res = await fetch('/api/export/video', {
-        body: JSON.stringify({
-          data: base64_payload,
-          filename: clean_filename,
-          metadata: {
-            fps,
-            frames: total_frames,
-            mimeType: mime_type,
-            mode: export_mode,
-            range: [start_year, end_year],
-            sizeBytes: video_blob.size,
-          },
-        }),
-        headers: { 'Content-Type': 'application/json' },
-        method: 'POST',
-      })
-
-      if (!res.ok) {
-        let err_json = await res.json()
-        throw new Error(err_json.error || 'Backend failed to save video export')
-      }
-
-      let data = await res.json()
-
-      //Trigger browser download
-      try {
-        let download_url = URL.createObjectURL(video_blob)
-        let download_anchor = document.createElement('a')
-        download_anchor.href = download_url
-        download_anchor.download = clean_filename
-        document.body.appendChild(download_anchor)
-        download_anchor.click()
-        document.body.removeChild(download_anchor)
-        setTimeout(() => URL.revokeObjectURL(download_url), 10000)
-      } catch (arg0_dl_err) {
-        console.warn('[VideoExportModal] Client download trigger warning:', arg0_dl_err)
-      }
-
-      set_progress_pct(100)
-      set_progress_status('Complete!')
-      set_export_success(
-        `Successfully exported ${Math.round(video_blob.size/1024)} KB video (${clean_filename}) to: ${data.path || data.filename}`
-      )
-    } catch (arg0_err: any) {
-      console.error('[VideoExportModal] Export failed:', arg0_err)
-      set_export_error(arg0_err.message || 'Video export encountered an error')
-    } finally {
-      set_is_exporting(false)
     }
   }, [
-    active_layer_id,
-    available_keyframes,
-    available_layers,
     end_year,
     export_filename,
-    export_mode,
     fps,
     keyframes_only,
-    selected_cycling_layers,
+    on_close,
+    props,
     start_year,
     timestep_step,
   ])
@@ -711,7 +535,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
         {/* Modal Footer */}
         <div className="p-4 border-t border-border bg-card/60 flex items-center justify-between">
           <span className="text-[11px] text-muted-foreground">
-            Target Destination: <code className="text-foreground">exports/</code>
+            Target Destination: <code className="text-foreground">exports/</code> on server
           </span>
 
           <div className="flex items-center gap-2">
@@ -730,7 +554,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
               className="px-4 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold shadow-sm cursor-pointer flex items-center gap-1.5"
             >
               <Icon name="videocam" />
-              <span>{is_exporting ? 'Exporting...' : 'Export Video'}</span>
+              <span>{is_exporting ? 'Starting...' : 'Start Timelapse Export'}</span>
             </button>
           </div>
         </div>

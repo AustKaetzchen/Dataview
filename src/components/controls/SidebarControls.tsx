@@ -26,7 +26,7 @@ import { ParsedDataLayer } from '@/server/layerParser'
 export interface SidebarControlsProps {
   activeFileName?: string
   activeLayerId?: string | null
-  activeVariableSelectors?: Record<string, string>
+  activeVariableSelectors?: Record<string, string | string[]>
   appMode: AppMode
   binningConfig: BinningConfig
   boundsMode: BoundsMode
@@ -47,7 +47,7 @@ export interface SidebarControlsProps {
   maxValOverride: string
   minValOverride: string
   onChangeUserRole?: (role: UserRole) => void
-  onChangeVariableSelector?: (key: string, option: string) => void
+  onChangeVariableSelector?: (key: string, option: string | string[]) => void
   onFileUpload: (file: File, target: 'single' | 'diff_a' | 'diff_b') => void
   onOpenVideoExport?: () => void
   onSelectLayer?: (layerId: string) => void

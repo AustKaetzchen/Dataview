@@ -18,10 +18,12 @@ export interface SectorBreakdownResult {
   global: Record<string, number>
 }
 
-//Demographic cohort IDs
+//Demographic cohort IDs, duration widths in years, and cohort midpoint ages
 let AGE_IDS = [
   '00', '01', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55', '60', '65', '70', '75', '80'
 ]
+let COHORT_WIDTHS = [1, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 7]
+let COHORT_MID_AGES = [0.5, 3.0, 7.5, 12.5, 17.5, 22.5, 27.5, 32.5, 37.5, 42.5, 47.5, 52.5, 57.5, 62.5, 67.5, 72.5, 77.5, 84.0]
 
 //Country demographic classification archetypes
 let SUPER_AGED_COUNTRIES = new Set([
@@ -74,6 +76,7 @@ export function getCountryDemographicPyramid (
   let sex_ratio: number
   let total_female = 0
   let total_male = 0
+  let total_pop: number
   let working_count = 0
   let youth_dep_count = 0
 
@@ -85,83 +88,57 @@ export function getCountryDemographicPyramid (
 
   //Function body
   for (let i = 0; i < AGE_IDS.length; i++) {
-    let age_factor = 1.0
+    let age = COHORT_MID_AGES[i]
     let cid = AGE_IDS[i]
+    let cohort_w = COHORT_WIDTHS[i]
     let f_val: number
-    let female_bias = 0.98 + i*0.008 //Women outlive men in older cohorts
     let m_val: number
-    let male_bias = 1.02 - i*0.006
+
+    //Smooth continuous demographic modeling
+    let annual_density = 1.0
 
     if (year <= 1850) {
-      //Pre-industrial classical pyramid across all countries (high birth & high mortality)
-      age_factor = Math.exp(-i*0.14)
-    } else if (is_super_aged) {
-      if (year >= 2000) {
-        //Contracting inverted urn pyramid: very low youth, peak around 50-65
-        let t_recent = Math.min(1, (year - 2000)/25)
-        if (i <= 3) {
-          age_factor = (0.45 - i*0.03)*(1 - t_recent*0.2)
-        } else if (i >= 9 && i <= 14) {
-          age_factor = 1.15 + (i - 9)*0.03
-        } else if (i >= 15) {
-          age_factor = 0.85 - (i - 15)*0.18
-        } else {
-          age_factor = 0.65 + i*0.05
-        }
-      } else {
-        let t_mid = (year - 1850)/150
-        age_factor = Math.exp(-i*(0.14 - t_mid*0.06))
-      }
-    } else if (is_mature) {
-      if (year >= 1970) {
-        //Stationary/pillar shape with post-war baby boom cohorts and stable youth
-        if (i <= 3) {
-          age_factor = 0.72 - i*0.02
-        } else if (i >= 4 && i <= 12) {
-          age_factor = 0.92 + (i === 8 || i === 9 ? 0.15 : 0)
-        } else {
-          age_factor = 0.75 - (i - 12)*0.14
-        }
-      } else {
-        let t_mid = (year - 1850)/120
-        age_factor = Math.exp(-i*(0.14 - t_mid*0.05))
-      }
-    } else if (is_transition) {
-      if (year >= 2000) {
-        //Rapid demographic transition: broad 25-45, narrowing base
-        if (i <= 3) {
-          age_factor = 0.58 - i*0.03
-        } else if (i >= 4 && i <= 10) {
-          age_factor = 1.08 + (i === 6 ? 0.14 : 0)
-        } else {
-          age_factor = 0.65 - (i - 10)*0.13
-        }
-      } else {
-        let t_mid = Math.max(0, (year - 1850)/150)
-        age_factor = Math.exp(-i*(0.14 - t_mid*0.04))
-      }
+      //Classical pre-industrial high-mortality demographic regime
+      annual_density = Math.exp(-age/32)
+    } else if (is_super_aged && year >= 1990) {
+      //Super-aged: low youth birth rate, high adult bulge at 45-65, low mortality until late 70s
+      let birth_decline = Math.min(0.65, 0.45 + (year - 1990)*0.007)
+      let youth_curve = 1 - birth_decline*Math.exp(-Math.pow(age/24, 2))
+      let bulge = 1 + 0.35*Math.exp(-Math.pow((age - 52)/14, 2))
+      let survival = Math.exp(-Math.pow(age/84, 5.5))
+      annual_density = youth_curve*bulge*survival
+    } else if (is_mature && year >= 1970) {
+      //Mature Western: stable fertility, baby-boom bulge around 45-60, high longevity
+      let birth_factor = 0.85 - 0.15*Math.exp(-Math.pow(age/22, 2))
+      let bulge = 1 + 0.25*Math.exp(-Math.pow((age - 48)/16, 2))
+      let survival = Math.exp(-Math.pow(age/82, 5.0))
+      annual_density = birth_factor*bulge*survival
+    } else if (is_transition && year >= 1990) {
+      //Emerging transition: rapid fertility drop in youth, working-age dividend at 25-50
+      let birth_factor = 0.70 - 0.30*Math.exp(-Math.pow(age/20, 2))
+      let bulge = 1 + 0.30*Math.exp(-Math.pow((age - 38)/15, 2))
+      let survival = Math.exp(-Math.pow(age/78, 4.5))
+      annual_density = birth_factor*bulge*survival
     } else if (is_high_fertility) {
-      //Expansive triangular pyramid: extremely wide youth base, rapid tapering
-      let taper_rate = year >= 1980 ? 0.11 : 0.13
-      age_factor = Math.exp(-i*taper_rate)
+      //High fertility expansive pyramid
+      let life_exp = year >= 1980 ? 46 : 38
+      annual_density = Math.exp(-age/life_exp)
     } else {
-      //Default / developing demographic dividend
-      if (year >= 2000) {
-        if (i <= 3) {
-          age_factor = 0.88 - i*0.04
-        } else if (i >= 4 && i <= 9) {
-          age_factor = 0.98 + (i === 5 ? 0.1 : 0)
-        } else {
-          age_factor = 0.68 - (i - 9)*0.11
-        }
-      } else {
-        let t_mid = Math.max(0, (year - 1850)/150)
-        age_factor = Math.exp(-i*(0.14 - t_mid*0.045))
-      }
+      //Developing dividend / default
+      let t_progress = Math.min(1, Math.max(0, (year - 1950)/75))
+      let life_exp = 38 + t_progress*34
+      let youth_factor = 1.0 - t_progress*0.25*Math.exp(-Math.pow(age/22, 2))
+      let survival = Math.exp(-Math.pow(age/life_exp, 3.8))
+      annual_density = youth_factor*survival
     }
 
-    m_val = Math.max(0.1, base_scale*age_factor*male_bias)
-    f_val = Math.max(0.1, base_scale*age_factor*female_bias)
+    //Aggregate inhabitants in cohort band = base_scale * cohort_duration * annual_density
+    let cohort_inhabitants = base_scale*cohort_w*annual_density
+
+    //Gender split: males higher at birth (1.05), women outlive men in older cohorts
+    let sex_bias = 1.05 - (age/90)*0.25
+    m_val = Math.max(0.1, cohort_inhabitants*(sex_bias/(1 + sex_bias)))
+    f_val = Math.max(0.1, cohort_inhabitants*(1/(1 + sex_bias)))
 
     male_map[cid] = Math.round(m_val*10)/10
     female_map[cid] = Math.round(f_val*10)/10
@@ -178,8 +155,9 @@ export function getCountryDemographicPyramid (
     }
   }
 
+  total_pop = youth_dep_count + working_count + old_dep_count
   sex_ratio = total_female > 0 ? Math.round((total_male/total_female)*1000)/1000 : 1.0
-  dependency_ratio = working_count > 0 ? Math.round(((youth_dep_count + old_dep_count)/working_count)*1000)/10 : 50.0
+  dependency_ratio = total_pop > 0 ? Math.round(((youth_dep_count + old_dep_count)/total_pop)*1000)/10 : 35.0
 
   //Return statement
   return {

@@ -5,7 +5,7 @@ import { CountryFeature, CountryStats } from '@/lib/geopng/polygonBinning'
 import { Icon } from '@/components/ui/icon'
 
 export interface PopulationPyramidChartProps {
-  activeVariableSelectors?: Record<string, string>
+  activeVariableSelectors?: Record<string, string | string[]>
   countryStats?: CountryStats | null
   currentYear: number
   inspectData?: {
@@ -154,30 +154,49 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
           if (arg0_json.dependencyRatio !== undefined)
             set_dependency_ratio(arg0_json.dependencyRatio)
         } else {
-          //Fallback demographic model
-          let base_scale = (country_stats?.mean ?? raster?.mean ?? 10)*10
+          //Fallback demographic model with cohort duration weighting and smooth mortality
+          let base_scale = (country_stats?.mean ?? raster?.mean ?? 10)*3
           let female_map: Record<string, number> = {}
           let male_map: Record<string, number> = {}
+          let old_dep = 0
           let sum_f = 0
           let sum_m = 0
+          let working_dep = 0
+          let youth_dep = 0
+          let cohort_durations = [1, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 7]
+          let cohort_mid_ages = [0.5, 3.0, 7.5, 12.5, 17.5, 22.5, 27.5, 32.5, 37.5, 42.5, 47.5, 52.5, 57.5, 62.5, 67.5, 72.5, 77.5, 84.0]
 
           for (let i = 0; i < AGE_COHORTS.length; i++) {
+            let age = cohort_mid_ages[i]
             let cid = AGE_COHORTS[i].id
-            let age_factor = Math.exp(-i*0.09)
-            if (current_year >= 1950 && i >= 4 && i <= 10)
-              age_factor *= 1.25
-            let m_val = Math.max(0.1, base_scale*age_factor*(1.02 - i*0.005))
-            let f_val = Math.max(0.1, base_scale*age_factor*(0.98 + i*0.008))
+            let w = cohort_durations[i]
+            let life_exp = Math.min(80, Math.max(40, 45 + (current_year - 1900)*0.25))
+            let survival = Math.exp(-Math.pow(age/life_exp, 3.5))
+            let inhabitants = base_scale*w*survival
+            let sex_bias = 1.05 - (age/90)*0.25
+            let m_val = Math.max(0.1, inhabitants*(sex_bias/(1 + sex_bias)))
+            let f_val = Math.max(0.1, inhabitants*(1/(1 + sex_bias)))
+
             male_map[cid] = Math.round(m_val*10)/10
             female_map[cid] = Math.round(f_val*10)/10
             sum_m += male_map[cid]
             sum_f += female_map[cid]
+
+            if (i <= 3) {
+              youth_dep += male_map[cid] + female_map[cid]
+            } else if (i >= 14) {
+              old_dep += male_map[cid] + female_map[cid]
+            } else {
+              working_dep += male_map[cid] + female_map[cid]
+            }
           }
 
+          let total_all = youth_dep + working_dep + old_dep
           set_pyramid_data({ female: female_map, male: male_map })
           set_total_male(Math.round(sum_m*10)/10)
           set_total_female(Math.round(sum_f*10)/10)
           set_sex_ratio(sum_f > 0 ? Math.round((sum_m/sum_f)*1000)/1000 : 1.0)
+          set_dependency_ratio(total_all > 0 ? Math.round(((youth_dep + old_dep)/total_all)*1000)/10 : 38.0)
         }
         set_is_loading(false)
       })
@@ -236,7 +255,9 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
   }, [pyramid_data])
 
   option = useMemo(() => {
-    let active_gender = active_variable_selectors.gender || 't'
+    let active_gender = Array.isArray(active_variable_selectors.gender)
+      ? active_variable_selectors.gender[0] || 't'
+      : active_variable_selectors.gender || 't'
     let max_abs_val = 1
     for (let i = 0; i < AGE_COHORTS.length; i++) {
       let m = Math.abs(male_values[i] || 0)

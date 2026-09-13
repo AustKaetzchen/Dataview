@@ -31,12 +31,12 @@ export function buildDecodedRasterResult (
   arg0_output: Float32Array,
   arg1_width: number,
   arg2_height: number,
-  arg3_min: number,
-  arg4_max: number,
-  arg5_mean: number,
-  arg6_std_dev: number,
-  arg7_valid_count: number,
-  arg8_total_cells: number
+  arg3_min?: number,
+  arg4_max?: number,
+  arg5_mean?: number,
+  arg6_std_dev?: number,
+  arg7_valid_count?: number,
+  arg8_total_cells?: number
 ): DecodedRaster {
   //Convert from parameters
   let height = arg2_height
@@ -55,10 +55,56 @@ export function buildDecodedRasterResult (
   let bin_edges: number[] = []
   let bin_width: number
   let quantiles: Record<number, number> = {}
-  let safe_max = Number.isFinite(max) ? max : 1
-  let safe_min = Number.isFinite(min) ? min : 0
+  let safe_max: number
+  let safe_min: number
   let sample_values: number[] = []
-  let step = Math.max(1, Math.floor(total_cells/50000))
+  let step: number
+
+  //Compute missing statistics if not supplied
+  if (
+    min === undefined ||
+    max === undefined ||
+    mean === undefined ||
+    std_dev === undefined ||
+    valid_count === undefined ||
+    total_cells === undefined
+  ) {
+    total_cells = width*height
+    valid_count = 0
+    let min_val = Infinity
+    let max_val = -Infinity
+    let sum = 0
+
+    for (let i = 0; i < total_cells; i++) {
+      let v = output[i]
+      if (!Number.isNaN(v) && Number.isFinite(v)) {
+        if (v < min_val)
+          min_val = v
+        if (v > max_val)
+          max_val = v
+        sum += v
+        valid_count++
+      }
+    }
+
+    min = Number.isFinite(min_val) ? min_val : 0
+    max = Number.isFinite(max_val) ? max_val : 0
+    mean = valid_count > 0 ? sum/valid_count : 0
+
+    let sum_sq_diff = 0
+    for (let i = 0; i < total_cells; i++) {
+      let v = output[i]
+      if (!Number.isNaN(v) && Number.isFinite(v)) {
+        let diff = v - mean
+        sum_sq_diff += diff*diff
+      }
+    }
+    std_dev = valid_count > 0 ? Math.sqrt(sum_sq_diff/valid_count) : 0
+  }
+
+  safe_max = Number.isFinite(max) ? max : 1
+  safe_min = Number.isFinite(min) ? min : 0
+  step = Math.max(1, Math.floor(total_cells/50000))
 
   //Function body
   for (let i = 0; i < total_cells; i += step) {

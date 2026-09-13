@@ -96,10 +96,10 @@ export interface MapViewerProps {
   onToggleInfoPanel?: () => void
   onCloseInfoPanel?: () => void
   activeLayerId?: string | null
-  activeVariableSelectors?: Record<string, string>
+  activeVariableSelectors?: Record<string, string | string[]>
   dataLayers?: Record<string, ParsedDataLayer>
   isLoadingLayers?: boolean
-  onChangeVariableSelector?: (arg0_key: string, arg1_option: string) => void
+  onChangeVariableSelector?: (arg0_key: string, arg1_option: string | string[]) => void
   onSelectLayer?: (arg0_layer_id: string) => void
   uiVisible?: boolean
   onToggleUi?: () => void
@@ -608,6 +608,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
       onPointerMove={handle_container_pointer_move}
     >
       <DeckGL
+        id="deckgl-overlay"
         views={views}
         viewState={proj_view_states[projection]}
         onViewStateChange={handle_view_state_change}

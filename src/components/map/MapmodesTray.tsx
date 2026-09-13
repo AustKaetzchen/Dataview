@@ -30,7 +30,7 @@ export {
 
 export interface MapmodesTrayProps {
   activeLayerId?: string | null
-  activeVariableSelectors?: Record<string, string>
+  activeVariableSelectors?: Record<string, string | string[]>
   allCountries: CountryFeature[]
   analyticsOpen?: boolean
   cameraTilt?: number
@@ -42,7 +42,7 @@ export interface MapmodesTrayProps {
   isLoadingLayers?: boolean
   layers?: Record<string, ParsedDataLayer>
   mapModes: MapModeItem[]
-  onChangeVariableSelector?: (arg0_key: string, arg1_option: string) => void
+  onChangeVariableSelector?: (arg0_key: string, arg1_option: string | string[]) => void
   onClearCountries: () => void
   onReorderMapModes: (newModes: MapModeItem[]) => void
   onSelectLayer?: (arg0_layer_id: string) => void
@@ -223,35 +223,91 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
     let selector_keys = Object.keys(layer.variable_selectors)
 
     return (
-      <div className="mt-1 p-1.5 border-t border-border/60 bg-muted/20 space-y-1.5 text-[11px]">
+      <div className="mt-1 p-1.5 border-t border-border/60 bg-muted/20 space-y-2 text-[11px]">
         {selector_keys.map((arg0_key) => {
           let sel = layer.variable_selectors![arg0_key]
           let opts = Object.entries(sel.options)
           if (opts.length > 0 && opts.every(([arg0_k]) => !Number.isNaN(parseInt(arg0_k, 10)))) {
             opts.sort((arg0_a, arg0_b) => parseInt(arg0_a[0], 10) - parseInt(arg0_b[0], 10))
           }
-          let current_val = active_variable_selectors[arg0_key] || opts[0]?.[0] || ''
+          let raw_val = active_variable_selectors[arg0_key]
+          let selected_vals: string[] = []
+          if (Array.isArray(raw_val)) {
+            selected_vals = raw_val
+          } else if (typeof raw_val === 'string' && raw_val.length > 0) {
+            selected_vals = [raw_val]
+          } else if (opts[0]?.[0]) {
+            selected_vals = [opts[0][0]]
+          }
 
           return (
             <div key={arg0_key} className="space-y-1">
-              <span className="text-muted-foreground uppercase font-bold text-[10px] tracking-wider block">
-                {sel.name || arg0_key}
-              </span>
-              <Select
-                value={current_val}
-                onValueChange={(arg0_v) => on_change_variable_selector && on_change_variable_selector(arg0_key, arg0_v)}
-              >
-                <SelectTrigger className="h-6 rounded-none text-[11px] bg-card border-border">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="rounded-none">
-                  {opts.map(([arg0_opt_key, arg0_opt]) => (
-                    <SelectItem key={arg0_opt_key} value={arg0_opt_key} className="rounded-none text-[11px]">
-                      {arg0_opt.name || arg0_opt_key}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center justify-between text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+                <span>{sel.name || arg0_key}</span>
+                <div className="flex items-center gap-1 font-mono">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      let all_keys = opts.map(([k]) => k)
+                      if (on_change_variable_selector)
+                        on_change_variable_selector(arg0_key, all_keys)
+                    }}
+                    className="text-[9px] text-primary hover:underline cursor-pointer"
+                  >
+                    All
+                  </button>
+                  <span className="text-muted-foreground/40">•</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (on_change_variable_selector)
+                        on_change_variable_selector(arg0_key, opts[0]?.[0] ? [opts[0][0]] : [])
+                    }}
+                    className="text-[9px] text-muted-foreground hover:underline cursor-pointer"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {opts.map(([arg0_opt_key, arg0_opt]) => {
+                  let is_selected = selected_vals.includes(arg0_opt_key)
+                  return (
+                    <button
+                      key={arg0_opt_key}
+                      type="button"
+                      onClick={() => {
+                        let next_vals: string[]
+                        if (is_selected) {
+                          next_vals = selected_vals.filter((v) => v !== arg0_opt_key)
+                          if (next_vals.length === 0)
+                            next_vals = [arg0_opt_key]
+                        } else {
+                          next_vals = [...selected_vals, arg0_opt_key]
+                        }
+                        if (on_change_variable_selector)
+                          on_change_variable_selector(arg0_key, next_vals)
+                      }}
+                      className={`px-2 py-0.5 border text-left text-[10px] flex items-center gap-1.5 cursor-pointer transition-colors ${
+                        is_selected
+                          ? 'bg-primary/20 border-primary text-primary font-bold'
+                          : 'bg-card border-border text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <span
+                        className={`w-3 h-3 border rounded-none flex items-center justify-center shrink-0 ${
+                          is_selected
+                            ? 'bg-primary border-primary text-primary-foreground'
+                            : 'border-muted-foreground/60 bg-background/60'
+                        }`}
+                      >
+                        {is_selected && <Icon name="check" className="text-[9px] text-white stroke-[3]" />}
+                      </span>
+                      <span>{arg0_opt.name || arg0_opt_key}</span>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           )
         })}
@@ -370,7 +426,15 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
                   if (opts.length > 0 && opts.every(([arg0_k]) => !Number.isNaN(parseInt(arg0_k, 10)))) {
                     opts.sort((arg0_a, arg0_b) => parseInt(arg0_a[0], 10) - parseInt(arg0_b[0], 10))
                   }
-                  let current_val = active_variable_selectors[arg0_var_key] || opts[0]?.[0] || ''
+                  let raw_val = active_variable_selectors[arg0_var_key]
+                  let selected_vals: string[] = []
+                  if (Array.isArray(raw_val)) {
+                    selected_vals = raw_val
+                  } else if (typeof raw_val === 'string' && raw_val.length > 0) {
+                    selected_vals = [raw_val]
+                  } else if (opts[0]?.[0]) {
+                    selected_vals = [opts[0][0]]
+                  }
 
                   return (
                     <div key={arg0_var_key} className="border border-border/70 bg-muted/20">
@@ -385,9 +449,37 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
                             {arg0_sel.name || arg0_var_key}
                           </span>
                         </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <span className="text-[9px] text-muted-foreground font-mono">
-                            {opts.length}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={(arg0_e) => {
+                              arg0_e.stopPropagation()
+                              if (!is_active && on_select_layer)
+                                on_select_layer(layer.id)
+                              let all_keys = opts.map(([k]) => k)
+                              if (on_change_variable_selector)
+                                on_change_variable_selector(arg0_var_key, all_keys)
+                            }}
+                            className="text-[9px] text-primary hover:underline font-mono cursor-pointer"
+                          >
+                            All
+                          </button>
+                          <span className="text-[9px] text-muted-foreground/40">•</span>
+                          <button
+                            type="button"
+                            onClick={(arg0_e) => {
+                              arg0_e.stopPropagation()
+                              if (!is_active && on_select_layer)
+                                on_select_layer(layer.id)
+                              if (on_change_variable_selector)
+                                on_change_variable_selector(arg0_var_key, opts[0]?.[0] ? [opts[0][0]] : [])
+                            }}
+                            className="text-[9px] text-muted-foreground hover:underline font-mono cursor-pointer"
+                          >
+                            Reset
+                          </button>
+                          <span className="text-[9px] px-1 py-0.2 bg-muted text-muted-foreground font-mono ml-0.5">
+                            {selected_vals.length}/{opts.length}
                           </span>
                           <Icon
                             name={is_var_open ? 'expand_less' : 'expand_more'}
@@ -396,11 +488,11 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
                         </div>
                       </div>
 
-                      {/* Box content: options as selectable buttons */}
+                      {/* Box content: options as selectable checkboxes */}
                       {is_var_open && (
                         <div className="p-1 max-h-48 overflow-y-auto space-y-0.5 bg-card/30">
                           {opts.map(([arg0_opt_key, arg0_opt]) => {
-                            let is_opt_selected = is_active && current_val === arg0_opt_key
+                            let is_opt_selected = is_active && selected_vals.includes(arg0_opt_key)
 
                             return (
                               <button
@@ -409,8 +501,16 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
                                 onClick={() => {
                                   if (!is_active && on_select_layer)
                                     on_select_layer(layer.id)
+                                  let next_vals: string[]
+                                  if (selected_vals.includes(arg0_opt_key)) {
+                                    next_vals = selected_vals.filter((arg0_v) => arg0_v !== arg0_opt_key)
+                                    if (next_vals.length === 0)
+                                      next_vals = [arg0_opt_key]
+                                  } else {
+                                    next_vals = [...selected_vals, arg0_opt_key]
+                                  }
                                   if (on_change_variable_selector)
-                                    on_change_variable_selector(arg0_var_key, arg0_opt_key)
+                                    on_change_variable_selector(arg0_var_key, next_vals)
                                 }}
                                 className={`w-full flex items-center justify-between px-2 py-1 text-left cursor-pointer border transition-colors text-[11px] ${
                                   is_opt_selected
@@ -419,15 +519,21 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
                                 }`}
                               >
                                 <div className="flex items-center gap-1.5 min-w-0">
-                                  <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center shrink-0 ${
-                                    is_opt_selected ? 'border-primary bg-primary' : 'border-muted-foreground/60'
-                                  }`}>
-                                    {is_opt_selected && <span className="w-1 h-1 rounded-full bg-primary-foreground" />}
+                                  <span
+                                    className={`w-3.5 h-3.5 border rounded-none flex items-center justify-center shrink-0 transition-colors ${
+                                      is_opt_selected
+                                        ? 'bg-primary border-primary text-primary-foreground'
+                                        : 'border-muted-foreground/60 bg-background/60'
+                                    }`}
+                                  >
+                                    {is_opt_selected && (
+                                      <Icon name="check" className="text-[9px] text-white stroke-[3]" />
+                                    )}
                                   </span>
                                   <span className="truncate">{arg0_opt.name || arg0_opt_key}</span>
                                 </div>
                                 {is_opt_selected && (
-                                  <Icon name="check" className="text-[10px] text-primary shrink-0" />
+                                  <span className="text-[9px] text-primary font-mono shrink-0">selected</span>
                                 )}
                               </button>
                             )
@@ -518,7 +624,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
       <div
         style={{
           bottom: '12px',
-          maxHeight: is_tray_collapsed ? 'auto' : max_height_style,
+          maxHeight: is_tray_collapsed ? 'auto' : '50dvh',
           right: '12px',
         }}
         className="absolute z-20 w-80 flex flex-col bg-card/95 backdrop-blur-md border border-border shadow-2xl p-2.5 space-y-2 text-[var(--body-font-size)] select-none font-sans overflow-hidden transition-all"

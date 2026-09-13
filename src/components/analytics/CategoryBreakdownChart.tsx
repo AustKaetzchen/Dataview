@@ -5,7 +5,7 @@ import { CountryFeature, CountryStats } from '@/lib/geopng/polygonBinning'
 import { Icon } from '@/components/ui/icon'
 
 export interface CategoryBreakdownChartProps {
-  activeVariableSelectors?: Record<string, string>
+  activeVariableSelectors?: Record<string, string | string[]>
   countryStats?: CountryStats | null
   currentYear: number
   inspectData?: {
@@ -338,7 +338,9 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
         <div className="flex items-center gap-2 text-[10px] font-mono text-muted-foreground shrink-0">
           <span>Active:</span>
           <span className="text-primary font-bold capitalize">
-            {active_variable_selectors.profession?.replace(/_/g, ' ') || 'Agriculture'}
+            {Array.isArray(active_variable_selectors.profession)
+              ? active_variable_selectors.profession.map((arg0_p) => arg0_p.replace(/_/g, ' ')).join(', ') || 'Agriculture'
+              : active_variable_selectors.profession?.replace(/_/g, ' ') || 'Agriculture'}
           </span>
         </div>
       </div>

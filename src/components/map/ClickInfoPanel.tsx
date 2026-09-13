@@ -4,7 +4,7 @@ import { ParsedDataLayer } from '@/server/layerParser'
 
 export interface ClickInfoPanelProps {
   activeLayer?: ParsedDataLayer | null
-  activeVariableSelectors?: Record<string, string>
+  activeVariableSelectors?: Record<string, string | string[]>
   info: InspectionData | null
   pos: { x: number; y: number } | null
 }
@@ -50,19 +50,48 @@ export const ClickInfoPanel: React.FC<ClickInfoPanelProps> = function (arg0_prop
   if (!info || !pos)
     return null
 
-  formatted_val = (info.value !== null && Number.isFinite(info.value))
-    ? info.value.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })
-    : 'NA'
+  let is_percentage_unit = Boolean(
+    active_layer?.unit && (
+      active_layer.unit === '%' ||
+      active_layer.unit.includes('%') ||
+      active_layer.unit.toLowerCase().includes('percent')
+    )
+  )
+
+  if (info.value !== null && Number.isFinite(info.value)) {
+    if (is_percentage_unit) {
+      let pct_num = Math.abs(info.value) <= 1.0 ? info.value*100 : info.value
+      formatted_val = `${pct_num.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}%`
+    } else {
+      formatted_val = info.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    }
+  } else {
+    formatted_val = 'NA'
+  }
   formatted_lat = info.lat.toLocaleString(undefined, { minimumFractionDigits: 5, maximumFractionDigits: 5 })
   formatted_lng = info.lng.toLocaleString(undefined, { minimumFractionDigits: 5, maximumFractionDigits: 5 })
 
-  gender_label = active_selectors.gender === 'm' ? 'Male' : 'Female'
-  age_label = active_selectors.age
-    ? active_layer?.variable_selectors?.age?.options?.[active_selectors.age]?.name || `${active_selectors.age}yo`
-    : 'All Ages'
-  profession_label = active_selectors.profession
-    ? active_layer?.variable_selectors?.profession?.options?.[active_selectors.profession]?.name || active_selectors.profession.replace(/_/g, ' ')
-    : 'Agriculture'
+  let raw_gender = active_selectors.gender
+  let gender_val = Array.isArray(raw_gender) ? raw_gender.join(', ') : raw_gender
+  gender_label = gender_val === 'm' ? 'Male' : gender_val === 'f' ? 'Female' : gender_val || 'All Genders'
+
+  let raw_age = active_selectors.age
+  if (Array.isArray(raw_age)) {
+    age_label = `${raw_age.length} Cohorts (${raw_age.join(', ')})`
+  } else if (raw_age) {
+    age_label = active_layer?.variable_selectors?.age?.options?.[raw_age]?.name || `${raw_age}yo`
+  } else {
+    age_label = 'All Ages'
+  }
+
+  let raw_prof = active_selectors.profession
+  if (Array.isArray(raw_prof)) {
+    profession_label = raw_prof.map((arg0_p) => arg0_p.replace(/_/g, ' ')).join(', ')
+  } else if (raw_prof) {
+    profession_label = active_layer?.variable_selectors?.profession?.options?.[raw_prof]?.name || raw_prof.replace(/_/g, ' ')
+  } else {
+    profession_label = 'Agriculture'
+  }
 
   //Return statement
   return (
@@ -84,7 +113,7 @@ export const ClickInfoPanel: React.FC<ClickInfoPanelProps> = function (arg0_prop
         <div className="flex items-baseline gap-1.5 whitespace-nowrap leading-snug">
           <span className="text-muted-foreground font-bold shrink-0">Value:</span>
           <span className="font-bold text-foreground">{formatted_val}</span>
-          {active_layer?.unit && (
+          {active_layer?.unit && !is_percentage_unit && (
             <span className="text-[10px] text-muted-foreground font-mono ml-0.5">({active_layer.unit})</span>
           )}
         </div>

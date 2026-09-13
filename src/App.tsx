@@ -16,6 +16,7 @@ import {
 import {
   decodeRawGeoPngBufferAsync,
   computeRasterDifference,
+  buildDecodedRasterResult,
 } from './lib/geopng/decoder'
 import { renderRasterToCanvas } from './lib/geopng/palettes'
 import { computeQuantiles } from './lib/geopng/scales'
@@ -29,10 +30,12 @@ import { SidebarControls } from './components/controls/SidebarControls'
 import { MapViewer } from './components/map/MapViewer'
 import { AnalyticsDrawer } from './components/analytics/AnalyticsDrawer'
 import { TimelineBar } from './components/timeline/TimelineBar'
-import { VideoExportModal } from './components/export/VideoExportModal'
+import { VideoExportModal, type StartTimelapseExportOptions } from './components/export/VideoExportModal'
 import { interpolateRasters } from './lib/geopng/interpolate'
 import { ParsedDataLayer } from './server/layerParser'
 import { UserRole } from './components/controls/DataLayersTab'
+import { Icon } from './components/ui/icon'
+import { UfDate } from './lib/ufDate'
 
 /**
  * Maps raw JSON5 colourscheme strings to the corresponding D3 ColorPalette enum name.
@@ -91,7 +94,7 @@ const in_flight_fetches = new Map<string, Promise<DecodedRaster | null>>()
  * Applies legend configuration (colourscheme, inversion, scale type, units) from layer or active variable selector option.
  *
  * @param {ParsedDataLayer | null} arg0_layer
- * @param {Record<string, string>} arg1_selectors
+ * @param {Record<string, string | string[]>} arg1_selectors
  * @param {(arg0_palette: ColorPalette) => void} arg2_set_palette
  * @param {(arg0_invert: boolean) => void} arg3_set_invert
  * @param {(arg0_scale: ScaleType) => void} arg4_set_scale
@@ -100,7 +103,7 @@ const in_flight_fetches = new Map<string, Promise<DecodedRaster | null>>()
  */
 const applyLayerLegend = function (
   arg0_layer: ParsedDataLayer | null,
-  arg1_selectors: Record<string, string>,
+  arg1_selectors: Record<string, string | string[]>,
   arg2_set_palette: (arg0_palette: ColorPalette) => void,
   arg3_set_invert: (arg0_invert: boolean) => void,
   arg4_set_scale: (arg0_scale: ScaleType) => void,
@@ -133,13 +136,20 @@ const applyLayerLegend = function (
     for (let i = 0; i < sel_keys.length; i++) {
       let sk = sel_keys[i]
       let opt_keys = Object.keys(layer.variable_selectors[sk]?.options || {})
-      let chosen_val = selectors[sk] || opt_keys[0] || ''
-      if (chosen_val && layer.variable_selectors[sk]?.options[chosen_val]) {
-        let opt = layer.variable_selectors[sk].options[chosen_val]
+      let raw_val = selectors[sk]
+      let chosen_vals = Array.isArray(raw_val) ? raw_val : [raw_val || opt_keys[0] || '']
+      let primary_val = chosen_vals[0] || ''
+      if (primary_val && layer.variable_selectors[sk]?.options[primary_val]) {
+        let opt = layer.variable_selectors[sk].options[primary_val]
         if (opt.legend)
           candidate_legend = opt.legend
-        if (opt.name)
-          candidate_title = `${layer.name} (${opt.name})`
+        if (opt.name) {
+          if (chosen_vals.length > 1) {
+            candidate_title = `${layer.name} (${chosen_vals.length} selected)`
+          } else {
+            candidate_title = `${layer.name} (${opt.name})`
+          }
+        }
       }
     }
   }
@@ -176,7 +186,50 @@ const applyLayerLegend = function (
 }
 
 /**
- * Fetches and decodes a GeoPNG raster from the backend API for a given layer, year, and selectors.
+ * Computes Cartesian product of selector choices.
+ *
+ * @param {Record<string, string | string[]>} arg0_selectors
+ *
+ * @returns {Array<Record<string, string>>}
+ */
+const getSelectorCombinations = function (
+  arg0_selectors: Record<string, string | string[]>
+): Array<Record<string, string>> {
+  //Convert from parameters
+  let selectors = arg0_selectors
+
+  //Declare local instance variables
+  let combinations: Array<Record<string, string>> = [{}]
+  let keys = Object.keys(selectors)
+
+  //Function body
+  for (let i = 0; i < keys.length; i++) {
+    let k = keys[i]
+    let raw_val = selectors[k]
+    let val_array = Array.isArray(raw_val) ? raw_val : [raw_val]
+    if (val_array.length === 0)
+      continue
+
+    let next_combinations: Array<Record<string, string>> = []
+    for (let x = 0; x < combinations.length; x++) {
+      let current = combinations[x]
+      for (let y = 0; y < val_array.length; y++) {
+        let v = val_array[y]
+        next_combinations.push({
+          ...current,
+          [k]: v,
+        })
+      }
+    }
+    combinations = next_combinations
+  }
+
+  //Return statement
+  return combinations
+}
+
+/**
+ * Fetches and decodes a single GeoPNG raster from backend API.
  *
  * @param {string} arg0_layer_id
  * @param {number} arg1_year
@@ -187,7 +240,7 @@ const applyLayerLegend = function (
  *
  * @returns {Promise<DecodedRaster | null>}
  */
-const fetchRasterKeyframe = async function (
+const fetchSingleDecodedRasterAsync = async function (
   arg0_layer_id: string,
   arg1_year: number,
   arg2_selectors: Record<string, string>,
@@ -257,6 +310,107 @@ const fetchRasterKeyframe = async function (
 }
 
 /**
+ * Fetches and decodes a GeoPNG raster (or composited multi-selector sum) from the backend API.
+ *
+ * @param {string} arg0_layer_id
+ * @param {number} arg1_year
+ * @param {Record<string, string | string[]>} arg2_selectors
+ * @param {DataFormat} arg3_format
+ * @param {Map<string, DecodedRaster>} arg4_cache
+ * @param {boolean} [arg5_has_selectors]
+ *
+ * @returns {Promise<DecodedRaster | null>}
+ */
+const fetchRasterKeyframe = async function (
+  arg0_layer_id: string,
+  arg1_year: number,
+  arg2_selectors: Record<string, string | string[]>,
+  arg3_format: DataFormat,
+  arg4_cache: Map<string, DecodedRaster>,
+  arg5_has_selectors?: boolean
+): Promise<DecodedRaster | null> {
+  //Convert from parameters
+  let cache = arg4_cache
+  let format = arg3_format
+  let has_selectors = Boolean(arg5_has_selectors)
+  let layer_id = arg0_layer_id
+  let selectors = arg2_selectors
+  let year = arg1_year
+
+  //Declare local instance variables
+  let combinations = has_selectors ? getSelectorCombinations(selectors) : [{}]
+  let composite_cache_key: string
+  let composite_promise: Promise<DecodedRaster | null>
+  let sel_keys = has_selectors ? Object.keys(selectors).sort() : []
+  let sel_part = sel_keys.map((arg0_k) => {
+    let val = selectors[arg0_k]
+    let str_val = Array.isArray(val) ? val.slice().sort().join(',') : val
+    return `${arg0_k}=${str_val}`
+  }).join(':')
+
+  //Construct composite_cache_key
+  composite_cache_key = has_selectors && sel_part.length > 0
+    ? `${layer_id}:${sel_part}:${year}:${format}`
+    : `${layer_id}:${year}:${format}`
+
+  //Fast path: already in cache
+  if (cache.has(composite_cache_key))
+    return cache.get(composite_cache_key)!
+
+  if (in_flight_fetches.has(composite_cache_key))
+    return in_flight_fetches.get(composite_cache_key)!
+
+  //If only single combination, delegate directly
+  if (combinations.length <= 1) {
+    let single_sel = combinations[0] || {}
+    return fetchSingleDecodedRasterAsync(layer_id, year, single_sel, format, cache, has_selectors)
+  }
+
+  //Multi-select Cartesian composite
+  composite_promise = (async () => {
+    try {
+      let raster_promises = combinations.map((arg0_comb) =>
+        fetchSingleDecodedRasterAsync(layer_id, year, arg0_comb, format, cache, has_selectors)
+      )
+      let results = await Promise.all(raster_promises)
+      let valid_rasters = results.filter((arg0_r): arg0_r is DecodedRaster => arg0_r !== null)
+
+      if (valid_rasters.length === 0)
+        return null
+
+      if (valid_rasters.length === 1) {
+        cache.set(composite_cache_key, valid_rasters[0])
+        return valid_rasters[0]
+      }
+
+      //Sum pixel values across all selected cohorts / professions
+      let base = valid_rasters[0]
+      let len = base.width*base.height
+      let sum_data = new Float32Array(len)
+
+      for (let i = 0; i < valid_rasters.length; i++) {
+        let r_data = valid_rasters[i].data
+        for (let idx = 0; idx < len; idx++) {
+          sum_data[idx] += r_data[idx]
+        }
+      }
+
+      let composite = buildDecodedRasterResult(sum_data, base.width, base.height)
+      cache.set(composite_cache_key, composite)
+      return composite
+    } catch (arg0_err) {
+      console.error(`Failed to composite multi-selector raster for ${layer_id}:`, arg0_err)
+      return null
+    } finally {
+      in_flight_fetches.delete(composite_cache_key)
+    }
+  })()
+
+  in_flight_fetches.set(composite_cache_key, composite_promise)
+  return composite_promise
+}
+
+/**
  * Main application root component managing raster datasets, map layers, and reactive view state.
  *
  * @returns {React.ReactElement}
@@ -270,7 +424,7 @@ export const App: React.FC = function () {
   let active_layer_id: string | null
   let active_layer_id_ref: React.MutableRefObject<string | null>
   let active_raster: DecodedRaster | null
-  let active_variable_selectors: Record<string, string>
+  let active_variable_selectors: Record<string, string | string[]>
   let analytics_open: boolean
   let app_mode: AppMode
   let available_keyframes: number[]
@@ -286,13 +440,14 @@ export const App: React.FC = function () {
   let diff_name_b: string
   let display_raster: DecodedRaster | null
   let displayed_year_ref: React.MutableRefObject<number | null>
-  let handle_change_variable_selector: (arg0_key: string, arg1_option: string) => void
+  let handle_change_variable_selector: (arg0_key: string, arg1_option: string | string[]) => void
   let handle_clear_countries: () => void
   let handle_file_upload: (arg0_file: File, arg1_target: 'single' | 'diff_a' | 'diff_b') => Promise<void>
   let handle_force_refresh_analytics: () => void
   let handle_reorder_map_modes: (arg0_new_modes: MapModeItem[]) => void
   let handle_select_country: (arg0_c: CountryFeature | null) => void
   let handle_select_layer: (arg0_layer_id: string) => void
+  let handle_start_timelapse_export: (arg0_options: StartTimelapseExportOptions) => Promise<void>
   let handle_toggle_countries_mode: (arg0_enabled: boolean) => void
   let handle_toggle_country: (arg0_c: CountryFeature) => void
   let handle_toggle_map_mode: (arg0_id: MapModeId) => void
@@ -307,6 +462,7 @@ export const App: React.FC = function () {
   let is_loading_layers: boolean
   let is_loading_raster: boolean
   let is_playing: boolean
+  let is_timelapse_exporting: boolean
   let layers: Record<string, ParsedDataLayer>
   let legend_subtitle: string
   let legend_title: string
@@ -330,7 +486,7 @@ export const App: React.FC = function () {
   let set_absolute_breaks: React.Dispatch<React.SetStateAction<string>>
   let set_active_file_name: React.Dispatch<React.SetStateAction<string>>
   let set_active_layer_id: React.Dispatch<React.SetStateAction<string | null>>
-  let set_active_variable_selectors: React.Dispatch<React.SetStateAction<Record<string, string>>>
+  let set_active_variable_selectors: React.Dispatch<React.SetStateAction<Record<string, string | string[]>>>
   let set_analytics_open: React.Dispatch<React.SetStateAction<boolean>>
   let set_app_mode: React.Dispatch<React.SetStateAction<AppMode>>
   let set_binning_config: React.Dispatch<React.SetStateAction<BinningConfig>>
@@ -350,6 +506,7 @@ export const App: React.FC = function () {
   let set_is_loading_layers: React.Dispatch<React.SetStateAction<boolean>>
   let set_is_loading_raster: React.Dispatch<React.SetStateAction<boolean>>
   let set_is_playing: React.Dispatch<React.SetStateAction<boolean>>
+  let set_is_timelapse_exporting: React.Dispatch<React.SetStateAction<boolean>>
   let set_layers: React.Dispatch<React.SetStateAction<Record<string, ParsedDataLayer>>>
   let set_legend_subtitle: React.Dispatch<React.SetStateAction<string>>
   let set_legend_title: React.Dispatch<React.SetStateAction<string>>
@@ -371,6 +528,9 @@ export const App: React.FC = function () {
   let set_settings_drawer_open: React.Dispatch<React.SetStateAction<boolean>>
   let set_sidebar_width: React.Dispatch<React.SetStateAction<number>>
   let set_snap_to_keyframes: React.Dispatch<React.SetStateAction<boolean>>
+  let set_timelapse_export_pct: React.Dispatch<React.SetStateAction<number>>
+  let set_timelapse_export_result: React.Dispatch<React.SetStateAction<{ filename: string; path: string; sizeBytes: number } | null>>
+  let set_timelapse_export_status: React.Dispatch<React.SetStateAction<string>>
   let set_timeline_year: React.Dispatch<React.SetStateAction<number>>
   let set_ui_visible: React.Dispatch<React.SetStateAction<boolean>>
   let set_user_role: React.Dispatch<React.SetStateAction<UserRole>>
@@ -378,6 +538,9 @@ export const App: React.FC = function () {
   let settings_drawer_open: boolean
   let sidebar_width: number
   let snap_to_keyframes: boolean
+  let timelapse_export_pct: number
+  let timelapse_export_result: { filename: string; path: string; sizeBytes: number } | null
+  let timelapse_export_status: string
   let timeline_year: number
   let timeline_year_ref: React.MutableRefObject<number>
   let ui_visible: boolean
@@ -455,14 +618,22 @@ export const App: React.FC = function () {
 
   ;[layers, set_layers] = useState<Record<string, ParsedDataLayer>>({})
   ;[active_layer_id, set_active_layer_id] = useState<string | null>('GDP_nominal_pc')
-  ;[active_variable_selectors, set_active_variable_selectors] = useState<Record<string, string>>({
-    gender: 't',
-    profession: 'agriculture',
+  ;[active_variable_selectors, set_active_variable_selectors] = useState<Record<string, string | string[]>>({
+    gender: ['t'],
+    profession: ['agriculture'],
   })
   ;[is_loading_layers, set_is_loading_layers] = useState<boolean>(false)
   ;[is_loading_raster, set_is_loading_raster] = useState<boolean>(false)
+  ;[is_timelapse_exporting, set_is_timelapse_exporting] = useState<boolean>(false)
   ;[user_role, set_user_role] = useState<UserRole>('developer')
   ;[timeline_year, set_timeline_year] = useState<number>(1950)
+  ;[timelapse_export_pct, set_timelapse_export_pct] = useState<number>(0)
+  ;[timelapse_export_result, set_timelapse_export_result] = useState<{
+    filename: string
+    path: string
+    sizeBytes: number
+  } | null>(null)
+  ;[timelapse_export_status, set_timelapse_export_status] = useState<string>('')
   ;[is_playing, set_is_playing] = useState<boolean>(false)
   ;[playback_speed, set_playback_speed] = useState<number>(1)
   ;[snap_to_keyframes, set_snap_to_keyframes] = useState<boolean>(false)
@@ -503,7 +674,7 @@ export const App: React.FC = function () {
     return active_layer.available_years
   }, [active_layer])
 
-  handle_change_variable_selector = useCallback((arg0_key: string, arg1_option: string) => {
+  handle_change_variable_selector = useCallback((arg0_key: string, arg1_option: string | string[]) => {
     let key = arg0_key
     let option = arg1_option
     set_active_variable_selectors((arg0_prev) => ({
@@ -545,10 +716,12 @@ export const App: React.FC = function () {
         let updated = { ...arg0_prev }
         for (let i = 0; i < sel_keys.length; i++) {
           let sk = sel_keys[i]
-          if (!updated[sk]) {
+          let curr = updated[sk]
+          let is_empty = curr === undefined || curr === null || (Array.isArray(curr) && curr.length === 0) || curr === ''
+          if (is_empty) {
             let opt_keys = Object.keys(active_layer!.variable_selectors![sk].options)
             if (opt_keys.length > 0) {
-              updated[sk] = opt_keys[0]
+              updated[sk] = [opt_keys[0]]
               changed = true
             }
           }
@@ -640,18 +813,25 @@ export const App: React.FC = function () {
       let primary_year = (t === 0 || prev_year === next_year) ? prev_year : (t < 0.5 ? prev_year : next_year)
 
       //Resolve effective selectors with fallback to first option
-      let effective_selectors: Record<string, string> = {}
+      let effective_selectors: Record<string, string | string[]> = {}
       if (has_selectors && active_layer.variable_selectors) {
         let sel_keys = Object.keys(active_layer.variable_selectors)
         for (let i = 0; i < sel_keys.length; i++) {
           let sk = sel_keys[i]
           let opt_keys = Object.keys(active_layer.variable_selectors[sk].options)
-          effective_selectors[sk] = requested_selectors[sk] || opt_keys[0] || ''
+          let val = requested_selectors[sk]
+          effective_selectors[sk] = (val !== undefined && (Array.isArray(val) ? val.length > 0 : Boolean(val)))
+            ? val
+            : (opt_keys.length > 0 ? [opt_keys[0]] : '')
         }
       }
 
       let sel_keys = has_selectors ? Object.keys(effective_selectors).sort() : []
-      let sel_part = sel_keys.map((arg0_k) => `${arg0_k}=${effective_selectors[arg0_k]}`).join(':')
+      let sel_part = sel_keys.map((arg0_k) => {
+        let val = effective_selectors[arg0_k]
+        let str_val = Array.isArray(val) ? val.slice().sort().join(',') : val
+        return `${arg0_k}=${str_val}`
+      }).join(':')
       let cache_key = has_selectors && sel_part.length > 0
         ? `${requested_layer_id}:${sel_part}:${primary_year}:${data_format}`
         : `${requested_layer_id}:${primary_year}:${data_format}`
@@ -946,6 +1126,203 @@ export const App: React.FC = function () {
     set_absolute_breaks(new_breaks.map((arg0_n) => (Math.round(arg0_n*1000)/1000).toString()).join(', '))
   }, [])
 
+  handle_start_timelapse_export = useCallback(
+    async function (arg0_options: StartTimelapseExportOptions) {
+      let options = arg0_options
+      if (!active_layer || !active_layer.available_years || active_layer.available_years.length === 0)
+        return
+
+      set_is_playing(false)
+      set_video_export_open(false)
+      set_ui_visible(false)
+      set_is_timelapse_exporting(true)
+      set_timelapse_export_pct(0)
+      set_timelapse_export_status('Preparing timelapse recording canvas...')
+      set_timelapse_export_result(null)
+
+      try {
+        let all_years = active_layer.available_years
+        let end_yr = Math.min(options.endYear, all_years[all_years.length - 1])
+        let export_h = 1080
+        let export_w = 1920
+        let frames_per_keyframe = Math.max(1, Math.round(15))
+        let has_selectors = Boolean(active_layer.variable_selectors && Object.keys(active_layer.variable_selectors).length > 0)
+        let mime_type = 'video/webm;codecs=vp9'
+        let record_canvas = document.createElement('canvas')
+        let record_ctx: CanvasRenderingContext2D | null
+        let recorder: MediaRecorder
+        let seq_years: number[]
+        let start_yr = Math.max(options.startYear, all_years[0])
+        let stream: MediaStream
+        let total_steps: number
+
+        seq_years = all_years.filter((arg0_y) => arg0_y >= start_yr && arg0_y <= end_yr)
+        if (seq_years.length === 0)
+          seq_years = [start_yr]
+
+        record_canvas.width = export_w
+        record_canvas.height = export_h
+        record_ctx = record_canvas.getContext('2d')
+        if (!record_ctx)
+          throw new Error('Could not create 2D canvas context for timelapse export')
+
+        stream = record_canvas.captureStream(options.fps || 30)
+
+        if (!MediaRecorder.isTypeSupported(mime_type)) {
+          if (MediaRecorder.isTypeSupported('video/webm'))
+            mime_type = 'video/webm'
+          else if (MediaRecorder.isTypeSupported('video/mp4'))
+            mime_type = 'video/mp4'
+        }
+
+        recorder = new MediaRecorder(stream, {
+          mimeType: mime_type,
+          videoBitsPerSecond: 8000000,
+        })
+
+        let chunks: Blob[] = []
+        recorder.ondataavailable = (arg0_e) => {
+          if (arg0_e.data && arg0_e.data.size > 0)
+            chunks.push(arg0_e.data)
+        }
+
+        recorder.start()
+        total_steps = seq_years.length
+
+        for (let i = 0; i < total_steps; i++) {
+          let yr = seq_years[i]
+          set_timelapse_export_status(`Loading keyframe ${i + 1}/${total_steps} (${UfDate.formatYear(yr)})...`)
+          set_timelapse_export_pct(Math.round(((i)/total_steps)*100))
+
+          set_timeline_year(yr)
+
+          let decoded = await fetchRasterKeyframe(
+            active_layer.id,
+            yr,
+            active_variable_selectors,
+            data_format,
+            raster_cache_ref.current,
+            has_selectors
+          )
+
+          if (decoded) {
+            displayed_year_ref.current = yr
+            set_raster_a(decoded)
+            set_active_file_name(`${active_layer.id}_${yr}.png`)
+            set_raster_version((arg0_v) => arg0_v + 1)
+          }
+
+          //Wait for Deck.gl & canvas render
+          await new Promise((arg0_resolve) => requestAnimationFrame(() => requestAnimationFrame(arg0_resolve)))
+          await new Promise((arg0_resolve) => setTimeout(arg0_resolve, 60))
+
+          let map_canvas = document.querySelector('#deckgl-overlay canvas') as HTMLCanvasElement | null
+          if (!map_canvas)
+            map_canvas = document.querySelector('canvas') as HTMLCanvasElement | null
+
+          record_ctx.fillStyle = '#0b0f19'
+          record_ctx.fillRect(0, 0, export_w, export_h)
+
+          if (map_canvas) {
+            record_ctx.drawImage(map_canvas, 0, 0, export_w, export_h)
+          }
+
+          //Draw HUD bar onto export video
+          record_ctx.save()
+          let grad = record_ctx.createLinearGradient(0, export_h - 130, 0, export_h)
+          grad.addColorStop(0, 'rgba(11, 15, 25, 0)')
+          grad.addColorStop(1, 'rgba(11, 15, 25, 0.88)')
+          record_ctx.fillStyle = grad
+          record_ctx.fillRect(0, export_h - 130, export_w, 130)
+
+          let pill_w = 420
+          let pill_h = 58
+          let pill_x = (export_w - pill_w)/2
+          let pill_y = export_h - 85
+
+          record_ctx.fillStyle = 'rgba(15, 23, 42, 0.85)'
+          record_ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)'
+          record_ctx.lineWidth = 1.5
+          record_ctx.beginPath()
+          record_ctx.roundRect(pill_x, pill_y, pill_w, pill_h, 29)
+          record_ctx.fill()
+          record_ctx.stroke()
+
+          record_ctx.font = 'bold 22px system-ui, -apple-system, sans-serif'
+          record_ctx.fillStyle = '#ffffff'
+          record_ctx.textAlign = 'center'
+          record_ctx.textBaseline = 'middle'
+          record_ctx.fillText(UfDate.formatYear(yr), export_w/2, pill_y + 20)
+
+          record_ctx.font = '500 13px system-ui, -apple-system, sans-serif'
+          record_ctx.fillStyle = '#94a3b8'
+          record_ctx.fillText(active_layer.name || active_layer.id, export_w/2, pill_y + 42)
+          record_ctx.restore()
+
+          //Tick stream
+          for (let frame_idx = 0; frame_idx < frames_per_keyframe; frame_idx++) {
+            await new Promise((arg0_resolve) => setTimeout(arg0_resolve, 1000 / (options.fps || 30)))
+          }
+        }
+
+        set_timelapse_export_status('Encoding video and uploading to server...')
+        set_timelapse_export_pct(100)
+
+        let stop_promise = new Promise<Blob>((arg0_resolve) => {
+          recorder.onstop = () => {
+            let blob = new Blob(chunks, { type: mime_type })
+            arg0_resolve(blob)
+          }
+        })
+
+        recorder.stop()
+        let final_blob = await stop_promise
+
+        let reader = new FileReader()
+        let base64_promise = new Promise<string>((arg0_resolve, arg0_reject) => {
+          reader.onloadend = () => {
+            if (typeof reader.result === 'string')
+              arg0_resolve(reader.result)
+            else
+              arg0_reject(new Error('Failed to convert video blob to base64'))
+          }
+          reader.onerror = arg0_reject
+        })
+        reader.readAsDataURL(final_blob)
+        let base64_data = await base64_promise
+
+        let ext = mime_type.includes('mp4') ? 'mp4' : 'webm'
+        let clean_filename = (options.filename || `timelapse_${active_layer.id}_${start_yr}_${end_yr}`).replace(/\.(mp4|webm)$/i, '') + `.${ext}`
+
+        let upload_resp = await fetch('/api/export/video', {
+          body: JSON.stringify({
+            filename: clean_filename,
+            format: ext,
+            videoData: base64_data,
+          }),
+          headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+        })
+
+        if (!upload_resp.ok) {
+          let err_msg = await upload_resp.text()
+          throw new Error(`Server video error: ${err_msg}`)
+        }
+
+        let save_result = await upload_resp.json()
+        set_timelapse_export_result(save_result)
+        set_timelapse_export_status(`Saved to server: ${save_result.filename}`)
+      } catch (arg0_err: any) {
+        console.error('Timelapse video export failed:', arg0_err)
+        set_timelapse_export_status(`Export failed: ${arg0_err?.message || 'Unknown error'}`)
+      } finally {
+        set_ui_visible(true)
+        set_is_timelapse_exporting(false)
+      }
+    },
+    [active_layer, active_variable_selectors, data_format]
+  )
+
   active_countries = useMemo<CountryFeature[]>(() => {
     if (selected_countries.length > 0)
       return selected_countries
@@ -1029,6 +1406,49 @@ export const App: React.FC = function () {
   //Return statement
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background text-foreground font-sans">
+      {/* Live Timelapse Recording HUD */}
+      {is_timelapse_exporting && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-full bg-card/90 backdrop-blur-md border border-primary/40 shadow-2xl text-foreground select-none">
+          <span className="relative flex h-3 w-3">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+          </span>
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-red-400">Recording Timelapse</span>
+              <span className="text-xs font-mono text-muted-foreground">({timelapse_export_pct}%)</span>
+            </div>
+            <span className="text-[11px] text-muted-foreground">{timelapse_export_status}</span>
+          </div>
+          <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden ml-2">
+            <div className="h-full bg-primary transition-all duration-150" style={{ width: `${timelapse_export_pct}%` }} />
+          </div>
+        </div>
+      )}
+
+      {/* Export Result Toast Banner */}
+      {timelapse_export_result && (
+        <div className="fixed top-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-lg bg-card/95 backdrop-blur-md border border-emerald-500/40 shadow-2xl text-foreground max-w-md">
+          <Icon name="check_circle" className="text-emerald-400 text-xl flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-bold text-emerald-400">Timelapse Saved to Server!</div>
+            <div className="text-[11px] text-muted-foreground truncate" title={timelapse_export_result.path}>
+              File: <span className="font-mono text-foreground">{timelapse_export_result.filename}</span>
+            </div>
+            <div className="text-[10px] text-muted-foreground">
+              Size: {(timelapse_export_result.sizeBytes / (1024*1024)).toFixed(2)} MB • Saved in exports/
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => set_timelapse_export_result(null)}
+            className="p-1 hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
+          >
+            <Icon name="close" className="text-sm" />
+          </button>
+        </div>
+      )}
+
       {/* Main Map Viewer */}
       <div className="absolute inset-0 w-full h-full overflow-hidden">
         <MapViewer
@@ -1200,6 +1620,7 @@ export const App: React.FC = function () {
         maxYear={available_keyframes.length > 0 ? available_keyframes[available_keyframes.length - 1] : 2025}
         minYear={available_keyframes.length > 0 ? available_keyframes[0] : -10000}
         onClose={() => set_video_export_open(false)}
+        onStartTimelapseExport={handle_start_timelapse_export}
       />
     </div>
   )
