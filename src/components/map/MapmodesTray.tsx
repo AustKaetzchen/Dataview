@@ -162,12 +162,33 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
 
     return all_layer_entries.filter((arg0_layer) => {
       let matches_category = arg0_layer.category?.toLowerCase().includes(q)
-      let matches_name = arg0_layer.name.toLowerCase().includes(q)
       let matches_id = arg0_layer.id.toLowerCase().includes(q)
+      let matches_name = arg0_layer.name.toLowerCase().includes(q)
       let matches_sub = arg0_layer.sub_layers?.some(
         (arg0_sub) => arg0_sub.name.toLowerCase().includes(q) || arg0_sub.id.toLowerCase().includes(q)
       )
-      return matches_name || matches_id || matches_sub || matches_category
+      let matches_selectors = false
+      if (arg0_layer.variable_selectors) {
+        let sel_keys = Object.keys(arg0_layer.variable_selectors)
+        for (let i = 0; i < sel_keys.length; i++) {
+          let sel = arg0_layer.variable_selectors[sel_keys[i]]
+          if (sel.name?.toLowerCase().includes(q) || sel_keys[i].toLowerCase().includes(q)) {
+            matches_selectors = true
+            break
+          }
+          let opt_keys = Object.keys(sel.options)
+          for (let x = 0; x < opt_keys.length; x++) {
+            let opt = sel.options[opt_keys[x]]
+            if (opt.name?.toLowerCase().includes(q) || opt_keys[x].toLowerCase().includes(q)) {
+              matches_selectors = true
+              break
+            }
+          }
+          if (matches_selectors)
+            break
+        }
+      }
+      return matches_name || matches_id || matches_sub || matches_category || matches_selectors
     })
   }, [all_layer_entries, search_query])
 
@@ -245,7 +266,9 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
     let is_active = active_layer_id === layer.id
     let is_accessible = is_layer_accessible(layer)
     let has_sub_layers = Boolean(layer.sub_layers && layer.sub_layers.length > 0)
-    let is_node_expanded = expanded_nodes[layer.id] ?? true
+    let has_variable_selectors = Boolean(layer.variable_selectors && Object.keys(layer.variable_selectors).length > 0)
+    let is_searching = Boolean(search_query.trim())
+    let is_node_expanded = is_searching || (expanded_nodes[layer.id] ?? true)
 
     return (
       <div key={layer.id} className="space-y-1" style={{ paddingLeft: `${depth*12}px` }}>
@@ -295,10 +318,125 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
                   </button>
                 )}
 
-                {is_active && render_variable_selectors(layer)}
-
                 {/* Child sub-layers */}
                 {layer.sub_layers!.map((arg0_sub) => render_data_layer_node(arg0_sub, depth + 1))}
+              </div>
+            )}
+          </div>
+        ) : has_variable_selectors ? (
+          <div>
+            {/* Indicator with variable_selectors shows up as a folder in itself */}
+            <div
+              onClick={() => toggle_node(layer.id)}
+              className={`flex items-center justify-between px-2 py-1 cursor-pointer border transition-colors ${
+                is_active
+                  ? 'bg-primary/20 border-primary text-primary font-bold shadow-xs'
+                  : 'bg-muted/30 hover:bg-muted/60 border-border/60 text-foreground'
+              }`}
+            >
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className={`w-3 h-3 rounded-full border flex items-center justify-center shrink-0 ${
+                  is_active ? 'border-primary bg-primary' : 'border-muted-foreground/60'
+                }`}>
+                  {is_active && <span className="w-1 h-1 rounded-full bg-primary-foreground" />}
+                </span>
+                <Icon
+                  name={is_node_expanded ? 'folder_open' : 'folder'}
+                  className="text-primary text-xs shrink-0"
+                />
+                <span className="text-xs font-bold truncate">{layer.name}</span>
+              </div>
+              <div className="flex items-center gap-1 shrink-0 ml-1">
+                {layer.unit && (
+                  <span className="text-[10px] text-muted-foreground font-mono">{layer.unit}</span>
+                )}
+                <span className="text-[9px] px-1 py-0.2 bg-muted text-muted-foreground font-mono">
+                  {Object.keys(layer.variable_selectors!).length} vars
+                </span>
+                <Icon
+                  name={is_node_expanded ? 'expand_less' : 'expand_more'}
+                  className="text-xs text-muted-foreground shrink-0"
+                />
+              </div>
+            </div>
+
+            {is_node_expanded && (
+              <div className="mt-1 space-y-1.5 border-l-2 border-primary/40 pl-1.5 ml-2">
+                {/* Separate box for each variable */}
+                {Object.entries(layer.variable_selectors!).map(([arg0_var_key, arg0_sel]) => {
+                  let var_node_id = `${layer.id}_var_${arg0_var_key}`
+                  let is_var_open = is_searching || (expanded_nodes[var_node_id] ?? true)
+                  let opts = Object.entries(arg0_sel.options)
+                  if (opts.length > 0 && opts.every(([arg0_k]) => !Number.isNaN(parseInt(arg0_k, 10)))) {
+                    opts.sort((arg0_a, arg0_b) => parseInt(arg0_a[0], 10) - parseInt(arg0_b[0], 10))
+                  }
+                  let current_val = active_variable_selectors[arg0_var_key] || opts[0]?.[0] || ''
+
+                  return (
+                    <div key={arg0_var_key} className="border border-border/70 bg-muted/20">
+                      {/* Box header for variable */}
+                      <div
+                        onClick={() => toggle_node(var_node_id)}
+                        className="flex items-center justify-between px-2 py-1 bg-muted/40 hover:bg-muted/60 cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <Icon name="tune" className="text-primary text-[10px] shrink-0" />
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-foreground truncate">
+                            {arg0_sel.name || arg0_var_key}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-[9px] text-muted-foreground font-mono">
+                            {opts.length}
+                          </span>
+                          <Icon
+                            name={is_var_open ? 'expand_less' : 'expand_more'}
+                            className="text-[10px] text-muted-foreground"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Box content: options as selectable buttons */}
+                      {is_var_open && (
+                        <div className="p-1 max-h-48 overflow-y-auto space-y-0.5 bg-card/30">
+                          {opts.map(([arg0_opt_key, arg0_opt]) => {
+                            let is_opt_selected = is_active && current_val === arg0_opt_key
+
+                            return (
+                              <button
+                                key={arg0_opt_key}
+                                type="button"
+                                onClick={() => {
+                                  if (!is_active && on_select_layer)
+                                    on_select_layer(layer.id)
+                                  if (on_change_variable_selector)
+                                    on_change_variable_selector(arg0_var_key, arg0_opt_key)
+                                }}
+                                className={`w-full flex items-center justify-between px-2 py-1 text-left cursor-pointer border transition-colors text-[11px] ${
+                                  is_opt_selected
+                                    ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
+                                    : 'hover:bg-muted/50 text-foreground border-transparent'
+                                }`}
+                              >
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center shrink-0 ${
+                                    is_opt_selected ? 'border-primary bg-primary' : 'border-muted-foreground/60'
+                                  }`}>
+                                    {is_opt_selected && <span className="w-1 h-1 rounded-full bg-primary-foreground" />}
+                                  </span>
+                                  <span className="truncate">{arg0_opt.name || arg0_opt_key}</span>
+                                </div>
+                                {is_opt_selected && (
+                                  <Icon name="check" className="text-[10px] text-primary shrink-0" />
+                                )}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>
@@ -326,8 +464,6 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
                 <span className="text-[10px] text-muted-foreground shrink-0 ml-1">{layer.unit}</span>
               )}
             </button>
-
-            {is_active && render_variable_selectors(layer)}
           </div>
         )}
       </div>
@@ -338,7 +474,8 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
     let folder_name = arg0_folder_name
     let folder_layers = arg1_folder_layers
     let node_id = `dataset_${folder_name}`
-    let is_open = expanded_nodes[node_id] !== undefined ? expanded_nodes[node_id] : true
+    let is_searching = Boolean(search_query.trim())
+    let is_open = is_searching || (expanded_nodes[node_id] !== undefined ? expanded_nodes[node_id] : true)
 
     return (
       <div key={node_id} className="border border-border/60 bg-muted/10 mb-1">

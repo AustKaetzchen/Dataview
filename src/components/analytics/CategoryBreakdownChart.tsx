@@ -33,7 +33,6 @@ export const PROFESSION_SECTORS: SectorItem[] = [
   { color: '#457b9d', id: 'informal_labour', label: 'Informal Labour' },
   { color: '#2a9d8f', id: 'manufacturing', label: 'Manufacturing' },
   { color: '#e76f51', id: 'services', label: 'Services' },
-  { color: '#6b7280', id: 'not_in_work', label: 'Not in Work' },
 ]
 
 /**
@@ -84,11 +83,10 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
   has_countries = effective_countries.length > 0
 
   ;[global_sector_data, set_global_sector_data] = useState<Record<string, number>>({
-    agriculture: 22.0,
-    informal_labour: 12.5,
-    manufacturing: 32.5,
-    not_in_work: 7.0,
-    services: 26.0,
+    agriculture: 25.0,
+    informal_labour: 15.0,
+    manufacturing: 35.0,
+    services: 25.0,
   })
   ;[by_country_data, set_by_country_data] = useState<Record<string, Record<string, number>>>({})
   ;[is_loading, set_is_loading] = useState<boolean>(false)
@@ -191,12 +189,19 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
       if (has_countries) {
         sector_data_points = country_names.map((arg0_name) => {
           let c_dict = by_country_data[arg0_name]
+          if (!c_dict) {
+            let found_k = Object.keys(by_country_data).find(
+              (arg0_k) => arg0_k.toLowerCase().trim() === arg0_name.toLowerCase().trim()
+            )
+            if (found_k)
+              c_dict = by_country_data[found_k]
+          }
           if (c_dict && c_dict[arg0_sector.id] !== undefined)
             return c_dict[arg0_sector.id]
-          return global_sector_data[arg0_sector.id] ?? 20.0
+          return global_sector_data[arg0_sector.id] ?? 25.0
         })
       } else {
-        sector_data_points = [global_sector_data[arg0_sector.id] ?? 20.0]
+        sector_data_points = [global_sector_data[arg0_sector.id] ?? 25.0]
       }
 
       return {
@@ -299,6 +304,7 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
         axisLine: { lineStyle: { color: '#3f3f46' } },
         axisTick: { show: false },
         data: entity_labels,
+        inverse: true,
         type: 'category',
       },
     }

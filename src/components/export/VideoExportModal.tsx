@@ -19,6 +19,158 @@ export interface VideoExportModalProps {
 }
 
 /**
+ * Asynchronously loads an image from an absolute or relative URL.
+ *
+ * @param {string} arg0_url
+ *
+ * @returns {Promise<HTMLImageElement | null>}
+ */
+const loadImageAsync = function (arg0_url: string): Promise<HTMLImageElement | null> {
+  //Convert from parameters
+  let url = arg0_url
+
+  //Return statement
+  return new Promise((arg0_resolve) => {
+    let img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => arg0_resolve(img)
+    img.onerror = () => arg0_resolve(null)
+    img.src = url
+  })
+}
+
+/**
+ * Renders a single frame of the timelapse onto the offscreen canvas context.
+ *
+ * @param {CanvasRenderingContext2D} arg0_ctx
+ * @param {HTMLImageElement | null} arg1_image
+ * @param {string} arg2_layer_title
+ * @param {string} arg3_category_name
+ * @param {number} arg4_year
+ * @param {number} arg5_current_step
+ * @param {number} arg6_total_steps
+ * @param {number} arg7_start_year
+ * @param {number} arg8_end_year
+ */
+const renderTimelapseCanvasFrame = function (
+  arg0_ctx: CanvasRenderingContext2D,
+  arg1_image: HTMLImageElement | null,
+  arg2_layer_title: string,
+  arg3_category_name: string,
+  arg4_year: number,
+  arg5_current_step: number,
+  arg6_total_steps: number,
+  arg7_start_year: number,
+  arg8_end_year: number
+) {
+  //Convert from parameters
+  let category_name = arg3_category_name
+  let ctx = arg0_ctx
+  let current_step = arg5_current_step
+  let end_year = arg8_end_year
+  let image = arg1_image
+  let layer_title = arg2_layer_title
+  let start_year = arg7_start_year
+  let total_steps = arg6_total_steps
+  let year = arg4_year
+
+  //Declare local instance variables
+  let progress_ratio = total_steps > 0 ? (current_step + 1)/total_steps : 0
+  let truncated_title = layer_title.length > 48 ? `${layer_title.slice(0, 45)}...` : layer_title
+  let year_formatted = UfDate.formatYear(year)
+
+  //Function body
+  //1. Clear and render dark background
+  ctx.fillStyle = '#0B0F19'
+  ctx.fillRect(0, 0, 1280, 720)
+
+  //Draw subtle latitude/longitude grid
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)'
+  ctx.lineWidth = 1
+  for (let lon = 0; lon <= 1280; lon += 160) {
+    ctx.beginPath()
+    ctx.moveTo(lon, 40)
+    ctx.lineTo(lon, 680)
+    ctx.stroke()
+  }
+  for (let lat = 40; lat <= 680; lat += 80) {
+    ctx.beginPath()
+    ctx.moveTo(0, lat)
+    ctx.lineTo(1280, lat)
+    ctx.stroke()
+  }
+
+  //2. Draw raster image centered in 2:1 aspect ratio (1280 x 640) from y = 40
+  if (image && image.complete && image.naturalWidth > 0) {
+    ctx.drawImage(image, 0, 40, 1280, 640)
+  } else {
+    //Placeholder notice
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.35)'
+    ctx.font = '14px Inter, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.fillText('No keyframe raster data available for this date', 640, 360)
+    ctx.textAlign = 'left'
+  }
+
+  //3. Draw top HUD bar (glassmorphism banner)
+  ctx.fillStyle = 'rgba(11, 15, 25, 0.85)'
+  ctx.fillRect(20, 16, 560, 56)
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)'
+  ctx.lineWidth = 1
+  ctx.strokeRect(20, 16, 560, 56)
+
+  //Category badge
+  ctx.fillStyle = '#3B82F6'
+  ctx.font = 'bold 10px monospace'
+  ctx.fillText(`LAYER: ${category_name.toUpperCase()}`, 34, 34)
+
+  //Layer title
+  ctx.fillStyle = '#FFFFFF'
+  ctx.font = 'bold 15px Inter, sans-serif'
+  ctx.fillText(truncated_title, 34, 56)
+
+  //4. Draw prominent Date Badge on top right
+  ctx.fillStyle = 'rgba(11, 15, 25, 0.9)'
+  ctx.fillRect(1060, 16, 200, 56)
+  ctx.strokeStyle = '#3B82F6'
+  ctx.lineWidth = 1.5
+  ctx.strokeRect(1060, 16, 200, 56)
+
+  ctx.fillStyle = '#60A5FA'
+  ctx.font = '10px monospace'
+  ctx.fillText('HISTORICAL DATE', 1074, 32)
+
+  ctx.fillStyle = '#FFFFFF'
+  ctx.font = 'bold 20px monospace'
+  ctx.fillText(year_formatted, 1074, 56)
+
+  //5. Draw bottom scrubber & progress bar
+  ctx.fillStyle = 'rgba(11, 15, 25, 0.92)'
+  ctx.fillRect(0, 680, 1280, 40)
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)'
+  ctx.beginPath()
+  ctx.moveTo(0, 680)
+  ctx.lineTo(1280, 680)
+  ctx.stroke()
+
+  //Progress track
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.12)'
+  ctx.fillRect(20, 696, 1240, 6)
+
+  //Progress fill
+  ctx.fillStyle = '#3B82F6'
+  ctx.fillRect(20, 696, Math.max(2, 1240*progress_ratio), 6)
+
+  //Scrubber labels
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'
+  ctx.font = '10px monospace'
+  ctx.fillText(`${UfDate.formatYear(start_year)}`, 20, 714)
+  ctx.textAlign = 'right'
+  ctx.fillText(`${UfDate.formatYear(end_year)}  [${current_step + 1}/${total_steps}]`, 1260, 714)
+  ctx.textAlign = 'left'
+}
+
+/**
  * Developer Video Export Modal supporting Stationary and Cycling timelapse modes.
  *
  * @param {VideoExportModalProps} arg0_props
@@ -81,7 +233,12 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   ;[start_year, set_start_year] = useState<number>(1800)
   ;[end_year, set_end_year] = useState<number>(2025)
   ;[fps, set_fps] = useState<number>(30)
-  ;[export_filename, set_export_filename] = useState<string>(`dataview_timelapse_${Date.now()}.mp4`)
+  ;[export_filename, set_export_filename] = useState<string>(() => {
+    let ext = 'mp4'
+    if (typeof MediaRecorder !== 'undefined' && !MediaRecorder.isTypeSupported('video/mp4'))
+      ext = 'webm'
+    return `dataview_timelapse_${Date.now()}.${ext}`
+  })
   ;[selected_cycling_layers, set_selected_cycling_layers] = useState<string[]>(() =>
     Object.keys(available_layers).slice(0, 8)
   )
@@ -121,60 +278,147 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
       if (sequence_years.length === 0)
         throw new Error('No valid keyframes found in selected date range.')
 
-      let total_frames = 0
+      let sequence_steps: Array<{ category: string; layer_id: string; layer_name: string; year: number }> = []
+
       if (export_mode === 'stationary') {
-        total_frames = sequence_years.length
+        let target_layer_id = active_layer_id || Object.keys(available_layers)[0]
+        let target_layer = available_layers[target_layer_id]
+        let category = target_layer?.category || 'Layer'
+        let layer_name = target_layer?.name || target_layer_id
+        for (let i = 0; i < sequence_years.length; i++) {
+          sequence_steps.push({
+            category,
+            layer_id: target_layer_id,
+            layer_name,
+            year: sequence_years[i],
+          })
+        }
       } else {
-        total_frames = sequence_years.length*Math.max(1, selected_cycling_layers.length)
-      }
-
-      set_progress_status(`Rendering ${total_frames} frames across ${sequence_years.length} timepoints...`)
-
-      //Simulate or render frames batch
-      let current_step = 0
-      for (let i = 0; i < sequence_years.length; i++) {
-        let yr = sequence_years[i]
-        if (export_mode === 'stationary') {
-          current_step++
-          set_progress_pct(Math.round((current_step/total_frames)*85))
-          set_progress_status(`Rendering frame for year ${UfDate.formatYear(yr)}...`)
-        } else {
-          for (let x = 0; x < selected_cycling_layers.length; x++) {
-            current_step++
-            let layer_id = selected_cycling_layers[x]
-            let layer_name = available_layers[layer_id]?.name || layer_id
-            set_progress_pct(Math.round((current_step/total_frames)*85))
-            set_progress_status(`Cycling ${layer_name} (${UfDate.formatYear(yr)})...`)
+        let cycling_layer_keys =
+          selected_cycling_layers.length > 0
+            ? selected_cycling_layers
+            : Object.keys(available_layers).slice(0, 5)
+        for (let i = 0; i < sequence_years.length; i++) {
+          let yr = sequence_years[i]
+          for (let x = 0; x < cycling_layer_keys.length; x++) {
+            let lid = cycling_layer_keys[x]
+            let lyr = available_layers[lid]
+            sequence_steps.push({
+              category: lyr?.category || 'Cycling',
+              layer_id: lid,
+              layer_name: lyr?.name || lid,
+              year: yr,
+            })
           }
         }
-        await new Promise((arg0_r) => setTimeout(arg0_r, 40))
       }
 
+      let total_frames = sequence_steps.length
+      set_progress_status(`Initialising canvas recorder for ${total_frames} frames...`)
+
+      //Create offscreen canvas
+      let canvas = document.createElement('canvas')
+      canvas.width = 1280
+      canvas.height = 720
+      let ctx = canvas.getContext('2d')
+      if (!ctx)
+        throw new Error('Canvas 2D context not supported.')
+
+      //Detect supported MIME type
+      let mime_type = 'video/webm'
+      if (typeof MediaRecorder !== 'undefined') {
+        if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1')) {
+          mime_type = 'video/mp4;codecs=avc1'
+        } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+          mime_type = 'video/mp4'
+        } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
+          mime_type = 'video/webm;codecs=vp9'
+        } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8')) {
+          mime_type = 'video/webm;codecs=vp8'
+        } else if (MediaRecorder.isTypeSupported('video/webm')) {
+          mime_type = 'video/webm'
+        }
+      }
+
+      let stream = canvas.captureStream(fps)
+      let recorder = new MediaRecorder(stream, {
+        mimeType: mime_type,
+        videoBitsPerSecond: 5000000,
+      })
+
+      let recorded_chunks: Blob[] = []
+      recorder.ondataavailable = function (arg0_event: BlobEvent) {
+        if (arg0_event.data && arg0_event.data.size > 0)
+          recorded_chunks.push(arg0_event.data)
+      }
+
+      recorder.start()
+
+      //Determine frame hold duration (at least 100ms per frame so timelapse is legible)
+      let frame_hold_ms = Math.max(100, Math.floor(1000/Math.min(15, fps)))
+
+      //Render each frame
+      for (let i = 0; i < sequence_steps.length; i++) {
+        let step = sequence_steps[i]
+        set_progress_pct(Math.round(((i + 1)/total_frames)*80))
+        set_progress_status(`Rendering ${step.layer_name} (${UfDate.formatYear(step.year)})...`)
+
+        let img_url = `/api/raster/file?layer=${encodeURIComponent(step.layer_id)}&year=${step.year}`
+        let img = await loadImageAsync(img_url)
+
+        renderTimelapseCanvasFrame(
+          ctx,
+          img,
+          step.layer_name,
+          step.category,
+          step.year,
+          i,
+          total_frames,
+          start_year,
+          end_year
+        )
+
+        //Sleep to allow stream frame capture
+        await new Promise((arg0_r) => setTimeout(arg0_r, frame_hold_ms))
+      }
+
+      set_progress_pct(85)
+      set_progress_status('Finalising video stream encoding...')
+
+      //Stop recorder and wait for blob
+      recorder.stop()
+      let video_blob: Blob = await new Promise((arg0_resolve) => {
+        recorder.onstop = function () {
+          let final_blob = new Blob(recorded_chunks, { type: mime_type })
+          arg0_resolve(final_blob)
+        }
+      })
+
       set_progress_pct(90)
-      set_progress_status('Finalising MP4 encoding and writing to exports folder...')
+      set_progress_status('Saving video to exports directory...')
 
-      //Generate synthetic MP4 header payload
-      let dummy_mp4_bytes = new Uint8Array(1024)
-      dummy_mp4_bytes[0] = 0x00
-      dummy_mp4_bytes[1] = 0x00
-      dummy_mp4_bytes[2] = 0x00
-      dummy_mp4_bytes[3] = 0x18
-      dummy_mp4_bytes.set([0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d], 4)
+      //Read as Data URL
+      let file_reader = new FileReader()
+      let base64_payload: string = await new Promise((arg0_resolve, arg1_reject) => {
+        file_reader.onloadend = () => arg0_resolve(file_reader.result as string)
+        file_reader.onerror = arg1_reject
+        file_reader.readAsDataURL(video_blob)
+      })
 
-      let binary_str = ''
-      for (let i = 0; i < dummy_mp4_bytes.length; i++)
-        binary_str += String.fromCharCode(dummy_mp4_bytes[i])
-      let base64_payload = btoa(binary_str)
+      let ext = mime_type.includes('mp4') ? '.mp4' : '.webm'
+      let clean_filename = export_filename.replace(/\.(mp4|webm)$/i, '') + ext
 
       let res = await fetch('/api/export/video', {
         body: JSON.stringify({
-          data: `data:video/mp4;base64,${base64_payload}`,
-          filename: export_filename.endsWith('.mp4') ? export_filename : `${export_filename}.mp4`,
+          data: base64_payload,
+          filename: clean_filename,
           metadata: {
             fps,
             frames: total_frames,
+            mimeType: mime_type,
             mode: export_mode,
             range: [start_year, end_year],
+            sizeBytes: video_blob.size,
           },
         }),
         headers: { 'Content-Type': 'application/json' },
@@ -187,9 +431,26 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
       }
 
       let data = await res.json()
+
+      //Trigger browser download
+      try {
+        let download_url = URL.createObjectURL(video_blob)
+        let download_anchor = document.createElement('a')
+        download_anchor.href = download_url
+        download_anchor.download = clean_filename
+        document.body.appendChild(download_anchor)
+        download_anchor.click()
+        document.body.removeChild(download_anchor)
+        setTimeout(() => URL.revokeObjectURL(download_url), 10000)
+      } catch (arg0_dl_err) {
+        console.warn('[VideoExportModal] Client download trigger warning:', arg0_dl_err)
+      }
+
       set_progress_pct(100)
       set_progress_status('Complete!')
-      set_export_success(`Successfully exported video to: ${data.path || data.filename}`)
+      set_export_success(
+        `Successfully exported ${Math.round(video_blob.size/1024)} KB video (${clean_filename}) to: ${data.path || data.filename}`
+      )
     } catch (arg0_err: any) {
       console.error('[VideoExportModal] Export failed:', arg0_err)
       set_export_error(arg0_err.message || 'Video export encountered an error')
@@ -197,16 +458,17 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
       set_is_exporting(false)
     }
   }, [
-    export_mode,
-    keyframes_only,
+    active_layer_id,
     available_keyframes,
-    start_year,
-    end_year,
-    timestep_step,
-    selected_cycling_layers,
     available_layers,
-    fps,
+    end_year,
     export_filename,
+    export_mode,
+    fps,
+    keyframes_only,
+    selected_cycling_layers,
+    start_year,
+    timestep_step,
   ])
 
   //Guard clauses
@@ -468,7 +730,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
               className="px-4 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold shadow-sm cursor-pointer flex items-center gap-1.5"
             >
               <Icon name="videocam" />
-              <span>{is_exporting ? 'Exporting...' : 'Export Video (.mp4)'}</span>
+              <span>{is_exporting ? 'Exporting...' : 'Export Video'}</span>
             </button>
           </div>
         </div>

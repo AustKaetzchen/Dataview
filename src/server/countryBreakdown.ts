@@ -215,92 +215,106 @@ export function getCountrySectorBreakdown (
   //Declare local instance variables
   let by_country: Record<string, Record<string, number>> = {}
   let compute_single_country: (arg0_name: string) => Record<string, number>
+  let get_country_hash: (arg0_str: string) => number
   let global_map: Record<string, number>
+
+  get_country_hash = function (arg0_str: string): number {
+    let hash = 0
+    for (let x = 0; x < arg0_str.length; x++) {
+      hash = ((hash << 5) - hash) + arg0_str.charCodeAt(x)
+      hash |= 0
+    }
+    return Math.abs(hash)
+  }
 
   //Function body
   compute_single_country = function (arg0_name: string): Record<string, number> {
     let clean = arg0_name.toLowerCase().trim()
+    let h = get_country_hash(clean)
     let map: Record<string, number> = {}
 
     //Determine country economic structure
     let is_agrarian = HIGH_FERTILITY_COUNTRIES.has(clean)
     let is_developing = DEVELOPING_DIVIDEND_COUNTRIES.has(clean)
     let is_factory = TRANSITION_EMERGING_COUNTRIES.has(clean)
-    let is_industrial = clean === 'germany' || clean === 'south korea' || clean === 'czechia' || clean === 'poland'
-    let is_western = MATURE_WESTERN_COUNTRIES.has(clean) || clean === 'japan'
+    let is_industrial = clean === 'germany' || clean === 'south korea' || clean === 'korea' || clean === 'czechia' || clean === 'poland' || clean === 'japan'
+    let is_western = MATURE_WESTERN_COUNTRIES.has(clean) || SUPER_AGED_COUNTRIES.has(clean) || clean === 'singapore'
 
     if (year <= 1800) {
-      map.agriculture = is_western ? 65.0 : 78.0
-      map.informal_labour = is_western ? 8.0 : 10.0
-      map.manufacturing = is_western ? 12.0 : 5.0
-      map.not_in_work = 5.0
-      map.services = is_western ? 10.0 : 2.0
+      map.agriculture = is_western ? 68.0 : 80.0
+      map.informal_labour = is_western ? 8.0 : 12.0
+      map.manufacturing = is_western ? 14.0 : 5.0
+      map.services = is_western ? 10.0 : 3.0
     } else if (year <= 1950) {
       let t = (year - 1800)/150
       if (is_western || is_industrial) {
-        map.agriculture = 65.0*(1 - t) + 12.0*t
-        map.informal_labour = 8.0*(1 - t) + 5.0*t
-        map.manufacturing = 12.0*(1 - t) + 38.0*t
-        map.not_in_work = 5.0*(1 - t) + 6.0*t
-        map.services = 10.0*(1 - t) + 39.0*t
+        map.agriculture = 68.0*(1 - t) + 14.0*t
+        map.informal_labour = 8.0*(1 - t) + 6.0*t
+        map.manufacturing = 14.0*(1 - t) + 40.0*t
+        map.services = 10.0*(1 - t) + 40.0*t
       } else {
-        map.agriculture = 78.0*(1 - t) + 60.0*t
-        map.informal_labour = 10.0*(1 - t) + 16.0*t
+        map.agriculture = 80.0*(1 - t) + 62.0*t
+        map.informal_labour = 12.0*(1 - t) + 18.0*t
         map.manufacturing = 5.0*(1 - t) + 11.0*t
-        map.not_in_work = 5.0*(1 - t) + 5.0*t
-        map.services = 2.0*(1 - t) + 8.0*t
+        map.services = 3.0*(1 - t) + 9.0*t
       }
     } else {
       let t = Math.min(1, (year - 1950)/75)
-      if (is_western) {
-        map.agriculture = 12.0*(1 - t) + 1.8*t
-        map.informal_labour = 5.0*(1 - t) + 4.2*t
-        map.manufacturing = 38.0*(1 - t) + 12.5*t
-        map.not_in_work = 6.0*(1 - t) + 5.5*t
-        map.services = 39.0*(1 - t) + 76.0*t
-      } else if (is_industrial) {
-        map.agriculture = 12.0*(1 - t) + 1.5*t
-        map.informal_labour = 5.0*(1 - t) + 3.5*t
-        map.manufacturing = 38.0*(1 - t) + 24.5*t
-        map.not_in_work = 6.0*(1 - t) + 5.5*t
-        map.services = 39.0*(1 - t) + 65.0*t
+      if (is_industrial) {
+        map.agriculture = 14.0*(1 - t) + 1.6*t
+        map.informal_labour = 6.0*(1 - t) + 3.8*t
+        map.manufacturing = 40.0*(1 - t) + 26.5*t
+        map.services = 40.0*(1 - t) + 68.1*t
+      } else if (is_western) {
+        map.agriculture = 14.0*(1 - t) + 2.0*t
+        map.informal_labour = 6.0*(1 - t) + 4.8*t
+        map.manufacturing = 40.0*(1 - t) + 14.2*t
+        map.services = 40.0*(1 - t) + 79.0*t
       } else if (is_factory) {
-        map.agriculture = 55.0*(1 - t) + 18.5*t
-        map.informal_labour = 15.0*(1 - t) + 9.5*t
-        map.manufacturing = 14.0*(1 - t) + 28.5*t
-        map.not_in_work = 5.0*(1 - t) + 6.0*t
-        map.services = 11.0*(1 - t) + 37.5*t
+        map.agriculture = 58.0*(1 - t) + 20.0*t
+        map.informal_labour = 16.0*(1 - t) + 10.5*t
+        map.manufacturing = 15.0*(1 - t) + 30.5*t
+        map.services = 11.0*(1 - t) + 39.0*t
       } else if (is_developing) {
-        map.agriculture = 62.0*(1 - t) + 36.0*t
-        map.informal_labour = 18.0*(1 - t) + 24.5*t
-        map.manufacturing = 10.0*(1 - t) + 14.5*t
-        map.not_in_work = 5.0*(1 - t) + 5.0*t
-        map.services = 5.0*(1 - t) + 20.0*t
+        map.agriculture = 65.0*(1 - t) + 38.0*t
+        map.informal_labour = 19.0*(1 - t) + 26.0*t
+        map.manufacturing = 10.0*(1 - t) + 15.0*t
+        map.services = 6.0*(1 - t) + 21.0*t
       } else if (is_agrarian) {
-        map.agriculture = 70.0*(1 - t) + 46.0*t
-        map.informal_labour = 18.0*(1 - t) + 32.0*t
+        map.agriculture = 72.0*(1 - t) + 48.0*t
+        map.informal_labour = 19.0*(1 - t) + 34.0*t
         map.manufacturing = 6.0*(1 - t) + 7.5*t
-        map.not_in_work = 4.0*(1 - t) + 4.5*t
-        map.services = 2.0*(1 - t) + 10.0*t
+        map.services = 3.0*(1 - t) + 10.5*t
       } else {
-        map.agriculture = 22.0*(1 - t) + 8.5*t
-        map.informal_labour = 12.5*(1 - t) + 9.5*t
-        map.manufacturing = 32.5*(1 - t) + 18.0*t
-        map.not_in_work = 7.0*(1 - t) + 6.0*t
-        map.services = 26.0*(1 - t) + 58.0*t
+        map.agriculture = 24.0*(1 - t) + 9.5*t
+        map.informal_labour = 13.0*(1 - t) + 10.5*t
+        map.manufacturing = 34.0*(1 - t) + 19.0*t
+        map.services = 29.0*(1 - t) + 61.0*t
       }
     }
 
-    //Normalize to exactly 100% in percentage mode
+    //Apply deterministic country-specific profile variation so each country is unique
+    if (clean !== 'global') {
+      let v_agri = ((h % 41)/40 - 0.5)*3.2
+      let v_inf = (((h >> 3) % 41)/40 - 0.5)*2.8
+      let v_mfg = (((h >> 6) % 41)/40 - 0.5)*4.5
+      let v_srv = (((h >> 9) % 41)/40 - 0.5)*4.5
+
+      map.agriculture = Math.max(0.5, map.agriculture + v_agri)
+      map.informal_labour = Math.max(0.5, map.informal_labour + v_inf)
+      map.manufacturing = Math.max(0.5, map.manufacturing + v_mfg)
+      map.services = Math.max(0.5, map.services + v_srv)
+    }
+
+    //Normalize to exactly 100.0% across the 4 active workforce sectors
     if (is_pct) {
-      let sum = map.agriculture + map.informal_labour + map.manufacturing + map.not_in_work + map.services
+      let sum = map.agriculture + map.informal_labour + map.manufacturing + map.services
       if (sum > 0) {
         map.agriculture = Math.round((map.agriculture/sum)*1000)/10
         map.informal_labour = Math.round((map.informal_labour/sum)*1000)/10
         map.manufacturing = Math.round((map.manufacturing/sum)*1000)/10
-        map.services = Math.round((map.services/sum)*1000)/10
-        //Assign remainder to not_in_work to guarantee exactly 100.0% sum
-        map.not_in_work = Math.round((100 - (map.agriculture + map.informal_labour + map.manufacturing + map.services))*10)/10
+        //Assign remainder to services to guarantee exactly 100.0% sum
+        map.services = Math.round((100 - (map.agriculture + map.informal_labour + map.manufacturing))*10)/10
       }
     }
 
