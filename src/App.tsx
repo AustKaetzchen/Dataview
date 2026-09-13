@@ -242,6 +242,10 @@ export const App: React.FC = () => {
 
   // Multi-country toggle handler (immediate UI response)
   const handleToggleCountry = useCallback((c: CountryFeature) => {
+    setCountriesMode(true)
+    setMapModes((prev) =>
+      prev.map((m) => (m.id === 'country_analysis' ? { ...m, active: true } : m))
+    )
     setSelectedCountries((prev) => {
       const exists = prev.some(
         (x) =>

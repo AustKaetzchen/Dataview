@@ -10,6 +10,7 @@ import {
   loadCountriesGeoJson,
   findCountryAtLngLat,
   isPointInGeometry,
+  pointInRing,
   computeGeometryBBox,
 } from '@/lib/geopng/polygonBinning'
 import {
@@ -705,10 +706,9 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
     const points: any[] = []
 
-    const deferredList = deferredSelectedCountries ?? selectedCountries
     const effectiveSelected =
-      deferredList && deferredList.length > 0
-        ? deferredList
+      selectedCountries && selectedCountries.length > 0
+        ? selectedCountries
         : selectedCountry
           ? [selectedCountry]
           : []
@@ -734,179 +734,206 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     const opacityVal = heightmapConfig.opacity ?? 0.9
     const alpha = Math.round(255 * opacityVal)
 
-    // In Country Analysis mode with active selection, constrain search space to country bounding box
-    let minGC = 0
-    let maxGC = gridW
-    let minGR = 0
-    let maxGR = gridH
-
-    if (countriesMode && effectiveSelected.length > 0) {
-      let bMinX = Infinity, bMinY = Infinity, bMaxX = -Infinity, bMaxY = -Infinity
-      for (const country of effectiveSelected) {
-        const bbox = country.bbox || computeGeometryBBox(country.geometry)
-        if (bbox) {
-          if (bbox[0] < bMinX) bMinX = bbox[0]
-          if (bbox[1] < bMinY) bMinY = bbox[1]
-          if (bbox[2] > bMaxX) bMaxX = bbox[2]
-          if (bbox[3] > bMaxY) bMaxY = bbox[3]
-        }
-      }
-      if (Number.isFinite(bMinX)) {
-        minGC = Math.max(0, Math.floor(((bMinX + 180) / 360) * gridW) - 1)
-        maxGC = Math.min(gridW, Math.ceil(((bMaxX + 180) / 360) * gridW) + 1)
-        minGR = Math.max(0, Math.floor(((90 - bMaxY) / 180) * gridH) - 1)
-        maxGR = Math.min(gridH, Math.ceil(((90 - bMinY) / 180) * gridH) + 1)
-      }
-    }
-
     const pixelOffset = getPixelOffset(projection)
     const latOffset = pixelOffset * (180 / H)
+    const visitedCells = new Set<number>()
 
-    for (let gr = minGR; gr < maxGR; gr++) {
+    const processCell = (gr: number, gc: number) => {
+      const cellIdx = gr * gridW + gc
+      if (visitedCells.has(cellIdx)) return
+      visitedCells.add(cellIdx)
+
       const startR = gr * step
       const endR = Math.min(H, startR + step)
-      const centerLat = 90 - ((gr + 0.5) / gridH) * 180 + latOffset
-      const minLat = centerLat - halfH
-      const maxLat = centerLat + halfH
+      const startC = gc * step
+      const endC = Math.min(W, startC + step)
 
-      for (let gc = minGC; gc < maxGC; gc++) {
-        const startC = gc * step
-        const endC = Math.min(W, startC + step)
+      let sumVal = 0
+      let countVal = 0
+      let maxBlockVal = -Infinity
 
-        // Area-aggregate block pixels: preserve fine spikes via blended mean + peak
-        let sumVal = 0
-        let countVal = 0
-        let maxBlockVal = -Infinity
-
-        if (step === 1) {
-          const v = raster.data[startR * W + startC]
-          if (Number.isFinite(v)) {
-            sumVal = v
-            countVal = 1
-            maxBlockVal = v
-          }
-        } else {
-          for (let r = startR; r < endR; r++) {
-            const rowOffset = r * W
-            for (let c = startC; c < endC; c++) {
-              const v = raster.data[rowOffset + c]
-              if (Number.isFinite(v)) {
-                sumVal += v
-                countVal++
-                if (v > maxBlockVal) maxBlockVal = v
-              }
+      if (step === 1) {
+        const v = raster.data[startR * W + startC]
+        if (Number.isFinite(v)) {
+          sumVal = v
+          countVal = 1
+          maxBlockVal = v
+        }
+      } else {
+        for (let r = startR; r < endR; r++) {
+          const rowOffset = r * W
+          for (let c = startC; c < endC; c++) {
+            const v = raster.data[rowOffset + c]
+            if (Number.isFinite(v)) {
+              sumVal += v
+              countVal++
+              if (v > maxBlockVal) maxBlockVal = v
             }
           }
         }
+      }
 
-        // Only skip if cell has no finite data (ocean / NaN)
-        if (countVal === 0) continue
+      if (countVal === 0) return
 
-        // Blend mean & max so needle spikes are prominently rendered while maintaining smooth coverage
-        const v = countVal > 1 ? (sumVal / countVal) * 0.4 + maxBlockVal * 0.6 : maxBlockVal
+      const v = countVal > 1 ? (sumVal / countVal) * 0.4 + maxBlockVal * 0.6 : maxBlockVal
 
-        // Uniform rectangular parent pixel center and bounds
-        const centerLng = -180 + ((gc + 0.5) / gridW) * 360
-        const minLng = centerLng - halfW
-        const maxLng = centerLng + halfW
+      const maxAllowedLat = projection === 'Mercator' ? 84.9 : 89.9
+      const minAllowedLat = projection === 'Mercator' ? -84.9 : -89.9
 
-        // Strict isolation in Country Analysis: skip any cell outside the selected country/countries
-        if (countriesMode && effectiveSelected.length > 0) {
-          let isInside = false
-          for (const country of effectiveSelected) {
-            const bbox = country.bbox || computeGeometryBBox(country.geometry)
-            if (bbox) {
-              const [cMinX, cMinY, cMaxX, cMaxY] = bbox
-              if (centerLng < cMinX || centerLng > cMaxX || centerLat < cMinY || centerLat > cMaxY) continue
-            }
-            if (isPointInGeometry(centerLng, centerLat, country.geometry)) {
-              isInside = true
-              break
-            }
-          }
-          if (!isInside) continue
-        }
+      const rawCenterLat = 90 - ((gr + 0.5) / gridH) * 180 + latOffset
+      if (rawCenterLat < minAllowedLat - halfH || rawCenterLat > maxAllowedLat + halfH) return
 
-        // 4 corners strictly flat-facing North: SW -> SE -> NE -> NW
-        let polygon: [number, number][]
-        if (projection === 'EqualEarth') {
-          polygon = [
-            projectEqualEarth(minLng, minLat),
-            projectEqualEarth(maxLng, minLat),
-            projectEqualEarth(maxLng, maxLat),
-            projectEqualEarth(minLng, maxLat),
-          ]
-        } else {
-          polygon = [
-            [minLng, minLat],
-            [maxLng, minLat],
-            [maxLng, maxLat],
-            [minLng, maxLat],
-          ]
-        }
+      const centerLat = Math.max(minAllowedLat, Math.min(maxAllowedLat, rawCenterLat))
+      const centerLng = Math.max(-180, Math.min(180, -180 + ((gc + 0.5) / gridW) * 360))
+      const minLng = Math.max(-180, centerLng - halfW)
+      const maxLng = Math.min(180, centerLng + halfW)
+      const minLat = Math.max(minAllowedLat, centerLat - halfH)
+      const maxLat = Math.min(maxAllowedLat, centerLat + halfH)
 
-        const tVal = transformValue(v, scaleType as any, logSigma)
-        const norm = Math.max(0, Math.min(1, (tVal - tMin) / tRange))
-
-        // Needle spike elevation: linear scale relative to current colourbar OR percentile-based OR blend
-        let heightNorm = 0
-        const cbRange = maxVal - minVal || 1
-        const linNorm = Math.max(0, Math.min(1, (v - minVal) / cbRange))
-
-        if (heightScaleMode === 'percentile') {
-          const rank = getPercentileRank ? getPercentileRank(v) : linNorm
-          heightNorm = Math.max(0, Math.min(1, rank))
-        } else if (heightScaleMode === 'blend') {
-          const rank = getPercentileRank ? getPercentileRank(v) : linNorm
-          const pctNorm = Math.max(0, Math.min(1, rank))
-          const w = Math.max(0, Math.min(1, heightmapConfig.blendWeight ?? 0.5))
-          heightNorm = (1 - w) * linNorm + w * pctNorm
-        } else {
-          // Direct linear scale relative to the current colourbar bounds
-          heightNorm = linNorm
-        }
-
-        const spikeHeight = isCartesian
-          ? heightNorm * ((maxScale / 111000) * 12)
-          : heightNorm * maxScale
-
-        // Latitude compensation: In Web Mercator projection, deck.gl multiplies Z elevation by
-        // 1.0 / cos(lat) (see project.glsl project_size_at_latitude). This causes spikes at northerly latitudes
-        // (e.g. 60°N - 80°N) to be exaggerated up to 2x - 6x compared to mid-latitudes (30°-40°N) or the equator.
-        // By multiplying by cos(lat), we cancel deck.gl's dilation factor so visual height is strictly uniform.
-        const latRad = (Math.min(85, Math.max(-85, centerLat)) * Math.PI) / 180
-        const latCorrection = projection === 'Mercator' ? Math.max(0.08, Math.cos(latRad)) : 1.0
-
-        const elev = (baseElevation + spikeHeight) * latCorrection
-
-        // Palette color from LUT with transparency alpha (optionally tied to cell empirical percentile)
-        const lutIdx = Math.floor(norm * 255) * 3
-        let cellAlpha = alpha
-        if (heightmapConfig.opacityByPercentile && getPercentileRank) {
-          const rank = Math.max(0.01, Math.min(1, getPercentileRank(v)))
-          const strength = heightmapConfig.opacityByPercentileStrength ?? 1.0
-          // Power curve gives smooth pseudo-log/exponential contrast:
-          // strength = 0: uniform opacity (rank^0 = 1.0)
-          // strength = 1: linear fade (rank^1 = rank)
-          // strength = 10: 10x order-of-magnitude fade (rank^10, isolates extreme spikes)
-          const factor = Math.pow(rank, strength)
-          cellAlpha = Math.round(255 * opacityVal * Math.max(0.02, factor))
-        }
-        const color: [number, number, number, number] = [
-          lut[lutIdx],
-          lut[lutIdx + 1],
-          lut[lutIdx + 2],
-          cellAlpha,
+      let polygon: [number, number][]
+      if (projection === 'EqualEarth') {
+        polygon = [
+          projectEqualEarth(minLng, minLat),
+          projectEqualEarth(maxLng, minLat),
+          projectEqualEarth(maxLng, maxLat),
+          projectEqualEarth(minLng, maxLat),
         ]
+      } else {
+        polygon = [
+          [minLng, minLat],
+          [maxLng, minLat],
+          [maxLng, maxLat],
+          [minLng, maxLat],
+        ]
+      }
 
-        points.push({
-          polygon,
-          elevation: elev,
-          color,
-          value: v,
-          lng: centerLng,
-          lat: centerLat,
-        })
+      const tVal = transformValue(v, scaleType as any, logSigma)
+      const norm = Math.max(0, Math.min(1, (tVal - tMin) / tRange))
+
+      let heightNorm = 0
+      const cbRange = maxVal - minVal || 1
+      const linNorm = Math.max(0, Math.min(1, (v - minVal) / cbRange))
+
+      if (heightScaleMode === 'percentile') {
+        const rank = getPercentileRank ? getPercentileRank(v) : linNorm
+        heightNorm = Math.max(0, Math.min(1, rank))
+      } else if (heightScaleMode === 'blend') {
+        const rank = getPercentileRank ? getPercentileRank(v) : linNorm
+        const pctNorm = Math.max(0, Math.min(1, rank))
+        const w = Math.max(0, Math.min(1, heightmapConfig.blendWeight ?? 0.5))
+        heightNorm = (1 - w) * linNorm + w * pctNorm
+      } else {
+        heightNorm = linNorm
+      }
+
+      const spikeHeight = isCartesian
+        ? heightNorm * ((maxScale / 111000) * 12)
+        : heightNorm * maxScale
+
+      const latRad = (Math.min(85, Math.max(-85, centerLat)) * Math.PI) / 180
+      const latCorrection = projection === 'Mercator' ? Math.max(0.08, Math.cos(latRad)) : 1.0
+
+      const elev = (baseElevation + spikeHeight) * latCorrection
+
+      const lutIdx = Math.floor(norm * 255) * 3
+      let cellAlpha = alpha
+      if (heightmapConfig.opacityByPercentile && getPercentileRank) {
+        const rank = Math.max(0.01, Math.min(1, getPercentileRank(v)))
+        const strength = heightmapConfig.opacityByPercentileStrength ?? 1.0
+        const factor = Math.pow(rank, strength)
+        cellAlpha = Math.round(255 * opacityVal * Math.max(0.02, factor))
+      }
+      const color: [number, number, number, number] = [
+        lut[lutIdx],
+        lut[lutIdx + 1],
+        lut[lutIdx + 2],
+        cellAlpha,
+      ]
+
+      points.push({
+        polygon,
+        elevation: elev,
+        color,
+        value: v,
+        lng: centerLng,
+        lat: centerLat,
+      })
+    }
+
+    if (countriesMode || effectiveSelected.length > 0) {
+      // High-performance country-by-country polygon scanning (only scans each country's tight bboxes)
+      for (const country of effectiveSelected) {
+        const geom = country.geometry
+        if (!geom) continue
+
+        const polyList: number[][][][] =
+          geom.type === 'Polygon'
+            ? [geom.coordinates as number[][][]]
+            : geom.type === 'MultiPolygon'
+              ? (geom.coordinates as number[][][][])
+              : []
+
+        for (const rings of polyList) {
+          if (!rings || rings.length === 0) continue
+          const outerRing = rings[0]
+          if (!outerRing || outerRing.length === 0) continue
+
+          let pMinX = Infinity, pMinY = Infinity, pMaxX = -Infinity, pMaxY = -Infinity
+          for (let i = 0; i < outerRing.length; i++) {
+            const pt = outerRing[i]
+            if (pt[0] < pMinX) pMinX = pt[0]
+            if (pt[1] < pMinY) pMinY = pt[1]
+            if (pt[0] > pMaxX) pMaxX = pt[0]
+            if (pt[1] > pMaxY) pMaxY = pt[1]
+          }
+
+          if (!Number.isFinite(pMinX)) continue
+
+          const crosses180 = pMaxX - pMinX > 180
+          const minC = crosses180 ? 0 : Math.max(0, Math.floor(((pMinX + 180) / 360) * gridW) - 1)
+          const maxC = crosses180 ? gridW : Math.min(gridW, Math.ceil(((pMaxX + 180) / 360) * gridW) + 1)
+          const minR = Math.max(0, Math.floor(((90 - pMaxY) / 180) * gridH) - 1)
+          const maxR = Math.min(gridH, Math.ceil(((90 - pMinY) / 180) * gridH) + 1)
+
+          const holes = rings.slice(1)
+
+          for (let gr = minR; gr < maxR; gr++) {
+            const centerLat = 90 - ((gr + 0.5) / gridH) * 180 + latOffset
+            if (centerLat < pMinY - halfH || centerLat > pMaxY + halfH) continue
+
+            for (let gc = minC; gc < maxC; gc++) {
+              const centerLng = -180 + ((gc + 0.5) / gridW) * 360
+              if (!crosses180 && (centerLng < pMinX - halfW || centerLng > pMaxX + halfW)) continue
+
+              const cellIdx = gr * gridW + gc
+              if (visitedCells.has(cellIdx)) continue
+
+              if (!pointInRing(centerLng, centerLat, outerRing)) continue
+
+              let inHole = false
+              for (let h = 0; h < holes.length; h++) {
+                if (pointInRing(centerLng, centerLat, holes[h])) {
+                  inHole = true
+                  break
+                }
+              }
+              if (inHole) continue
+
+              processCell(gr, gc)
+            }
+          }
+        }
+      }
+    } else {
+      // Global mode: scan all grid cells bounded by valid projection latitudes
+      const minAllowedLat = projection === 'Mercator' ? -84.9 : -89.9
+      const maxAllowedLat = projection === 'Mercator' ? 84.9 : 89.9
+      for (let gr = 0; gr < gridH; gr++) {
+        const rawCenterLat = 90 - ((gr + 0.5) / gridH) * 180 + latOffset
+        if (rawCenterLat < minAllowedLat || rawCenterLat > maxAllowedLat) continue
+        for (let gc = 0; gc < gridW; gc++) {
+          processCell(gr, gc)
+        }
       }
     }
 
@@ -930,7 +957,6 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     projection,
     countriesMode,
     countryStats,
-    deferredSelectedCountries,
     selectedCountries,
     selectedCountry,
   ])
@@ -954,10 +980,9 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     const isCartesian = projection === 'Equirectangular' || projection === 'EqualEarth'
     const scaleFactor = circleOverlayConfig.baseRadius || 1.0
 
-    const deferredList = deferredSelectedCountries ?? selectedCountries
     const effectiveSelected =
-      deferredList && deferredList.length > 0
-        ? deferredList
+      selectedCountries && selectedCountries.length > 0
+        ? selectedCountries
         : selectedCountry
           ? [selectedCountry]
           : []
@@ -1053,7 +1078,6 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     projection,
     heightmapConfig,
     countriesMode,
-    deferredSelectedCountries,
     selectedCountries,
     selectedCountry,
   ])
@@ -1237,22 +1261,21 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       )
     }
 
-    // 3.5. 3D Elevation Spike Map Layer (Uniform Rectangular Parent-Pixel SolidPolygonLayer)
     if (heightmapConfig.enabled && elevationSpikesData.points && elevationSpikesData.points.length > 0) {
-      const isolationKey = countriesMode
-        ? `iso-${effectiveSelected.map((c) => c.properties.iso_a3 || c.properties.name).join('_') || 'empty'}`
-        : 'all'
+      const spikeKey = (countriesMode || effectiveSelected.length > 0)
+        ? `iso-${effectiveSelected.map((c) => c.properties.iso_a3 || c.properties.name).sort().join('_') || 'empty'}`
+        : 'global'
       list.push(
         new SolidPolygonLayer({
-          id: `elevation-spikes-${projection}-${isolationKey}-${heightmapConfig.resolutionArcmin ?? 60}-${heightmapConfig.heightScaleMode ?? 'linear'}-${heightmapConfig.blendWeight ?? 0.5}`,
+          id: `elevation-spikes-${projection}-${spikeKey}-${heightmapConfig.resolutionArcmin ?? 60}-${heightmapConfig.heightScaleMode ?? 'linear'}-${heightmapConfig.blendWeight ?? 0.5}`,
           data: elevationSpikesData.points,
           getPolygon: (d: any) => d.polygon,
           getElevation: (d: any) => d.elevation,
           getFillColor: (d: any) => d.color,
           updateTriggers: {
-            getPolygon: [elevationSpikesData.points.length, countriesMode, effectiveSelected.length, heightmapConfig.resolutionArcmin],
-            getElevation: [elevationSpikesData.points.length, heightmapConfig.elevationScale, heightmapConfig.resolutionArcmin, heightmapConfig.heightScaleMode, heightmapConfig.blendWeight],
-            getFillColor: [palette, invertPalette, heightmapConfig.opacity, heightmapConfig.opacityByPercentile, heightmapConfig.opacityByPercentileStrength],
+            getPolygon: [elevationSpikesData.points, spikeKey, countriesMode, effectiveSelected.length, heightmapConfig.resolutionArcmin],
+            getElevation: [elevationSpikesData.points, spikeKey, heightmapConfig.elevationScale, heightmapConfig.resolutionArcmin, heightmapConfig.heightScaleMode, heightmapConfig.blendWeight],
+            getFillColor: [elevationSpikesData.points, spikeKey, palette, invertPalette, heightmapConfig.opacity, heightmapConfig.opacityByPercentile, heightmapConfig.opacityByPercentileStrength],
           },
           extruded: true,
           flatShading: true,

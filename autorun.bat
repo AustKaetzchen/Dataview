@@ -6,7 +6,7 @@ title Project 1436 - Dataview Webviewer
 cd /d "%~dp0"
 
 echo ===================================================
-echo           Starting Dataview Webviewer              
+echo           Dataview Webviewer Launcher              
 echo ===================================================
 echo.
 
@@ -34,41 +34,80 @@ if not exist "node_modules\" (
     echo.
 )
 
-:: Check if a forced rebuild was requested via argument (e.g. autorun.bat build)
-if /i "%~1"=="build" goto do_build
-if /i "%~1"=="rebuild" goto do_build
-if /i "%~1"=="--build" goto do_build
+:: Command-line argument bypass
+if /i "%~1"=="dev" goto start_dev
+if /i "%~1"=="--dev" goto start_dev
+if /i "%~1"=="preview" goto start_preview
+if /i "%~1"=="prod" goto start_preview
+if /i "%~1"=="build" goto start_preview
+if /i "%~1"=="rebuild" goto do_rebuild
+if /i "%~1"=="--rebuild" goto do_rebuild
 
-:: Check if dist bundle exists, build if missing
+:: Interactive startup menu
+echo Choose server mode to run:
+echo.
+echo   [1] Production Build Server (vite preview) [Default in 10s]
+echo   [2] Development Server      (vite dev with HMR live reload)
+echo   [3] Rebuild Production      (npm run build, then preview)
+echo   [4] Exit
+echo.
+choice /c 1234 /t 10 /d 1 /m "Select option [1-4]: "
+if errorlevel 4 goto do_exit
+if errorlevel 3 goto do_rebuild
+if errorlevel 2 goto start_dev
+if errorlevel 1 goto start_preview
+
+:start_dev
+echo.
+echo ===================================================
+echo      Starting Development Server (vite dev)        
+echo ===================================================
+echo [INFO] Live reloading and HMR active.
+echo [INFO] Press Ctrl+C in this window to stop the server.
+echo.
+call npm run dev -- --host --open
+goto handle_exit
+
+:start_preview
 if not exist "dist\index.html" (
-    echo [INFO] Production build not found. Generating build...
-    goto do_build
+    echo.
+    echo [INFO] Production build not found in dist\. Building now...
+    goto do_rebuild
 )
+echo.
+echo ===================================================
+echo   Starting Production Build Server (vite preview)  
+echo ===================================================
+echo [INFO] Serving optimized production bundle from dist\
+echo [INFO] Press Ctrl+C in this window to stop the server.
+echo.
+call npm run preview -- --host --open
+goto handle_exit
 
-goto start_preview
-
-:do_build
-echo [INFO] Building production bundle...
+:do_rebuild
+echo.
+echo ===================================================
+echo             Building Production Bundle             
+echo ===================================================
 echo.
 call npm run build
 if %ERRORLEVEL% neq 0 (
     echo.
-    echo [ERROR] Build failed.
+    echo [ERROR] Production build failed.
     pause
     exit /b %ERRORLEVEL%
 )
-echo.
+goto start_preview
 
-:start_preview
-:: Launch the fast preview server for the pre-built version
-echo [INFO] Launching built webviewer in your browser...
-echo [INFO] (Press Ctrl+C in this window to stop the server)
-echo.
-call npm run preview -- --host --open
-
-:: If the server exits with an error, keep window open
+:handle_exit
 if %ERRORLEVEL% neq 0 (
     echo.
     echo [ERROR] The server exited with error code %ERRORLEVEL%.
     pause
 )
+exit /b %ERRORLEVEL%
+
+:do_exit
+echo.
+echo Exiting Dataview launcher.
+exit /b 0
