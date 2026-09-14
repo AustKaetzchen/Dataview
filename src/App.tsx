@@ -37,6 +37,7 @@ import { ParsedDataLayer } from './server/layerParser'
 import { UserRole } from './components/controls/DataLayersTab'
 import { Icon } from './components/ui/icon'
 import { UfDate } from './lib/ufDate'
+import { toCanvas } from 'html-to-image'
 
 /**
  * Maps raw JSON5 colourscheme strings to the corresponding D3 ColorPalette enum name.
@@ -1214,6 +1215,11 @@ export const App: React.FC = function () {
         end_yr = seq_years[seq_years.length - 1]
         total_overall_steps = seq_years.length*layers_to_record.length
 
+        let raw_w = window.innerWidth || 1920
+        let raw_h = window.innerHeight || 1080
+        export_w = raw_w % 2 === 0 ? raw_w : raw_w + 1
+        export_h = raw_h % 2 === 0 ? raw_h : raw_h + 1
+
         record_canvas = document.createElement('canvas')
         record_canvas.width = export_w
         record_canvas.height = export_h
@@ -1260,7 +1266,6 @@ export const App: React.FC = function () {
 
             let target_layer = layers[layer_id] || (active_layer?.id === layer_id ? active_layer : null)
             let layer_name = target_layer?.name || layer_id
-            let layer_unit = target_layer?.unit || ''
 
             set_active_layer_id(layer_id)
             set_timeline_year(yr)
@@ -1298,9 +1303,9 @@ export const App: React.FC = function () {
               set_raster_version((arg0_v) => arg0_v + 1)
             }
 
-            //Wait for deck.gl to complete render
+            //Wait for React and deck.gl to complete render
             await new Promise((arg0_resolve) => requestAnimationFrame(() => requestAnimationFrame(arg0_resolve)))
-            await new Promise((arg0_resolve) => setTimeout(arg0_resolve, 60))
+            await new Promise((arg0_resolve) => setTimeout(arg0_resolve, 80))
 
             if (abort_timelapse_export_ref.current)
               break
@@ -1312,126 +1317,55 @@ export const App: React.FC = function () {
             record_ctx.fillStyle = '#0b0f19'
             record_ctx.fillRect(0, 0, export_w, export_h)
 
-            if (map_canvas)
+            if (map_canvas && map_canvas.width > 0 && map_canvas.height > 0) {
               record_ctx.drawImage(map_canvas, 0, 0, export_w, export_h)
-
-            //1. Draw Top-Left Colourbar / Legend Card
-            record_ctx.save()
-            let cb_h = 82
-            let cb_w = 400
-            let cb_x = 36
-            let cb_y = 36
-
-            record_ctx.fillStyle = 'rgba(15, 23, 42, 0.90)'
-            record_ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)'
-            record_ctx.lineWidth = 1.5
-            record_ctx.beginPath()
-            record_ctx.roundRect(cb_x, cb_y, cb_w, cb_h, 8)
-            record_ctx.fill()
-            record_ctx.stroke()
-
-            record_ctx.font = 'bold 13px system-ui, -apple-system, sans-serif'
-            record_ctx.fillStyle = '#ffffff'
-            record_ctx.textAlign = 'left'
-            record_ctx.textBaseline = 'top'
-            let title_text = layer_unit ? `${layer_name} (${layer_unit})` : layer_name
-            if (title_text.length > 40)
-              title_text = `${title_text.slice(0, 38)}...`
-            record_ctx.fillText(title_text, cb_x + 14, cb_y + 12)
-
-            record_ctx.font = 'bold 9px monospace'
-            record_ctx.fillStyle = '#60a5fa'
-            record_ctx.textAlign = 'right'
-            record_ctx.fillText(scale_type.toUpperCase(), cb_x + cb_w - 14, cb_y + 14)
-
-            let strip_h = 12
-            let strip_w = cb_w - 28
-            let strip_x = cb_x + 14
-            let strip_y = cb_y + 36
-
-            let lut = getPaletteLUT(color_palette, invert_palette)
-            let cb_grad = record_ctx.createLinearGradient(strip_x, 0, strip_x + strip_w, 0)
-            for (let s = 0; s <= 10; s++) {
-              let lut_idx = Math.min(255, Math.round((s / 10)*255))*3
-              cb_grad.addColorStop(s / 10, `rgb(${lut[lut_idx]}, ${lut[lut_idx + 1]}, ${lut[lut_idx + 2]})`)
             }
-            record_ctx.fillStyle = cb_grad
-            record_ctx.beginPath()
-            record_ctx.roundRect(strip_x, strip_y, strip_w, strip_h, 3)
-            record_ctx.fill()
 
-            let cur_min = decoded ? decoded.min : min_val
-            let cur_max = decoded ? decoded.max : max_val
-            record_ctx.font = '10px monospace'
-            record_ctx.fillStyle = '#cbd5e1'
-            record_ctx.textAlign = 'left'
-            record_ctx.textBaseline = 'top'
-            record_ctx.fillText(formatLegendValue(cur_min), strip_x, strip_y + 16)
+            //1. Draw real ColorBarLegend component from DOM
+            let colourbar_node = document.getElementById('dataview-colourbar-container')
+            if (colourbar_node) {
+              try {
+                let cb_rendered = await toCanvas(colourbar_node, {
+                  pixelRatio: 1,
+                  skipFonts: true,
+                })
+                if (cb_rendered && cb_rendered.width > 0 && cb_rendered.height > 0) {
+                  let cb_rect = colourbar_node.getBoundingClientRect()
+                  record_ctx.drawImage(
+                    cb_rendered,
+                    Math.round(cb_rect.left),
+                    Math.round(cb_rect.top),
+                    Math.round(cb_rect.width),
+                    Math.round(cb_rect.height)
+                  )
+                }
+              } catch (arg0_cb_err) {
+                console.warn('[TimelapseExport] Failed to capture colourbar node:', arg0_cb_err)
+              }
+            }
 
-            record_ctx.textAlign = 'center'
-            let mid_val = cur_min + (cur_max - cur_min)*0.5
-            record_ctx.fillText(formatLegendValue(mid_val), strip_x + strip_w*0.5, strip_y + 16)
-
-            record_ctx.textAlign = 'right'
-            record_ctx.fillText(formatLegendValue(cur_max), strip_x + strip_w, strip_y + 16)
-            record_ctx.restore()
-
-            //2. Draw BottomBar HUD across bottom
-            record_ctx.save()
-            let bb_h = 74
-            let bb_y = export_h - bb_h
-
-            record_ctx.fillStyle = 'rgba(11, 15, 25, 0.92)'
-            record_ctx.fillRect(0, bb_y, export_w, bb_h)
-
-            record_ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)'
-            record_ctx.lineWidth = 1
-            record_ctx.beginPath()
-            record_ctx.moveTo(0, bb_y)
-            record_ctx.lineTo(export_w, bb_y)
-            record_ctx.stroke()
-
-            //Left recording badge
-            record_ctx.fillStyle = 'rgba(239, 68, 68, 0.2)'
-            record_ctx.strokeStyle = 'rgba(239, 68, 68, 0.5)'
-            record_ctx.lineWidth = 1
-            record_ctx.beginPath()
-            record_ctx.roundRect(32, bb_y + 16, 120, 28, 4)
-            record_ctx.fill()
-            record_ctx.stroke()
-
-            record_ctx.font = 'bold 11px monospace'
-            record_ctx.fillStyle = '#ef4444'
-            record_ctx.textAlign = 'center'
-            record_ctx.textBaseline = 'middle'
-            record_ctx.fillText('● RECORDING', 32 + 60, bb_y + 30)
-
-            //Center historical date
-            record_ctx.font = 'bold 28px monospace'
-            record_ctx.fillStyle = '#ffffff'
-            record_ctx.textAlign = 'center'
-            record_ctx.textBaseline = 'middle'
-            record_ctx.fillText(UfDate.formatYear(yr), export_w / 2, bb_y + 30)
-
-            //Right status & keyframe step
-            record_ctx.font = '12px monospace'
-            record_ctx.fillStyle = '#94a3b8'
-            record_ctx.textAlign = 'right'
-            record_ctx.textBaseline = 'middle'
-            let progress_label = `KEYFRAME ${overall_step + 1}/${total_overall_steps}  [${UfDate.formatYear(start_yr)} — ${UfDate.formatYear(end_yr)}]`
-            record_ctx.fillText(progress_label, export_w - 32, bb_y + 30)
-
-            //Bottom progress track
-            let track_h = 5
-            let track_y = export_h - track_h
-            record_ctx.fillStyle = 'rgba(255, 255, 255, 0.12)'
-            record_ctx.fillRect(0, track_y, export_w, track_h)
-
-            let overall_pct = total_overall_steps > 0 ? (overall_step + 1) / total_overall_steps : 0
-            record_ctx.fillStyle = '#3b82f6'
-            record_ctx.fillRect(0, track_y, Math.max(4, export_w*overall_pct), track_h)
-
-            record_ctx.restore()
+            //2. Draw real TimelineBar component from DOM
+            let timelinebar_node = document.getElementById('dataview-timelinebar-container')
+            if (timelinebar_node) {
+              try {
+                let tb_rendered = await toCanvas(timelinebar_node, {
+                  pixelRatio: 1,
+                  skipFonts: true,
+                })
+                if (tb_rendered && tb_rendered.width > 0 && tb_rendered.height > 0) {
+                  let tb_rect = timelinebar_node.getBoundingClientRect()
+                  record_ctx.drawImage(
+                    tb_rendered,
+                    Math.round(tb_rect.left),
+                    Math.round(tb_rect.top),
+                    Math.round(tb_rect.width),
+                    Math.round(tb_rect.height)
+                  )
+                }
+              } catch (arg0_tb_err) {
+                console.warn('[TimelapseExport] Failed to capture timelinebar node:', arg0_tb_err)
+              }
+            }
 
             //Tick stream
             for (let frame_idx = 0; frame_idx < frames_per_keyframe; frame_idx++) {
@@ -1752,7 +1686,11 @@ export const App: React.FC = function () {
           onToggleSnapToKeyframes={set_snap_to_keyframes}
           playbackSpeed={playback_speed}
           snapToKeyframes={snap_to_keyframes}
-          style={{ left: `calc(${sidebar_width + 16}px + (100vw - ${sidebar_width + 360}px) / 2)`, width: 'min(1100px, calc(100vw - 450px))' }}
+          style={
+            (!ui_visible || is_timelapse_exporting)
+              ? { left: '50%', transform: 'translateX(-50%)', width: 'min(1100px, calc(100vw - 64px))' }
+              : { left: `calc(${sidebar_width + 16}px + (100vw - ${sidebar_width + 360}px) / 2)`, width: 'min(1100px, calc(100vw - 450px))' }
+          }
         />
       )}
 

@@ -50,6 +50,235 @@ let HIGH_FERTILITY_COUNTRIES = new Set([
   'afghanistan', 'niger', 'mali', 'chad', 'angola', 'somalia', 'mozambique', 'madagascar', 'cameroon', 'yemen'
 ])
 
+let COUNTRY_POP_2025_THOUSANDS: Record<string, number> = {
+  algeria: 45000,
+  angola: 36000,
+  argentina: 46000,
+  australia: 27000,
+  austria: 9100,
+  azerbaijan: 10000,
+  bangladesh: 173000,
+  belgium: 12000,
+  benin: 13000,
+  bolivia: 12000,
+  brazil: 215000,
+  burundi: 13000,
+  cameroon: 29000,
+  canada: 40000,
+  chad: 18000,
+  chile: 20000,
+  china: 1410000,
+  colombia: 52000,
+  croatia: 4000,
+  cuba: 11000,
+  czechia: 11000,
+  'czech republic': 11000,
+  'democratic republic of the congo': 102000,
+  denmark: 5900,
+  'dominican republic': 11000,
+  'dr congo': 102000,
+  ecuador: 18000,
+  egypt: 112000,
+  ethiopia: 126000,
+  finland: 5600,
+  france: 68000,
+  germany: 84000,
+  ghana: 34000,
+  global: 8050000,
+  greece: 10000,
+  guatemala: 18000,
+  guinea: 14000,
+  haiti: 12000,
+  honduras: 10500,
+  hungary: 9600,
+  india: 1430000,
+  indonesia: 280000,
+  iran: 89000,
+  iraq: 45000,
+  ireland: 5100,
+  israel: 9800,
+  italy: 59000,
+  'ivory coast': 29000,
+  japan: 124000,
+  jordan: 11000,
+  kazakhstan: 20000,
+  kenya: 55000,
+  korea: 52000,
+  madagascar: 30000,
+  malaysia: 34000,
+  mali: 23000,
+  mexico: 130000,
+  morocco: 37000,
+  mozambique: 33000,
+  myanmar: 54000,
+  nepal: 31000,
+  netherlands: 18000,
+  'new zealand': 5200,
+  niger: 27000,
+  nigeria: 225000,
+  norway: 5500,
+  pakistan: 240000,
+  'papua new guinea': 10000,
+  peru: 34000,
+  philippines: 117000,
+  poland: 38000,
+  portugal: 10000,
+  romania: 19000,
+  russia: 144000,
+  'russian federation': 144000,
+  rwanda: 14000,
+  'saudi arabia': 36000,
+  senegal: 18000,
+  slovenia: 2100,
+  somalia: 18000,
+  'south africa': 60000,
+  'south korea': 52000,
+  'south sudan': 11000,
+  spain: 48000,
+  'sri lanka': 22000,
+  sudan: 48000,
+  sweden: 10500,
+  switzerland: 8900,
+  syria: 23000,
+  taiwan: 23000,
+  tanzania: 68000,
+  thailand: 72000,
+  tunisia: 12000,
+  turkey: 86000,
+  uganda: 48000,
+  uk: 68000,
+  ukraine: 38000,
+  'united arab emirates': 10000,
+  'united kingdom': 68000,
+  'united states': 340000,
+  'united states of america': 340000,
+  usa: 340000,
+  uzbekistan: 36000,
+  venezuela: 29000,
+  vietnam: 100000,
+  yemen: 34000,
+  zambia: 20000,
+  zimbabwe: 16000,
+}
+
+/**
+ * Calculates historical population of a country or global total in thousands for a given year.
+ *
+ * @param {string} arg0_country
+ * @param {number} arg1_year
+ *
+ * @returns {number}
+ */
+export function getHistoricalPopulationThousands (arg0_country: string, arg1_year: number): number {
+  //Convert from parameters
+  let country = arg0_country.toLowerCase().trim()
+  let year = arg1_year
+
+  //Declare local instance variables
+  let base_2025: number
+  let growth_ratio = 1.0
+
+  //Function body
+  base_2025 = COUNTRY_POP_2025_THOUSANDS[country]
+  if (!base_2025) {
+    let hash = 0
+    for (let i = 0; i < country.length; i++)
+      hash = (hash*31 + country.charCodeAt(i)) >>> 0
+    base_2025 = 15000 + (hash % 30000)
+  }
+
+  if (country === 'global' || country === '') {
+    if (year <= 1800) {
+      growth_ratio = 0.124
+    } else if (year <= 1850) {
+      growth_ratio = 0.124 + ((year - 1800)/50)*(0.157 - 0.124)
+    } else if (year <= 1900) {
+      growth_ratio = 0.157 + ((year - 1850)/50)*(0.205 - 0.157)
+    } else if (year <= 1950) {
+      growth_ratio = 0.205 + ((year - 1900)/50)*(0.314 - 0.205)
+    } else if (year <= 1970) {
+      growth_ratio = 0.314 + ((year - 1950)/20)*(0.460 - 0.314)
+    } else if (year <= 1990) {
+      growth_ratio = 0.460 + ((year - 1970)/20)*(0.658 - 0.460)
+    } else if (year <= 2010) {
+      growth_ratio = 0.658 + ((year - 1990)/20)*(0.863 - 0.658)
+    } else {
+      growth_ratio = 0.863 + ((year - 2010)/15)*(1.0 - 0.863)
+    }
+  } else if (MATURE_WESTERN_COUNTRIES.has(country)) {
+    if (country.includes('united states') || country === 'usa' || country === 'canada' || country === 'australia') {
+      if (year <= 1800) {
+        growth_ratio = 0.015
+      } else if (year <= 1850) {
+        growth_ratio = 0.015 + ((year - 1800)/50)*(0.070 - 0.015)
+      } else if (year <= 1900) {
+        growth_ratio = 0.070 + ((year - 1850)/50)*(0.220 - 0.070)
+      } else if (year <= 1950) {
+        growth_ratio = 0.220 + ((year - 1900)/50)*(0.450 - 0.220)
+      } else if (year <= 2000) {
+        growth_ratio = 0.450 + ((year - 1950)/50)*(0.830 - 0.450)
+      } else {
+        growth_ratio = 0.830 + ((year - 2000)/25)*(1.0 - 0.830)
+      }
+    } else {
+      if (year <= 1800) {
+        growth_ratio = 0.35
+      } else if (year <= 1850) {
+        growth_ratio = 0.35 + ((year - 1800)/50)*(0.45 - 0.35)
+      } else if (year <= 1900) {
+        growth_ratio = 0.45 + ((year - 1850)/50)*(0.65 - 0.45)
+      } else if (year <= 1950) {
+        growth_ratio = 0.65 + ((year - 1900)/50)*(0.80 - 0.65)
+      } else if (year <= 2000) {
+        growth_ratio = 0.80 + ((year - 1950)/50)*(0.95 - 0.80)
+      } else {
+        growth_ratio = 0.95 + ((year - 2000)/25)*(1.0 - 0.95)
+      }
+    }
+  } else if (SUPER_AGED_COUNTRIES.has(country)) {
+    if (year <= 1850) {
+      growth_ratio = 0.38
+    } else if (year <= 1900) {
+      growth_ratio = 0.38 + ((year - 1850)/50)*(0.55 - 0.38)
+    } else if (year <= 1950) {
+      growth_ratio = 0.55 + ((year - 1900)/50)*(0.75 - 0.55)
+    } else if (year <= 2000) {
+      growth_ratio = 0.75 + ((year - 1950)/50)*(0.98 - 0.75)
+    } else {
+      growth_ratio = 0.98 + ((year - 2000)/25)*(1.0 - 0.98)
+    }
+  } else if (HIGH_FERTILITY_COUNTRIES.has(country) || DEVELOPING_DIVIDEND_COUNTRIES.has(country)) {
+    if (year <= 1850) {
+      growth_ratio = 0.08
+    } else if (year <= 1900) {
+      growth_ratio = 0.08 + ((year - 1850)/50)*(0.12 - 0.08)
+    } else if (year <= 1950) {
+      growth_ratio = 0.12 + ((year - 1900)/50)*(0.22 - 0.12)
+    } else if (year <= 1980) {
+      growth_ratio = 0.22 + ((year - 1950)/30)*(0.45 - 0.22)
+    } else if (year <= 2000) {
+      growth_ratio = 0.45 + ((year - 1980)/20)*(0.72 - 0.45)
+    } else {
+      growth_ratio = 0.72 + ((year - 2000)/25)*(1.0 - 0.72)
+    }
+  } else {
+    if (year <= 1850) {
+      growth_ratio = 0.20
+    } else if (year <= 1900) {
+      growth_ratio = 0.20 + ((year - 1850)/50)*(0.28 - 0.20)
+    } else if (year <= 1950) {
+      growth_ratio = 0.28 + ((year - 1900)/50)*(0.42 - 0.28)
+    } else if (year <= 2000) {
+      growth_ratio = 0.42 + ((year - 1950)/50)*(0.82 - 0.42)
+    } else {
+      growth_ratio = 0.82 + ((year - 2000)/25)*(1.0 - 0.82)
+    }
+  }
+
+  //Return statement
+  return Math.round(base_2025*growth_ratio)
+}
+
 /**
  * Computes individual country population pyramid cohort values based on country archetype and historical year.
  *
@@ -67,16 +296,18 @@ export function getCountryDemographicPyramid (
   let year = arg1_year
 
   //Declare local instance variables
-  let base_scale = 100
   let clean_name = country.toLowerCase().trim()
+  let cohort_densities: number[] = []
   let dependency_ratio: number
   let female_map: Record<string, number> = {}
   let male_map: Record<string, number> = {}
   let old_dep_count = 0
   let sex_ratio: number
+  let sum_unnormalised = 0
   let total_female = 0
   let total_male = 0
   let total_pop: number
+  let total_pop_thousands: number
   let working_count = 0
   let youth_dep_count = 0
 
@@ -87,44 +318,35 @@ export function getCountryDemographicPyramid (
   let is_transition = TRANSITION_EMERGING_COUNTRIES.has(clean_name)
 
   //Function body
+  total_pop_thousands = getHistoricalPopulationThousands(clean_name, year)
+
   for (let i = 0; i < AGE_IDS.length; i++) {
     let age = COHORT_MID_AGES[i]
-    let cid = AGE_IDS[i]
-    let cohort_w = COHORT_WIDTHS[i]
-    let f_val: number
-    let m_val: number
-
-    //Smooth continuous demographic modeling
     let annual_density = 1.0
+    let cohort_w = COHORT_WIDTHS[i]
 
     if (year <= 1850) {
-      //Classical pre-industrial high-mortality demographic regime
       annual_density = Math.exp(-age/32)
     } else if (is_super_aged && year >= 1990) {
-      //Super-aged: low youth birth rate, high adult bulge at 45-65, low mortality until late 70s
       let birth_decline = Math.min(0.65, 0.45 + (year - 1990)*0.007)
       let youth_curve = 1 - birth_decline*Math.exp(-Math.pow(age/24, 2))
       let bulge = 1 + 0.35*Math.exp(-Math.pow((age - 52)/14, 2))
       let survival = Math.exp(-Math.pow(age/84, 5.5))
       annual_density = youth_curve*bulge*survival
     } else if (is_mature && year >= 1970) {
-      //Mature Western: stable fertility, baby-boom bulge around 45-60, high longevity
       let birth_factor = 0.85 - 0.15*Math.exp(-Math.pow(age/22, 2))
       let bulge = 1 + 0.25*Math.exp(-Math.pow((age - 48)/16, 2))
       let survival = Math.exp(-Math.pow(age/82, 5.0))
       annual_density = birth_factor*bulge*survival
     } else if (is_transition && year >= 1990) {
-      //Emerging transition: rapid fertility drop in youth, working-age dividend at 25-50
       let birth_factor = 0.70 - 0.30*Math.exp(-Math.pow(age/20, 2))
       let bulge = 1 + 0.30*Math.exp(-Math.pow((age - 38)/15, 2))
       let survival = Math.exp(-Math.pow(age/78, 4.5))
       annual_density = birth_factor*bulge*survival
     } else if (is_high_fertility) {
-      //High fertility expansive pyramid
       let life_exp = year >= 1980 ? 46 : 38
       annual_density = Math.exp(-age/life_exp)
     } else {
-      //Developing dividend / default
       let t_progress = Math.min(1, Math.max(0, (year - 1950)/75))
       let life_exp = 38 + t_progress*34
       let youth_factor = 1.0 - t_progress*0.25*Math.exp(-Math.pow(age/22, 2))
@@ -132,11 +354,21 @@ export function getCountryDemographicPyramid (
       annual_density = youth_factor*survival
     }
 
-    //Aggregate inhabitants in cohort band = base_scale * cohort_duration * annual_density
-    let cohort_inhabitants = base_scale*cohort_w*annual_density
+    let density_val = cohort_w*annual_density
+    cohort_densities.push(density_val)
+    sum_unnormalised += density_val
+  }
 
-    //Gender split: males higher at birth (1.05), women outlive men in older cohorts
+  for (let i = 0; i < AGE_IDS.length; i++) {
+    let age = COHORT_MID_AGES[i]
+    let cid = AGE_IDS[i]
+    let cohort_inhabitants = sum_unnormalised > 0
+      ? (cohort_densities[i] / sum_unnormalised)*total_pop_thousands
+      : (total_pop_thousands / AGE_IDS.length)
+    let f_val: number
+    let m_val: number
     let sex_bias = 1.05 - (age/90)*0.25
+
     m_val = Math.max(0.1, cohort_inhabitants*(sex_bias/(1 + sex_bias)))
     f_val = Math.max(0.1, cohort_inhabitants*(1/(1 + sex_bias)))
 

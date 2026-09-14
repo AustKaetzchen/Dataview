@@ -657,6 +657,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
 
           return (
             <div
+              id="dataview-colourbar-container"
               style={{
                 top: `${UI_LAYOUT.margin}px`,
                 left: `${colourbar_left}px`,

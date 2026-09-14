@@ -250,6 +250,7 @@ export const TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
   //Return statement
   return (
     <div
+      id="dataview-timelinebar-container"
       style={style}
       className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 w-[96%] max-w-5xl pointer-events-auto select-none font-sans"
     >

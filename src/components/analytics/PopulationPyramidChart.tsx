@@ -3,6 +3,7 @@ import ReactECharts from 'echarts-for-react'
 import { DecodedRaster } from '@/lib/geopng/types'
 import { CountryFeature, CountryStats } from '@/lib/geopng/polygonBinning'
 import { Icon } from '@/components/ui/icon'
+import { formatLegendValue } from '@/components/map/ColorBarLegend'
 
 export interface PopulationPyramidChartProps {
   activeVariableSelectors?: Record<string, string | string[]>
@@ -100,15 +101,15 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
     return []
   }, [selected_countries, selected_country])
 
-  ;[active_country_name, set_active_country_name] = useState<string | null>(
-    effective_countries.length > 0 ? effective_countries[effective_countries.length - 1].properties.name : null
-  )
-  ;[pyramid_data, set_pyramid_data] = useState<{ female: Record<string, number>; male: Record<string, number> } | null>(null)
-  ;[is_loading, set_is_loading] = useState<boolean>(false)
-  ;[total_male, set_total_male] = useState<number>(0)
-  ;[total_female, set_total_female] = useState<number>(0)
-  ;[sex_ratio, set_sex_ratio] = useState<number>(1.0)
-  ;[dependency_ratio, set_dependency_ratio] = useState<number>(50.0)
+    ;[active_country_name, set_active_country_name] = useState<string | null>(
+      effective_countries.length > 0 ? effective_countries[effective_countries.length - 1].properties.name : null
+    )
+    ;[pyramid_data, set_pyramid_data] = useState<{ female: Record<string, number>; male: Record<string, number> } | null>(null)
+    ;[is_loading, set_is_loading] = useState<boolean>(false)
+    ;[total_male, set_total_male] = useState<number>(0)
+    ;[total_female, set_total_female] = useState<number>(0)
+    ;[sex_ratio, set_sex_ratio] = useState<number>(1.0)
+    ;[dependency_ratio, set_dependency_ratio] = useState<number>(50.0)
 
   //Auto-synchronize active country selection when user selects or clicks countries
   useEffect(() => {
@@ -154,31 +155,59 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
           if (arg0_json.dependencyRatio !== undefined)
             set_dependency_ratio(arg0_json.dependencyRatio)
         } else {
-          //Fallback demographic model with cohort duration weighting and smooth mortality
-          let base_scale = (country_stats?.mean ?? raster?.mean ?? 10)*3
+          let total_pop_thousands = 25000
+          if (country_stats && country_stats.total && country_stats.total > 0) {
+            total_pop_thousands = Math.round(country_stats.total)
+          } else if (raster && raster.mean) {
+            total_pop_thousands = Math.round(raster.mean * 1500)
+          }
+
+          let growth_factor = 1.0
+          if (current_year <= 1800) {
+            growth_factor = 0.15
+          } else if (current_year <= 1850) {
+            growth_factor = 0.20
+          } else if (current_year <= 1900) {
+            growth_factor = 0.30
+          } else if (current_year <= 1950) {
+            growth_factor = 0.45
+          } else if (current_year <= 2000) {
+            growth_factor = 0.80
+          }
+          total_pop_thousands = Math.max(100, Math.round(total_pop_thousands * growth_factor))
+
+          let cohort_durations = [1, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 7]
+          let cohort_mid_ages = [0.5, 3.0, 7.5, 12.5, 17.5, 22.5, 27.5, 32.5, 37.5, 42.5, 47.5, 52.5, 57.5, 62.5, 67.5, 72.5, 77.5, 84.0]
           let female_map: Record<string, number> = {}
           let male_map: Record<string, number> = {}
           let old_dep = 0
           let sum_f = 0
           let sum_m = 0
+          let sum_unnormalised = 0
+          let unnormalised_densities: number[] = []
           let working_dep = 0
           let youth_dep = 0
-          let cohort_durations = [1, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 7]
-          let cohort_mid_ages = [0.5, 3.0, 7.5, 12.5, 17.5, 22.5, 27.5, 32.5, 37.5, 42.5, 47.5, 52.5, 57.5, 62.5, 67.5, 72.5, 77.5, 84.0]
+
+          for (let i = 0; i < AGE_COHORTS.length; i++) {
+            let age = cohort_mid_ages[i]
+            let w = cohort_durations[i]
+            let life_exp = Math.min(80, Math.max(40, 45 + (current_year - 1900) * 0.25))
+            let survival = Math.exp(-Math.pow(age / life_exp, 3.5))
+            let d = w * survival
+            unnormalised_densities.push(d)
+            sum_unnormalised += d
+          }
 
           for (let i = 0; i < AGE_COHORTS.length; i++) {
             let age = cohort_mid_ages[i]
             let cid = AGE_COHORTS[i].id
-            let w = cohort_durations[i]
-            let life_exp = Math.min(80, Math.max(40, 45 + (current_year - 1900)*0.25))
-            let survival = Math.exp(-Math.pow(age/life_exp, 3.5))
-            let inhabitants = base_scale*w*survival
-            let sex_bias = 1.05 - (age/90)*0.25
-            let m_val = Math.max(0.1, inhabitants*(sex_bias/(1 + sex_bias)))
-            let f_val = Math.max(0.1, inhabitants*(1/(1 + sex_bias)))
+            let inhabitants = (unnormalised_densities[i] / sum_unnormalised) * total_pop_thousands
+            let sex_bias = 1.05 - (age / 90) * 0.25
+            let m_val = Math.max(0.1, inhabitants * (sex_bias / (1 + sex_bias)))
+            let f_val = Math.max(0.1, inhabitants * (1 / (1 + sex_bias)))
 
-            male_map[cid] = Math.round(m_val*10)/10
-            female_map[cid] = Math.round(f_val*10)/10
+            male_map[cid] = Math.round(m_val * 10) / 10
+            female_map[cid] = Math.round(f_val * 10) / 10
             sum_m += male_map[cid]
             sum_f += female_map[cid]
 
@@ -193,10 +222,10 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
 
           let total_all = youth_dep + working_dep + old_dep
           set_pyramid_data({ female: female_map, male: male_map })
-          set_total_male(Math.round(sum_m*10)/10)
-          set_total_female(Math.round(sum_f*10)/10)
-          set_sex_ratio(sum_f > 0 ? Math.round((sum_m/sum_f)*1000)/1000 : 1.0)
-          set_dependency_ratio(total_all > 0 ? Math.round(((youth_dep + old_dep)/total_all)*1000)/10 : 38.0)
+          set_total_male(Math.round(sum_m * 10) / 10)
+          set_total_female(Math.round(sum_f * 10) / 10)
+          set_sex_ratio(sum_f > 0 ? Math.round((sum_m / sum_f) * 1000) / 1000 : 1.0)
+          set_dependency_ratio(total_all > 0 ? Math.round(((youth_dep + old_dep) / total_all) * 1000) / 10 : 38.0)
         }
         set_is_loading(false)
       })
@@ -267,7 +296,7 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
       if (f > max_abs_val)
         max_abs_val = f
     }
-    let axis_limit = Math.ceil(max_abs_val*1.15)
+    let axis_limit = Math.ceil(max_abs_val * 1.15)
     let y_labels = AGE_COHORTS.map((arg0_c) => arg0_c.label)
 
     return {
@@ -275,14 +304,14 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
       backgroundColor: 'transparent',
       grid: [
         {
-          bottom: '8%',
+          bottom: '12%',
           containLabel: false,
           left: '4%',
           right: '58%',
           top: effective_countries.length > 0 ? '34px' : '28px',
         },
         {
-          bottom: '8%',
+          bottom: '12%',
           containLabel: false,
           left: '58%',
           right: '4%',
@@ -353,7 +382,7 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
           let cohort = AGE_COHORTS[idx]
           let f = female_values[idx] || 0
           let m = Math.abs(male_values[idx] || 0)
-          let ratio = f > 0 ? (m/f).toFixed(2) : 'N/A'
+          let ratio = f > 0 ? (m / f).toFixed(2) : 'N/A'
 
           return `
             <div style="font-family: sans-serif; font-size: 11px; line-height: 1.4;">
@@ -362,11 +391,15 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
               </div>
               <div style="display: flex; justify-content: space-between; gap: 14px; color: #60a5fa;">
                 <span>Male:</span>
-                <b>${m.toLocaleString()}</b>
+                <b>${Math.round(m).toLocaleString('de-DE')}k (${formatLegendValue(m * 1000)})</b>
               </div>
               <div style="display: flex; justify-content: space-between; gap: 14px; color: #f472b6;">
                 <span>Female:</span>
-                <b>${f.toLocaleString()}</b>
+                <b>${Math.round(f).toLocaleString('de-DE')}k (${formatLegendValue(f * 1000)})</b>
+              </div>
+              <div style="display: flex; justify-content: space-between; gap: 14px; color: #e4e4e7; margin-top: 2px; border-top: 1px dashed #3f3f46; padding-top: 2px;">
+                <span>Cohort Total:</span>
+                <b>${Math.round(m + f).toLocaleString('de-DE')}k (${formatLegendValue((m + f) * 1000)})</b>
               </div>
               <div style="display: flex; justify-content: space-between; gap: 14px; color: #a1a1aa; margin-top: 2px;">
                 <span>Sex Ratio (M/F):</span>
@@ -384,13 +417,21 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
           axisLabel: {
             color: '#71717a',
             fontSize: 9,
-            formatter: (arg0_val: number) => arg0_val.toLocaleString(),
+            formatter: (arg0_val: number) => {
+              if (arg0_val === 0)
+                return '0'
+              return `${Math.round(arg0_val).toLocaleString('de-DE')}`
+            },
           },
           axisLine: { lineStyle: { color: '#27272a' } },
           gridIndex: 0,
           inverse: true, //Male points to the left
           max: axis_limit,
           min: 0,
+          name: 'Thousands',
+          nameGap: 18,
+          nameLocation: 'middle',
+          nameTextStyle: { color: '#71717a', fontSize: 9 },
           splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } },
           type: 'value',
         },
@@ -398,12 +439,20 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
           axisLabel: {
             color: '#71717a',
             fontSize: 9,
-            formatter: (arg0_val: number) => arg0_val.toLocaleString(),
+            formatter: (arg0_val: number) => {
+              if (arg0_val === 0)
+                return '0'
+              return `${Math.round(arg0_val).toLocaleString('de-DE')}`
+            },
           },
           axisLine: { lineStyle: { color: '#27272a' } },
           gridIndex: 1,
           max: axis_limit,
           min: 0,
+          name: 'Thousands',
+          nameGap: 18,
+          nameLocation: 'middle',
+          nameTextStyle: { color: '#71717a', fontSize: 9 },
           splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } },
           type: 'value',
         },
@@ -464,6 +513,9 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
 
         <div className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground shrink-0">
           <span>
+            Total: <b className="text-foreground">{formatLegendValue((total_male + total_female) * 1000)}</b>
+          </span>
+          <span>
             Sex Ratio: <b className="text-foreground">{sex_ratio.toFixed(2)}</b> M/F
           </span>
           <span>
@@ -481,11 +533,10 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
           <button
             type="button"
             onClick={() => set_active_country_name(null)}
-            className={`px-2 py-0.5 text-[11px] rounded-none cursor-pointer transition-colors shrink-0 ${
-              !active_country_name
-                ? 'bg-primary text-primary-foreground font-bold shadow-sm'
-                : 'bg-background/60 text-muted-foreground hover:text-foreground border border-border/40'
-            }`}
+            className={`px-2 py-0.5 text-[11px] rounded-none cursor-pointer transition-colors shrink-0 ${!active_country_name
+              ? 'bg-primary text-primary-foreground font-bold shadow-sm'
+              : 'bg-background/60 text-muted-foreground hover:text-foreground border border-border/40'
+              }`}
           >
             Global
           </button>
@@ -497,11 +548,10 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
                 key={name}
                 type="button"
                 onClick={() => set_active_country_name(name)}
-                className={`px-2 py-0.5 text-[11px] rounded-none cursor-pointer transition-colors truncate max-w-[140px] flex items-center gap-1 shrink-0 ${
-                  is_active
-                    ? 'bg-primary text-primary-foreground font-bold shadow-sm'
-                    : 'bg-background/60 text-muted-foreground hover:text-foreground border border-border/40'
-                }`}
+                className={`px-2 py-0.5 text-[11px] rounded-none cursor-pointer transition-colors truncate max-w-[140px] flex items-center gap-1 shrink-0 ${is_active
+                  ? 'bg-primary text-primary-foreground font-bold shadow-sm'
+                  : 'bg-background/60 text-muted-foreground hover:text-foreground border border-border/40'
+                  }`}
                 title={`View ${name} individual population pyramid`}
               >
                 <Icon name="flag" className="text-[10px]" />
