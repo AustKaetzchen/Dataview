@@ -27,6 +27,7 @@ export interface StartTimelapseExportOptions {
   fps: number
   height?: number
   keyframesOnly: boolean
+  legendPosition?: 'top-left' | 'bottom-left' | 'bottom-center'
   mode: VideoExportMode
   projection?: string
   selectedLayers: string[]
@@ -238,12 +239,13 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   let export_mode: VideoExportMode
   let export_success: string | null
   let fps: number
-  let get_default_zoom: (arg0_proj: string) => number
+  let get_default_zoom: (arg0_proj: string, arg1_w?: number, arg2_h?: number) => number
   let handle_start_export: () => Promise<void>
   let handle_zoom_change: (arg0_new_zoom: number) => void
   let indicator_folders: IndicatorFolderItem[]
   let is_exporting: boolean
   let keyframes_only: boolean
+  let legend_position: 'top-left' | 'bottom-left' | 'bottom-center'
   let preview_canvas_ref: React.MutableRefObject<HTMLCanvasElement | null>
   let progress_pct: number
   let progress_status: string
@@ -262,6 +264,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   let set_fps: React.Dispatch<React.SetStateAction<number>>
   let set_is_exporting: React.Dispatch<React.SetStateAction<boolean>>
   let set_keyframes_only: React.Dispatch<React.SetStateAction<boolean>>
+  let set_legend_position: React.Dispatch<React.SetStateAction<'top-left' | 'bottom-left' | 'bottom-center'>>
   let set_progress_pct: React.Dispatch<React.SetStateAction<number>>
   let set_progress_status: React.Dispatch<React.SetStateAction<string>>
   let set_projection: React.Dispatch<React.SetStateAction<string>>
@@ -436,18 +439,26 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
     return keys
   }, [indicator_folders])
 
-  get_default_zoom = useCallback((arg0_proj: string): number => {
-    if (arg0_proj === 'EqualEarth')
-      return 1.65
-    if (arg0_proj === 'Equirectangular')
-      return 1.6
-    if (arg0_proj === 'Mercator')
+  get_default_zoom = useCallback((arg0_proj: string, arg1_w?: number, arg2_h?: number): number => {
+    let h = arg2_h || (resolution === '1440p' ? 1440 : resolution === '720p' ? 720 : 1080)
+    let p = arg0_proj.toLowerCase()
+    let w = arg1_w || (resolution === '1440p' ? 2560 : resolution === '720p' ? 1280 : 1920)
+
+    if (p === 'equirectangular' || p.includes('equirect')) {
+      // Fit ~92% width of target resolution
+      let ideal = Math.log2((w*0.92)/360)
+      return Math.max(1.0, Math.min(4.0, parseFloat(ideal.toFixed(2))))
+    } else if (p === 'equalearth' || p.includes('earth')) {
+      let ideal = Math.log2((w*0.90)/360)
+      return Math.max(1.0, Math.min(4.0, parseFloat(ideal.toFixed(2))))
+    } else if (p === 'mercator') {
       return 0.95
-    if (arg0_proj === 'Globe')
+    } else if (p === 'globe') {
       return 0.0
+    }
 
     return 1.65
-  }, [])
+  }, [resolution])
 
   ;[concurrency, set_concurrency] = useState<number>(4)
   ;[export_mode, set_export_mode] = useState<VideoExportMode>('cycling')
@@ -457,6 +468,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   ;[timestep_unit, set_timestep_unit] = useState<TimestepUnit>('years')
   ;[timestep_step, set_timestep_step] = useState<number>(1)
   ;[keyframes_only, set_keyframes_only] = useState<boolean>(true)
+  ;[legend_position, set_legend_position] = useState<'top-left' | 'bottom-left' | 'bottom-center'>('top-left')
   ;[start_year, set_start_year] = useState<number>(1800)
   ;[end_year, set_end_year] = useState<number>(2025)
   ;[fps, set_fps] = useState<number>(30)
@@ -542,9 +554,10 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
       ctx.stroke()
     }
 
-    //3. Draw map raster (scaled by zoom)
-    let map_w = 400*Math.pow(2, zoom - 1.0)
-    let map_h = 200*Math.pow(2, zoom - 1.0)
+    //3. Draw map raster (scaled by resolution-aware zoom)
+    let res_w = resolution === '1440p' ? 2560 : resolution === '720p' ? 1280 : 1920
+    let map_w = w*(360*Math.pow(2, zoom))/res_w
+    let map_h = map_w/2
     let map_x = (w - map_w)/2
     let map_y = (h - map_h)/2
 
@@ -567,11 +580,48 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
     ctx.lineWidth = 1
     ctx.strokeRect(1, 1, w - 2, h - 2)
 
-    //5. Top-Left Colourbar Overlay Mockup (matching actual export position)
-    let cb_x = 8
-    let cb_y = 8
+    //5. Bottom-Centred Timeline Bar Mockup (matching actual export position)
+    let tb_w = Math.min(360, w - 40)
+    let tb_h = 24
+    let tb_x = (w - tb_w)/2
+    let tb_y = h - 30
+    ctx.fillStyle = 'rgba(11, 15, 25, 0.95)'
+    ctx.fillRect(tb_x, tb_y, tb_w, tb_h)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)'
+    ctx.strokeRect(tb_x, tb_y, tb_w, tb_h)
+
+    //Date badge in center
+    let date_str = UfDate.formatYear(props.timelineYear || start_year)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)'
+    ctx.fillRect(tb_x + (tb_w - 70)/2, tb_y + 3, 70, 10)
+    ctx.fillStyle = '#FFFFFF'
+    ctx.font = 'bold 7px monospace'
+    ctx.textAlign = 'center'
+    ctx.fillText(date_str, tb_x + tb_w/2, tb_y + 11)
+    ctx.textAlign = 'left'
+
+    //Scrubber track & red progress line
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'
+    ctx.fillRect(tb_x + 6, tb_y + 17, tb_w - 12, 2)
+    ctx.fillStyle = '#EF4444'
+    ctx.fillRect(tb_x + 6, tb_y + 17, (tb_w - 12)*0.45, 2)
+
+    //6. Colourbar Overlay Mockup (positioned according to legend_position)
     let cb_w = 130
     let cb_h = 46
+    let cb_x = 8
+    let cb_y = 8
+    if (legend_position === 'bottom-center') {
+      cb_x = (w - cb_w)/2
+      cb_y = tb_y - cb_h - 4
+    } else if (legend_position === 'bottom-left') {
+      cb_x = 8
+      cb_y = tb_y - cb_h - 4
+    } else {
+      cb_x = 8
+      cb_y = 8
+    }
+
     ctx.fillStyle = 'rgba(11, 15, 25, 0.92)'
     ctx.fillRect(cb_x, cb_y, cb_w, cb_h)
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)'
@@ -598,33 +648,8 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
     ctx.textAlign = 'right'
     ctx.fillText(props.maxVal !== undefined ? String(Math.round(props.maxVal)) : '100', cb_x + cb_w - 6, cb_y + 36)
     ctx.textAlign = 'left'
-
-    //6. Bottom-Centred Timeline Bar Mockup (matching actual export position)
-    let tb_w = Math.min(360, w - 40)
-    let tb_h = 24
-    let tb_x = (w - tb_w)/2
-    let tb_y = h - 30
-    ctx.fillStyle = 'rgba(11, 15, 25, 0.95)'
-    ctx.fillRect(tb_x, tb_y, tb_w, tb_h)
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)'
-    ctx.strokeRect(tb_x, tb_y, tb_w, tb_h)
-
-    //Date badge in center
-    let date_str = UfDate.formatYear(props.timelineYear || start_year)
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)'
-    ctx.fillRect(tb_x + (tb_w - 70)/2, tb_y + 3, 70, 10)
-    ctx.fillStyle = '#FFFFFF'
-    ctx.font = 'bold 7px monospace'
-    ctx.textAlign = 'center'
-    ctx.fillText(date_str, tb_x + tb_w/2, tb_y + 11)
-    ctx.textAlign = 'left'
-
-    //Scrubber track & red progress line
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'
-    ctx.fillRect(tb_x + 6, tb_y + 17, tb_w - 12, 2)
-    ctx.fillStyle = '#EF4444'
-    ctx.fillRect(tb_x + 6, tb_y + 17, (tb_w - 12)*0.45, 2)
   }, [
+    legend_position,
     props.colorPalette,
     props.legendSubtitle,
     props.legendTitle,
@@ -633,6 +658,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
     props.renderedCanvas,
     props.timelineYear,
     projection,
+    resolution,
     start_year,
     zoom,
   ])
@@ -707,6 +733,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
         fps,
         height: h,
         keyframesOnly: keyframes_only,
+        legendPosition: legend_position,
         mode: export_mode,
         projection,
         selectedLayers: chosen_layers,
@@ -725,6 +752,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
     export_mode,
     fps,
     keyframes_only,
+    legend_position,
     on_close,
     projection,
     props,
@@ -1158,13 +1186,53 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
               <span className="text-[11px] text-muted-foreground">Resolution Preset</span>
               <select
                 value={resolution}
-                onChange={(arg0_e) => set_resolution(arg0_e.target.value)}
+                onChange={(arg0_e) => {
+                  let r = arg0_e.target.value
+                  set_resolution(r)
+                  let w = r === '1440p' ? 2560 : r === '720p' ? 1280 : 1920
+                  let h = r === '1440p' ? 1440 : r === '720p' ? 720 : 1080
+                  handle_zoom_change(get_default_zoom(projection, w, h))
+                }}
                 className="w-full h-7 text-xs bg-background border border-border px-2 text-foreground focus:outline-hidden"
               >
                 <option value="1080p">1080p (1920x1080 Full HD)</option>
                 <option value="1440p">1440p (2560x1440 2K)</option>
                 <option value="720p">720p (1280x720 HD)</option>
               </select>
+            </div>
+          </div>
+
+          {/* Legend Position Selector */}
+          <div className="space-y-1.5 border border-border p-2.5 bg-muted/20">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <Icon name="palette" className="text-primary text-xs" />
+                <span>Legend Bar Position</span>
+              </Label>
+              <span className="text-[10px] text-muted-foreground font-mono">
+                {legend_position === 'bottom-center' ? 'Bottom Center' : legend_position === 'bottom-left' ? 'Bottom Left' : 'Top Left'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-1.5">
+              {[
+                { id: 'top-left', label: 'Top Left' },
+                { id: 'bottom-left', label: 'Bottom Left' },
+                { id: 'bottom-center', label: 'Bottom Center' },
+              ].map((arg0_pos) => (
+                <button
+                  key={arg0_pos.id}
+                  type="button"
+                  onClick={() => set_legend_position(arg0_pos.id as any)}
+                  className={`h-7 text-xs border cursor-pointer transition-colors ${
+                    legend_position === arg0_pos.id
+                      ? 'bg-primary text-primary-foreground font-bold border-primary'
+                      : 'bg-card border-border text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {arg0_pos.label}
+                </button>
+              ))}
             </div>
           </div>
 

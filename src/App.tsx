@@ -255,10 +255,12 @@ const fetchSingleDecodedRasterAsync = async function (
   arg2_selectors: Record<string, string>,
   arg3_format: DataFormat,
   arg4_cache: Map<string, DecodedRaster>,
-  arg5_has_selectors?: boolean
+  arg5_has_selectors?: boolean,
+  arg6_can_be_uninhabited?: boolean
 ): Promise<DecodedRaster | null> {
   //Convert from parameters
   let cache = arg4_cache
+  let can_be_uninhabited = Boolean(arg6_can_be_uninhabited)
   let format = arg3_format
   let has_selectors = Boolean(arg5_has_selectors)
   let layer_id = arg0_layer_id
@@ -304,6 +306,32 @@ const fetchSingleDecodedRasterAsync = async function (
       let buf = await resp.arrayBuffer()
       let uint8 = new Uint8Array(buf)
       let decoded = await decodeRawGeoPngBufferAsync(uint8, format)
+
+      //Mask uninhabited cells as NaN if layer requires human habitation
+      if (!can_be_uninhabited && layer_id !== 'population_total') {
+        let pop_raster = await fetchSingleDecodedRasterAsync(
+          'population_total',
+          year,
+          {},
+          'int32',
+          cache,
+          false,
+          true
+        )
+        let pop_data = pop_raster?.data
+        if (pop_data && pop_data.length === decoded.data.length) {
+          let d = decoded.data
+          let len = d.length
+          for (let i = 0; i < len; i++) {
+            let p = pop_data[i]
+            if (p <= 0 || Number.isNaN(p)) {
+              d[i] = NaN
+            }
+          }
+          decoded = buildDecodedRasterResult(d, decoded.width, decoded.height)
+        }
+      }
+
       cache.set(cache_key, decoded)
       return decoded
     } catch (arg0_e) {
@@ -336,10 +364,12 @@ const fetchRasterKeyframe = async function (
   arg2_selectors: Record<string, string | string[]>,
   arg3_format: DataFormat,
   arg4_cache: Map<string, DecodedRaster>,
-  arg5_has_selectors?: boolean
+  arg5_has_selectors?: boolean,
+  arg6_can_be_uninhabited?: boolean
 ): Promise<DecodedRaster | null> {
   //Convert from parameters
   let cache = arg4_cache
+  let can_be_uninhabited = Boolean(arg6_can_be_uninhabited)
   let format = arg3_format
   let has_selectors = Boolean(arg5_has_selectors)
   let layer_id = arg0_layer_id
@@ -372,14 +402,14 @@ const fetchRasterKeyframe = async function (
   //If only single combination, delegate directly
   if (combinations.length <= 1) {
     let single_sel = combinations[0] || {}
-    return fetchSingleDecodedRasterAsync(layer_id, year, single_sel, format, cache, has_selectors)
+    return fetchSingleDecodedRasterAsync(layer_id, year, single_sel, format, cache, has_selectors, can_be_uninhabited)
   }
 
   //Multi-select Cartesian composite
   composite_promise = (async () => {
     try {
       let raster_promises = combinations.map((arg0_comb) =>
-        fetchSingleDecodedRasterAsync(layer_id, year, arg0_comb, format, cache, has_selectors)
+        fetchSingleDecodedRasterAsync(layer_id, year, arg0_comb, format, cache, has_selectors, can_be_uninhabited)
       )
       let results = await Promise.all(raster_promises)
       let valid_rasters = results.filter((arg0_r): arg0_r is DecodedRaster => arg0_r !== null)
@@ -400,7 +430,12 @@ const fetchRasterKeyframe = async function (
       for (let i = 0; i < valid_rasters.length; i++) {
         let r_data = valid_rasters[i].data
         for (let idx = 0; idx < len; idx++) {
-          sum_data[idx] += r_data[idx]
+          let v = r_data[idx]
+          if (Number.isNaN(v)) {
+            sum_data[idx] = NaN
+          } else if (!Number.isNaN(sum_data[idx])) {
+            sum_data[idx] += v
+          }
         }
       }
 
@@ -477,6 +512,7 @@ export const App: React.FC = function () {
   let is_playing: boolean
   let is_timelapse_exporting: boolean
   let layers: Record<string, ParsedDataLayer>
+  let legend_position: 'top-left' | 'bottom-left' | 'bottom-center'
   let legend_subtitle: string
   let legend_title: string
   let load_req_id_ref: React.MutableRefObject<number>
@@ -521,6 +557,7 @@ export const App: React.FC = function () {
   let set_is_playing: React.Dispatch<React.SetStateAction<boolean>>
   let set_is_timelapse_exporting: React.Dispatch<React.SetStateAction<boolean>>
   let set_layers: React.Dispatch<React.SetStateAction<Record<string, ParsedDataLayer>>>
+  let set_legend_position: React.Dispatch<React.SetStateAction<'top-left' | 'bottom-left' | 'bottom-center'>>
   let set_legend_subtitle: React.Dispatch<React.SetStateAction<string>>
   let set_legend_title: React.Dispatch<React.SetStateAction<string>>
   let set_log_sigma: React.Dispatch<React.SetStateAction<number>>
@@ -664,10 +701,22 @@ export const App: React.FC = function () {
   let search_params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
   is_headless_export = search_params?.get('export_mode') === '1'
 
+  ;[legend_position, set_legend_position] = useState<'top-left' | 'bottom-left' | 'bottom-center'>(() => {
+    let url_leg = search_params?.get('legend_position')
+    if (url_leg && ['top-left', 'bottom-left', 'bottom-center'].includes(url_leg)) {
+      return url_leg as 'top-left' | 'bottom-left' | 'bottom-center'
+    }
+    return 'top-left'
+  })
+
   useEffect(() => {
     let url_proj = search_params?.get('projection') as ProjectionMode | null
     if (url_proj && ['EqualEarth', 'Mercator', 'Globe', 'Equirectangular'].includes(url_proj)) {
       set_projection(url_proj)
+    }
+    let url_leg = search_params?.get('legend_position') as any
+    if (url_leg && ['top-left', 'bottom-left', 'bottom-center'].includes(url_leg)) {
+      set_legend_position(url_leg)
     }
   }, [])
 
@@ -708,6 +757,7 @@ export const App: React.FC = function () {
       }
 
       let has_selectors = Boolean(target_layer?.variable_selectors && Object.keys(target_layer.variable_selectors).length > 0)
+      let can_be_uninhabited = Boolean(target_layer?.can_be_uninhabited)
 
       let decoded = await fetchRasterKeyframe(
         layer_id,
@@ -715,7 +765,8 @@ export const App: React.FC = function () {
         selectors,
         data_format,
         raster_cache_ref.current,
-        has_selectors
+        has_selectors,
+        can_be_uninhabited
       )
 
       if (decoded) {
@@ -958,13 +1009,16 @@ export const App: React.FC = function () {
         set_is_loading_raster(true)
         in_flight_fetches_count_ref.current++
 
+        let can_be_uninhabited = Boolean(active_layer.can_be_uninhabited)
+
         fetchRasterKeyframe(
           requested_layer_id,
           primary_year,
           effective_selectors,
           data_format,
           raster_cache_ref.current,
-          has_selectors
+          has_selectors,
+          can_be_uninhabited
         ).then((arg0_primary) => {
           in_flight_fetches_count_ref.current = Math.max(0, in_flight_fetches_count_ref.current - 1)
           if (in_flight_fetches_count_ref.current === 0)
@@ -991,6 +1045,7 @@ export const App: React.FC = function () {
       //Prefetch upcoming 4 keyframes in the background for ultra-smooth 60fps playback
       let curr_idx = years.indexOf(next_year)
       if (curr_idx !== -1) {
+        let can_be_uninhabited = Boolean(active_layer.can_be_uninhabited)
         for (let step = 1; step <= 4; step++) {
           if (curr_idx + step < years.length) {
             let future_year = years[curr_idx + step]
@@ -1000,7 +1055,8 @@ export const App: React.FC = function () {
               effective_selectors,
               data_format,
               raster_cache_ref.current,
-              has_selectors
+              has_selectors,
+              can_be_uninhabited
             ).catch(() => {})
           }
         }
@@ -1253,6 +1309,7 @@ export const App: React.FC = function () {
             fps: options.fps || 30,
             height: options.height || 1080,
             keyframesOnly: options.keyframesOnly,
+            legendPosition: options.legendPosition || legend_position,
             mode: options.mode,
             outputFilename: options.filename,
             projection: options.projection || projection,
@@ -1540,6 +1597,7 @@ export const App: React.FC = function () {
           onToggleUi={() => set_ui_visible((arg0_prev) => !arg0_prev)}
           uiVisible={!is_headless_export && ui_visible && !is_timelapse_exporting}
           isTimelapseExporting={is_timelapse_exporting || is_headless_export}
+          legendPosition={legend_position}
           userRole={user_role}
         />
 

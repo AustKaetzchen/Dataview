@@ -32,6 +32,7 @@ export interface TimelapseRenderOptions {
   fps?: number
   height?: number
   keyframesOnly?: boolean
+  legendPosition?: 'top-left' | 'bottom-left' | 'bottom-center'
   mode: 'stationary' | 'cycling'
   outputFilename?: string
   projection?: string
@@ -388,6 +389,7 @@ export const startTimelapseRenderJob = async function (
   let job_id = `timelapse_${Date.now()}`
   let job_status: TimelapseJobStatus
   let keyframes_only = options.keyframesOnly !== false
+  let legend_position = options.legendPosition || 'top-left'
   let output_mp4_path: string
   let projection = options.projection || 'EqualEarth'
   let render_targets: CyclingRenderItem[] = []
@@ -467,9 +469,11 @@ export const startTimelapseRenderJob = async function (
     export_zoom = options.zoom
   } else {
     if (projection === 'EqualEarth') {
-      export_zoom = 1.65
+      let ideal = Math.log2((export_w*0.90)/360)
+      export_zoom = Math.max(1.0, Math.min(4.0, parseFloat(ideal.toFixed(2))))
     } else if (projection === 'Equirectangular') {
-      export_zoom = 1.6
+      let ideal = Math.log2((export_w*0.92)/360)
+      export_zoom = Math.max(1.0, Math.min(4.0, parseFloat(ideal.toFixed(2))))
     } else if (projection === 'Mercator') {
       export_zoom = 0.95
     } else if (projection === 'Globe') {
@@ -507,7 +511,7 @@ export const startTimelapseRenderJob = async function (
       }
 
       let pool_size = Math.min(concurrency, render_targets.length)
-      let target_url = `${client_url}/?export_mode=1&projection=${encodeURIComponent(projection)}&zoom=${export_zoom}`
+      let target_url = `${client_url}/?export_mode=1&projection=${encodeURIComponent(projection)}&zoom=${export_zoom}&legend_position=${encodeURIComponent(legend_position)}`
 
       /**
        * Individual worker routine that claims indicators from the queue and renders all timeline frames.

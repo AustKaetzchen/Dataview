@@ -59,8 +59,9 @@ export interface MapViewerProps {
   invertPalette?: boolean
   minVal: number
   maxVal: number
-  legendTitle: string
+  legendPosition?: 'top-left' | 'bottom-left' | 'bottom-center'
   legendSubtitle?: string
+  legendTitle: string
   scaleType: string
   logSigma: number
   breaks?: number[]
@@ -116,6 +117,7 @@ export interface MapViewerProps {
 export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewerProps) {
   //Convert from parameters
   let props = (arg0_props) ? arg0_props : ({} as MapViewerProps)
+  let legend_position = props.legendPosition || 'top-left'
   let on_toggle_ui = props.onToggleUi
   let ui_visible = props.uiVisible !== undefined ? props.uiVisible : true
 
@@ -679,15 +681,26 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
             ? UI_LAYOUT.margin
             : UI_LAYOUT.margin + current_sidebar_width + UI_LAYOUT.gap
 
+          let container_style: React.CSSProperties = {
+            width: `${current_colourbar_width}px`,
+          }
+          if (legend_position === 'bottom-center') {
+            container_style.bottom = '84px'
+            container_style.left = '50%'
+            container_style.transform = 'translateX(-50%)'
+          } else if (legend_position === 'bottom-left') {
+            container_style.bottom = '84px'
+            container_style.left = `${colourbar_left}px`
+          } else {
+            container_style.top = `${UI_LAYOUT.margin}px`
+            container_style.left = `${colourbar_left}px`
+          }
+
           return (
             <div
               id="dataview-colourbar-container"
-              style={{
-                top: `${UI_LAYOUT.margin}px`,
-                left: `${colourbar_left}px`,
-                width: `${current_colourbar_width}px`,
-              }}
-              className="absolute z-20 flex flex-col gap-3 pointer-events-none"
+              style={container_style}
+              className={`absolute z-20 flex ${legend_position.startsWith('bottom') ? 'flex-col-reverse' : 'flex-col'} gap-3 pointer-events-none`}
             >
               {/* Value Colourbar (when canvas/raster is available) */}
               {(has_canvas || Boolean(raster) || is_timelapse_exporting) && (

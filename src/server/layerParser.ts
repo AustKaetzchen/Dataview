@@ -19,6 +19,7 @@ export interface LayerVariableSelector {
 
 export interface ParsedDataLayer {
   available_years: number[]
+  can_be_uninhabited?: boolean
   category?: string
   description?: string
   encoding: 'float32' | 'int32'
@@ -586,6 +587,7 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
 
           sub_layer_list.push({
             available_years: sub_years,
+            can_be_uninhabited: Boolean(sub_item.can_be_uninhabited ?? item.can_be_uninhabited ?? parsed_json.can_be_uninhabited),
             category: dataset_name,
             encoding: sub_item.encoding || 'float32',
             filepath_template: sub_template,
@@ -615,6 +617,7 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
 
         parsed_layers[k] = {
           available_years: years,
+          can_be_uninhabited: Boolean(item.can_be_uninhabited ?? parsed_json.can_be_uninhabited),
           category: dataset_name,
           description: desc_text,
           encoding: item.encoding || 'float32',
