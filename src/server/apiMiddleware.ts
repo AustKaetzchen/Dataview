@@ -5,6 +5,12 @@ import type { IncomingMessage, ServerResponse } from 'http'
 import JSON5 from 'json5'
 import { loadAndParseLayers, type LayerRegistryCache, type ParsedDataLayer } from './layerParser.ts'
 import { getCountryDemographicPyramid, getCountrySectorBreakdown } from './countryBreakdown.ts'
+import {
+  startTimelapseRenderJob,
+  getTimelapseJobStatus,
+  cancelTimelapseJob,
+  type TimelapseRenderOptions,
+} from './videoRenderer.ts'
 
 export interface ApiMiddlewareOptions {
   configDir: string
@@ -382,6 +388,120 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
           res.end(JSON.stringify({ error: 'Failed to process video export payload' }))
         }
       })
+      return
+    }
+
+    //Route 7: POST /api/export/start-render
+    if ((pathname === '/export/start-render' || pathname === '/api/export/start-render') && req.method === 'POST') {
+      let body_chunks: Buffer[] = []
+      req.on('data', (arg0_chunk) => {
+        body_chunks.push(arg0_chunk)
+      })
+
+      req.on('end', async () => {
+        try {
+          let raw_body = Buffer.concat(body_chunks).toString('utf-8')
+          let payload: TimelapseRenderOptions = JSON.parse(raw_body)
+
+          let job = await startTimelapseRenderJob(payload, exports_dir)
+          res.statusCode = 200
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify(job))
+        } catch (arg0_err: any) {
+          console.error('[ApiMiddleware] Failed to start timelapse render job:', arg0_err)
+          res.statusCode = 500
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify({ error: arg0_err?.message || 'Failed to start timelapse render job' }))
+        }
+      })
+      return
+    }
+
+    //Route 8: GET /api/export/status
+    if (pathname === '/export/status' || pathname === '/api/export/status') {
+      let job_id = (query.jobId as string) || (query.id as string) || ''
+      if (!job_id) {
+        res.statusCode = 400
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ error: 'Missing jobId parameter' }))
+        return
+      }
+
+      let job = getTimelapseJobStatus(job_id)
+      if (!job) {
+        res.statusCode = 404
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ error: `No timelapse job found with ID: ${job_id}` }))
+        return
+      }
+
+      res.statusCode = 200
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify(job))
+      return
+    }
+
+    //Route 9: POST /api/export/cancel
+    if ((pathname === '/export/cancel' || pathname === '/api/export/cancel') && req.method === 'POST') {
+      let body_chunks: Buffer[] = []
+      req.on('data', (arg0_chunk) => {
+        body_chunks.push(arg0_chunk)
+      })
+
+      req.on('end', () => {
+        try {
+          let raw_body = Buffer.concat(body_chunks).toString('utf-8')
+          let payload = JSON.parse(raw_body)
+          let job_id = payload.jobId || ''
+
+          if (!job_id) {
+            res.statusCode = 400
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ error: 'Missing jobId parameter' }))
+            return
+          }
+
+          cancelTimelapseJob(job_id)
+          res.statusCode = 200
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify({ message: `Timelapse job ${job_id} cancelled.`, success: true }))
+        } catch (arg0_err: any) {
+          console.error('[ApiMiddleware] Failed to cancel timelapse job:', arg0_err)
+          res.statusCode = 500
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify({ error: 'Failed to cancel timelapse job' }))
+        }
+      })
+      return
+    }
+
+    //Route 10: GET /api/export/download
+    if (pathname === '/export/download' || pathname === '/api/export/download') {
+      let filename = (query.filename as string) || ''
+      if (!filename) {
+        res.statusCode = 400
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ error: 'Missing filename parameter' }))
+        return
+      }
+
+      let safe_filename = path.basename(filename)
+      let file_path = path.join(exports_dir, safe_filename)
+
+      if (!fs.existsSync(file_path)) {
+        res.statusCode = 404
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ error: `File not found: ${safe_filename}` }))
+        return
+      }
+
+      let stats = fs.statSync(file_path)
+      res.statusCode = 200
+      res.setHeader('Content-Type', 'video/mp4')
+      res.setHeader('Content-Length', stats.size)
+      res.setHeader('Content-Disposition', `inline; filename="${safe_filename}"`)
+      let stream = fs.createReadStream(file_path)
+      stream.pipe(res)
       return
     }
 

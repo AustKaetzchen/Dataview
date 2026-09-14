@@ -422,6 +422,7 @@ export const App: React.FC = function () {
   let abort_timelapse_export_ref: React.MutableRefObject<boolean>
   let absolute_breaks: string
   let active_countries: CountryFeature[]
+  let active_export_job_id_ref: React.MutableRefObject<string | null>
   let active_file_name: string
   let active_layer: ParsedDataLayer | null
   let active_layer_id: string | null
@@ -462,6 +463,7 @@ export const App: React.FC = function () {
   let info_panel_open: boolean
   let inspect_data: any
   let invert_palette: boolean
+  let is_headless_export: boolean
   let is_hover_only: boolean
   let is_loading_layers: boolean
   let is_loading_raster: boolean
@@ -644,12 +646,61 @@ export const App: React.FC = function () {
   ;[video_export_open, set_video_export_open] = useState<boolean>(false)
   ;[ui_visible, set_ui_visible] = useState<boolean>(true)
   abort_timelapse_export_ref = useRef<boolean>(false)
+  active_export_job_id_ref = useRef<string | null>(null)
   active_layer_id_ref = useRef<string | null>(active_layer_id)
   displayed_year_ref = useRef<number | null>(null)
   in_flight_fetches_count_ref = useRef<number>(0)
   load_req_id_ref = useRef<number>(0)
   raster_cache_ref = useRef<Map<string, DecodedRaster>>(new Map())
   timeline_year_ref = useRef<number>(timeline_year)
+
+  let search_params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+  is_headless_export = search_params?.get('export_mode') === '1'
+
+  useEffect(() => {
+    let url_proj = search_params?.get('projection') as ProjectionMode | null
+    if (url_proj && ['EqualEarth', 'Mercator', 'Globe', 'Equirectangular'].includes(url_proj)) {
+      set_projection(url_proj)
+    }
+  }, [])
+
+  useEffect(() => {
+    ;(window as any).__renderKeyframe = async (
+      arg0_layer_id: string,
+      arg0_year: number,
+      arg0_selectors?: Record<string, string | string[]>
+    ) => {
+      let layer_id = arg0_layer_id
+      let yr = arg0_year
+      let selectors = arg0_selectors || {}
+
+      set_active_layer_id(layer_id)
+      set_timeline_year(yr)
+      displayed_year_ref.current = yr
+
+      let target_layer = layers[layer_id] || (active_layer?.id === layer_id ? active_layer : null)
+      let has_selectors = Boolean(target_layer?.variable_selectors && Object.keys(target_layer.variable_selectors).length > 0)
+
+      let decoded = await fetchRasterKeyframe(
+        layer_id,
+        yr,
+        selectors,
+        data_format,
+        raster_cache_ref.current,
+        has_selectors
+      )
+
+      if (decoded) {
+        set_raster_a(decoded)
+        set_active_file_name(`${layer_id}_${yr}.png`)
+        set_raster_version((arg0_v) => arg0_v + 1)
+      }
+
+      await new Promise((arg0_res) => requestAnimationFrame(() => requestAnimationFrame(arg0_res)))
+      await new Promise((arg0_res) => setTimeout(arg0_res, 60))
+      return true
+    }
+  }, [active_layer, data_format, fetchRasterKeyframe, layers])
 
   active_layer_id_ref.current = active_layer_id
   timeline_year_ref.current = timeline_year
@@ -747,6 +798,7 @@ export const App: React.FC = function () {
           let data = await resp.json()
           if (!cancelled && data && data.layers) {
             set_layers(data.layers)
+            ;(window as any).__layersLoaded = true
             let layer_keys = Object.keys(data.layers)
             if (layer_keys.length > 0) {
               let default_key = layer_keys.includes('GDP_nominal_pc') ? 'GDP_nominal_pc' : layer_keys[0]
@@ -1137,31 +1189,10 @@ export const App: React.FC = function () {
       let options = arg0_options
 
       //Declare local instance variables
-      let all_layer_entries: ParsedDataLayer[]
-      let all_target_years: number[]
-      let base_name: string
-      let chunks: Blob[] = []
-      let clean_filename: string
-      let end_yr: number
-      let export_h = 1080
-      let export_w = 1920
-      let ext: string
-      let final_blob: Blob
-      let frames_per_keyframe = 15
-      let is_mp4: boolean
-      let layers_to_record: string[] = []
-      let mime_type = ''
-      let overall_step = 0
-      let record_canvas: HTMLCanvasElement
-      let record_ctx: CanvasRenderingContext2D | null
-      let recorder: MediaRecorder
-      let save_result: any
-      let seq_years: number[]
-      let start_yr: number
-      let stop_promise: Promise<Blob>
-      let stream: MediaStream
-      let total_overall_steps = 0
-      let upload_resp: Response
+      let chosen_layers: string[]
+      let job_id: string
+      let poll_interval: any
+      let start_resp: Response
 
       //Guard clauses
       if (Object.keys(layers).length === 0 && !active_layer)
@@ -1173,280 +1204,115 @@ export const App: React.FC = function () {
       set_video_export_open(false)
       set_is_timelapse_exporting(true)
       set_timelapse_export_pct(0)
-      set_timelapse_export_status('Initializing timelapse recording canvas...')
+      set_timelapse_export_status('Submitting timelapse render job to server...')
       set_timelapse_export_result(null)
 
+      if (options.mode === 'stationary') {
+        chosen_layers = (options.selectedLayers && options.selectedLayers.length > 0)
+          ? [options.selectedLayers[0]]
+          : (active_layer_id ? [active_layer_id] : ['GDP_nominal_pc'])
+      } else {
+        chosen_layers = (options.selectedLayers && options.selectedLayers.length > 0)
+          ? options.selectedLayers
+          : ['GDP_nominal_pc']
+      }
+
       try {
-        all_layer_entries = Object.values(layers)
-
-        //Resolve layers to record
-        if (options.mode === 'stationary') {
-          layers_to_record = (options.selectedLayers && options.selectedLayers.length > 0)
-            ? [options.selectedLayers[0]]
-            : (active_layer_id ? [active_layer_id] : [all_layer_entries[0]?.id || 'GDP_nominal_pc'])
-        } else {
-          layers_to_record = (options.selectedLayers && options.selectedLayers.length > 0)
-            ? options.selectedLayers
-            : all_layer_entries.slice(0, 8).map((arg0_l) => arg0_l.id)
-        }
-
-        //Collect keyframe years
-        all_target_years = []
-        for (let i = 0; i < layers_to_record.length; i++) {
-          let lid = layers_to_record[i]
-          let lyr = layers[lid] || (active_layer?.id === lid ? active_layer : null)
-          if (lyr?.available_years) {
-            for (let y = 0; y < lyr.available_years.length; y++) {
-              let yr_val = lyr.available_years[y]
-              if (!all_target_years.includes(yr_val))
-                all_target_years.push(yr_val)
-            }
-          }
-        }
-        if (all_target_years.length === 0)
-          all_target_years = [1800, 1850, 1900, 1950, 2000, 2025]
-        all_target_years.sort((arg0_a, arg0_b) => arg0_a - arg0_b)
-
-        seq_years = all_target_years.filter((arg0_y) => arg0_y >= options.startYear && arg0_y <= options.endYear)
-        if (seq_years.length === 0)
-          seq_years = [all_target_years[0]]
-
-        start_yr = seq_years[0]
-        end_yr = seq_years[seq_years.length - 1]
-        total_overall_steps = seq_years.length*layers_to_record.length
-
-        let raw_w = window.innerWidth || 1920
-        let raw_h = window.innerHeight || 1080
-        export_w = raw_w % 2 === 0 ? raw_w : raw_w + 1
-        export_h = raw_h % 2 === 0 ? raw_h : raw_h + 1
-
-        record_canvas = document.createElement('canvas')
-        record_canvas.width = export_w
-        record_canvas.height = export_h
-        record_ctx = record_canvas.getContext('2d')
-        if (!record_ctx)
-          throw new Error('Could not create 2D canvas context for timelapse export')
-
-        stream = record_canvas.captureStream(options.fps || 30)
-
-        //Prioritize video/mp4 where supported
-        if (typeof MediaRecorder !== 'undefined') {
-          if (MediaRecorder.isTypeSupported('video/mp4')) {
-            mime_type = 'video/mp4'
-          } else if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1')) {
-            mime_type = 'video/mp4;codecs=avc1'
-          } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
-            mime_type = 'video/webm;codecs=vp9'
-          } else if (MediaRecorder.isTypeSupported('video/webm')) {
-            mime_type = 'video/webm'
-          }
-        }
-
-        recorder = new MediaRecorder(stream, {
-          mimeType: mime_type || undefined,
-          videoBitsPerSecond: 8000000,
-        })
-
-        recorder.ondataavailable = (arg0_e) => {
-          if (arg0_e.data && arg0_e.data.size > 0)
-            chunks.push(arg0_e.data)
-        }
-
-        recorder.start()
-
-        for (let y_idx = 0; y_idx < seq_years.length; y_idx++) {
-          let yr = seq_years[y_idx]
-          if (abort_timelapse_export_ref.current)
-            break
-
-          for (let l_idx = 0; l_idx < layers_to_record.length; l_idx++) {
-            let layer_id = layers_to_record[l_idx]
-            if (abort_timelapse_export_ref.current)
-              break
-
-            let target_layer = layers[layer_id] || (active_layer?.id === layer_id ? active_layer : null)
-            let layer_name = target_layer?.name || layer_id
-
-            set_active_layer_id(layer_id)
-            set_timeline_year(yr)
-            displayed_year_ref.current = yr
-
-            set_timelapse_export_status(`Recording keyframe ${overall_step + 1}/${total_overall_steps}: ${layer_name} (${UfDate.formatYear(yr)})...`)
-            set_timelapse_export_pct(Math.round((overall_step / total_overall_steps)*100))
-
-            let has_selectors = Boolean(target_layer?.variable_selectors && Object.keys(target_layer.variable_selectors).length > 0)
-            let effective_selectors: Record<string, string | string[]> = {}
-            if (has_selectors && target_layer?.variable_selectors) {
-              let sel_keys = Object.keys(target_layer.variable_selectors)
-              for (let i = 0; i < sel_keys.length; i++) {
-                let sk = sel_keys[i]
-                let opt_keys = Object.keys(target_layer.variable_selectors[sk].options)
-                let val = active_variable_selectors[sk]
-                effective_selectors[sk] = (val !== undefined && (Array.isArray(val) ? val.length > 0 : Boolean(val)))
-                  ? val
-                  : (opt_keys.length > 0 ? [opt_keys[0]] : '')
-              }
-            }
-
-            let decoded = await fetchRasterKeyframe(
-              layer_id,
-              yr,
-              effective_selectors,
-              data_format,
-              raster_cache_ref.current,
-              has_selectors
-            )
-
-            if (decoded) {
-              set_raster_a(decoded)
-              set_active_file_name(`${layer_id}_${yr}.png`)
-              set_raster_version((arg0_v) => arg0_v + 1)
-            }
-
-            //Wait for React and deck.gl to complete render
-            await new Promise((arg0_resolve) => requestAnimationFrame(() => requestAnimationFrame(arg0_resolve)))
-            await new Promise((arg0_resolve) => setTimeout(arg0_resolve, 80))
-
-            if (abort_timelapse_export_ref.current)
-              break
-
-            let map_canvas = document.querySelector('#deckgl-overlay canvas') as HTMLCanvasElement | null
-            if (!map_canvas)
-              map_canvas = document.querySelector('canvas') as HTMLCanvasElement | null
-
-            record_ctx.fillStyle = '#0b0f19'
-            record_ctx.fillRect(0, 0, export_w, export_h)
-
-            if (map_canvas && map_canvas.width > 0 && map_canvas.height > 0) {
-              record_ctx.drawImage(map_canvas, 0, 0, export_w, export_h)
-            }
-
-            //1. Draw real ColorBarLegend component from DOM
-            let colourbar_node = document.getElementById('dataview-colourbar-container')
-            if (colourbar_node) {
-              try {
-                let cb_rendered = await toCanvas(colourbar_node, {
-                  pixelRatio: 1,
-                  skipFonts: true,
-                })
-                if (cb_rendered && cb_rendered.width > 0 && cb_rendered.height > 0) {
-                  let cb_rect = colourbar_node.getBoundingClientRect()
-                  record_ctx.drawImage(
-                    cb_rendered,
-                    Math.round(cb_rect.left),
-                    Math.round(cb_rect.top),
-                    Math.round(cb_rect.width),
-                    Math.round(cb_rect.height)
-                  )
-                }
-              } catch (arg0_cb_err) {
-                console.warn('[TimelapseExport] Failed to capture colourbar node:', arg0_cb_err)
-              }
-            }
-
-            //2. Draw real TimelineBar component from DOM
-            let timelinebar_node = document.getElementById('dataview-timelinebar-container')
-            if (timelinebar_node) {
-              try {
-                let tb_rendered = await toCanvas(timelinebar_node, {
-                  pixelRatio: 1,
-                  skipFonts: true,
-                })
-                if (tb_rendered && tb_rendered.width > 0 && tb_rendered.height > 0) {
-                  let tb_rect = timelinebar_node.getBoundingClientRect()
-                  record_ctx.drawImage(
-                    tb_rendered,
-                    Math.round(tb_rect.left),
-                    Math.round(tb_rect.top),
-                    Math.round(tb_rect.width),
-                    Math.round(tb_rect.height)
-                  )
-                }
-              } catch (arg0_tb_err) {
-                console.warn('[TimelapseExport] Failed to capture timelinebar node:', arg0_tb_err)
-              }
-            }
-
-            //Tick stream
-            for (let frame_idx = 0; frame_idx < frames_per_keyframe; frame_idx++) {
-              if (abort_timelapse_export_ref.current)
-                break
-              await new Promise((arg0_resolve) => setTimeout(arg0_resolve, 1000/(options.fps || 30)))
-            }
-
-            overall_step++
-          }
-        }
-
-        set_timelapse_export_status('Encoding recorded frames and uploading to server...')
-        set_timelapse_export_pct(100)
-
-        stop_promise = new Promise<Blob>((arg0_resolve) => {
-          recorder.onstop = () => {
-            let blob = new Blob(chunks, { type: mime_type || 'video/webm' })
-            arg0_resolve(blob)
-          }
-        })
-
-        recorder.stop()
-        final_blob = await stop_promise
-
-        if (final_blob.size === 0)
-          throw new Error('Recorded timelapse video stream was empty.')
-
-        let reader = new FileReader()
-        let base64_promise = new Promise<string>((arg0_resolve, arg0_reject) => {
-          reader.onloadend = () => {
-            if (typeof reader.result === 'string')
-              arg0_resolve(reader.result)
-            else
-              arg0_reject(new Error('Failed to convert video blob to base64'))
-          }
-          reader.onerror = arg0_reject
-        })
-        reader.readAsDataURL(final_blob)
-        let base64_data = await base64_promise
-
-        is_mp4 = mime_type.includes('mp4')
-        ext = is_mp4 ? 'mp4' : 'webm'
-        base_name = (options.filename || `timelapse_${Date.now()}`).replace(/\.(mp4|webm)$/i, '')
-        clean_filename = `${base_name}.${ext}`
-
-        upload_resp = await fetch('/api/export/video', {
+        start_resp = await fetch('/api/export/start-render', {
           body: JSON.stringify({
-            data: base64_data,
-            filename: clean_filename,
-            format: ext,
-            metadata: { mimeType: mime_type },
-            videoData: base64_data,
+            endYear: options.endYear,
+            fps: options.fps || 30,
+            height: options.height || 1080,
+            mode: options.mode,
+            outputFilename: options.filename,
+            projection: options.projection || projection,
+            selectedLayers: chosen_layers,
+            startYear: options.startYear,
+            variableSelectors: active_variable_selectors,
+            width: options.width || 1920,
           }),
           headers: { 'Content-Type': 'application/json' },
           method: 'POST',
         })
 
-        if (!upload_resp.ok) {
-          let err_msg = await upload_resp.text()
-          throw new Error(`Server video error: ${err_msg}`)
+        if (!start_resp.ok) {
+          let err_text = await start_resp.text()
+          throw new Error(`Server returned error: ${err_text}`)
         }
 
-        save_result = await upload_resp.json()
-        console.log('[Timelapse Export] Video successfully saved to server:', save_result.path, `(${save_result.sizeBytes} bytes)`)
-        set_timelapse_export_result(save_result)
-        let stopped_notice = abort_timelapse_export_ref.current ? ' (stopped by user)' : ''
-        set_timelapse_export_status(`Saved to exports/${save_result.filename}${stopped_notice} (${(save_result.sizeBytes / (1024*1024)).toFixed(2)} MB)`)
+        let job_data = await start_resp.json()
+        job_id = job_data.jobId
+        active_export_job_id_ref.current = job_id
+
+        //Poll server for render progress
+        await new Promise<void>((arg0_resolve, arg0_reject) => {
+          poll_interval = setInterval(async () => {
+            if (abort_timelapse_export_ref.current) {
+              clearInterval(poll_interval)
+              await fetch('/api/export/cancel', {
+                body: JSON.stringify({ jobId: job_id }),
+                headers: { 'Content-Type': 'application/json' },
+                method: 'POST',
+              }).catch(() => {})
+              set_timelapse_export_status('Timelapse export cancelled by user.')
+              set_is_timelapse_exporting(false)
+              arg0_resolve()
+              return
+            }
+
+            try {
+              let status_resp = await fetch(`/api/export/status?jobId=${encodeURIComponent(job_id)}`)
+              if (status_resp.ok) {
+                let status_data = await status_resp.json()
+                set_timelapse_export_pct(status_data.progressPct || 0)
+                set_timelapse_export_status(status_data.message || 'Rendering timelapse on server...')
+
+                if (status_data.status === 'complete') {
+                  clearInterval(poll_interval)
+                  set_timelapse_export_result({
+                    filename: status_data.filename,
+                    path: status_data.path,
+                    sizeBytes: status_data.sizeBytes,
+                  })
+                  set_timelapse_export_status(`Saved to exports/${status_data.filename} (${(status_data.sizeBytes / (1024*1024)).toFixed(2)} MB)`)
+                  set_is_timelapse_exporting(false)
+                  arg0_resolve()
+                } else if (status_data.status === 'error') {
+                  clearInterval(poll_interval)
+                  set_timelapse_export_status(`Export failed: ${status_data.error || 'Unknown error'}`)
+                  set_is_timelapse_exporting(false)
+                  arg0_reject(new Error(status_data.error || 'Server rendering error'))
+                } else if (status_data.status === 'cancelled') {
+                  clearInterval(poll_interval)
+                  set_timelapse_export_status('Timelapse export cancelled.')
+                  set_is_timelapse_exporting(false)
+                  arg0_resolve()
+                }
+              }
+            } catch (arg0_poll_err) {
+              console.warn('[TimelapseExport] Status poll error:', arg0_poll_err)
+            }
+          }, 400)
+        })
       } catch (arg0_err: any) {
         console.error('Timelapse video export failed:', arg0_err)
         set_timelapse_export_status(`Export failed: ${arg0_err?.message || 'Unknown error'}`)
-      } finally {
         set_is_timelapse_exporting(false)
       }
     },
-    [active_layer, active_layer_id, active_variable_selectors, color_palette, data_format, invert_palette, layers, max_val, min_val, scale_type]
+    [active_layer, active_layer_id, active_variable_selectors, layers, projection]
   )
 
   handle_stop_timelapse_export = useCallback(() => {
     abort_timelapse_export_ref.current = true
-    set_timelapse_export_status('Stopping recording and finalizing video...')
+    set_timelapse_export_status('Cancelling server timelapse rendering...')
+    if (active_export_job_id_ref.current) {
+      fetch('/api/export/cancel', {
+        body: JSON.stringify({ jobId: active_export_job_id_ref.current }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }).catch(() => {})
+    }
   }, [])
 
   active_countries = useMemo<CountryFeature[]>(() => {
@@ -1531,19 +1397,18 @@ export const App: React.FC = function () {
 
   //Return statement
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-background text-foreground font-sans">
+    <div id="dataview-app-root" className="relative h-screen w-screen overflow-hidden bg-background text-foreground font-sans">
       {/* Live Timelapse Recording HUD */}
-      {is_timelapse_exporting && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3.5 px-5 py-2.5 rounded-full bg-card/95 backdrop-blur-md border border-red-500/50 shadow-2xl text-foreground select-none">
+      {!is_headless_export && is_timelapse_exporting && (
+        <div id="timelapse-recording-hud" className="fixed top-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3.5 px-5 py-2.5 rounded-full bg-card/95 backdrop-blur-md border border-red-500/50 shadow-2xl text-foreground select-none">
           <span className="relative flex h-3 w-3 shrink-0">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
             <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
           </span>
           <div className="flex flex-col min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-red-400">Recording Timelapse</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-red-400">Rendering Timelapse on Server</span>
               <span className="text-xs font-mono text-muted-foreground">({timelapse_export_pct}%)</span>
-              <span className="text-xs font-mono font-bold text-foreground">• {UfDate.formatYear(timeline_year)}</span>
             </div>
             <span className="text-[11px] text-muted-foreground truncate max-w-sm">{timelapse_export_status}</span>
           </div>
@@ -1554,16 +1419,16 @@ export const App: React.FC = function () {
             type="button"
             onClick={handle_stop_timelapse_export}
             className="ml-1 px-3 py-1 bg-destructive hover:bg-destructive/90 text-destructive-foreground font-bold text-xs flex items-center gap-1.5 rounded-full shadow-xs cursor-pointer transition-colors"
-            title="Stop timelapse recording early and save recorded frames to server"
+            title="Cancel timelapse render job on server"
           >
             <Icon name="stop" className="text-sm" />
-            <span>Stop</span>
+            <span>Cancel</span>
           </button>
         </div>
       )}
 
       {/* Export Result Toast Banner */}
-      {timelapse_export_result && (
+      {!is_headless_export && timelapse_export_result && (
         <div className="fixed top-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-lg bg-card/95 backdrop-blur-md border border-emerald-500/40 shadow-2xl text-foreground max-w-md">
           <Icon name="check_circle" className="text-emerald-400 text-xl flex-shrink-0" />
           <div className="flex-1 min-w-0">
@@ -1641,14 +1506,14 @@ export const App: React.FC = function () {
           onInspect={set_inspect_data}
           onSelectLayer={handle_select_layer}
           onToggleUi={() => set_ui_visible((arg0_prev) => !arg0_prev)}
-          uiVisible={ui_visible && !is_timelapse_exporting}
-          isTimelapseExporting={is_timelapse_exporting}
+          uiVisible={!is_headless_export && ui_visible && !is_timelapse_exporting}
+          isTimelapseExporting={is_timelapse_exporting || is_headless_export}
           userRole={user_role}
         />
 
         {/* ECharts Analytical View Panel (Top Right) */}
         <AnalyticsDrawer
-          isOpen={ui_visible && analytics_open && !is_timelapse_exporting}
+          isOpen={!is_headless_export && ui_visible && analytics_open && !is_timelapse_exporting}
           onToggleOpen={() => set_analytics_open(false)}
           raster={display_raster || active_raster}
           scaleType={scale_type}
@@ -1672,7 +1537,7 @@ export const App: React.FC = function () {
       </div>
 
       {/* Historical Timeline Scrubber Bar */}
-      {(ui_visible || is_timelapse_exporting) && (
+      {(ui_visible || is_timelapse_exporting || is_headless_export) && (
         <TimelineBar
           availableKeyframes={available_keyframes}
           currentYear={timeline_year}
@@ -1686,16 +1551,18 @@ export const App: React.FC = function () {
           onToggleSnapToKeyframes={set_snap_to_keyframes}
           playbackSpeed={playback_speed}
           snapToKeyframes={snap_to_keyframes}
-          style={
-            (!ui_visible || is_timelapse_exporting)
-              ? { left: '50%', transform: 'translateX(-50%)', width: 'min(1100px, calc(100vw - 64px))' }
-              : { left: `calc(${sidebar_width + 16}px + (100vw - ${sidebar_width + 360}px) / 2)`, width: 'min(1100px, calc(100vw - 450px))' }
-          }
+          style={{
+            left: 0,
+            marginLeft: 'auto',
+            marginRight: 'auto',
+            right: 0,
+            width: 'min(1100px, calc(100vw - 64px))',
+          }}
         />
       )}
 
       {/* Floating Sidebar Controls Dock */}
-      {ui_visible && !is_timelapse_exporting && (
+      {!is_headless_export && ui_visible && !is_timelapse_exporting && (
         <SidebarControls
           activeFileName={active_file_name}
           activeLayerId={active_layer_id}
@@ -1757,6 +1624,7 @@ export const App: React.FC = function () {
         activeLayerId={active_layer_id}
         availableKeyframes={available_keyframes}
         availableLayers={layers}
+        currentProjection={projection}
         isOpen={video_export_open}
         maxYear={available_keyframes.length > 0 ? available_keyframes[available_keyframes.length - 1] : 2025}
         minYear={available_keyframes.length > 0 ? available_keyframes[0] : -10000}

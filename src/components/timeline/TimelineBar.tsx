@@ -251,8 +251,15 @@ export const TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
   return (
     <div
       id="dataview-timelinebar-container"
-      style={style}
-      className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 w-[96%] max-w-5xl pointer-events-auto select-none font-sans"
+      style={{
+        left: 0,
+        marginLeft: 'auto',
+        marginRight: 'auto',
+        right: 0,
+        width: 'min(1100px, calc(100vw - 64px))',
+        ...style,
+      }}
+      className="absolute bottom-3 z-20 pointer-events-auto select-none font-sans"
     >
       <div className="bg-card/95 backdrop-blur-md border border-border shadow-2xl p-2.5 transition-all">
         {/* Top Header Row: Date Badge, Controls, & Settings */}

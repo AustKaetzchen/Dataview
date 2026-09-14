@@ -12,17 +12,21 @@ export interface StartTimelapseExportOptions {
   endYear: number
   filename: string
   fps: number
+  height?: number
   keyframesOnly: boolean
   mode: VideoExportMode
+  projection?: string
   selectedLayers: string[]
   startYear: number
   timestepStep: number
+  width?: number
 }
 
 export interface VideoExportModalProps {
   activeLayerId: string | null
   availableKeyframes: number[]
   availableLayers: Record<string, ParsedDataLayer>
+  currentProjection?: string
   isOpen: boolean
   maxYear: number
   minYear: number
@@ -216,6 +220,8 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   let keyframes_only: boolean
   let progress_pct: number
   let progress_status: string
+  let projection: string
+  let resolution: string
   let select_all_cycling_layers: () => void
   let selected_cycling_layers: string[]
   let selected_stationary_layer: string
@@ -229,6 +235,8 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   let set_keyframes_only: React.Dispatch<React.SetStateAction<boolean>>
   let set_progress_pct: React.Dispatch<React.SetStateAction<number>>
   let set_progress_status: React.Dispatch<React.SetStateAction<string>>
+  let set_projection: React.Dispatch<React.SetStateAction<string>>
+  let set_resolution: React.Dispatch<React.SetStateAction<string>>
   let set_selected_cycling_layers: React.Dispatch<React.SetStateAction<string[]>>
   let set_selected_stationary_layer: React.Dispatch<React.SetStateAction<string>>
   let set_start_year: React.Dispatch<React.SetStateAction<number>>
@@ -252,11 +260,10 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   ;[start_year, set_start_year] = useState<number>(1800)
   ;[end_year, set_end_year] = useState<number>(2025)
   ;[fps, set_fps] = useState<number>(30)
+  ;[projection, set_projection] = useState<string>(props.currentProjection || 'EqualEarth')
+  ;[resolution, set_resolution] = useState<string>('1080p')
   ;[export_filename, set_export_filename] = useState<string>(() => {
-    let ext = 'mp4'
-    if (typeof MediaRecorder !== 'undefined' && !MediaRecorder.isTypeSupported('video/mp4'))
-      ext = 'webm'
-    return `dataview_timelapse_${Date.now()}.${ext}`
+    return `dataview_timelapse_${Date.now()}.mp4`
   })
   ;[selected_cycling_layers, set_selected_cycling_layers] = useState<string[]>(() =>
     Object.keys(available_layers).slice(0, 8)
@@ -285,10 +292,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   }, [])
 
   handle_start_export = useCallback(async () => {
-    let ext = 'webm'
-    if (typeof MediaRecorder !== 'undefined' && (MediaRecorder.isTypeSupported('video/mp4') || MediaRecorder.isTypeSupported('video/mp4;codecs=avc1')))
-      ext = 'mp4'
-    let clean_filename = export_filename.replace(/\.(mp4|webm)$/i, '') + `.${ext}`
+    let clean_filename = export_filename.replace(/\.(mp4|webm)$/i, '') + '.mp4'
 
     let chosen_layers: string[] = []
     if (export_mode === 'cycling') {
@@ -297,17 +301,30 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
       chosen_layers = [selected_stationary_layer || active_layer_id || Object.keys(available_layers)[0] || 'GDP_nominal_pc']
     }
 
+    let w = 1920
+    let h = 1080
+    if (resolution === '1440p') {
+      w = 2560
+      h = 1440
+    } else if (resolution === '720p') {
+      w = 1280
+      h = 720
+    }
+
     if (props.onStartTimelapseExport) {
       on_close()
       await props.onStartTimelapseExport({
         endYear: end_year,
         filename: clean_filename,
         fps,
+        height: h,
         keyframesOnly: keyframes_only,
         mode: export_mode,
+        projection,
         selectedLayers: chosen_layers,
         startYear: start_year,
         timestepStep: timestep_step,
+        width: w,
       })
     }
   }, [
@@ -319,7 +336,9 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
     fps,
     keyframes_only,
     on_close,
+    projection,
     props,
+    resolution,
     selected_cycling_layers,
     selected_stationary_layer,
     start_year,
@@ -567,6 +586,35 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
                 onChange={(arg0_e) => set_fps(parseInt(arg0_e.target.value) || 30)}
                 className="h-7 text-xs bg-background"
               />
+            </div>
+          </div>
+
+          {/* Projection & Resolution Preset */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <span className="text-[11px] text-muted-foreground">Map Projection</span>
+              <select
+                value={projection}
+                onChange={(arg0_e) => set_projection(arg0_e.target.value)}
+                className="w-full h-7 text-xs bg-background border border-border px-2 text-foreground focus:outline-hidden"
+              >
+                <option value="EqualEarth">Equal Earth</option>
+                <option value="Mercator">Mercator</option>
+                <option value="Globe">Globe</option>
+                <option value="Equirectangular">Equirectangular</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <span className="text-[11px] text-muted-foreground">Resolution Preset</span>
+              <select
+                value={resolution}
+                onChange={(arg0_e) => set_resolution(arg0_e.target.value)}
+                className="w-full h-7 text-xs bg-background border border-border px-2 text-foreground focus:outline-hidden"
+              >
+                <option value="1080p">1080p (1920x1080 Full HD)</option>
+                <option value="1440p">1440p (2560x1440 2K)</option>
+                <option value="720p">720p (1280x720 HD)</option>
+              </select>
             </div>
           </div>
 

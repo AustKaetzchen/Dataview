@@ -632,7 +632,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
       )}
 
       {/* Top Left: Value Colourbar & Information Flyout Container */}
-      {(ui_visible || is_timelapse_exporting) && (Boolean(rendered_canvas) || info_panel_open) &&
+      {(ui_visible || is_timelapse_exporting) && (Boolean(rendered_canvas) || Boolean(raster) || is_timelapse_exporting || info_panel_open) &&
         (() => {
           let has_canvas = Boolean(rendered_canvas)
           let is_country_relative = Boolean(
@@ -666,7 +666,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
               className="absolute z-20 flex flex-col gap-3 pointer-events-none"
             >
               {/* Value Colourbar (when canvas/raster is available) */}
-              {has_canvas && (
+              {(has_canvas || Boolean(raster) || is_timelapse_exporting) && (
                 <div className="pointer-events-auto">
                   <ColorBarLegend
                     palette={palette}
@@ -708,7 +708,8 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
         })()}
 
       {/* Map Control Tools Toolbar (Top Right) */}
-      <TooltipProvider delayDuration={150}>
+      {(ui_visible && !is_timelapse_exporting) && (
+        <TooltipProvider delayDuration={150}>
         <div
           style={{ top: `${UI_LAYOUT.margin}px`, right: `${UI_LAYOUT.margin}px` }}
           className="absolute z-30 flex flex-col gap-[var(--cell-padding)] bg-card/95 backdrop-blur-md p-[var(--cell-padding)] rounded-none border border-border shadow-md"
@@ -875,6 +876,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
           </div>
         )}
       </TooltipProvider>
+      )}
 
       {/* Bottom Right Tray: Unified Mapmodes with Inline Settings */}
       {ui_visible && (
