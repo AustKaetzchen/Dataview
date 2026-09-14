@@ -331,17 +331,52 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
         {has_sub_layers ? (
           <div>
             <div
-              onClick={() => toggle_node(layer.id)}
-              className="flex items-center justify-between px-2 py-1 bg-muted/30 hover:bg-muted/60 cursor-pointer border border-border/60 transition-colors"
+              className={`flex items-center justify-between px-2 py-1 cursor-pointer border border-border/60 transition-colors ${
+                is_active ? 'bg-primary/20 border-primary text-primary font-bold shadow-xs' : 'bg-muted/30 hover:bg-muted/60'
+              }`}
             >
-              <div className="flex items-center gap-1.5 min-w-0">
-                <Icon name="folder" className="text-primary text-xs shrink-0" />
-                <span className="text-xs font-bold text-foreground truncate">{layer.name}</span>
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <button
+                  type="button"
+                  onClick={(arg0_e) => {
+                    arg0_e.stopPropagation()
+                    if (on_select_layer)
+                      on_select_layer(layer.id)
+                    if (!is_node_expanded)
+                      toggle_node(layer.id)
+                  }}
+                  className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 cursor-pointer transition-colors ${
+                    is_active ? 'border-primary bg-primary' : 'border-muted-foreground/60 hover:border-primary'
+                  }`}
+                  title={`Select ${layer.name}`}
+                >
+                  {is_active && <span className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
+                </button>
+                <div
+                  onClick={() => {
+                    if (on_select_layer)
+                      on_select_layer(layer.id)
+                    if (!is_node_expanded)
+                      toggle_node(layer.id)
+                  }}
+                  className="flex items-center gap-1.5 min-w-0 flex-1"
+                >
+                  <Icon name={is_node_expanded ? 'folder_open' : 'folder'} className="text-primary text-xs shrink-0" />
+                  <span className="text-xs font-bold text-foreground truncate">{layer.name}</span>
+                </div>
               </div>
-              <Icon
-                name={is_node_expanded ? 'expand_less' : 'expand_more'}
-                className="text-xs text-muted-foreground shrink-0"
-              />
+              <div
+                onClick={(arg0_e) => {
+                  arg0_e.stopPropagation()
+                  toggle_node(layer.id)
+                }}
+                className="flex items-center shrink-0 p-0.5"
+              >
+                <Icon
+                  name={is_node_expanded ? 'expand_less' : 'expand_more'}
+                  className="text-xs text-muted-foreground shrink-0"
+                />
+              </div>
             </div>
 
             {is_node_expanded && (
@@ -359,10 +394,10 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
                     } ${!is_accessible ? 'opacity-40 cursor-not-allowed' : ''}`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className={`w-3 h-3 rounded-full border flex items-center justify-center shrink-0 ${
+                      <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
                         is_active ? 'border-primary bg-primary' : 'border-muted-foreground/60'
                       }`}>
-                        {is_active && <span className="w-1 h-1 rounded-full bg-primary-foreground" />}
+                        {is_active && <span className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
                       </span>
                       <span className="text-xs truncate">
                         {layer.name.endsWith('(Total)') ? layer.name : `${layer.name} (Total)`}
@@ -381,28 +416,54 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
           </div>
         ) : has_variable_selectors ? (
           <div>
-            {/* Indicator with variable_selectors shows up as a folder in itself */}
+            {/* Indicator with variable_selectors shows up as an expandable layer row */}
             <div
-              onClick={() => toggle_node(layer.id)}
               className={`flex items-center justify-between px-2 py-1 cursor-pointer border transition-colors ${
                 is_active
                   ? 'bg-primary/20 border-primary text-primary font-bold shadow-xs'
                   : 'bg-muted/30 hover:bg-muted/60 border-border/60 text-foreground'
               }`}
             >
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span className={`w-3 h-3 rounded-full border flex items-center justify-center shrink-0 ${
-                  is_active ? 'border-primary bg-primary' : 'border-muted-foreground/60'
-                }`}>
-                  {is_active && <span className="w-1 h-1 rounded-full bg-primary-foreground" />}
-                </span>
-                <Icon
-                  name={is_node_expanded ? 'folder_open' : 'folder'}
-                  className="text-primary text-xs shrink-0"
-                />
-                <span className="text-xs font-bold truncate">{layer.name}</span>
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <button
+                  type="button"
+                  onClick={(arg0_e) => {
+                    arg0_e.stopPropagation()
+                    if (on_select_layer)
+                      on_select_layer(layer.id)
+                    if (!is_node_expanded)
+                      toggle_node(layer.id)
+                  }}
+                  className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 cursor-pointer transition-colors ${
+                    is_active ? 'border-primary bg-primary' : 'border-muted-foreground/60 hover:border-primary'
+                  }`}
+                  title={`Select ${layer.name}`}
+                >
+                  {is_active && <span className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
+                </button>
+                <div
+                  onClick={() => {
+                    if (on_select_layer)
+                      on_select_layer(layer.id)
+                    if (!is_node_expanded)
+                      toggle_node(layer.id)
+                  }}
+                  className="flex items-center gap-1.5 min-w-0 flex-1"
+                >
+                  <Icon
+                    name={is_node_expanded ? 'folder_open' : 'folder'}
+                    className="text-primary text-xs shrink-0"
+                  />
+                  <span className="text-xs font-bold truncate">{layer.name}</span>
+                </div>
               </div>
-              <div className="flex items-center gap-1 shrink-0 ml-1">
+              <div
+                onClick={(arg0_e) => {
+                  arg0_e.stopPropagation()
+                  toggle_node(layer.id)
+                }}
+                className="flex items-center gap-1 shrink-0 ml-1 cursor-pointer p-0.5"
+              >
                 {layer.unit && (
                   <span className="text-[10px] text-muted-foreground font-mono">{layer.unit}</span>
                 )}

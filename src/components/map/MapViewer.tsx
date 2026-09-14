@@ -102,6 +102,7 @@ export interface MapViewerProps {
   onChangeVariableSelector?: (arg0_key: string, arg1_option: string | string[]) => void
   onSelectLayer?: (arg0_layer_id: string) => void
   uiVisible?: boolean
+  isTimelapseExporting?: boolean
   onToggleUi?: () => void
   userRole?: UserRole
 }
@@ -142,6 +143,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
   let info_panel_open = props.infoPanelOpen ?? false
   let invert_palette = props.invertPalette
   let is_calculating_stats = props.isCalculatingStats
+  let is_timelapse_exporting = props.isTimelapseExporting ?? false
   let last_country_ref = useRef<CountryFeature | null>(null)
   let last_hovered_country_code_ref = useRef<string | null | undefined>(null)
   let layers: any[]
@@ -630,7 +632,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
       )}
 
       {/* Top Left: Value Colourbar & Information Flyout Container */}
-      {ui_visible && (Boolean(rendered_canvas) || info_panel_open) &&
+      {(ui_visible || is_timelapse_exporting) && (Boolean(rendered_canvas) || info_panel_open) &&
         (() => {
           let has_canvas = Boolean(rendered_canvas)
           let is_country_relative = Boolean(
@@ -646,8 +648,12 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
           let legend_country_name = (is_country_relative) ? country_stats!.name : null
 
           let current_sidebar_width = sidebar_width ?? UI_LAYOUT.sidebarWidth
+          if (is_timelapse_exporting)
+            current_sidebar_width = 0
           let current_colourbar_width = colourbar_width ?? 336
-          let colourbar_left = UI_LAYOUT.margin + current_sidebar_width + UI_LAYOUT.gap
+          let colourbar_left = is_timelapse_exporting
+            ? UI_LAYOUT.margin
+            : UI_LAYOUT.margin + current_sidebar_width + UI_LAYOUT.gap
 
           return (
             <div

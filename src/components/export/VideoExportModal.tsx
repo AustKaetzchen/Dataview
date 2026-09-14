@@ -13,6 +13,8 @@ export interface StartTimelapseExportOptions {
   filename: string
   fps: number
   keyframesOnly: boolean
+  mode: VideoExportMode
+  selectedLayers: string[]
   startYear: number
   timestepStep: number
 }
@@ -202,6 +204,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   //Declare local instance variables
 
   let all_layer_keys: string[]
+  let clear_all_cycling_layers: () => void
   let end_year: number
   let export_error: string | null
   let export_filename: string
@@ -213,7 +216,9 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   let keyframes_only: boolean
   let progress_pct: number
   let progress_status: string
+  let select_all_cycling_layers: () => void
   let selected_cycling_layers: string[]
+  let selected_stationary_layer: string
   let set_end_year: React.Dispatch<React.SetStateAction<number>>
   let set_export_error: React.Dispatch<React.SetStateAction<string | null>>
   let set_export_filename: React.Dispatch<React.SetStateAction<string>>
@@ -225,6 +230,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   let set_progress_pct: React.Dispatch<React.SetStateAction<number>>
   let set_progress_status: React.Dispatch<React.SetStateAction<string>>
   let set_selected_cycling_layers: React.Dispatch<React.SetStateAction<string[]>>
+  let set_selected_stationary_layer: React.Dispatch<React.SetStateAction<string>>
   let set_start_year: React.Dispatch<React.SetStateAction<number>>
   let set_timestep_step: React.Dispatch<React.SetStateAction<number>>
   let set_timestep_unit: React.Dispatch<React.SetStateAction<TimestepUnit>>
@@ -237,6 +243,9 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   all_layer_keys = useMemo(() => Object.keys(available_layers), [available_layers])
 
   ;[export_mode, set_export_mode] = useState<VideoExportMode>('cycling')
+  ;[selected_stationary_layer, set_selected_stationary_layer] = useState<string>(() => {
+    return active_layer_id || Object.keys(available_layers)[0] || 'GDP_nominal_pc'
+  })
   ;[timestep_unit, set_timestep_unit] = useState<TimestepUnit>('years')
   ;[timestep_step, set_timestep_step] = useState<number>(1)
   ;[keyframes_only, set_keyframes_only] = useState<boolean>(true)
@@ -258,6 +267,14 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   ;[export_error, set_export_error] = useState<string | null>(null)
   ;[export_success, set_export_success] = useState<string | null>(null)
 
+  select_all_cycling_layers = useCallback(() => {
+    set_selected_cycling_layers(Object.keys(available_layers))
+  }, [available_layers])
+
+  clear_all_cycling_layers = useCallback(() => {
+    set_selected_cycling_layers([])
+  }, [])
+
   toggle_cycling_layer = useCallback((arg0_id: string) => {
     let id = arg0_id
     set_selected_cycling_layers((arg0_prev) => {
@@ -269,9 +286,16 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
 
   handle_start_export = useCallback(async () => {
     let ext = 'webm'
-    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported('video/mp4'))
+    if (typeof MediaRecorder !== 'undefined' && (MediaRecorder.isTypeSupported('video/mp4') || MediaRecorder.isTypeSupported('video/mp4;codecs=avc1')))
       ext = 'mp4'
     let clean_filename = export_filename.replace(/\.(mp4|webm)$/i, '') + `.${ext}`
+
+    let chosen_layers: string[] = []
+    if (export_mode === 'cycling') {
+      chosen_layers = selected_cycling_layers.length > 0 ? selected_cycling_layers : (active_layer_id ? [active_layer_id] : Object.keys(available_layers).slice(0, 1))
+    } else {
+      chosen_layers = [selected_stationary_layer || active_layer_id || Object.keys(available_layers)[0] || 'GDP_nominal_pc']
+    }
 
     if (props.onStartTimelapseExport) {
       on_close()
@@ -280,17 +304,24 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
         filename: clean_filename,
         fps,
         keyframesOnly: keyframes_only,
+        mode: export_mode,
+        selectedLayers: chosen_layers,
         startYear: start_year,
         timestepStep: timestep_step,
       })
     }
   }, [
+    active_layer_id,
+    available_layers,
     end_year,
     export_filename,
+    export_mode,
     fps,
     keyframes_only,
     on_close,
     props,
+    selected_cycling_layers,
+    selected_stationary_layer,
     start_year,
     timestep_step,
   ])
@@ -350,7 +381,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
                   <span>Stationary Mode</span>
                 </div>
                 <p className="text-[11px] leading-tight text-muted-foreground">
-                  Displays the same active indicator across the entire timeline sequence.
+                  Displays the selected indicator across the entire timeline sequence.
                 </p>
               </button>
 
@@ -374,12 +405,61 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
             </div>
           </div>
 
+          {/* Stationary Indicator Selector */}
+          {export_mode === 'stationary' && (
+            <div className="space-y-1.5 border border-border p-2.5 bg-muted/20">
+              <Label className="text-xs font-semibold text-foreground">
+                Selected Indicator to Export
+              </Label>
+              <div className="grid grid-cols-2 gap-1 max-h-36 overflow-y-auto pr-1">
+                {all_layer_keys.map((arg0_key) => {
+                  let layer = available_layers[arg0_key]
+                  let is_selected = selected_stationary_layer === arg0_key
+                  return (
+                    <button
+                      key={arg0_key}
+                      type="button"
+                      onClick={() => set_selected_stationary_layer(arg0_key)}
+                      className={`px-2 py-1 flex items-center justify-between border text-left text-[11px] cursor-pointer transition-colors ${
+                        is_selected
+                          ? 'bg-primary/20 border-primary text-foreground font-medium'
+                          : 'bg-card border-border text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <span className="truncate pr-1">{layer?.name || arg0_key}</span>
+                      {is_selected && <Icon name="check" className="text-xs text-primary shrink-0" />}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Cycling Indicators Selector */}
           {export_mode === 'cycling' && (
             <div className="space-y-1.5 border border-border p-2.5 bg-muted/20">
-              <Label className="text-xs font-semibold text-foreground">
-                Active Indicators to Cycle ({selected_cycling_layers.length} selected)
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold text-foreground">
+                  Active Indicators to Cycle ({selected_cycling_layers.length} selected)
+                </Label>
+                <div className="flex items-center gap-1.5 text-[10px] font-mono">
+                  <button
+                    type="button"
+                    onClick={select_all_cycling_layers}
+                    className="text-primary hover:underline cursor-pointer"
+                  >
+                    Select All
+                  </button>
+                  <span className="text-muted-foreground/40">•</span>
+                  <button
+                    type="button"
+                    onClick={clear_all_cycling_layers}
+                    className="text-muted-foreground hover:underline cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-1 max-h-36 overflow-y-auto pr-1">
                 {all_layer_keys.map((arg0_key) => {
                   let layer = available_layers[arg0_key]
