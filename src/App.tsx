@@ -749,6 +749,10 @@ export const App: React.FC = function () {
       let yr = arg0_year
       let selectors = arg0_selectors || {}
 
+      if (typeof window !== 'undefined') {
+        ;(window as any).__deckRendered = false
+      }
+
       set_active_layer_id(layer_id)
       set_timeline_year(yr)
       set_active_variable_selectors(selectors)
@@ -779,6 +783,11 @@ export const App: React.FC = function () {
       let has_selectors = Boolean(target_layer?.variable_selectors && Object.keys(target_layer.variable_selectors).length > 0)
       let can_be_uninhabited = Boolean(target_layer?.can_be_uninhabited)
 
+      //Evict old entries from in-memory raster cache during headless export to prevent multi-gigabyte memory leaks
+      if (is_headless_export && raster_cache_ref.current.size > 1) {
+        raster_cache_ref.current.clear()
+      }
+
       let decoded = await fetchRasterKeyframe(
         layer_id,
         yr,
@@ -795,11 +804,21 @@ export const App: React.FC = function () {
         set_raster_version((arg0_v) => arg0_v + 1)
       }
 
-      await new Promise((arg0_res) => requestAnimationFrame(() => requestAnimationFrame(arg0_res)))
-      await new Promise((arg0_res) => setTimeout(arg0_res, 60))
+      //Wait for DeckGL to confirm frame drawing or timeout after 250ms
+      await new Promise((arg0_res) => {
+        let check_count = 0
+        let check_timer = setInterval(() => {
+          check_count++
+          if ((window as any).__deckRendered || check_count >= 15) {
+            clearInterval(check_timer)
+            requestAnimationFrame(() => requestAnimationFrame(arg0_res))
+          }
+        }, 16)
+      })
+      await new Promise((arg0_res) => setTimeout(arg0_res, 40))
       return true
     }
-  }, [active_layer, data_format, fetchRasterKeyframe, layers])
+  }, [active_layer, data_format, fetchRasterKeyframe, is_headless_export, layers])
 
   active_layer_id_ref.current = active_layer_id
   timeline_year_ref.current = timeline_year
@@ -922,6 +941,8 @@ export const App: React.FC = function () {
   //Load and interpolate rasters whenever layer, selectors, or timeline position change
   useEffect(() => {
     let loadRasters = async function () {
+      if (is_headless_export)
+        return
       if (!active_layer || !active_layer.available_years || active_layer.available_years.length === 0)
         return
 
@@ -1312,15 +1333,9 @@ export const App: React.FC = function () {
       set_timelapse_export_status('Submitting timelapse render job to server...')
       set_timelapse_export_result(null)
 
-      if (options.mode === 'stationary') {
-        chosen_layers = (options.selectedLayers && options.selectedLayers.length > 0)
-          ? [options.selectedLayers[0]]
-          : (active_layer_id ? [active_layer_id] : ['GDP_nominal_pc'])
-      } else {
-        chosen_layers = (options.selectedLayers && options.selectedLayers.length > 0)
-          ? options.selectedLayers
-          : ['GDP_nominal_pc']
-      }
+      chosen_layers = (options.selectedLayers && options.selectedLayers.length > 0)
+        ? options.selectedLayers
+        : (active_layer_id ? [active_layer_id] : ['GDP_nominal_pc'])
 
       try {
         start_resp = await fetch('/api/export/start-render', {
@@ -1329,11 +1344,14 @@ export const App: React.FC = function () {
             endYear: options.endYear,
             fps: options.fps || 30,
             height: options.height || 1080,
+            keepFrames: options.keepFrames,
             keyframesOnly: options.keyframesOnly,
             legendPosition: options.legendPosition || legend_position,
+            maxRamPerThreadMb: options.maxRamPerThreadMb,
             mode: options.mode,
             outputFilename: options.filename,
             projection: options.projection || projection,
+            resumeFolder: options.resumeFolder,
             selectedLayers: chosen_layers,
             startYear: options.startYear,
             timestepStep: options.timestepStep,

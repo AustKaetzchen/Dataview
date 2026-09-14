@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { UfDate } from '@/lib/ufDate'
 
-export type VideoExportMode = 'stationary' | 'cycling'
+export type VideoExportMode = 'sequential' | 'cycling' | 'stationary'
 export type TimestepUnit = 'years' | 'months' | 'days'
 
 export interface CohortOption {
@@ -26,10 +26,13 @@ export interface StartTimelapseExportOptions {
   filename: string
   fps: number
   height?: number
+  keepFrames?: boolean
   keyframesOnly: boolean
   legendPosition?: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'
+  maxRamPerThreadMb?: number
   mode: VideoExportMode
   projection?: string
+  resumeFolder?: string
   selectedLayers: string[]
   startYear: number
   timestepStep: number
@@ -230,7 +233,8 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   //Declare local instance variables
   let all_cohort_keys: string[]
   let all_layer_keys: string[]
-  let clear_all_cycling_layers: () => void
+  let available_partial_folders: any[]
+  let clear_all_layers: () => void
   let concurrency: number
   let end_year: number
   let expanded_folders: Record<string, boolean>
@@ -240,20 +244,27 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   let export_success: string | null
   let fps: number
   let get_default_zoom: (arg0_proj: string, arg1_w?: number, arg2_h?: number) => number
+  let get_indicator_label: (arg0_key: string) => string
   let handle_start_export: () => Promise<void>
   let handle_zoom_change: (arg0_new_zoom: number) => void
   let indicator_folders: IndicatorFolderItem[]
   let is_exporting: boolean
+  let keep_frames: boolean
   let keyframes_only: boolean
   let legend_position: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'
+  let max_ram_per_thread_mb: number
+  let move_layer_down: (arg0_index: number) => void
+  let move_layer_up: (arg0_index: number) => void
   let preview_canvas_ref: React.MutableRefObject<HTMLCanvasElement | null>
   let progress_pct: number
   let progress_status: string
   let projection: string
+  let remove_layer: (arg0_index: number) => void
   let resolution: string
-  let select_all_cycling_layers: () => void
-  let selected_cycling_layers: string[]
-  let selected_stationary_layer: string
+  let resume_folder: string
+  let select_all_layers: () => void
+  let selected_layers: string[]
+  let set_available_partial_folders: React.Dispatch<React.SetStateAction<any[]>>
   let set_concurrency: React.Dispatch<React.SetStateAction<number>>
   let set_end_year: React.Dispatch<React.SetStateAction<number>>
   let set_expanded_folders: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
@@ -263,14 +274,16 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   let set_export_success: React.Dispatch<React.SetStateAction<string | null>>
   let set_fps: React.Dispatch<React.SetStateAction<number>>
   let set_is_exporting: React.Dispatch<React.SetStateAction<boolean>>
+  let set_keep_frames: React.Dispatch<React.SetStateAction<boolean>>
   let set_keyframes_only: React.Dispatch<React.SetStateAction<boolean>>
   let set_legend_position: React.Dispatch<React.SetStateAction<'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'>>
+  let set_max_ram_per_thread_mb: React.Dispatch<React.SetStateAction<number>>
   let set_progress_pct: React.Dispatch<React.SetStateAction<number>>
   let set_progress_status: React.Dispatch<React.SetStateAction<string>>
   let set_projection: React.Dispatch<React.SetStateAction<string>>
   let set_resolution: React.Dispatch<React.SetStateAction<string>>
-  let set_selected_cycling_layers: React.Dispatch<React.SetStateAction<string[]>>
-  let set_selected_stationary_layer: React.Dispatch<React.SetStateAction<string>>
+  let set_resume_folder: React.Dispatch<React.SetStateAction<string>>
+  let set_selected_layers: React.Dispatch<React.SetStateAction<string[]>>
   let set_start_year: React.Dispatch<React.SetStateAction<number>>
   let set_timestep_step: React.Dispatch<React.SetStateAction<number>>
   let set_timestep_unit: React.Dispatch<React.SetStateAction<TimestepUnit>>
@@ -278,9 +291,9 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   let start_year: number
   let timestep_step: number
   let timestep_unit: TimestepUnit
-  let toggle_cycling_layer: (arg0_id: string) => void
   let toggle_expanded_folder: (arg0_id: string) => void
   let toggle_folder_cohorts: (arg0_folder: IndicatorFolderItem) => void
+  let toggle_layer: (arg0_id: string) => void
   let zoom: number
 
   //Function body
@@ -461,10 +474,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   }, [resolution])
 
     ;[concurrency, set_concurrency] = useState<number>(4)
-    ;[export_mode, set_export_mode] = useState<VideoExportMode>('cycling')
-    ;[selected_stationary_layer, set_selected_stationary_layer] = useState<string>(() => {
-      return active_layer_id || Object.keys(available_layers)[0] || 'GDP_nominal_pc'
-    })
+    ;[export_mode, set_export_mode] = useState<VideoExportMode>('sequential')
     ;[timestep_unit, set_timestep_unit] = useState<TimestepUnit>('years')
     ;[timestep_step, set_timestep_step] = useState<number>(1)
     ;[keyframes_only, set_keyframes_only] = useState<boolean>(true)
@@ -486,7 +496,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
       age_sex: false,
       labourforce_total: false,
     })
-    ;[selected_cycling_layers, set_selected_cycling_layers] = useState<string[]>(() => {
+    ;[selected_layers, set_selected_layers] = useState<string[]>(() => {
       let initial: string[] = []
       let keys = Object.keys(available_layers)
       for (let i = 0; i < Math.min(3, keys.length); i++) {
@@ -505,11 +515,27 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
       }
       return initial
     })
+    ;[available_partial_folders, set_available_partial_folders] = useState<any[]>([])
+    ;[resume_folder, set_resume_folder] = useState<string>('')
+    ;[keep_frames, set_keep_frames] = useState<boolean>(false)
+    ;[max_ram_per_thread_mb, set_max_ram_per_thread_mb] = useState<number>(0)
     ;[is_exporting, set_is_exporting] = useState<boolean>(false)
     ;[progress_pct, set_progress_pct] = useState<number>(0)
     ;[progress_status, set_progress_status] = useState<string>('')
     ;[export_error, set_export_error] = useState<string | null>(null)
     ;[export_success, set_export_success] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!is_open)
+      return
+    fetch('/api/export/folders')
+      .then((arg0_res) => arg0_res.json())
+      .then((arg0_data) => {
+        if (arg0_data && arg0_data.folders)
+          set_available_partial_folders(arg0_data.folders)
+      })
+      .catch(() => {})
+  }, [is_open])
 
   handle_zoom_change = useCallback((arg0_new_zoom: number) => {
     let clamped = Math.max(0.1, Math.min(4.0, Math.round(arg0_new_zoom * 100) / 100))
@@ -674,17 +700,17 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
     zoom,
   ])
 
-  select_all_cycling_layers = useCallback(() => {
-    set_selected_cycling_layers(all_cohort_keys)
+  select_all_layers = useCallback(() => {
+    set_selected_layers(all_cohort_keys)
   }, [all_cohort_keys])
 
-  clear_all_cycling_layers = useCallback(() => {
-    set_selected_cycling_layers([])
+  clear_all_layers = useCallback(() => {
+    set_selected_layers([])
   }, [])
 
-  toggle_cycling_layer = useCallback((arg0_id: string) => {
+  toggle_layer = useCallback((arg0_id: string) => {
     let id = arg0_id
-    set_selected_cycling_layers((arg0_prev) => {
+    set_selected_layers((arg0_prev) => {
       if (arg0_prev.includes(id))
         return arg0_prev.filter((arg0_x) => arg0_x !== id)
       return [...arg0_prev, id]
@@ -694,18 +720,67 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   toggle_folder_cohorts = useCallback((arg0_folder: IndicatorFolderItem) => {
     let folder = arg0_folder
     let folder_cohort_keys = folder.cohorts.map((arg0_c) => arg0_c.key)
-    set_selected_cycling_layers((arg0_prev) => {
+    set_selected_layers((arg0_prev) => {
       let all_selected = folder_cohort_keys.every((arg0_k) => arg0_prev.includes(arg0_k))
       if (all_selected) {
         return arg0_prev.filter((arg0_k) => !folder_cohort_keys.includes(arg0_k))
       }
-      let next = new Set(arg0_prev)
+      let next = [...arg0_prev]
       for (let i = 0; i < folder_cohort_keys.length; i++) {
-        next.add(folder_cohort_keys[i])
+        if (!next.includes(folder_cohort_keys[i]))
+          next.push(folder_cohort_keys[i])
       }
-      return Array.from(next)
+      return next
     })
   }, [])
+
+  move_layer_up = useCallback((arg0_index: number) => {
+    let idx = arg0_index
+    if (idx <= 0)
+      return
+    set_selected_layers((arg0_prev) => {
+      let next = [...arg0_prev]
+      let temp = next[idx]
+      next[idx] = next[idx - 1]
+      next[idx - 1] = temp
+      return next
+    })
+  }, [])
+
+  move_layer_down = useCallback((arg0_index: number) => {
+    let idx = arg0_index
+    set_selected_layers((arg0_prev) => {
+      if (idx >= arg0_prev.length - 1)
+        return arg0_prev
+      let next = [...arg0_prev]
+      let temp = next[idx]
+      next[idx] = next[idx + 1]
+      next[idx + 1] = temp
+      return next
+    })
+  }, [])
+
+  remove_layer = useCallback((arg0_index: number) => {
+    let idx = arg0_index
+    set_selected_layers((arg0_prev) => arg0_prev.filter((_arg0_x, arg0_i) => arg0_i !== idx))
+  }, [])
+
+  get_indicator_label = useCallback((arg0_key: string) => {
+    let key = arg0_key
+    for (let i = 0; i < indicator_folders.length; i++) {
+      let f = indicator_folders[i]
+      for (let x = 0; x < f.cohorts.length; x++) {
+        if (f.cohorts[x].key === key)
+          return `${f.name} - ${f.cohorts[x].label}`
+      }
+      if (f.id === key)
+        return f.name
+    }
+    let layer = available_layers[key]
+    if (layer)
+      return layer.name
+    return key
+  }, [available_layers, indicator_folders])
 
   toggle_expanded_folder = useCallback((arg0_id: string) => {
     let id = arg0_id
@@ -718,12 +793,9 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   handle_start_export = useCallback(async () => {
     let clean_filename = export_filename.replace(/\.(mp4|webm)$/i, '') + '.mp4'
 
-    let chosen_layers: string[] = []
-    if (export_mode === 'cycling') {
-      chosen_layers = selected_cycling_layers.length > 0 ? selected_cycling_layers : (active_layer_id ? [active_layer_id] : Object.keys(available_layers).slice(0, 1))
-    } else {
-      chosen_layers = [selected_stationary_layer || active_layer_id || Object.keys(available_layers)[0] || 'GDP_nominal_pc']
-    }
+    let chosen_layers: string[] = selected_layers.length > 0
+      ? selected_layers
+      : (active_layer_id ? [active_layer_id] : Object.keys(available_layers).slice(0, 1))
 
     let w = 1920
     let h = 1080
@@ -743,10 +815,13 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
         filename: clean_filename,
         fps,
         height: h,
+        keepFrames: keep_frames,
         keyframesOnly: keyframes_only,
         legendPosition: legend_position,
+        maxRamPerThreadMb: max_ram_per_thread_mb,
         mode: export_mode,
         projection,
+        resumeFolder: resume_folder || undefined,
         selectedLayers: chosen_layers,
         startYear: start_year,
         timestepStep: timestep_step,
@@ -762,14 +837,16 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
     export_filename,
     export_mode,
     fps,
+    keep_frames,
     keyframes_only,
     legend_position,
+    max_ram_per_thread_mb,
     on_close,
     projection,
     props,
     resolution,
-    selected_cycling_layers,
-    selected_stationary_layer,
+    resume_folder,
+    selected_layers,
     start_year,
     timestep_step,
     zoom,
@@ -818,18 +895,18 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => set_export_mode('stationary')}
-                className={`p-2.5 border text-left flex flex-col gap-1 cursor-pointer transition-colors ${export_mode === 'stationary'
+                onClick={() => set_export_mode('sequential')}
+                className={`p-2.5 border text-left flex flex-col gap-1 cursor-pointer transition-colors ${export_mode === 'sequential'
                     ? 'bg-primary/15 border-primary text-foreground'
                     : 'bg-muted/30 border-border text-muted-foreground hover:text-foreground'
                   }`}
               >
                 <div className="flex items-center gap-1.5 font-bold text-xs text-foreground">
-                  <Icon name="straighten" />
-                  <span>Stationary Mode</span>
+                  <Icon name="view_timeline" />
+                  <span>Sequential Mode</span>
                 </div>
                 <p className="text-[11px] leading-tight text-muted-foreground">
-                  Displays the selected indicator across the entire timeline sequence.
+                  Renders each selected indicator across its individual time domain from start to finish, then advances to the next indicator.
                 </p>
               </button>
 
@@ -852,157 +929,189 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
             </div>
           </div>
 
-          {/* Stationary Indicator Selector */}
-          {export_mode === 'stationary' && (
-            <div className="space-y-1.5 border border-border p-2.5 bg-muted/20">
+          {/* Indicators & Cohorts Selector */}
+          <div className="space-y-2 border border-border p-2.5 bg-muted/20">
+            <div className="flex items-center justify-between">
               <Label className="text-xs font-semibold text-foreground">
-                Selected Indicator to Export
+                Active Indicators & Cohorts ({selected_layers.length} selected)
               </Label>
-              <div className="grid grid-cols-2 gap-1 max-h-36 overflow-y-auto pr-1">
-                {all_layer_keys.map((arg0_key) => {
-                  let layer = available_layers[arg0_key]
-                  let is_selected = selected_stationary_layer === arg0_key
+              <div className="flex items-center gap-1.5 text-[10px] font-mono">
+                <button
+                  type="button"
+                  onClick={select_all_layers}
+                  className="text-primary hover:underline cursor-pointer"
+                >
+                  Select All
+                </button>
+                <span className="text-muted-foreground/40">•</span>
+                <button
+                  type="button"
+                  onClick={clear_all_layers}
+                  className="text-muted-foreground hover:underline cursor-pointer"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-1 max-h-56 overflow-y-auto pr-1 border border-border/50 bg-background/50 p-1.5">
+              {indicator_folders.map((arg0_folder) => {
+                let f_keys = arg0_folder.cohorts.map((arg0_c) => arg0_c.key)
+                let selected_count = f_keys.filter((arg0_k) => selected_layers.includes(arg0_k)).length
+                let is_all_selected = selected_count === f_keys.length && f_keys.length > 0
+                let is_some_selected = selected_count > 0 && selected_count < f_keys.length
+                let is_expanded = Boolean(expanded_folders[arg0_folder.id])
+
+                if (!arg0_folder.isFolder) {
+                  let is_checked = selected_layers.includes(arg0_folder.cohorts[0]?.key || arg0_folder.id)
                   return (
-                    <button
-                      key={arg0_key}
-                      type="button"
-                      onClick={() => set_selected_stationary_layer(arg0_key)}
-                      className={`px-2 py-1 flex items-center justify-between border text-left text-[11px] cursor-pointer transition-colors ${is_selected
+                    <div
+                      key={arg0_folder.id}
+                      onClick={() => toggle_layer(arg0_folder.cohorts[0]?.key || arg0_folder.id)}
+                      className={`px-2 py-1 flex items-center justify-between border text-[11px] cursor-pointer transition-colors ${is_checked
                           ? 'bg-primary/20 border-primary text-foreground font-medium'
-                          : 'bg-card border-border text-muted-foreground hover:text-foreground'
+                          : 'bg-card border-border/60 text-muted-foreground hover:text-foreground'
                         }`}
                     >
-                      <span className="truncate pr-1">{layer?.name || arg0_key}</span>
-                      {is_selected && <Icon name="check" className="text-xs text-primary shrink-0" />}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Cycling Indicators Selector */}
-          {export_mode === 'cycling' && (
-            <div className="space-y-1.5 border border-border p-2.5 bg-muted/20">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold text-foreground">
-                  Active Indicators & Cohorts to Cycle ({selected_cycling_layers.length} cohorts selected)
-                </Label>
-                <div className="flex items-center gap-1.5 text-[10px] font-mono">
-                  <button
-                    type="button"
-                    onClick={select_all_cycling_layers}
-                    className="text-primary hover:underline cursor-pointer"
-                  >
-                    Select All
-                  </button>
-                  <span className="text-muted-foreground/40">•</span>
-                  <button
-                    type="button"
-                    onClick={clear_all_cycling_layers}
-                    className="text-muted-foreground hover:underline cursor-pointer"
-                  >
-                    Clear
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-1 max-h-56 overflow-y-auto pr-1 border border-border/50 bg-background/50 p-1.5">
-                {indicator_folders.map((arg0_folder) => {
-                  let f_keys = arg0_folder.cohorts.map((arg0_c) => arg0_c.key)
-                  let selected_count = f_keys.filter((arg0_k) => selected_cycling_layers.includes(arg0_k)).length
-                  let is_all_selected = selected_count === f_keys.length && f_keys.length > 0
-                  let is_some_selected = selected_count > 0 && selected_count < f_keys.length
-                  let is_expanded = Boolean(expanded_folders[arg0_folder.id])
-
-                  if (!arg0_folder.isFolder) {
-                    let is_checked = selected_cycling_layers.includes(arg0_folder.cohorts[0]?.key || arg0_folder.id)
-                    return (
-                      <div
-                        key={arg0_folder.id}
-                        onClick={() => toggle_cycling_layer(arg0_folder.cohorts[0]?.key || arg0_folder.id)}
-                        className={`px-2 py-1 flex items-center justify-between border text-[11px] cursor-pointer transition-colors ${is_checked
-                            ? 'bg-primary/20 border-primary text-foreground font-medium'
-                            : 'bg-card border-border/60 text-muted-foreground hover:text-foreground'
-                          }`}
-                      >
-                        <div className="flex items-center gap-1.5 truncate">
-                          <Icon name="analytics" className="text-xs text-muted-foreground shrink-0" />
-                          <span className="truncate">{arg0_folder.name}</span>
-                        </div>
-                        {is_checked && <Icon name="check" className="text-xs text-primary shrink-0" />}
+                      <div className="flex items-center gap-1.5 truncate">
+                        <Icon name="analytics" className="text-xs text-muted-foreground shrink-0" />
+                        <span className="truncate">{arg0_folder.name}</span>
                       </div>
-                    )
-                  }
-
-                  return (
-                    <div key={arg0_folder.id} className="border border-border/70 bg-card/60 overflow-hidden">
-                      <div
-                        className={`px-2 py-1 flex items-center justify-between transition-colors ${is_all_selected ? 'bg-primary/15' : is_some_selected ? 'bg-primary/5' : 'bg-muted/30'
-                          }`}
-                      >
-                        <div
-                          onClick={() => toggle_folder_cohorts(arg0_folder)}
-                          className="flex items-center gap-1.5 min-w-0 flex-1 cursor-pointer select-none"
-                        >
-                          <button
-                            type="button"
-                            className={`w-3.5 h-3.5 border flex items-center justify-center shrink-0 text-[10px] ${is_all_selected
-                                ? 'border-primary bg-primary text-primary-foreground'
-                                : is_some_selected
-                                  ? 'border-primary bg-primary/40 text-primary-foreground'
-                                  : 'border-muted-foreground/60 bg-background'
-                              }`}
-                          >
-                            {is_all_selected && <Icon name="check" className="text-[10px]" />}
-                            {is_some_selected && <span className="w-1.5 h-1.5 bg-primary" />}
-                          </button>
-                          <Icon name={is_expanded ? 'folder_open' : 'folder'} className="text-primary text-xs shrink-0" />
-                          <span className="text-xs font-bold text-foreground truncate">{arg0_folder.name}</span>
-                          <span className="text-[10px] text-muted-foreground font-mono ml-1">
-                            ({selected_count}/{f_keys.length} cohorts)
-                          </span>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={(arg0_e) => {
-                            arg0_e.stopPropagation()
-                            toggle_expanded_folder(arg0_folder.id)
-                          }}
-                          className="p-1 hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer shrink-0"
-                        >
-                          <Icon name={is_expanded ? 'expand_less' : 'expand_more'} className="text-xs" />
-                        </button>
-                      </div>
-
-                      {is_expanded && (
-                        <div className="p-1.5 bg-background/60 border-t border-border/40 grid grid-cols-2 gap-1 max-h-36 overflow-y-auto">
-                          {arg0_folder.cohorts.map((arg0_cohort) => {
-                            let is_cohort_checked = selected_cycling_layers.includes(arg0_cohort.key)
-                            return (
-                              <button
-                                key={arg0_cohort.key}
-                                type="button"
-                                onClick={() => toggle_cycling_layer(arg0_cohort.key)}
-                                className={`px-1.5 py-0.5 flex items-center justify-between border text-left text-[10px] cursor-pointer transition-colors ${is_cohort_checked
-                                    ? 'bg-primary/20 border-primary text-foreground font-medium'
-                                    : 'bg-card border-border/50 text-muted-foreground hover:text-foreground'
-                                  }`}
-                              >
-                                <span className="truncate pr-1">{arg0_cohort.label}</span>
-                                {is_cohort_checked && <Icon name="check" className="text-[10px] text-primary shrink-0" />}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      )}
+                      {is_checked && <Icon name="check" className="text-xs text-primary shrink-0" />}
                     </div>
                   )
-                })}
-              </div>
+                }
+
+                return (
+                  <div key={arg0_folder.id} className="border border-border/70 bg-card/60 overflow-hidden">
+                    <div
+                      className={`px-2 py-1 flex items-center justify-between transition-colors ${is_all_selected ? 'bg-primary/15' : is_some_selected ? 'bg-primary/5' : 'bg-muted/30'
+                        }`}
+                    >
+                      <div
+                        onClick={() => toggle_folder_cohorts(arg0_folder)}
+                        className="flex items-center gap-1.5 min-w-0 flex-1 cursor-pointer select-none"
+                      >
+                        <button
+                          type="button"
+                          className={`w-3.5 h-3.5 border flex items-center justify-center shrink-0 text-[10px] ${is_all_selected
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : is_some_selected
+                                ? 'border-primary bg-primary/40 text-primary-foreground'
+                                : 'border-muted-foreground/60 bg-background'
+                            }`}
+                        >
+                          {is_all_selected && <Icon name="check" className="text-[10px]" />}
+                          {is_some_selected && <span className="w-1.5 h-1.5 bg-primary" />}
+                        </button>
+                        <Icon name={is_expanded ? 'folder_open' : 'folder'} className="text-primary text-xs shrink-0" />
+                        <span className="text-xs font-bold text-foreground truncate">{arg0_folder.name}</span>
+                        <span className="text-[10px] text-muted-foreground font-mono ml-1">
+                          ({selected_count}/{f_keys.length} cohorts)
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={(arg0_e) => {
+                          arg0_e.stopPropagation()
+                          toggle_expanded_folder(arg0_folder.id)
+                        }}
+                        className="p-1 hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer shrink-0"
+                      >
+                        <Icon name={is_expanded ? 'expand_less' : 'expand_more'} className="text-xs" />
+                      </button>
+                    </div>
+
+                    {is_expanded && (
+                      <div className="p-1.5 bg-background/60 border-t border-border/40 grid grid-cols-2 gap-1 max-h-36 overflow-y-auto">
+                        {arg0_folder.cohorts.map((arg0_cohort) => {
+                          let is_cohort_checked = selected_layers.includes(arg0_cohort.key)
+                          return (
+                            <button
+                              key={arg0_cohort.key}
+                              type="button"
+                              onClick={() => toggle_layer(arg0_cohort.key)}
+                              className={`px-1.5 py-0.5 flex items-center justify-between border text-left text-[10px] cursor-pointer transition-colors ${is_cohort_checked
+                                  ? 'bg-primary/20 border-primary text-foreground font-medium'
+                                  : 'bg-card border-border/50 text-muted-foreground hover:text-foreground'
+                                }`}
+                            >
+                              <span className="truncate pr-1">{arg0_cohort.label}</span>
+                              {is_cohort_checked && <Icon name="check" className="text-[10px] text-primary shrink-0" />}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
-          )}
+
+            {/* Active Indicator Order Queue with Reordering Arrows (Requirement 6) */}
+            {selected_layers.length > 0 && (
+              <div className="space-y-1.5 pt-2 border-t border-border/60">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-foreground flex items-center gap-1">
+                    <Icon name="format_list_numbered" className="text-primary text-xs" />
+                    <span>Execution & Cycle Sequence ({selected_layers.length} items)</span>
+                  </span>
+                  <span className="text-[10px] text-muted-foreground font-mono">
+                    Use arrows to reorder sequence
+                  </span>
+                </div>
+
+                <div className="space-y-1 max-h-44 overflow-y-auto pr-1">
+                  {selected_layers.map((arg0_layer_key, arg0_idx) => {
+                    let label = get_indicator_label(arg0_layer_key)
+                    return (
+                      <div
+                        key={`${arg0_layer_key}_${arg0_idx}`}
+                        className="px-2 py-1 flex items-center justify-between border border-border bg-card text-[11px]"
+                      >
+                        <div className="flex items-center gap-2 truncate flex-1 min-w-0">
+                          <span className="font-mono text-primary font-bold text-[10px] w-5 shrink-0">
+                            #{arg0_idx + 1}
+                          </span>
+                          <span className="truncate text-foreground font-medium">{label}</span>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0 ml-2">
+                          <button
+                            type="button"
+                            onClick={() => move_layer_up(arg0_idx)}
+                            disabled={arg0_idx === 0}
+                            title="Move earlier in render sequence"
+                            className="w-5 h-5 flex items-center justify-center border border-border bg-background hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer text-muted-foreground hover:text-foreground"
+                          >
+                            <Icon name="arrow_upward" className="text-xs" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => move_layer_down(arg0_idx)}
+                            disabled={arg0_idx === selected_layers.length - 1}
+                            title="Move later in render sequence"
+                            className="w-5 h-5 flex items-center justify-center border border-border bg-background hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer text-muted-foreground hover:text-foreground"
+                          >
+                            <Icon name="arrow_downward" className="text-xs" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => remove_layer(arg0_idx)}
+                            title="Remove from selection"
+                            className="w-5 h-5 flex items-center justify-center border border-destructive/40 text-destructive hover:bg-destructive/10 cursor-pointer ml-0.5"
+                          >
+                            <Icon name="close" className="text-xs" />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* 16:9 Video Framing Preview & Zoom Adjustment */}
           <div className="space-y-2 border border-border p-3 bg-muted/20">
@@ -1308,15 +1417,124 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
             </div>
           </div>
 
-          {/* Filename */}
-          <div className="space-y-1">
-            <span className="text-[11px] text-muted-foreground">Export Filename</span>
-            <Input
-              type="text"
-              value={export_filename}
-              onChange={(arg0_e) => set_export_filename(arg0_e.target.value)}
-              className="h-7 text-xs bg-background font-mono"
-            />
+          {/* Max RAM Per Worker Thread Control */}
+          <div className="space-y-1.5 border border-border p-2.5 bg-muted/20">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <Icon name="speed" className="text-primary text-xs" />
+                <span>Max RAM Per Worker Thread</span>
+              </Label>
+              <span className="text-[10px] text-muted-foreground font-mono">
+                {max_ram_per_thread_mb === 0 ? 'No Cap (Default)' : `${max_ram_per_thread_mb >= 1024 ? `${max_ram_per_thread_mb / 1024} GB` : `${max_ram_per_thread_mb} MB`} per thread`}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-4 gap-1.5">
+              {[
+                { label: 'No Cap', mb: 0 },
+                { label: '2 GB', mb: 2048 },
+                { label: '4 GB', mb: 4096 },
+                { label: '8 GB', mb: 8192 },
+              ].map((arg0_ram) => (
+                <button
+                  key={arg0_ram.mb}
+                  type="button"
+                  onClick={() => set_max_ram_per_thread_mb(arg0_ram.mb)}
+                  className={`h-7 text-xs border cursor-pointer transition-colors ${max_ram_per_thread_mb === arg0_ram.mb
+                      ? 'bg-primary text-primary-foreground font-bold border-primary'
+                      : 'bg-card border-border text-muted-foreground hover:text-foreground'
+                    }`}
+                >
+                  {arg0_ram.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[10px] text-muted-foreground">
+                Sets V8 max heap space to prevent memory leaks during long multi-variable renders.
+              </span>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-muted-foreground">Custom MB:</span>
+                <Input
+                  type="number"
+                  min={0}
+                  step={512}
+                  value={max_ram_per_thread_mb || ''}
+                  placeholder="0 (uncapped)"
+                  onChange={(arg0_e) => set_max_ram_per_thread_mb(Math.max(0, parseInt(arg0_e.target.value) || 0))}
+                  className="h-6 w-24 text-xs bg-background font-mono text-center"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Resume Partial Render (if available) */}
+          {available_partial_folders.length > 0 && (
+            <div className="space-y-1.5 border border-amber-500/30 bg-amber-500/10 p-2.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
+                  <Icon name="history" className="text-amber-400 text-xs" />
+                  <span>Resume from Partial Render</span>
+                </Label>
+                <span className="text-[10px] text-amber-200/80 font-mono">
+                  {available_partial_folders.length} partial render{available_partial_folders.length > 1 ? 's' : ''} detected
+                </span>
+              </div>
+              <select
+                value={resume_folder}
+                onChange={(arg0_e) => {
+                  let folder_id = arg0_e.target.value
+                  set_resume_folder(folder_id)
+                  if (folder_id) {
+                    set_export_filename(`${folder_id}.mp4`)
+                    let matched = available_partial_folders.find((arg0_f) => arg0_f.folder === folder_id)
+                    if (matched && matched.manifest && matched.manifest.mode) {
+                      set_export_mode(matched.manifest.mode)
+                    }
+                  }
+                }}
+                className="w-full h-7 text-xs bg-background border border-border px-2 text-foreground focus:outline-hidden"
+              >
+                <option value="">-- None (Start fresh render) --</option>
+                {available_partial_folders.map((arg0_f) => (
+                  <option key={arg0_f.folder} value={arg0_f.folder}>
+                    {arg0_f.folder} ({arg0_f.completedFrames}/{arg0_f.totalFrames || '?'} frames rendered)
+                  </option>
+                ))}
+              </select>
+              <span className="text-[10px] text-amber-200/80 block">
+                Selecting a folder skips all existing complete frames and resumes remaining indicators.
+              </span>
+            </div>
+          )}
+
+          {/* Keep Frames Option & Filename */}
+          <div className="space-y-2 border border-border p-2.5 bg-muted/20">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={keep_frames}
+                onChange={(arg0_e) => set_keep_frames(arg0_e.target.checked)}
+                className="rounded-none border-border accent-primary cursor-pointer"
+              />
+              <div className="flex flex-col">
+                <span className="text-xs font-medium text-foreground">Keep individual PNG frames after render</span>
+                <span className="text-[10px] text-muted-foreground">
+                  Preserves exported frames in exports/frames/ instead of deleting them post-stitching.
+                </span>
+              </div>
+            </label>
+
+            <div className="space-y-1 pt-1 border-t border-border/50">
+              <span className="text-[11px] text-muted-foreground">Export Filename</span>
+              <Input
+                type="text"
+                value={export_filename}
+                onChange={(arg0_e) => set_export_filename(arg0_e.target.value)}
+                className="h-7 text-xs bg-background font-mono"
+              />
+            </div>
           </div>
 
           {/* Progress / Status Feedback */}

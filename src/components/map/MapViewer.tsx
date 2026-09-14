@@ -741,6 +741,11 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
         layers={layers}
         onClick={handle_click}
         onHover={handle_hover}
+        onAfterRender={() => {
+          if (typeof window !== 'undefined') {
+            ;(window as any).__deckRendered = true
+          }
+        }}
         getCursor={({ isHovering }) => ((isHovering) ? 'crosshair' : 'grab')}
       />
 

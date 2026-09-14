@@ -31,11 +31,14 @@ export interface TimelapseRenderOptions {
   endYear: number
   fps?: number
   height?: number
+  keepFrames?: boolean
   keyframesOnly?: boolean
   legendPosition?: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'
-  mode: 'stationary' | 'cycling'
+  maxRamPerThreadMb?: number
+  mode: 'sequential' | 'cycling' | 'stationary'
   outputFilename?: string
   projection?: string
+  resumeFolder?: string
   selectedLayers?: string[]
   startYear: number
   timestepStep?: number
@@ -379,6 +382,7 @@ export const startTimelapseRenderJob = async function (
   let clean_filename: string
   let completed_frames = 0
   let concurrency = options.concurrency ? Math.max(1, Math.min(16, options.concurrency)) : 4
+  let effective_mode: 'sequential' | 'cycling' = options.mode === 'cycling' ? 'cycling' : 'sequential'
   let end_year = options.endYear
   let executable_path: string
   let export_h = options.height || 1080
@@ -386,17 +390,23 @@ export const startTimelapseRenderJob = async function (
   let export_zoom: number
   let ffmpeg_bin: string
   let fps = options.fps || 30
+  let frames_dir: string
+  let frames_folder_name: string
   let job_id = `timelapse_${Date.now()}`
   let job_status: TimelapseJobStatus
+  let keep_frames = Boolean(options.keepFrames)
   let keyframes_only = options.keyframesOnly !== false
+  let launch_args: string[]
   let legend_position = options.legendPosition || 'top-left'
+  let manifest_path: string
+  let max_ram_mb = options.maxRamPerThreadMb && options.maxRamPerThreadMb > 0 ? options.maxRamPerThreadMb : 0
   let output_mp4_path: string
   let projection = options.projection || 'EqualEarth'
   let render_targets: CyclingRenderItem[] = []
   let start_year = options.startYear
   let stitched_dir: string
   let target_queue: number[] = []
-  let temp_frames_dir: string
+  let target_years: number[][] = []
   let total_steps = 0
   let worker_promises: Promise<void>[] = []
   let years_list: number[] = []
@@ -413,8 +423,10 @@ export const startTimelapseRenderJob = async function (
   base_name = (options.outputFilename || `dataview_timelapse_${Date.now()}`).replace(/\.(mp4|webm)$/i, '')
   clean_filename = `${base_name}.mp4`
   output_mp4_path = path.join(exports_dir, clean_filename)
-  temp_frames_dir = path.join(exports_dir, `temp_${job_id}`)
-  stitched_dir = path.join(temp_frames_dir, 'stitched')
+
+  frames_folder_name = options.resumeFolder || base_name
+  frames_dir = path.join(exports_dir, 'frames', frames_folder_name)
+  stitched_dir = path.join(frames_dir, 'stitched')
 
   if (options.cyclingTargets && options.cyclingTargets.length > 0) {
     render_targets = options.cyclingTargets
@@ -424,13 +436,9 @@ export const startTimelapseRenderJob = async function (
     render_targets = [{ displayName: 'GDP per capita (Nominal)', folderName: 'GDP per capita (Nominal)', layerId: 'GDP_nominal_pc', selectors: {} }]
   }
 
-  if (options.mode === 'stationary') {
-    render_targets = [render_targets[0]]
-  }
-
-  //Calculate sequence of years
-  if (keyframes_only) {
-    let keyframe_set = new Set<number>()
+  //Calculate sequence of years per target based on mode
+  if (effective_mode === 'sequential') {
+    //Sequential mode: each indicator is rendered over its individual time domain
     for (let i = 0; i < render_targets.length; i++) {
       let target = render_targets[i]
       let layer = registry_layers[target.layerId]
@@ -438,31 +446,71 @@ export const startTimelapseRenderJob = async function (
         let parent_id = target.layerId.split('.')[0]
         layer = registry_layers[parent_id]
       }
-      if (layer?.available_years) {
+
+      let t_years: number[] = []
+      if (keyframes_only && layer?.available_years && layer.available_years.length > 0) {
         for (let x = 0; x < layer.available_years.length; x++) {
           let yr = layer.available_years[x]
           if (yr >= start_year && yr <= end_year) {
-            keyframe_set.add(yr)
+            t_years.push(yr)
+          }
+        }
+        t_years.sort((arg0_a, arg0_b) => arg0_a - arg0_b)
+      }
+
+      if (t_years.length === 0) {
+        let step = Math.max(1, options.timestepStep || 1)
+        for (let yr = start_year; yr <= end_year; yr += step) {
+          t_years.push(yr)
+        }
+      }
+      if (t_years.length === 0) {
+        t_years = [start_year]
+      }
+
+      target_years.push(t_years)
+      total_steps += t_years.length
+    }
+  } else {
+    //Cycling mode: global timeline union across all active targets
+    if (keyframes_only) {
+      let keyframe_set = new Set<number>()
+      for (let i = 0; i < render_targets.length; i++) {
+        let target = render_targets[i]
+        let layer = registry_layers[target.layerId]
+        if (!layer && target.layerId.includes('.')) {
+          let parent_id = target.layerId.split('.')[0]
+          layer = registry_layers[parent_id]
+        }
+        if (layer?.available_years) {
+          for (let x = 0; x < layer.available_years.length; x++) {
+            let yr = layer.available_years[x]
+            if (yr >= start_year && yr <= end_year) {
+              keyframe_set.add(yr)
+            }
           }
         }
       }
+      if (keyframe_set.size > 0) {
+        years_list = Array.from(keyframe_set).sort((arg0_a, arg0_b) => arg0_a - arg0_b)
+      }
     }
-    if (keyframe_set.size > 0) {
-      years_list = Array.from(keyframe_set).sort((arg0_a, arg0_b) => arg0_a - arg0_b)
-    }
-  }
 
-  if (years_list.length === 0) {
-    let step = Math.max(1, options.timestepStep || 1)
-    for (let yr = start_year; yr <= end_year; yr += step) {
-      years_list.push(yr)
+    if (years_list.length === 0) {
+      let step = Math.max(1, options.timestepStep || 1)
+      for (let yr = start_year; yr <= end_year; yr += step) {
+        years_list.push(yr)
+      }
+    }
+    if (years_list.length === 0) {
+      years_list = [start_year]
+    }
+
+    total_steps = render_targets.length*years_list.length
+    for (let i = 0; i < render_targets.length; i++) {
+      target_years.push(years_list)
     }
   }
-  if (years_list.length === 0) {
-    years_list = [start_year]
-  }
-
-  total_steps = render_targets.length*years_list.length
 
   //Determine export zoom if not explicitly provided
   if (options.zoom !== undefined && options.zoom !== null) {
@@ -498,10 +546,34 @@ export const startTimelapseRenderJob = async function (
   //Run background rendering pipeline asynchronously
   ;(async () => {
     try {
-      if (!fs.existsSync(temp_frames_dir))
-        fs.mkdirSync(temp_frames_dir, { recursive: true })
-      if (!fs.existsSync(stitched_dir))
-        fs.mkdirSync(stitched_dir, { recursive: true })
+      if (!fs.existsSync(frames_dir))
+        fs.mkdirSync(frames_dir, { recursive: true })
+
+      //Write manifest for resumability and inspection
+      manifest_path = path.join(frames_dir, 'manifest.json')
+      let manifest_data = {
+        created_at: new Date().toISOString(),
+        end_year,
+        fps,
+        height: export_h,
+        keep_frames: keep_frames,
+        mode: effective_mode,
+        output_filename: clean_filename,
+        projection,
+        start_year,
+        targets: render_targets.map((arg0_t, arg0_idx) => ({
+          displayName: arg0_t.displayName,
+          folderName: arg0_t.folderName,
+          index: arg0_idx,
+          layerId: arg0_t.layerId,
+          selectors: arg0_t.selectors || {},
+          years: target_years[arg0_idx],
+        })),
+        total_frames: total_steps,
+        width: export_w,
+        zoom: export_zoom,
+      }
+      fs.writeFileSync(manifest_path, JSON.stringify(manifest_data, null, 2))
 
       executable_path = findBrowserExecutable()
 
@@ -513,69 +585,103 @@ export const startTimelapseRenderJob = async function (
       let pool_size = Math.min(concurrency, render_targets.length)
       let target_url = `${client_url}/?export_mode=1&projection=${encodeURIComponent(projection)}&zoom=${export_zoom}&legend_position=${encodeURIComponent(legend_position)}`
 
-      /**
-       * Individual worker routine that claims indicators from the queue and renders all timeline frames.
-       */
-      let spawnWorker = async function () {
-        let browser_instance: Browser | null = null
+      launch_args = [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--use-gl=angle',
+        '--enable-webgl',
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding',
+        '--hide-scrollbars',
+        '--mute-audio',
+        `--window-size=${export_w},${export_h}`,
+      ]
+      if (max_ram_mb > 0) {
+        launch_args.push(`--js-flags=--max-old-space-size=${max_ram_mb}`)
+      }
 
-        try {
-          browser_instance = await puppeteer.launch({
-            args: [
-              '--no-sandbox',
-              '--disable-setuid-sandbox',
-              '--disable-dev-shm-usage',
-              '--use-gl=angle',
-              '--enable-webgl',
-              '--disable-background-timer-throttling',
-              '--disable-backgrounding-occluded-windows',
-              '--disable-renderer-backgrounding',
-              '--hide-scrollbars',
-              '--mute-audio',
-              `--window-size=${export_w},${export_h}`,
-            ],
-            defaultViewport: {
+      /**
+       * Individual worker routine that claims targets from the queue, launches a clean browser instance
+       * for each target, renders all keyframes, and closes the browser upon completion to reclaim 100% of memory.
+       *
+       * @param {number} arg0_worker_id
+       */
+      let spawnWorker = async function (arg0_worker_id: number) {
+        //Convert from parameters
+        let worker_id = arg0_worker_id
+
+        //Function body
+        while (target_queue.length > 0 && !cancellation_tokens.has(job_id)) {
+          let t_idx = target_queue.shift()
+          if (t_idx === undefined)
+            break
+
+          let browser_instance: Browser | null = null
+          let target = render_targets[t_idx]
+          let sanitized_layer = target.layerId.replace(/[^a-zA-Z0-9_-]/g, '_')
+          let target_dir = path.join(frames_dir, `target_${t_idx}_${sanitized_layer}`)
+          let t_years = target_years[t_idx] || []
+
+          if (!fs.existsSync(target_dir))
+            fs.mkdirSync(target_dir, { recursive: true })
+
+          try {
+            browser_instance = await puppeteer.launch({
+              args: launch_args,
+              defaultViewport: {
+                deviceScaleFactor: 1,
+                height: export_h,
+                width: export_w,
+              },
+              executablePath: executable_path,
+              headless: true,
+            })
+            active_browsers.push(browser_instance)
+
+            let page = await browser_instance.newPage()
+            await page.setViewport({
               deviceScaleFactor: 1,
               height: export_h,
               width: export_w,
-            },
-            executablePath: executable_path,
-            headless: true,
-          })
-          active_browsers.push(browser_instance)
+            })
 
-          let page = await browser_instance.newPage()
-          await page.setViewport({
-            deviceScaleFactor: 1,
-            height: export_h,
-            width: export_w,
-          })
+            page.on('console', (arg0_msg) => {
+              let text = arg0_msg.text()
+              if (text.includes('error') || text.includes('Error') || text.includes('WebGL')) {
+                console.warn(`[VideoRenderer Worker ${worker_id}]`, text)
+              }
+            })
+            page.on('pageerror', (arg0_err) => {
+              console.error(`[VideoRenderer Worker ${worker_id} PageError]`, arg0_err)
+            })
 
-          await page.goto(target_url, {
-            timeout: 60000,
-            waitUntil: 'domcontentloaded',
-          })
+            await page.goto(target_url, {
+              timeout: 60000,
+              waitUntil: 'domcontentloaded',
+            })
 
-          await page.waitForFunction(
-            () => Boolean(document.querySelector('#deckgl-overlay')) && typeof (window as any).__renderKeyframe === 'function' && (window as any).__layersLoaded === true,
-            { timeout: 30000 }
-          )
+            await page.waitForFunction(
+              () => Boolean(document.querySelector('#deckgl-overlay')) && typeof (window as any).__renderKeyframe === 'function' && (window as any).__layersLoaded === true,
+              { timeout: 30000 }
+            )
 
-          for (let i = 0; i < render_targets.length; i++) {
-            if (target_queue.length === 0 || cancellation_tokens.has(job_id))
-              break
-
-            let t_idx = target_queue.shift()!
-            let target = render_targets[t_idx]
-            let target_dir = path.join(temp_frames_dir, `target_${t_idx}`)
-            if (!fs.existsSync(target_dir))
-              fs.mkdirSync(target_dir, { recursive: true })
-
-            for (let x = 0; x < years_list.length; x++) {
+            for (let x = 0; x < t_years.length; x++) {
               if (cancellation_tokens.has(job_id))
                 break
 
-              let yr = years_list[x]
+              let yr = t_years[x]
+              let frame_filename = `frame_${String(x).padStart(6, '0')}_${yr}.png`
+              let frame_out_path = path.join(target_dir, frame_filename)
+
+              //Resume optimization: if frame already rendered and valid, skip
+              if (fs.existsSync(frame_out_path) && fs.statSync(frame_out_path).size > 1000) {
+                completed_frames++
+                job_status.currentFrame = completed_frames
+                job_status.progressPct = Math.round((completed_frames / total_steps)*85)
+                continue
+              }
 
               //Instruct headless client to render keyframe
               await page.evaluate(
@@ -593,10 +699,7 @@ export const startTimelapseRenderJob = async function (
               await page.evaluate(() => {
                 return new Promise((arg0_res) => requestAnimationFrame(() => requestAnimationFrame(arg0_res)))
               })
-              await new Promise((arg0_res) => setTimeout(arg0_res, 60))
-
-              let frame_filename = `frame_${String(x).padStart(6, '0')}.png`
-              let frame_out_path = path.join(target_dir, frame_filename)
+              await new Promise((arg0_res) => setTimeout(arg0_res, 30))
 
               //Capture full-screen native GPU screenshot
               await page.screenshot({
@@ -609,51 +712,63 @@ export const startTimelapseRenderJob = async function (
               job_status.progressPct = Math.round((completed_frames / total_steps)*85)
               job_status.message = `Rendering frame ${completed_frames}/${total_steps}: ${target.displayName} (${yr} AD)...`
             }
-          }
-        } finally {
-          if (browser_instance) {
-            await browser_instance.close().catch(() => {})
-            let b_idx = active_browsers.indexOf(browser_instance)
-            if (b_idx !== -1)
-              active_browsers.splice(b_idx, 1)
+          } finally {
+            if (browser_instance) {
+              await browser_instance.close().catch(() => {})
+              let b_idx = active_browsers.indexOf(browser_instance)
+              if (b_idx !== -1)
+                active_browsers.splice(b_idx, 1)
+            }
           }
         }
       }
 
       for (let i = 0; i < pool_size; i++) {
-        worker_promises.push(spawnWorker())
+        worker_promises.push(spawnWorker(i))
       }
 
       await Promise.all(worker_promises)
       active_browser_pools.delete(job_id)
 
-      if (cancellation_tokens.has(job_id)) {
-        if (fs.existsSync(temp_frames_dir))
-          fs.rmSync(temp_frames_dir, { force: true, recursive: true })
+      if (cancellation_tokens.has(job_id))
         return
-      }
 
       //Stitch rendered frames together into deterministic sequence for ffmpeg
       job_status.message = 'Stitching rendered frames together...'
+      if (!fs.existsSync(stitched_dir))
+        fs.mkdirSync(stitched_dir, { recursive: true })
+
       let frame_counter = 0
 
-      if (options.mode === 'cycling') {
-        for (let i = 0; i < years_list.length; i++) {
-          for (let x = 0; x < render_targets.length; x++) {
-            let src_file = path.join(temp_frames_dir, `target_${x}`, `frame_${String(i).padStart(6, '0')}.png`)
+      if (effective_mode === 'cycling') {
+        for (let yr_idx = 0; yr_idx < years_list.length; yr_idx++) {
+          let yr = years_list[yr_idx]
+          for (let t_idx = 0; t_idx < render_targets.length; t_idx++) {
+            let target = render_targets[t_idx]
+            let sanitized_layer = target.layerId.replace(/[^a-zA-Z0-9_-]/g, '_')
+            let target_dir = path.join(frames_dir, `target_${t_idx}_${sanitized_layer}`)
+            let src_file = path.join(target_dir, `frame_${String(yr_idx).padStart(6, '0')}_${yr}.png`)
             let dst_file = path.join(stitched_dir, `frame_${String(frame_counter).padStart(6, '0')}.png`)
             if (fs.existsSync(src_file))
-              fs.renameSync(src_file, dst_file)
+              fs.copyFileSync(src_file, dst_file)
             frame_counter++
           }
         }
       } else {
-        for (let i = 0; i < years_list.length; i++) {
-          let src_file = path.join(temp_frames_dir, 'target_0', `frame_${String(i).padStart(6, '0')}.png`)
-          let dst_file = path.join(stitched_dir, `frame_${String(frame_counter).padStart(6, '0')}.png`)
-          if (fs.existsSync(src_file))
-            fs.renameSync(src_file, dst_file)
-          frame_counter++
+        //Sequential mode: concatenate all frames of indicator 1, then indicator 2, etc.
+        for (let t_idx = 0; t_idx < render_targets.length; t_idx++) {
+          let target = render_targets[t_idx]
+          let sanitized_layer = target.layerId.replace(/[^a-zA-Z0-9_-]/g, '_')
+          let target_dir = path.join(frames_dir, `target_${t_idx}_${sanitized_layer}`)
+          let t_years = target_years[t_idx] || []
+          for (let x = 0; x < t_years.length; x++) {
+            let yr = t_years[x]
+            let src_file = path.join(target_dir, `frame_${String(x).padStart(6, '0')}_${yr}.png`)
+            let dst_file = path.join(stitched_dir, `frame_${String(frame_counter).padStart(6, '0')}.png`)
+            if (fs.existsSync(src_file))
+              fs.copyFileSync(src_file, dst_file)
+            frame_counter++
+          }
         }
       }
 
@@ -680,9 +795,18 @@ export const startTimelapseRenderJob = async function (
         })
       })
 
-      //Clean up temporary frame files
-      if (fs.existsSync(temp_frames_dir))
-        fs.rmSync(temp_frames_dir, { force: true, recursive: true })
+      //Clean up temporary stitched directory
+      if (fs.existsSync(stitched_dir))
+        fs.rmSync(stitched_dir, { force: true, recursive: true })
+
+      //If user elected not to keep individual PNG frames, clean up the frames directory
+      if (!keep_frames && fs.existsSync(frames_dir)) {
+        try {
+          fs.rmSync(frames_dir, { force: true, recursive: true })
+        } catch {
+          //Ignore cleanup errors
+        }
+      }
 
       let stats = fs.statSync(output_mp4_path)
       job_status.currentFrame = total_steps
@@ -707,9 +831,9 @@ export const startTimelapseRenderJob = async function (
         active_browser_pools.delete(job_id)
       }
 
-      if (fs.existsSync(temp_frames_dir)) {
+      if (fs.existsSync(stitched_dir)) {
         try {
-          fs.rmSync(temp_frames_dir, { force: true, recursive: true })
+          fs.rmSync(stitched_dir, { force: true, recursive: true })
         } catch {
           //Ignore cleanup errors
         }

@@ -505,6 +505,68 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
       return
     }
 
+    //Route 11: GET /api/export/folders
+    if (pathname === '/export/folders' || pathname === '/api/export/folders') {
+      let folders_list: any[] = []
+      let frames_root = path.join(exports_dir, 'frames')
+
+      if (fs.existsSync(frames_root)) {
+        let entries = fs.readdirSync(frames_root, { withFileTypes: true })
+        for (let i = 0; i < entries.length; i++) {
+          let ent = entries[i]
+          if (ent.isDirectory()) {
+            let folder_path = path.join(frames_root, ent.name)
+            let manifest: any = null
+            let manifest_path = path.join(folder_path, 'manifest.json')
+            if (fs.existsSync(manifest_path)) {
+              try {
+                manifest = JSON.parse(fs.readFileSync(manifest_path, 'utf-8'))
+              } catch {
+                //Ignore malformed manifest
+              }
+            }
+
+            //Count rendered PNG frames across target subdirectories
+            let completed_frames = 0
+            try {
+              let sub_items = fs.readdirSync(folder_path, { withFileTypes: true })
+              for (let x = 0; x < sub_items.length; x++) {
+                let sub = sub_items[x]
+                if (sub.isDirectory() && sub.name.startsWith('target_')) {
+                  let sub_dir = path.join(folder_path, sub.name)
+                  let files = fs.readdirSync(sub_dir)
+                  for (let f = 0; f < files.length; f++) {
+                    if (files[f].endsWith('.png'))
+                      completed_frames++
+                  }
+                }
+              }
+            } catch {
+              //Ignore read errors
+            }
+
+            let stats = fs.statSync(folder_path)
+            folders_list.push({
+              completedFrames: completed_frames,
+              createdAt: stats.birthtimeMs || stats.mtimeMs,
+              folder: ent.name,
+              manifest,
+              mtimeMs: stats.mtimeMs,
+              name: ent.name,
+              totalFrames: manifest?.total_frames || completed_frames,
+            })
+          }
+        }
+      }
+
+      folders_list.sort((arg0_a, arg0_b) => arg0_b.mtimeMs - arg0_a.mtimeMs)
+
+      res.statusCode = 200
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify({ folders: folders_list }))
+      return
+    }
+
     //Continue to next middleware
     next()
   }
