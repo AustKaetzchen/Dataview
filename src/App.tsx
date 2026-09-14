@@ -93,7 +93,7 @@ const mapColourschemeToPalette = function (arg0_scheme?: string): ColorPalette |
 const in_flight_fetches = new Map<string, Promise<DecodedRaster | null>>()
 
 /**
- * Applies legend configuration (colourscheme, inversion, scale type, units) from layer or active variable selector option.
+ * Applies legend configuration (colourscheme, inversion, scale type, steepness/sigma, units) from layer or active variable selector option.
  *
  * @param {ParsedDataLayer | null} arg0_layer
  * @param {Record<string, string | string[]>} arg1_selectors
@@ -102,6 +102,7 @@ const in_flight_fetches = new Map<string, Promise<DecodedRaster | null>>()
  * @param {(arg0_scale: ScaleType) => void} arg4_set_scale
  * @param {(arg0_title: string) => void} arg5_set_title
  * @param {(arg0_subtitle: string) => void} arg6_set_subtitle
+ * @param {(arg0_sigma: number) => void} [arg7_set_log_sigma]
  */
 const applyLayerLegend = function (
   arg0_layer: ParsedDataLayer | null,
@@ -110,23 +111,25 @@ const applyLayerLegend = function (
   arg3_set_invert: (arg0_invert: boolean) => void,
   arg4_set_scale: (arg0_scale: ScaleType) => void,
   arg5_set_title: (arg0_title: string) => void,
-  arg6_set_subtitle: (arg0_subtitle: string) => void
+  arg6_set_subtitle: (arg0_subtitle: string) => void,
+  arg7_set_log_sigma?: (arg0_sigma: number) => void
 ) {
   //Convert from parameters
   let layer = arg0_layer
   let selectors = arg1_selectors
-  let set_invert = arg3_set_invert
   let set_palette = arg2_set_palette
+  let set_invert = arg3_set_invert
   let set_scale = arg4_set_scale
-  let set_subtitle = arg6_set_subtitle
   let set_title = arg5_set_title
+  let set_subtitle = arg6_set_subtitle
+  let set_log_sigma = arg7_set_log_sigma
 
   //Guard clauses
   if (!layer)
     return
 
   //Declare local instance variables
-  let candidate_legend: { colourscheme?: string; inverted?: boolean; type?: string } | undefined
+  let candidate_legend: { colourscheme?: string; inverted?: boolean; steepness?: number; type?: string } | undefined
   let candidate_title = layer.name || layer.id
   let candidate_unit = layer.unit || ''
   let mapped_palette: ColorPalette | null = null
@@ -180,13 +183,23 @@ const applyLayerLegend = function (
   else
     set_invert(false)
 
-  //Apply scale type
+  //Apply scale type: default is pseudo-log if not explicitly given (e.g. as linear)
   if (candidate_legend?.type) {
     let t = candidate_legend.type.toLowerCase()
-    if (t === 'pseudo-log' || t === 'log')
-      set_scale('pseudo-log')
-    else
+    if (t === 'linear')
       set_scale('linear')
+    else
+      set_scale('pseudo-log')
+  } else {
+    set_scale('pseudo-log')
+  }
+
+  //Apply steepness (pseudo-log sigma)
+  if (set_log_sigma) {
+    if (candidate_legend?.steepness !== undefined && typeof candidate_legend.steepness === 'number' && !Number.isNaN(candidate_legend.steepness))
+      set_log_sigma(candidate_legend.steepness)
+    else
+      set_log_sigma(1.0)
   }
 
   //Apply titles
@@ -758,7 +771,8 @@ export const App: React.FC = function () {
           set_invert_palette,
           set_scale_type,
           set_legend_title,
-          set_legend_subtitle
+          set_legend_subtitle,
+          set_log_sigma
         )
       }
 
@@ -841,7 +855,8 @@ export const App: React.FC = function () {
         set_invert_palette,
         set_scale_type,
         set_legend_title,
-        set_legend_subtitle
+        set_legend_subtitle,
+        set_log_sigma
       )
       if (active_layer.encoding)
         set_data_format(active_layer.encoding)

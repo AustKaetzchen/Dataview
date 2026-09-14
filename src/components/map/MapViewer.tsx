@@ -23,7 +23,7 @@ import {
   MapModeId,
 } from '@/lib/geopng/types'
 import { MAP_CONFIG, getPixelOffset } from '@config'
-import { UI_LAYOUT } from '@/lib/uiLayout'
+import { UI_LAYOUT, getAnalyticsPanelRightOffset } from '@/lib/uiLayout'
 import { ClickInfoPanel } from './ClickInfoPanel'
 import { ColorBarLegend } from './ColorBarLegend'
 import { Button } from '../ui/button'
@@ -157,6 +157,8 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
   let legend_title = props.legendTitle
   let log_sigma = props.logSigma
   let map_modes = props.mapModes
+  let mapmodes_bounds: { left: number; right: number; top: number } | null = null
+  let mapmodes_taken_right: number
   let max_val = props.maxVal
   let min_val = props.minVal
   let on_clear_countries = props.onClearCountries
@@ -185,14 +187,92 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
   let set_circle_overlay_config = props.setCircleOverlayConfig
   let set_flyout_open: (open: boolean) => void
   let set_heightmap_config = props.setHeightmapConfig
+  let set_mapmodes_bounds: React.Dispatch<React.SetStateAction<{ left: number; right: number; top: number } | null>>
+  let set_mapmodes_taken_right: React.Dispatch<React.SetStateAction<number>>
   let set_projection = props.setProjection
+  let set_timeline_bounds: React.Dispatch<React.SetStateAction<{ left: number; right: number; top: number } | null>>
+  let set_timeline_clearance: React.Dispatch<React.SetStateAction<number>>
+  let set_top_right_taken: React.Dispatch<React.SetStateAction<number>>
   let sidebar_width = props.sidebarWidth
+  let timeline_bounds: { left: number; right: number; top: number } | null = null
+  let timeline_clearance: number
+  let top_right_taken: number
   let views: any
 
   //Function body
   let [internal_flyout_open, set_internal_flyout_open] = useState(false)
   flyout_open = (props.settingsDrawerOpen !== undefined) ? props.settingsDrawerOpen : internal_flyout_open
   set_flyout_open = on_toggle_settings_drawer || set_internal_flyout_open
+
+  ;[mapmodes_bounds, set_mapmodes_bounds] = useState<{ left: number; right: number; top: number } | null>(null)
+  ;[mapmodes_taken_right, set_mapmodes_taken_right] = useState<number>(352)
+  ;[timeline_bounds, set_timeline_bounds] = useState<{ left: number; right: number; top: number } | null>(null)
+  ;[timeline_clearance, set_timeline_clearance] = useState<number>(128)
+  ;[top_right_taken, set_top_right_taken] = useState<number>(0)
+
+  useEffect(() => {
+    let updateClearance = () => {
+      //1. Timeline bounds and clearance
+      let timeline_el = document.getElementById('dataview-timelinebar-container')
+      if (timeline_el) {
+        let rect = timeline_el.getBoundingClientRect()
+        let from_bottom = window.innerHeight - rect.top
+        set_timeline_clearance(Math.max(from_bottom, 0) + UI_LAYOUT.margin)
+        set_timeline_bounds({ left: rect.left, right: rect.right, top: rect.top })
+      } else {
+        set_timeline_clearance(UI_LAYOUT.margin)
+        set_timeline_bounds(null)
+      }
+
+      //2. Mapmodes tray bounds
+      let mapmodes_el = document.getElementById('dataview-mapmodes-tray')
+      if (mapmodes_el) {
+        let rect = mapmodes_el.getBoundingClientRect()
+        if (rect.width > 0 && rect.left < window.innerWidth) {
+          set_mapmodes_taken_right(Math.max(window.innerWidth - rect.left, 0))
+          set_mapmodes_bounds({ left: rect.left, right: rect.right, top: rect.top })
+        } else {
+          set_mapmodes_taken_right(0)
+          set_mapmodes_bounds(null)
+        }
+      } else {
+        set_mapmodes_taken_right(0)
+        set_mapmodes_bounds(null)
+      }
+
+      //3. Top-right trays (AnalyticsDrawer, Settings, Toolbar)
+      let current_top_right = 0
+      let analytics_el = document.getElementById('dataview-analytics-drawer')
+      let settings_el = document.getElementById('dataview-settings-drawer')
+      let toolbar_el = document.getElementById('dataview-top-right-toolbar')
+
+      if (analytics_el) {
+        let rect = analytics_el.getBoundingClientRect()
+        if (rect.width > 0 && rect.left < window.innerWidth)
+          current_top_right = Math.max(current_top_right, window.innerWidth - rect.left)
+      }
+      if (settings_el) {
+        let rect = settings_el.getBoundingClientRect()
+        if (rect.width > 0 && rect.left < window.innerWidth)
+          current_top_right = Math.max(current_top_right, window.innerWidth - rect.left)
+      }
+      if (toolbar_el) {
+        let rect = toolbar_el.getBoundingClientRect()
+        if (rect.width > 0 && rect.left < window.innerWidth)
+          current_top_right = Math.max(current_top_right, window.innerWidth - rect.left)
+      }
+      set_top_right_taken(current_top_right)
+    }
+
+    updateClearance()
+    window.addEventListener('resize', updateClearance)
+    let interval = setInterval(updateClearance, 250)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('resize', updateClearance)
+    }
+  }, [flyout_open, analytics_open, ui_visible])
 
   let [proj_view_states, set_proj_view_states] = useState<Record<ProjectionType, any>>({
     Mercator: MAP_CONFIG.mapDefines?.initialMercator || {
@@ -700,19 +780,35 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
 
           let is_center_pos = legend_position === 'bottom-center' || legend_position === 'top-center'
           let container_style: React.CSSProperties = {}
+          let window_w = (typeof window !== 'undefined') ? window.innerWidth : 1920
+
+          //Timeline horizontal collision check
+          let effective_timeline_left = timeline_bounds ? timeline_bounds.left : ((window_w - Math.min(1100, window_w - 64))/2)
+          let effective_timeline_right = timeline_bounds ? timeline_bounds.right : (effective_timeline_left + Math.min(1100, window_w - 64))
+          let has_timeline = Boolean(timeline_bounds) || ui_visible || is_timelapse_exporting
 
           if (legend_position === 'bottom-center') {
-            container_style.bottom = '104px'
+            container_style.bottom = `${timeline_clearance}px`
             container_style.left = '50%'
             container_style.transform = 'translateX(-50%)'
             container_style.width = 'min(1100px, calc(100vw - 64px))'
           } else if (legend_position === 'bottom-left') {
-            container_style.bottom = '104px'
+            let cb_x1 = colourbar_left
+            let cb_x2 = colourbar_left + current_colourbar_width
+            let overlaps_timeline = has_timeline && (cb_x1 < effective_timeline_right && cb_x2 > effective_timeline_left)
+
+            container_style.bottom = overlaps_timeline ? `${timeline_clearance}px` : `${UI_LAYOUT.margin}px`
             container_style.left = `${colourbar_left}px`
             container_style.width = `${current_colourbar_width}px`
           } else if (legend_position === 'bottom-right') {
-            container_style.bottom = '104px'
-            container_style.right = `${UI_LAYOUT.margin}px`
+            let effective_mapmodes_taken = (ui_visible && !is_timelapse_exporting) ? Math.max(mapmodes_taken_right, 352) : 0
+            let bottom_right_offset = (effective_mapmodes_taken > 0) ? (effective_mapmodes_taken + UI_LAYOUT.gap) : UI_LAYOUT.margin
+            let cb_x1 = window_w - bottom_right_offset - current_colourbar_width
+            let cb_x2 = window_w - bottom_right_offset
+            let overlaps_timeline = has_timeline && (cb_x1 < effective_timeline_right && cb_x2 > effective_timeline_left)
+
+            container_style.bottom = overlaps_timeline ? `${timeline_clearance}px` : `${UI_LAYOUT.margin}px`
+            container_style.right = `${bottom_right_offset}px`
             container_style.width = `${current_colourbar_width}px`
           } else if (legend_position === 'top-center') {
             container_style.top = `${UI_LAYOUT.margin}px`
@@ -720,8 +816,23 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
             container_style.transform = 'translateX(-50%)'
             container_style.width = 'min(1100px, calc(100vw - 64px))'
           } else if (legend_position === 'top-right') {
+            let theoretical_top_right = 0
+            if (ui_visible && !is_timelapse_exporting) {
+              if (analytics_open) {
+                let analytics_panel_offset = getAnalyticsPanelRightOffset(flyout_open)
+                let panel_width = Math.min(640, window_w - 720)
+                theoretical_top_right = analytics_panel_offset + panel_width
+              } else if (flyout_open) {
+                theoretical_top_right = UI_LAYOUT.settingsDrawerRight + UI_LAYOUT.settingsDrawerWidth
+              } else {
+                theoretical_top_right = UI_LAYOUT.margin + UI_LAYOUT.toolbarWidth
+              }
+            }
+            let effective_top_right = Math.max(top_right_taken, theoretical_top_right)
+            let top_right_offset = (effective_top_right > 0) ? (effective_top_right + UI_LAYOUT.gap) : UI_LAYOUT.margin
+
             container_style.top = `${UI_LAYOUT.margin}px`
-            container_style.right = is_timelapse_exporting ? `${UI_LAYOUT.margin}px` : `${UI_LAYOUT.margin + 44 + UI_LAYOUT.gap}px`
+            container_style.right = `${top_right_offset}px`
             container_style.width = `${current_colourbar_width}px`
           } else {
             // 'top-left'
@@ -734,7 +845,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
             <div
               id="dataview-colourbar-container"
               style={container_style}
-              className={`absolute z-20 flex ${legend_position.startsWith('bottom') ? 'flex-col-reverse' : 'flex-col'} gap-3 pointer-events-none`}
+              className={`absolute z-20 flex ${legend_position.startsWith('bottom') ? 'flex-col-reverse' : 'flex-col'} gap-3 pointer-events-none transition-all duration-150 ease-out`}
             >
               {/* Value Colourbar (when canvas/raster is available) */}
               {(has_canvas || Boolean(raster) || is_timelapse_exporting) && (
@@ -782,6 +893,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
       {(ui_visible && !is_timelapse_exporting) && (
         <TooltipProvider delayDuration={150}>
         <div
+          id="dataview-top-right-toolbar"
           style={{ top: `${UI_LAYOUT.margin}px`, right: `${UI_LAYOUT.margin}px` }}
           className="absolute z-30 flex flex-col gap-[var(--cell-padding)] bg-card/95 backdrop-blur-md p-[var(--cell-padding)] rounded-none border border-border shadow-md"
         >
@@ -879,6 +991,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
         {/* Map Display Settings Flyout Panel */}
         {flyout_open && (
           <div
+            id="dataview-settings-drawer"
             style={{
               top: `${UI_LAYOUT.margin}px`,
               right: `${UI_LAYOUT.settingsDrawerRight}px`,

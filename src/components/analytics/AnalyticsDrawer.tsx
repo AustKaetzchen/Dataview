@@ -142,6 +142,7 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_pr
   //Return statement
   return (
     <div
+      id="dataview-analytics-drawer"
       onTransitionEnd={() => {
         window.dispatchEvent(new Event('resize'))
       }}

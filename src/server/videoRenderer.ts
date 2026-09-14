@@ -32,7 +32,7 @@ export interface TimelapseRenderOptions {
   fps?: number
   height?: number
   keyframesOnly?: boolean
-  legendPosition?: 'top-left' | 'bottom-left' | 'bottom-center'
+  legendPosition?: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'
   mode: 'stationary' | 'cycling'
   outputFilename?: string
   projection?: string

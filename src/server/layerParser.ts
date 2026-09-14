@@ -8,6 +8,7 @@ export interface LayerVariableOption {
   legend?: {
     colourscheme?: string
     inverted?: boolean
+    steepness?: number
     type?: string
   }
 }
@@ -30,6 +31,7 @@ export interface ParsedDataLayer {
   legend?: {
     colourscheme?: string
     inverted?: boolean
+    steepness?: number
     type?: string
   }
   name: string

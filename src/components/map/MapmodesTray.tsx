@@ -793,6 +793,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
   return (
     <TooltipProvider delayDuration={150}>
       <div
+        id="dataview-mapmodes-tray"
         style={{
           bottom: '12px',
           height: is_tray_collapsed ? 'auto' : `${tray_height}px`,

@@ -27,7 +27,7 @@ export interface StartTimelapseExportOptions {
   fps: number
   height?: number
   keyframesOnly: boolean
-  legendPosition?: 'top-left' | 'bottom-left' | 'bottom-center'
+  legendPosition?: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'
   mode: VideoExportMode
   projection?: string
   selectedLayers: string[]
@@ -113,7 +113,7 @@ const renderTimelapseCanvasFrame = function (
   let year = arg4_year
 
   //Declare local instance variables
-  let progress_ratio = total_steps > 0 ? (current_step + 1)/total_steps : 0
+  let progress_ratio = total_steps > 0 ? (current_step + 1) / total_steps : 0
   let truncated_title = layer_title.length > 48 ? `${layer_title.slice(0, 45)}...` : layer_title
   let year_formatted = UfDate.formatYear(year)
 
@@ -197,7 +197,7 @@ const renderTimelapseCanvasFrame = function (
 
   //Progress fill
   ctx.fillStyle = '#3B82F6'
-  ctx.fillRect(20, 696, Math.max(2, 1240*progress_ratio), 6)
+  ctx.fillRect(20, 696, Math.max(2, 1240 * progress_ratio), 6)
 
   //Scrubber labels
   ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'
@@ -449,7 +449,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
       let ideal = Math.log2(w / 360)
       return Math.max(1.0, Math.min(4.0, parseFloat(ideal.toFixed(2))))
     } else if (p === 'equalearth' || p.includes('earth')) {
-      let ideal = Math.log2((h*0.96) / 180)
+      let ideal = Math.log2((h * 0.96) / 180)
       return Math.max(1.0, Math.min(4.0, parseFloat(ideal.toFixed(2))))
     } else if (p === 'mercator') {
       return 0.95
@@ -460,62 +460,62 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
     return 2.85
   }, [resolution])
 
-  ;[concurrency, set_concurrency] = useState<number>(4)
-  ;[export_mode, set_export_mode] = useState<VideoExportMode>('cycling')
-  ;[selected_stationary_layer, set_selected_stationary_layer] = useState<string>(() => {
-    return active_layer_id || Object.keys(available_layers)[0] || 'GDP_nominal_pc'
-  })
-  ;[timestep_unit, set_timestep_unit] = useState<TimestepUnit>('years')
-  ;[timestep_step, set_timestep_step] = useState<number>(1)
-  ;[keyframes_only, set_keyframes_only] = useState<boolean>(true)
-  ;[legend_position, set_legend_position] = useState<'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'>('bottom-center')
-  ;[start_year, set_start_year] = useState<number>(1800)
-  ;[end_year, set_end_year] = useState<number>(2025)
-  ;[fps, set_fps] = useState<number>(30)
-  ;[projection, set_projection] = useState<string>(props.currentProjection || 'EqualEarth')
-  ;[zoom, set_zoom] = useState<number>(() => {
-    return get_default_zoom(props.currentProjection || 'EqualEarth')
-  })
+    ;[concurrency, set_concurrency] = useState<number>(4)
+    ;[export_mode, set_export_mode] = useState<VideoExportMode>('cycling')
+    ;[selected_stationary_layer, set_selected_stationary_layer] = useState<string>(() => {
+      return active_layer_id || Object.keys(available_layers)[0] || 'GDP_nominal_pc'
+    })
+    ;[timestep_unit, set_timestep_unit] = useState<TimestepUnit>('years')
+    ;[timestep_step, set_timestep_step] = useState<number>(1)
+    ;[keyframes_only, set_keyframes_only] = useState<boolean>(true)
+    ;[legend_position, set_legend_position] = useState<'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'>('bottom-center')
+    ;[start_year, set_start_year] = useState<number>(1800)
+    ;[end_year, set_end_year] = useState<number>(2025)
+    ;[fps, set_fps] = useState<number>(30)
+    ;[projection, set_projection] = useState<string>(props.currentProjection || 'EqualEarth')
+    ;[zoom, set_zoom] = useState<number>(() => {
+      return get_default_zoom(props.currentProjection || 'EqualEarth')
+    })
   preview_canvas_ref = useRef<HTMLCanvasElement | null>(null)
-  ;[resolution, set_resolution] = useState<string>('1080p')
-  ;[export_filename, set_export_filename] = useState<string>(() => {
-    return `dataview_timelapse_${Date.now()}.mp4`
-  })
-  ;[expanded_folders, set_expanded_folders] = useState<Record<string, boolean>>({
-    professions_percentage: true,
-    age_sex: false,
-    labourforce_total: false,
-  })
-  ;[selected_cycling_layers, set_selected_cycling_layers] = useState<string[]>(() => {
-    let initial: string[] = []
-    let keys = Object.keys(available_layers)
-    for (let i = 0; i < Math.min(3, keys.length); i++) {
-      let k = keys[i]
-      if (k === 'professions_percentage') {
-        initial.push(
-          `${k}::profession=agriculture&gender=t`,
-          `${k}::profession=informal_labour&gender=t`,
-          `${k}::profession=manufacturing&gender=t`,
-          `${k}::profession=services&gender=t`,
-          `${k}::profession=not_in_work&gender=t`
-        )
-      } else {
-        initial.push(k)
+    ;[resolution, set_resolution] = useState<string>('1080p')
+    ;[export_filename, set_export_filename] = useState<string>(() => {
+      return `dataview_timelapse_${Date.now()}.mp4`
+    })
+    ;[expanded_folders, set_expanded_folders] = useState<Record<string, boolean>>({
+      professions_percentage: true,
+      age_sex: false,
+      labourforce_total: false,
+    })
+    ;[selected_cycling_layers, set_selected_cycling_layers] = useState<string[]>(() => {
+      let initial: string[] = []
+      let keys = Object.keys(available_layers)
+      for (let i = 0; i < Math.min(3, keys.length); i++) {
+        let k = keys[i]
+        if (k === 'professions_percentage') {
+          initial.push(
+            `${k}::profession=agriculture&gender=t`,
+            `${k}::profession=informal_labour&gender=t`,
+            `${k}::profession=manufacturing&gender=t`,
+            `${k}::profession=services&gender=t`,
+            `${k}::profession=not_in_work&gender=t`
+          )
+        } else {
+          initial.push(k)
+        }
       }
-    }
-    return initial
-  })
-  ;[is_exporting, set_is_exporting] = useState<boolean>(false)
-  ;[progress_pct, set_progress_pct] = useState<number>(0)
-  ;[progress_status, set_progress_status] = useState<string>('')
-  ;[export_error, set_export_error] = useState<string | null>(null)
-  ;[export_success, set_export_success] = useState<string | null>(null)
+      return initial
+    })
+    ;[is_exporting, set_is_exporting] = useState<boolean>(false)
+    ;[progress_pct, set_progress_pct] = useState<number>(0)
+    ;[progress_status, set_progress_status] = useState<string>('')
+    ;[export_error, set_export_error] = useState<string | null>(null)
+    ;[export_success, set_export_success] = useState<string | null>(null)
 
   handle_zoom_change = useCallback((arg0_new_zoom: number) => {
-    let clamped = Math.max(0.1, Math.min(4.0, Math.round(arg0_new_zoom*100)/100))
+    let clamped = Math.max(0.1, Math.min(4.0, Math.round(arg0_new_zoom * 100) / 100))
     set_zoom(clamped)
     if (typeof (window as any).__setMapZoom === 'function') {
-      ;(window as any).__setMapZoom(clamped)
+      ; (window as any).__setMapZoom(clamped)
     }
   }, [])
 
@@ -556,10 +556,10 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
 
     //3. Draw map raster (scaled by resolution-aware zoom)
     let res_w = resolution === '1440p' ? 2560 : resolution === '720p' ? 1280 : 1920
-    let map_w = w*(360*Math.pow(2, zoom))/res_w
-    let map_h = map_w/2
-    let map_x = (w - map_w)/2
-    let map_y = (h - map_h)/2
+    let map_w = w * (360 * Math.pow(2, zoom)) / res_w
+    let map_h = map_w / 2
+    let map_x = (w - map_w) / 2
+    let map_y = (h - map_h) / 2
 
     if (props.renderedCanvas) {
       try {
@@ -583,7 +583,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
     //5. Bottom-Centred Timeline Bar Mockup (matching actual export position)
     let tb_w = Math.min(360, w - 40)
     let tb_h = 24
-    let tb_x = (w - tb_w)/2
+    let tb_x = (w - tb_w) / 2
     let tb_y = h - 30
     ctx.fillStyle = 'rgba(11, 15, 25, 0.95)'
     ctx.fillRect(tb_x, tb_y, tb_w, tb_h)
@@ -593,18 +593,18 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
     //Date badge in center
     let date_str = UfDate.formatYear(props.timelineYear || start_year)
     ctx.fillStyle = 'rgba(255, 255, 255, 0.08)'
-    ctx.fillRect(tb_x + (tb_w - 70)/2, tb_y + 3, 70, 10)
+    ctx.fillRect(tb_x + (tb_w - 70) / 2, tb_y + 3, 70, 10)
     ctx.fillStyle = '#FFFFFF'
     ctx.font = 'bold 7px monospace'
     ctx.textAlign = 'center'
-    ctx.fillText(date_str, tb_x + tb_w/2, tb_y + 11)
+    ctx.fillText(date_str, tb_x + tb_w / 2, tb_y + 11)
     ctx.textAlign = 'left'
 
     //Scrubber track & red progress line
     ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'
     ctx.fillRect(tb_x + 6, tb_y + 17, tb_w - 12, 2)
     ctx.fillStyle = '#EF4444'
-    ctx.fillRect(tb_x + 6, tb_y + 17, (tb_w - 12)*0.45, 2)
+    ctx.fillRect(tb_x + 6, tb_y + 17, (tb_w - 12) * 0.45, 2)
 
     //6. Colourbar Overlay Mockup (positioned according to legend_position)
     let is_center_pos = legend_position === 'bottom-center' || legend_position === 'top-center'
@@ -617,10 +617,10 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
       cb_y = tb_y - cb_h - 4
     } else if (legend_position === 'bottom-left') {
       cb_x = 8
-      cb_y = tb_y - cb_h - 4
+      cb_y = h - cb_h - 8
     } else if (legend_position === 'bottom-right') {
       cb_x = w - cb_w - 8
-      cb_y = tb_y - cb_h - 4
+      cb_y = h - cb_h - 8
     } else if (legend_position === 'top-center') {
       cb_x = (w - cb_w)/2
       cb_y = 8
@@ -819,11 +819,10 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
               <button
                 type="button"
                 onClick={() => set_export_mode('stationary')}
-                className={`p-2.5 border text-left flex flex-col gap-1 cursor-pointer transition-colors ${
-                  export_mode === 'stationary'
+                className={`p-2.5 border text-left flex flex-col gap-1 cursor-pointer transition-colors ${export_mode === 'stationary'
                     ? 'bg-primary/15 border-primary text-foreground'
                     : 'bg-muted/30 border-border text-muted-foreground hover:text-foreground'
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-1.5 font-bold text-xs text-foreground">
                   <Icon name="straighten" />
@@ -837,11 +836,10 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
               <button
                 type="button"
                 onClick={() => set_export_mode('cycling')}
-                className={`p-2.5 border text-left flex flex-col gap-1 cursor-pointer transition-colors ${
-                  export_mode === 'cycling'
+                className={`p-2.5 border text-left flex flex-col gap-1 cursor-pointer transition-colors ${export_mode === 'cycling'
                     ? 'bg-primary/15 border-primary text-foreground'
                     : 'bg-muted/30 border-border text-muted-foreground hover:text-foreground'
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-1.5 font-bold text-xs text-foreground">
                   <Icon name="sync" />
@@ -869,11 +867,10 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
                       key={arg0_key}
                       type="button"
                       onClick={() => set_selected_stationary_layer(arg0_key)}
-                      className={`px-2 py-1 flex items-center justify-between border text-left text-[11px] cursor-pointer transition-colors ${
-                        is_selected
+                      className={`px-2 py-1 flex items-center justify-between border text-left text-[11px] cursor-pointer transition-colors ${is_selected
                           ? 'bg-primary/20 border-primary text-foreground font-medium'
                           : 'bg-card border-border text-muted-foreground hover:text-foreground'
-                      }`}
+                        }`}
                     >
                       <span className="truncate pr-1">{layer?.name || arg0_key}</span>
                       {is_selected && <Icon name="check" className="text-xs text-primary shrink-0" />}
@@ -924,11 +921,10 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
                       <div
                         key={arg0_folder.id}
                         onClick={() => toggle_cycling_layer(arg0_folder.cohorts[0]?.key || arg0_folder.id)}
-                        className={`px-2 py-1 flex items-center justify-between border text-[11px] cursor-pointer transition-colors ${
-                          is_checked
+                        className={`px-2 py-1 flex items-center justify-between border text-[11px] cursor-pointer transition-colors ${is_checked
                             ? 'bg-primary/20 border-primary text-foreground font-medium'
                             : 'bg-card border-border/60 text-muted-foreground hover:text-foreground'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-1.5 truncate">
                           <Icon name="analytics" className="text-xs text-muted-foreground shrink-0" />
@@ -942,9 +938,8 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
                   return (
                     <div key={arg0_folder.id} className="border border-border/70 bg-card/60 overflow-hidden">
                       <div
-                        className={`px-2 py-1 flex items-center justify-between transition-colors ${
-                          is_all_selected ? 'bg-primary/15' : is_some_selected ? 'bg-primary/5' : 'bg-muted/30'
-                        }`}
+                        className={`px-2 py-1 flex items-center justify-between transition-colors ${is_all_selected ? 'bg-primary/15' : is_some_selected ? 'bg-primary/5' : 'bg-muted/30'
+                          }`}
                       >
                         <div
                           onClick={() => toggle_folder_cohorts(arg0_folder)}
@@ -952,13 +947,12 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
                         >
                           <button
                             type="button"
-                            className={`w-3.5 h-3.5 border flex items-center justify-center shrink-0 text-[10px] ${
-                              is_all_selected
+                            className={`w-3.5 h-3.5 border flex items-center justify-center shrink-0 text-[10px] ${is_all_selected
                                 ? 'border-primary bg-primary text-primary-foreground'
                                 : is_some_selected
-                                ? 'border-primary bg-primary/40 text-primary-foreground'
-                                : 'border-muted-foreground/60 bg-background'
-                            }`}
+                                  ? 'border-primary bg-primary/40 text-primary-foreground'
+                                  : 'border-muted-foreground/60 bg-background'
+                              }`}
                           >
                             {is_all_selected && <Icon name="check" className="text-[10px]" />}
                             {is_some_selected && <span className="w-1.5 h-1.5 bg-primary" />}
@@ -991,11 +985,10 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
                                 key={arg0_cohort.key}
                                 type="button"
                                 onClick={() => toggle_cycling_layer(arg0_cohort.key)}
-                                className={`px-1.5 py-0.5 flex items-center justify-between border text-left text-[10px] cursor-pointer transition-colors ${
-                                  is_cohort_checked
+                                className={`px-1.5 py-0.5 flex items-center justify-between border text-left text-[10px] cursor-pointer transition-colors ${is_cohort_checked
                                     ? 'bg-primary/20 border-primary text-foreground font-medium'
                                     : 'bg-card border-border/50 text-muted-foreground hover:text-foreground'
-                                }`}
+                                  }`}
                               >
                                 <span className="truncate pr-1">{arg0_cohort.label}</span>
                                 {is_cohort_checked && <Icon name="check" className="text-[10px] text-primary shrink-0" />}
@@ -1142,11 +1135,10 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
                         key={arg0_u}
                         type="button"
                         onClick={() => set_timestep_unit(arg0_u)}
-                        className={`capitalize text-xs border cursor-pointer ${
-                          timestep_unit === arg0_u
+                        className={`capitalize text-xs border cursor-pointer ${timestep_unit === arg0_u
                             ? 'bg-primary text-primary-foreground font-bold'
                             : 'bg-background text-muted-foreground hover:text-foreground'
-                        }`}
+                          }`}
                       >
                         {arg0_u}
                       </button>
@@ -1243,22 +1235,21 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
 
             <div className="grid grid-cols-3 gap-1.5">
               {[
-                { id: 'top-left', label: 'Top Left' },
-                { id: 'top-center', label: 'Top Centre' },
-                { id: 'top-right', label: 'Top Right' },
-                { id: 'bottom-left', label: 'Bottom Left' },
-                { id: 'bottom-center', label: 'Bottom Centre' },
-                { id: 'bottom-right', label: 'Bottom Right' },
+                { id: 'top-left', label: 'NW' },
+                { id: 'top-center', label: 'N' },
+                { id: 'top-right', label: 'NE' },
+                { id: 'bottom-left', label: 'SW' },
+                { id: 'bottom-center', label: 'S' },
+                { id: 'bottom-right', label: 'SE' },
               ].map((arg0_pos) => (
                 <button
                   key={arg0_pos.id}
                   type="button"
                   onClick={() => set_legend_position(arg0_pos.id as any)}
-                  className={`h-7 text-xs border cursor-pointer transition-colors ${
-                    legend_position === arg0_pos.id
+                  className={`h-7 text-xs border cursor-pointer transition-colors ${legend_position === arg0_pos.id
                       ? 'bg-primary text-primary-foreground font-bold border-primary'
                       : 'bg-card border-border text-muted-foreground hover:text-foreground'
-                  }`}
+                    }`}
                 >
                   {arg0_pos.label}
                 </button>
@@ -1289,11 +1280,10 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
                   key={arg0_t.count}
                   type="button"
                   onClick={() => set_concurrency(arg0_t.count)}
-                  className={`h-7 text-xs border cursor-pointer transition-colors ${
-                    concurrency === arg0_t.count
+                  className={`h-7 text-xs border cursor-pointer transition-colors ${concurrency === arg0_t.count
                       ? 'bg-primary text-primary-foreground font-bold border-primary'
                       : 'bg-card border-border text-muted-foreground hover:text-foreground'
-                  }`}
+                    }`}
                 >
                   {arg0_t.label}
                 </button>
