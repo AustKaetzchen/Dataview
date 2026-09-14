@@ -33,14 +33,14 @@
     },
     initialEquirectangular: {
       target: [0, 0, 0],
-      zoom: 1.6,
+      zoom: 2.83,
       minZoom: 0.2,
       maxZoom: 10,
       pixelOffset: -1,
     },
     initialEqualEarth: {
       target: [0, 0, 0],
-      zoom: 1.65,
+      zoom: 2.80,
       minZoom: 0.2,
       maxZoom: 10,
       pixelOffset: -1,

@@ -16,7 +16,7 @@ export interface ColorBarLegendProps {
   breaks?: number[]
   countryName?: string | null
   onUpdateBreaks?: (breaks: number[]) => void
-  width?: number
+  width?: number | string
   onResizeWidth?: (width: number) => void
 }
 
@@ -174,7 +174,7 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = function (arg0_prop
   handle_resize_mouse_down = function (e: React.MouseEvent) {
     e.preventDefault()
     e.stopPropagation()
-    let start_w = current_width
+    let start_w = (typeof current_width === 'number') ? current_width : 336
     let start_x = e.clientX
 
     let on_mouse_move = function (move_event: MouseEvent) {
@@ -268,11 +268,11 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = function (arg0_prop
   //Return statement
   return (
     <div
-      style={{ width: `${current_width}px` }}
+      style={{ width: (typeof current_width === 'number') ? `${current_width}px` : current_width }}
       className="relative rounded-none border border-border bg-card/95 backdrop-blur-md p-[var(--padding)] pb-3 shadow-lg text-[var(--body-font-size)] text-card-foreground select-none font-sans"
     >
       {/* Draggable Right Border Resize Handle */}
-      {on_resize_width && (
+      {(on_resize_width && typeof current_width === 'number') && (
         <div
           onMouseDown={handle_resize_mouse_down}
           className="absolute top-0 right-0 bottom-0 w-2 cursor-col-resize hover:bg-primary/50 active:bg-primary transition-colors z-30 group"

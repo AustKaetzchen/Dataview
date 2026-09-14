@@ -102,6 +102,9 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
   let expanded_nodes: Record<string, boolean>
   let filtered_layers: ParsedDataLayer[]
   let filtered_overlays: MapModeItem[]
+  let handle_resize_left: (e: React.MouseEvent) => void
+  let handle_resize_top: (e: React.MouseEvent) => void
+  let handle_resize_top_left: (e: React.MouseEvent) => void
   let is_layer_accessible: (arg0_layer: ParsedDataLayer) => boolean
   let is_tray_collapsed: boolean
   let max_height_style: string
@@ -112,7 +115,11 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
   let set_expanded_nodes: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
   let set_is_tray_collapsed: React.Dispatch<React.SetStateAction<boolean>>
   let set_search_query: React.Dispatch<React.SetStateAction<string>>
+  let set_tray_height: React.Dispatch<React.SetStateAction<number>>
+  let set_tray_width: React.Dispatch<React.SetStateAction<number>>
   let toggle_node: (arg0_id: string) => void
+  let tray_height: number
+  let tray_width: number
 
   //Function body
   ;[is_tray_collapsed, set_is_tray_collapsed] = useState<boolean>(false)
@@ -121,6 +128,94 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
     data_layers: true,
     overlays: true,
   })
+  ;[tray_width, set_tray_width] = useState<number>(() => {
+    let saved = typeof localStorage !== 'undefined' ? localStorage.getItem('dataview_mapmodes_width') : null
+    return saved ? parseInt(saved, 10) : 340
+  })
+  ;[tray_height, set_tray_height] = useState<number>(() => {
+    let saved = typeof localStorage !== 'undefined' ? localStorage.getItem('dataview_mapmodes_height') : null
+    return saved ? parseInt(saved, 10) : 520
+  })
+
+  handle_resize_left = function (e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    let start_w = tray_width
+    let start_x = e.clientX
+
+    let on_mouse_move = function (move_e: MouseEvent) {
+      let delta_x = start_x - move_e.clientX
+      let max_w = Math.min(800, window.innerWidth - 40)
+      let next_w = Math.max(280, Math.min(max_w, start_w + delta_x))
+      set_tray_width(next_w)
+      if (typeof localStorage !== 'undefined')
+        localStorage.setItem('dataview_mapmodes_width', String(next_w))
+    }
+
+    let on_mouse_up = function () {
+      window.removeEventListener('mousemove', on_mouse_move)
+      window.removeEventListener('mouseup', on_mouse_up)
+    }
+
+    window.addEventListener('mousemove', on_mouse_move)
+    window.addEventListener('mouseup', on_mouse_up)
+  }
+
+  handle_resize_top = function (e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    let start_h = tray_height
+    let start_y = e.clientY
+
+    let on_mouse_move = function (move_e: MouseEvent) {
+      let delta_y = start_y - move_e.clientY
+      let max_h = Math.min(900, window.innerHeight - 60)
+      let next_h = Math.max(260, Math.min(max_h, start_h + delta_y))
+      set_tray_height(next_h)
+      if (typeof localStorage !== 'undefined')
+        localStorage.setItem('dataview_mapmodes_height', String(next_h))
+    }
+
+    let on_mouse_up = function () {
+      window.removeEventListener('mousemove', on_mouse_move)
+      window.removeEventListener('mouseup', on_mouse_up)
+    }
+
+    window.addEventListener('mousemove', on_mouse_move)
+    window.addEventListener('mouseup', on_mouse_up)
+  }
+
+  handle_resize_top_left = function (e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    let start_h = tray_height
+    let start_w = tray_width
+    let start_x = e.clientX
+    let start_y = e.clientY
+
+    let on_mouse_move = function (move_e: MouseEvent) {
+      let delta_x = start_x - move_e.clientX
+      let delta_y = start_y - move_e.clientY
+      let max_h = Math.min(900, window.innerHeight - 60)
+      let max_w = Math.min(800, window.innerWidth - 40)
+      let next_h = Math.max(260, Math.min(max_h, start_h + delta_y))
+      let next_w = Math.max(280, Math.min(max_w, start_w + delta_x))
+      set_tray_width(next_w)
+      set_tray_height(next_h)
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('dataview_mapmodes_width', String(next_w))
+        localStorage.setItem('dataview_mapmodes_height', String(next_h))
+      }
+    }
+
+    let on_mouse_up = function () {
+      window.removeEventListener('mousemove', on_mouse_move)
+      window.removeEventListener('mouseup', on_mouse_up)
+    }
+
+    window.addEventListener('mousemove', on_mouse_move)
+    window.addEventListener('mouseup', on_mouse_up)
+  }
 
   toggle_node = function (arg0_id: string) {
     let id = arg0_id
@@ -404,7 +499,12 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
                       </span>
                     </div>
                     {layer.unit && (
-                      <span className="text-[10px] text-muted-foreground shrink-0 ml-1">{layer.unit}</span>
+                      <span
+                        className="text-[10px] text-muted-foreground font-mono truncate max-w-[110px] shrink ml-1"
+                        title={layer.unit}
+                      >
+                        {layer.unit}
+                      </span>
                     )}
                   </button>
                 )}
@@ -465,7 +565,12 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
                 className="flex items-center gap-1 shrink-0 ml-1 cursor-pointer p-0.5"
               >
                 {layer.unit && (
-                  <span className="text-[10px] text-muted-foreground font-mono">{layer.unit}</span>
+                  <span
+                    className="text-[10px] text-muted-foreground font-mono truncate max-w-[110px] shrink ml-1"
+                    title={layer.unit}
+                  >
+                    {layer.unit}
+                  </span>
                 )}
                 <span className="text-[9px] px-1 py-0.2 bg-muted text-muted-foreground font-mono">
                   {Object.keys(layer.variable_selectors!).length} vars
@@ -628,7 +733,12 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
                 <span className="text-xs truncate">{layer.name}</span>
               </div>
               {layer.unit && (
-                <span className="text-[10px] text-muted-foreground shrink-0 ml-1">{layer.unit}</span>
+                <span
+                  className="text-[10px] text-muted-foreground font-mono truncate max-w-[110px] shrink ml-1"
+                  title={layer.unit}
+                >
+                  {layer.unit}
+                </span>
               )}
             </button>
           </div>
@@ -685,11 +795,39 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
       <div
         style={{
           bottom: '12px',
-          maxHeight: is_tray_collapsed ? 'auto' : '50dvh',
+          height: is_tray_collapsed ? 'auto' : `${tray_height}px`,
+          maxHeight: is_tray_collapsed ? 'auto' : 'calc(100vh - 40px)',
+          maxWidth: 'calc(100vw - 40px)',
           right: '12px',
+          width: `${tray_width}px`,
         }}
-        className="absolute z-20 w-80 flex flex-col bg-card/95 backdrop-blur-md border border-border shadow-2xl p-2.5 space-y-2 text-[var(--body-font-size)] select-none font-sans overflow-hidden transition-all"
+        className="absolute z-20 flex flex-col bg-card/95 backdrop-blur-md border border-border shadow-2xl p-2.5 space-y-2 text-[var(--body-font-size)] select-none font-sans overflow-hidden"
       >
+        {/* Resize Handles (Active when tray is not collapsed) */}
+        {!is_tray_collapsed && (
+          <>
+            {/* Left Border Drag Handle */}
+            <div
+              onMouseDown={handle_resize_left}
+              className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-primary/40 active:bg-primary z-30 transition-colors"
+              title="Drag left edge to resize width"
+            />
+            {/* Top Border Drag Handle */}
+            <div
+              onMouseDown={handle_resize_top}
+              className="absolute top-0 left-0 right-0 h-2 cursor-ns-resize hover:bg-primary/40 active:bg-primary z-30 transition-colors"
+              title="Drag top edge to resize height"
+            />
+            {/* Top-Left Corner Drag Handle */}
+            <div
+              onMouseDown={handle_resize_top_left}
+              className="absolute top-0 left-0 w-3.5 h-3.5 cursor-nwse-resize hover:bg-primary active:bg-primary z-40 transition-colors flex items-center justify-center group"
+              title="Drag corner to resize width and height"
+            >
+              <div className="w-1.5 h-1.5 border-t-2 border-l-2 border-muted-foreground group-hover:border-primary-foreground" />
+            </div>
+          </>
+        )}
         {/* Tray Header */}
         <div className="flex items-center justify-between border-b border-border pb-1.5 shrink-0">
           <div className="flex items-center gap-2">

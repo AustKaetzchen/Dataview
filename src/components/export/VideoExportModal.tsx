@@ -245,7 +245,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   let indicator_folders: IndicatorFolderItem[]
   let is_exporting: boolean
   let keyframes_only: boolean
-  let legend_position: 'top-left' | 'bottom-left' | 'bottom-center'
+  let legend_position: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'
   let preview_canvas_ref: React.MutableRefObject<HTMLCanvasElement | null>
   let progress_pct: number
   let progress_status: string
@@ -264,7 +264,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   let set_fps: React.Dispatch<React.SetStateAction<number>>
   let set_is_exporting: React.Dispatch<React.SetStateAction<boolean>>
   let set_keyframes_only: React.Dispatch<React.SetStateAction<boolean>>
-  let set_legend_position: React.Dispatch<React.SetStateAction<'top-left' | 'bottom-left' | 'bottom-center'>>
+  let set_legend_position: React.Dispatch<React.SetStateAction<'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'>>
   let set_progress_pct: React.Dispatch<React.SetStateAction<number>>
   let set_progress_status: React.Dispatch<React.SetStateAction<string>>
   let set_projection: React.Dispatch<React.SetStateAction<string>>
@@ -445,11 +445,11 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
     let w = arg1_w || (resolution === '1440p' ? 2560 : resolution === '720p' ? 1280 : 1920)
 
     if (p === 'equirectangular' || p.includes('equirect')) {
-      // Fit ~92% width of target resolution
-      let ideal = Math.log2((w*0.92)/360)
+      // Fit full width of target resolution (2.83 for 1440p)
+      let ideal = Math.log2(w / 360)
       return Math.max(1.0, Math.min(4.0, parseFloat(ideal.toFixed(2))))
     } else if (p === 'equalearth' || p.includes('earth')) {
-      let ideal = Math.log2((w*0.90)/360)
+      let ideal = Math.log2((h*0.96) / 180)
       return Math.max(1.0, Math.min(4.0, parseFloat(ideal.toFixed(2))))
     } else if (p === 'mercator') {
       return 0.95
@@ -457,7 +457,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
       return 0.0
     }
 
-    return 1.65
+    return 2.85
   }, [resolution])
 
   ;[concurrency, set_concurrency] = useState<number>(4)
@@ -468,7 +468,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   ;[timestep_unit, set_timestep_unit] = useState<TimestepUnit>('years')
   ;[timestep_step, set_timestep_step] = useState<number>(1)
   ;[keyframes_only, set_keyframes_only] = useState<boolean>(true)
-  ;[legend_position, set_legend_position] = useState<'top-left' | 'bottom-left' | 'bottom-center'>('top-left')
+  ;[legend_position, set_legend_position] = useState<'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'>('bottom-center')
   ;[start_year, set_start_year] = useState<number>(1800)
   ;[end_year, set_end_year] = useState<number>(2025)
   ;[fps, set_fps] = useState<number>(30)
@@ -607,7 +607,8 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
     ctx.fillRect(tb_x + 6, tb_y + 17, (tb_w - 12)*0.45, 2)
 
     //6. Colourbar Overlay Mockup (positioned according to legend_position)
-    let cb_w = 130
+    let is_center_pos = legend_position === 'bottom-center' || legend_position === 'top-center'
+    let cb_w = is_center_pos ? tb_w : 130
     let cb_h = 46
     let cb_x = 8
     let cb_y = 8
@@ -617,7 +618,17 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
     } else if (legend_position === 'bottom-left') {
       cb_x = 8
       cb_y = tb_y - cb_h - 4
+    } else if (legend_position === 'bottom-right') {
+      cb_x = w - cb_w - 8
+      cb_y = tb_y - cb_h - 4
+    } else if (legend_position === 'top-center') {
+      cb_x = (w - cb_w)/2
+      cb_y = 8
+    } else if (legend_position === 'top-right') {
+      cb_x = w - cb_w - 8
+      cb_y = 8
     } else {
+      // 'top-left'
       cb_x = 8
       cb_y = 8
     }
@@ -1031,25 +1042,41 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
-                    onClick={() => handle_zoom_change(get_default_zoom(projection))}
-                    className="px-1.5 py-0.5 text-[10px] border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
-                    title="Fit whole world nicely inside 16:9 frame"
+                    onClick={() => {
+                      let cur_h = resolution === '1440p' ? 1440 : resolution === '720p' ? 720 : 1080
+                      let fit_h_zoom = parseFloat(Math.log2(cur_h / 180).toFixed(2))
+                      handle_zoom_change(fit_h_zoom)
+                    }}
+                    className="px-1.5 py-0.5 text-[10px] border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer font-medium"
+                    title="Fill 100% of viewport height (eliminates vertical black bars)"
                   >
-                    Fit World
+                    Fit Height
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      let cur_w = resolution === '1440p' ? 2560 : resolution === '720p' ? 1280 : 1920
+                      let fit_w_zoom = parseFloat(Math.log2(cur_w / 360).toFixed(2))
+                      handle_zoom_change(fit_w_zoom)
+                    }}
+                    className="px-1.5 py-0.5 text-[10px] border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer font-medium"
+                    title="Fit all 360 degrees of longitude edge-to-edge"
+                  >
+                    Fit Width
                   </button>
                   <button
                     type="button"
                     onClick={() => handle_zoom_change(zoom - 0.15)}
                     className="px-1.5 py-0.5 text-[10px] border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
                   >
-                    - Zoom
+                    -
                   </button>
                   <button
                     type="button"
                     onClick={() => handle_zoom_change(zoom + 0.15)}
                     className="px-1.5 py-0.5 text-[10px] border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
                   >
-                    + Zoom
+                    +
                   </button>
                 </div>
               </div>
@@ -1058,7 +1085,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
                 <input
                   type="range"
                   min="0.4"
-                  max="3.5"
+                  max="4.0"
                   step="0.05"
                   value={zoom}
                   onChange={(arg0_e) => handle_zoom_change(parseFloat(arg0_e.target.value))}
@@ -1209,16 +1236,19 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
                 <Icon name="palette" className="text-primary text-xs" />
                 <span>Legend Bar Position</span>
               </Label>
-              <span className="text-[10px] text-muted-foreground font-mono">
-                {legend_position === 'bottom-center' ? 'Bottom Center' : legend_position === 'bottom-left' ? 'Bottom Left' : 'Top Left'}
+              <span className="text-[10px] text-muted-foreground font-mono capitalize">
+                {legend_position.replace('-', ' ').replace('center', 'centre')}
               </span>
             </div>
 
             <div className="grid grid-cols-3 gap-1.5">
               {[
                 { id: 'top-left', label: 'Top Left' },
+                { id: 'top-center', label: 'Top Centre' },
+                { id: 'top-right', label: 'Top Right' },
                 { id: 'bottom-left', label: 'Bottom Left' },
-                { id: 'bottom-center', label: 'Bottom Center' },
+                { id: 'bottom-center', label: 'Bottom Centre' },
+                { id: 'bottom-right', label: 'Bottom Right' },
               ].map((arg0_pos) => (
                 <button
                   key={arg0_pos.id}

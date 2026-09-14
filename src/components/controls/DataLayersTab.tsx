@@ -272,7 +272,10 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-bold text-xs text-foreground truncate">{arg0_layer.name}</span>
                       {arg0_layer.unit && (
-                        <span className="text-[10px] px-1 bg-muted text-muted-foreground border border-border font-mono">
+                        <span
+                          className="text-[10px] px-1 bg-muted text-muted-foreground border border-border font-mono truncate max-w-[130px]"
+                          title={arg0_layer.unit}
+                        >
                           {arg0_layer.unit}
                         </span>
                       )}

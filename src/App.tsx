@@ -512,7 +512,7 @@ export const App: React.FC = function () {
   let is_playing: boolean
   let is_timelapse_exporting: boolean
   let layers: Record<string, ParsedDataLayer>
-  let legend_position: 'top-left' | 'bottom-left' | 'bottom-center'
+  let legend_position: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'
   let legend_subtitle: string
   let legend_title: string
   let load_req_id_ref: React.MutableRefObject<number>
@@ -557,7 +557,7 @@ export const App: React.FC = function () {
   let set_is_playing: React.Dispatch<React.SetStateAction<boolean>>
   let set_is_timelapse_exporting: React.Dispatch<React.SetStateAction<boolean>>
   let set_layers: React.Dispatch<React.SetStateAction<Record<string, ParsedDataLayer>>>
-  let set_legend_position: React.Dispatch<React.SetStateAction<'top-left' | 'bottom-left' | 'bottom-center'>>
+  let set_legend_position: React.Dispatch<React.SetStateAction<'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'>>
   let set_legend_subtitle: React.Dispatch<React.SetStateAction<string>>
   let set_legend_title: React.Dispatch<React.SetStateAction<string>>
   let set_log_sigma: React.Dispatch<React.SetStateAction<number>>
@@ -701,10 +701,13 @@ export const App: React.FC = function () {
   let search_params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
   is_headless_export = search_params?.get('export_mode') === '1'
 
-  ;[legend_position, set_legend_position] = useState<'top-left' | 'bottom-left' | 'bottom-center'>(() => {
+  ;[legend_position, set_legend_position] = useState<'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'>(() => {
     let url_leg = search_params?.get('legend_position')
-    if (url_leg && ['top-left', 'bottom-left', 'bottom-center'].includes(url_leg)) {
-      return url_leg as 'top-left' | 'bottom-left' | 'bottom-center'
+    if (url_leg) {
+      let normalized = url_leg.replace('centre', 'center') as any
+      if (['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'].includes(normalized)) {
+        return normalized
+      }
     }
     return 'top-left'
   })
@@ -714,9 +717,12 @@ export const App: React.FC = function () {
     if (url_proj && ['EqualEarth', 'Mercator', 'Globe', 'Equirectangular'].includes(url_proj)) {
       set_projection(url_proj)
     }
-    let url_leg = search_params?.get('legend_position') as any
-    if (url_leg && ['top-left', 'bottom-left', 'bottom-center'].includes(url_leg)) {
-      set_legend_position(url_leg)
+    let url_leg = search_params?.get('legend_position')
+    if (url_leg) {
+      let normalized = url_leg.replace('centre', 'center') as any
+      if (['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'].includes(normalized)) {
+        set_legend_position(normalized)
+      }
     }
   }, [])
 
@@ -1598,6 +1604,7 @@ export const App: React.FC = function () {
           uiVisible={!is_headless_export && ui_visible && !is_timelapse_exporting}
           isTimelapseExporting={is_timelapse_exporting || is_headless_export}
           legendPosition={legend_position}
+          onChangeLegendPosition={set_legend_position}
           userRole={user_role}
         />
 

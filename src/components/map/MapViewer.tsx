@@ -102,6 +102,8 @@ export interface MapViewerProps {
   isLoadingLayers?: boolean
   onChangeVariableSelector?: (arg0_key: string, arg1_option: string | string[]) => void
   onSelectLayer?: (arg0_layer_id: string) => void
+  legendPosition?: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'top-centre' | 'bottom-centre'
+  onChangeLegendPosition?: (pos: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right') => void
   uiVisible?: boolean
   isTimelapseExporting?: boolean
   onToggleUi?: () => void
@@ -117,8 +119,10 @@ export interface MapViewerProps {
 export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewerProps) {
   //Convert from parameters
   let props = (arg0_props) ? arg0_props : ({} as MapViewerProps)
-  let legend_position = props.legendPosition || 'top-left'
+  let on_change_legend_position = props.onChangeLegendPosition
   let on_toggle_ui = props.onToggleUi
+  let raw_legend_pos = (props.legendPosition || 'top-left') as string
+  let legend_position = raw_legend_pos.replace('centre', 'center') as 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'
   let ui_visible = props.uiVisible !== undefined ? props.uiVisible : true
 
   //Declare local instance variables
@@ -213,9 +217,11 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
       minPitch: 0,
       maxPitch: 85,
     },
-    Equirectangular: MAP_CONFIG.mapDefines?.initialEquirectangular || {
+    Equirectangular: {
       target: [0, 0, 0],
-      zoom: 2.0,
+      zoom: typeof window !== 'undefined'
+        ? Math.max(1.5, parseFloat(Math.log2(window.innerWidth / 360).toFixed(2)))
+        : 2.83,
       minZoom: 0.2,
       maxZoom: 10,
       rotationX: 0,
@@ -223,9 +229,11 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
       minRotationX: -85,
       maxRotationX: 0,
     },
-    EqualEarth: MAP_CONFIG.mapDefines?.initialEqualEarth || {
+    EqualEarth: {
       target: [0, 0, 0],
-      zoom: 2.0,
+      zoom: typeof window !== 'undefined'
+        ? Math.max(1.5, parseFloat(Math.log2((window.innerHeight*0.96) / 180).toFixed(2)))
+        : 2.80,
       minZoom: 0.2,
       maxZoom: 10,
       rotationX: 0,
@@ -474,14 +482,23 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
   )
 
   handle_double_click = useCallback(() => {
+    let equal_earth_zoom = typeof window !== 'undefined'
+      ? Math.max(1.5, parseFloat(Math.log2((window.innerHeight*0.96) / 180).toFixed(2)))
+      : 2.80
+    let equirect_zoom = typeof window !== 'undefined'
+      ? Math.max(1.5, parseFloat(Math.log2(window.innerWidth / 360).toFixed(2)))
+      : 2.83
+
     set_proj_view_states((prev) => ({
       ...prev,
       [projection]:
-        (projection === 'Equirectangular' || projection === 'EqualEarth')
-          ? { target: [0, 0, 0], zoom: 2.0, minZoom: 0.2, maxZoom: 10, rotationX: 0, rotationOrbit: 0, minRotationX: -85, maxRotationX: 0 }
-          : (projection === 'Globe')
-            ? { longitude: 0, latitude: 20, zoom: 0, pitch: 0, bearing: 0, maxZoom: 18, minZoom: 0, minPitch: 0, maxPitch: 85 }
-            : { longitude: 0, latitude: 20, zoom: 1.2, pitch: 0, bearing: 0, maxZoom: 18, minZoom: 0, minPitch: 0, maxPitch: 85 },
+        (projection === 'Equirectangular')
+          ? { target: [0, 0, 0], zoom: equirect_zoom, minZoom: 0.2, maxZoom: 10, rotationX: 0, rotationOrbit: 0, minRotationX: -85, maxRotationX: 0 }
+          : (projection === 'EqualEarth')
+            ? { target: [0, 0, 0], zoom: equal_earth_zoom, minZoom: 0.2, maxZoom: 10, rotationX: 0, rotationOrbit: 0, minRotationX: -85, maxRotationX: 0 }
+            : (projection === 'Globe')
+              ? { longitude: 0, latitude: 20, zoom: 0, pitch: 0, bearing: 0, maxZoom: 18, minZoom: 0, minPitch: 0, maxPitch: 85 }
+              : { longitude: 0, latitude: 20, zoom: 1.2, pitch: 0, bearing: 0, maxZoom: 18, minZoom: 0, minPitch: 0, maxPitch: 85 },
     }))
   }, [projection, set_proj_view_states])
 
@@ -681,19 +698,36 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
             ? UI_LAYOUT.margin
             : UI_LAYOUT.margin + current_sidebar_width + UI_LAYOUT.gap
 
-          let container_style: React.CSSProperties = {
-            width: `${current_colourbar_width}px`,
-          }
+          let is_center_pos = legend_position === 'bottom-center' || legend_position === 'top-center'
+          let container_style: React.CSSProperties = {}
+
           if (legend_position === 'bottom-center') {
-            container_style.bottom = '84px'
+            container_style.bottom = '104px'
             container_style.left = '50%'
             container_style.transform = 'translateX(-50%)'
+            container_style.width = 'min(1100px, calc(100vw - 64px))'
           } else if (legend_position === 'bottom-left') {
-            container_style.bottom = '84px'
+            container_style.bottom = '104px'
             container_style.left = `${colourbar_left}px`
+            container_style.width = `${current_colourbar_width}px`
+          } else if (legend_position === 'bottom-right') {
+            container_style.bottom = '104px'
+            container_style.right = `${UI_LAYOUT.margin}px`
+            container_style.width = `${current_colourbar_width}px`
+          } else if (legend_position === 'top-center') {
+            container_style.top = `${UI_LAYOUT.margin}px`
+            container_style.left = '50%'
+            container_style.transform = 'translateX(-50%)'
+            container_style.width = 'min(1100px, calc(100vw - 64px))'
+          } else if (legend_position === 'top-right') {
+            container_style.top = `${UI_LAYOUT.margin}px`
+            container_style.right = is_timelapse_exporting ? `${UI_LAYOUT.margin}px` : `${UI_LAYOUT.margin + 44 + UI_LAYOUT.gap}px`
+            container_style.width = `${current_colourbar_width}px`
           } else {
+            // 'top-left'
             container_style.top = `${UI_LAYOUT.margin}px`
             container_style.left = `${colourbar_left}px`
+            container_style.width = `${current_colourbar_width}px`
           }
 
           return (
@@ -718,8 +752,8 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
                     breaks={legend_breaks}
                     countryName={legend_country_name}
                     onUpdateBreaks={on_update_breaks}
-                    width={current_colourbar_width}
-                    onResizeWidth={on_resize_colourbar_width}
+                    width={is_center_pos ? '100%' : current_colourbar_width}
+                    onResizeWidth={is_center_pos ? undefined : on_resize_colourbar_width}
                   />
                 </div>
               )}
@@ -906,6 +940,33 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
                     {basemap === item.id && (
                       <span className="w-1.5 h-1.5 rounded-none bg-primary" />
                     )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Colourbar Position Selector */}
+            <div className="space-y-1.5">
+              <span className="text-[var(--body-font-size)] font-bold text-foreground">Colourbar Position</span>
+              <div className="grid grid-cols-3 gap-1 bg-background/60 p-[var(--cell-padding)] rounded-none border border-border">
+                {[
+                  { id: 'top-left', label: 'Top Left' },
+                  { id: 'top-center', label: 'Top Centre' },
+                  { id: 'top-right', label: 'Top Right' },
+                  { id: 'bottom-left', label: 'Bottom Left' },
+                  { id: 'bottom-center', label: 'Bottom Centre' },
+                  { id: 'bottom-right', label: 'Bottom Right' },
+                ].map((pos) => (
+                  <button
+                    key={pos.id}
+                    type="button"
+                    onClick={() => on_change_legend_position && on_change_legend_position(pos.id as any)}
+                    className={`px-1.5 py-1 rounded-none text-[10px] transition-colors cursor-pointer text-center ${(legend_position === pos.id)
+                      ? 'bg-primary text-primary-foreground font-bold shadow-xs'
+                      : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground font-light'
+                      }`}
+                  >
+                    {pos.label}
                   </button>
                 ))}
               </div>

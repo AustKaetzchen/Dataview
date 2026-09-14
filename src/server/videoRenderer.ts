@@ -469,17 +469,17 @@ export const startTimelapseRenderJob = async function (
     export_zoom = options.zoom
   } else {
     if (projection === 'EqualEarth') {
-      let ideal = Math.log2((export_w*0.90)/360)
+      let ideal = Math.log2((export_h*0.96)/180)
       export_zoom = Math.max(1.0, Math.min(4.0, parseFloat(ideal.toFixed(2))))
     } else if (projection === 'Equirectangular') {
-      let ideal = Math.log2((export_w*0.92)/360)
+      let ideal = Math.log2(export_w/360)
       export_zoom = Math.max(1.0, Math.min(4.0, parseFloat(ideal.toFixed(2))))
     } else if (projection === 'Mercator') {
       export_zoom = 0.95
     } else if (projection === 'Globe') {
       export_zoom = 0
     } else {
-      export_zoom = 1.65
+      export_zoom = 2.85
     }
   }
 

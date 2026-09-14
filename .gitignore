@@ -12,6 +12,7 @@ dist
 dist-ssr
 docs
 exports
+scratch
 *.local
 
 # Editor directories and files
