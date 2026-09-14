@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react'
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { ParsedDataLayer } from '@/server/layerParser'
 import { Icon } from '@/components/ui/icon'
 import { Label } from '@/components/ui/label'
@@ -8,7 +8,20 @@ import { UfDate } from '@/lib/ufDate'
 export type VideoExportMode = 'stationary' | 'cycling'
 export type TimestepUnit = 'years' | 'months' | 'days'
 
+export interface CohortOption {
+  key: string
+  label: string
+}
+
+export interface IndicatorFolderItem {
+  cohorts: CohortOption[]
+  id: string
+  isFolder: boolean
+  name: string
+}
+
 export interface StartTimelapseExportOptions {
+  concurrency?: number
   endYear: number
   filename: string
   fps: number
@@ -20,18 +33,26 @@ export interface StartTimelapseExportOptions {
   startYear: number
   timestepStep: number
   width?: number
+  zoom?: number
 }
 
 export interface VideoExportModalProps {
   activeLayerId: string | null
   availableKeyframes: number[]
   availableLayers: Record<string, ParsedDataLayer>
+  colorPalette?: string
   currentProjection?: string
   isOpen: boolean
+  legendSubtitle?: string
+  legendTitle?: string
+  maxVal?: number
   maxYear: number
+  minVal?: number
   minYear: number
   onClose: () => void
   onStartTimelapseExport?: (arg0_options: StartTimelapseExportOptions) => Promise<void>
+  renderedCanvas?: HTMLCanvasElement | null
+  timelineYear?: number
 }
 
 /**
@@ -206,18 +227,24 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
     onClose: on_close,
   } = props
   //Declare local instance variables
-
+  let all_cohort_keys: string[]
   let all_layer_keys: string[]
   let clear_all_cycling_layers: () => void
+  let concurrency: number
   let end_year: number
+  let expanded_folders: Record<string, boolean>
   let export_error: string | null
   let export_filename: string
   let export_mode: VideoExportMode
   let export_success: string | null
   let fps: number
+  let get_default_zoom: (arg0_proj: string) => number
   let handle_start_export: () => Promise<void>
+  let handle_zoom_change: (arg0_new_zoom: number) => void
+  let indicator_folders: IndicatorFolderItem[]
   let is_exporting: boolean
   let keyframes_only: boolean
+  let preview_canvas_ref: React.MutableRefObject<HTMLCanvasElement | null>
   let progress_pct: number
   let progress_status: string
   let projection: string
@@ -225,7 +252,9 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   let select_all_cycling_layers: () => void
   let selected_cycling_layers: string[]
   let selected_stationary_layer: string
+  let set_concurrency: React.Dispatch<React.SetStateAction<number>>
   let set_end_year: React.Dispatch<React.SetStateAction<number>>
+  let set_expanded_folders: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
   let set_export_error: React.Dispatch<React.SetStateAction<string | null>>
   let set_export_filename: React.Dispatch<React.SetStateAction<string>>
   let set_export_mode: React.Dispatch<React.SetStateAction<VideoExportMode>>
@@ -242,14 +271,185 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   let set_start_year: React.Dispatch<React.SetStateAction<number>>
   let set_timestep_step: React.Dispatch<React.SetStateAction<number>>
   let set_timestep_unit: React.Dispatch<React.SetStateAction<TimestepUnit>>
+  let set_zoom: React.Dispatch<React.SetStateAction<number>>
   let start_year: number
   let timestep_step: number
   let timestep_unit: TimestepUnit
   let toggle_cycling_layer: (arg0_id: string) => void
+  let toggle_expanded_folder: (arg0_id: string) => void
+  let toggle_folder_cohorts: (arg0_folder: IndicatorFolderItem) => void
+  let zoom: number
 
   //Function body
   all_layer_keys = useMemo(() => Object.keys(available_layers), [available_layers])
 
+  indicator_folders = useMemo<IndicatorFolderItem[]>(() => {
+    let result: IndicatorFolderItem[] = []
+    let keys = Object.keys(available_layers)
+
+    for (let i = 0; i < keys.length; i++) {
+      let k = keys[i]
+      let layer = available_layers[k]
+      if (!layer)
+        continue
+
+      //1. Sub-layers (e.g. labourforce_total)
+      if (layer.sub_layers && layer.sub_layers.length > 0) {
+        result.push({
+          cohorts: layer.sub_layers.map((arg0_sub) => ({
+            key: arg0_sub.id,
+            label: arg0_sub.name,
+          })),
+          id: k,
+          isFolder: true,
+          name: layer.name,
+        })
+        continue
+      }
+
+      //2. Professions
+      if (k === 'professions_percentage' || k === 'professions_total') {
+        let title_prefix = k === 'professions_percentage' ? 'Professions (%)' : 'Professions (Total)'
+        result.push({
+          cohorts: [
+            { key: `${k}::profession=agriculture&gender=t`, label: 'Agriculture' },
+            { key: `${k}::profession=informal_labour&gender=t`, label: 'Informal Labour' },
+            { key: `${k}::profession=manufacturing&gender=t`, label: 'Manufacturing' },
+            { key: `${k}::profession=services&gender=t`, label: 'Services' },
+            { key: `${k}::profession=not_in_work&gender=t`, label: 'Not in Work' },
+          ],
+          id: k,
+          isFolder: true,
+          name: title_prefix,
+        })
+        continue
+      }
+
+      //3. Age/Sex
+      if (k === 'age_sex') {
+        let age_brackets = [
+          { id: '00', name: '0-1yo' },
+          { id: '01', name: '1-5yo' },
+          { id: '05', name: '5-10yo' },
+          { id: '10', name: '10-15yo' },
+          { id: '15', name: '15-20yo' },
+          { id: '20', name: '20-25yo' },
+          { id: '25', name: '25-30yo' },
+          { id: '30', name: '30-35yo' },
+          { id: '35', name: '35-40yo' },
+          { id: '40', name: '40-45yo' },
+          { id: '45', name: '45-50yo' },
+          { id: '50', name: '50-55yo' },
+          { id: '55', name: '55-60yo' },
+          { id: '60', name: '60-65yo' },
+          { id: '65', name: '65-70yo' },
+          { id: '70', name: '70-75yo' },
+          { id: '75', name: '75-80yo' },
+          { id: '80', name: '80+yo' },
+        ]
+        let age_cohorts: CohortOption[] = []
+        for (let x = 0; x < age_brackets.length; x++) {
+          age_cohorts.push({
+            key: `age_sex::gender=f&age=${age_brackets[x].id}`,
+            label: `Female (${age_brackets[x].name})`,
+          })
+        }
+        for (let x = 0; x < age_brackets.length; x++) {
+          age_cohorts.push({
+            key: `age_sex::gender=m&age=${age_brackets[x].id}`,
+            label: `Male (${age_brackets[x].name})`,
+          })
+        }
+        result.push({
+          cohorts: age_cohorts,
+          id: k,
+          isFolder: true,
+          name: 'Age/Sex (Total)',
+        })
+        continue
+      }
+
+      //4. Wealth/Income
+      if (k === 'wealth_income') {
+        result.push({
+          cohorts: [
+            { key: 'wealth_income::indicator=net_wealth', label: 'Net Wealth' },
+            { key: 'wealth_income::indicator=net_income', label: 'Net Income' },
+            { key: 'wealth_income::indicator=disposable_income', label: 'Disposable Income' },
+            { key: 'wealth_income::indicator=discretionary_income', label: 'Discretionary Income' },
+          ],
+          id: k,
+          isFolder: true,
+          name: 'Wealth/Income',
+        })
+        continue
+      }
+
+      //5. Deaths
+      if (k === 'deaths') {
+        result.push({
+          cohorts: [
+            { key: 'deaths::gender=female', label: 'Female Deaths' },
+            { key: 'deaths::gender=male', label: 'Male Deaths' },
+          ],
+          id: k,
+          isFolder: true,
+          name: 'Deaths',
+        })
+        continue
+      }
+
+      //6. Migration (Gender)
+      if (k === 'migration_gender') {
+        result.push({
+          cohorts: [
+            { key: 'migration_gender::gender=female', label: 'Female Migration' },
+            { key: 'migration_gender::gender=male', label: 'Male Migration' },
+          ],
+          id: k,
+          isFolder: true,
+          name: 'Migration (Gender)',
+        })
+        continue
+      }
+
+      //7. Standalone layer
+      result.push({
+        cohorts: [{ key: k, label: layer.name || k }],
+        id: k,
+        isFolder: false,
+        name: layer.name || k,
+      })
+    }
+
+    return result
+  }, [available_layers])
+
+  all_cohort_keys = useMemo(() => {
+    let keys: string[] = []
+    for (let i = 0; i < indicator_folders.length; i++) {
+      let f = indicator_folders[i]
+      for (let x = 0; x < f.cohorts.length; x++) {
+        keys.push(f.cohorts[x].key)
+      }
+    }
+    return keys
+  }, [indicator_folders])
+
+  get_default_zoom = useCallback((arg0_proj: string): number => {
+    if (arg0_proj === 'EqualEarth')
+      return 1.65
+    if (arg0_proj === 'Equirectangular')
+      return 1.6
+    if (arg0_proj === 'Mercator')
+      return 0.95
+    if (arg0_proj === 'Globe')
+      return 0.0
+
+    return 1.65
+  }, [])
+
+  ;[concurrency, set_concurrency] = useState<number>(4)
   ;[export_mode, set_export_mode] = useState<VideoExportMode>('cycling')
   ;[selected_stationary_layer, set_selected_stationary_layer] = useState<string>(() => {
     return active_layer_id || Object.keys(available_layers)[0] || 'GDP_nominal_pc'
@@ -261,22 +461,185 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
   ;[end_year, set_end_year] = useState<number>(2025)
   ;[fps, set_fps] = useState<number>(30)
   ;[projection, set_projection] = useState<string>(props.currentProjection || 'EqualEarth')
+  ;[zoom, set_zoom] = useState<number>(() => {
+    return get_default_zoom(props.currentProjection || 'EqualEarth')
+  })
+  preview_canvas_ref = useRef<HTMLCanvasElement | null>(null)
   ;[resolution, set_resolution] = useState<string>('1080p')
   ;[export_filename, set_export_filename] = useState<string>(() => {
     return `dataview_timelapse_${Date.now()}.mp4`
   })
-  ;[selected_cycling_layers, set_selected_cycling_layers] = useState<string[]>(() =>
-    Object.keys(available_layers).slice(0, 8)
-  )
+  ;[expanded_folders, set_expanded_folders] = useState<Record<string, boolean>>({
+    professions_percentage: true,
+    age_sex: false,
+    labourforce_total: false,
+  })
+  ;[selected_cycling_layers, set_selected_cycling_layers] = useState<string[]>(() => {
+    let initial: string[] = []
+    let keys = Object.keys(available_layers)
+    for (let i = 0; i < Math.min(3, keys.length); i++) {
+      let k = keys[i]
+      if (k === 'professions_percentage') {
+        initial.push(
+          `${k}::profession=agriculture&gender=t`,
+          `${k}::profession=informal_labour&gender=t`,
+          `${k}::profession=manufacturing&gender=t`,
+          `${k}::profession=services&gender=t`,
+          `${k}::profession=not_in_work&gender=t`
+        )
+      } else {
+        initial.push(k)
+      }
+    }
+    return initial
+  })
   ;[is_exporting, set_is_exporting] = useState<boolean>(false)
   ;[progress_pct, set_progress_pct] = useState<number>(0)
   ;[progress_status, set_progress_status] = useState<string>('')
   ;[export_error, set_export_error] = useState<string | null>(null)
   ;[export_success, set_export_success] = useState<string | null>(null)
 
+  handle_zoom_change = useCallback((arg0_new_zoom: number) => {
+    let clamped = Math.max(0.1, Math.min(4.0, Math.round(arg0_new_zoom*100)/100))
+    set_zoom(clamped)
+    if (typeof (window as any).__setMapZoom === 'function') {
+      ;(window as any).__setMapZoom(clamped)
+    }
+  }, [])
+
+  //Draw live 16:9 framing preview canvas showing map positioning relative to UI overlays
+  useEffect(() => {
+    let canvas = preview_canvas_ref.current
+    if (!canvas)
+      return
+
+    let ctx = canvas.getContext('2d')
+    if (!ctx)
+      return
+
+    let w = 640
+    let h = 360
+    canvas.width = w
+    canvas.height = h
+
+    //1. Clear dark background
+    ctx.fillStyle = '#0B0F19'
+    ctx.fillRect(0, 0, w, h)
+
+    //2. Draw graticule lines
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)'
+    ctx.lineWidth = 1
+    for (let x = 0; x <= w; x += 40) {
+      ctx.beginPath()
+      ctx.moveTo(x, 0)
+      ctx.lineTo(x, h)
+      ctx.stroke()
+    }
+    for (let y = 0; y <= h; y += 40) {
+      ctx.beginPath()
+      ctx.moveTo(0, y)
+      ctx.lineTo(w, y)
+      ctx.stroke()
+    }
+
+    //3. Draw map raster (scaled by zoom)
+    let map_w = 400*Math.pow(2, zoom - 1.0)
+    let map_h = 200*Math.pow(2, zoom - 1.0)
+    let map_x = (w - map_w)/2
+    let map_y = (h - map_h)/2
+
+    if (props.renderedCanvas) {
+      try {
+        ctx.drawImage(props.renderedCanvas, map_x, map_y, map_w, map_h)
+      } catch {
+        //Fallback if canvas draw fails
+      }
+    } else {
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.15)'
+      ctx.strokeStyle = 'rgba(59, 130, 246, 0.4)'
+      ctx.lineWidth = 1.5
+      ctx.fillRect(map_x, map_y, map_w, map_h)
+      ctx.strokeRect(map_x, map_y, map_w, map_h)
+    }
+
+    //4. Draw 16:9 frame outline
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)'
+    ctx.lineWidth = 1
+    ctx.strokeRect(1, 1, w - 2, h - 2)
+
+    //5. Top-Left Colourbar Overlay Mockup (matching actual export position)
+    let cb_x = 8
+    let cb_y = 8
+    let cb_w = 130
+    let cb_h = 46
+    ctx.fillStyle = 'rgba(11, 15, 25, 0.92)'
+    ctx.fillRect(cb_x, cb_y, cb_w, cb_h)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)'
+    ctx.strokeRect(cb_x, cb_y, cb_w, cb_h)
+
+    ctx.fillStyle = '#FFFFFF'
+    ctx.font = 'bold 8px Inter, sans-serif'
+    let title_str = (props.legendTitle || 'Indicator Value')
+    if (title_str.length > 22)
+      title_str = title_str.slice(0, 20) + '...'
+    ctx.fillText(title_str, cb_x + 6, cb_y + 12)
+
+    //Gradient bar
+    let grad = ctx.createLinearGradient(cb_x + 6, 0, cb_x + cb_w - 12, 0)
+    grad.addColorStop(0, '#313695')
+    grad.addColorStop(0.5, '#ffffbf')
+    grad.addColorStop(1, '#a50026')
+    ctx.fillStyle = grad
+    ctx.fillRect(cb_x + 6, cb_y + 17, cb_w - 12, 7)
+
+    ctx.fillStyle = '#94A3B8'
+    ctx.font = '7px monospace'
+    ctx.fillText(props.minVal !== undefined ? String(Math.round(props.minVal)) : '0', cb_x + 6, cb_y + 36)
+    ctx.textAlign = 'right'
+    ctx.fillText(props.maxVal !== undefined ? String(Math.round(props.maxVal)) : '100', cb_x + cb_w - 6, cb_y + 36)
+    ctx.textAlign = 'left'
+
+    //6. Bottom-Centred Timeline Bar Mockup (matching actual export position)
+    let tb_w = Math.min(360, w - 40)
+    let tb_h = 24
+    let tb_x = (w - tb_w)/2
+    let tb_y = h - 30
+    ctx.fillStyle = 'rgba(11, 15, 25, 0.95)'
+    ctx.fillRect(tb_x, tb_y, tb_w, tb_h)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)'
+    ctx.strokeRect(tb_x, tb_y, tb_w, tb_h)
+
+    //Date badge in center
+    let date_str = UfDate.formatYear(props.timelineYear || start_year)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)'
+    ctx.fillRect(tb_x + (tb_w - 70)/2, tb_y + 3, 70, 10)
+    ctx.fillStyle = '#FFFFFF'
+    ctx.font = 'bold 7px monospace'
+    ctx.textAlign = 'center'
+    ctx.fillText(date_str, tb_x + tb_w/2, tb_y + 11)
+    ctx.textAlign = 'left'
+
+    //Scrubber track & red progress line
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'
+    ctx.fillRect(tb_x + 6, tb_y + 17, tb_w - 12, 2)
+    ctx.fillStyle = '#EF4444'
+    ctx.fillRect(tb_x + 6, tb_y + 17, (tb_w - 12)*0.45, 2)
+  }, [
+    props.colorPalette,
+    props.legendSubtitle,
+    props.legendTitle,
+    props.maxVal,
+    props.minVal,
+    props.renderedCanvas,
+    props.timelineYear,
+    projection,
+    start_year,
+    zoom,
+  ])
+
   select_all_cycling_layers = useCallback(() => {
-    set_selected_cycling_layers(Object.keys(available_layers))
-  }, [available_layers])
+    set_selected_cycling_layers(all_cohort_keys)
+  }, [all_cohort_keys])
 
   clear_all_cycling_layers = useCallback(() => {
     set_selected_cycling_layers([])
@@ -289,6 +652,30 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
         return arg0_prev.filter((arg0_x) => arg0_x !== id)
       return [...arg0_prev, id]
     })
+  }, [])
+
+  toggle_folder_cohorts = useCallback((arg0_folder: IndicatorFolderItem) => {
+    let folder = arg0_folder
+    let folder_cohort_keys = folder.cohorts.map((arg0_c) => arg0_c.key)
+    set_selected_cycling_layers((arg0_prev) => {
+      let all_selected = folder_cohort_keys.every((arg0_k) => arg0_prev.includes(arg0_k))
+      if (all_selected) {
+        return arg0_prev.filter((arg0_k) => !folder_cohort_keys.includes(arg0_k))
+      }
+      let next = new Set(arg0_prev)
+      for (let i = 0; i < folder_cohort_keys.length; i++) {
+        next.add(folder_cohort_keys[i])
+      }
+      return Array.from(next)
+    })
+  }, [])
+
+  toggle_expanded_folder = useCallback((arg0_id: string) => {
+    let id = arg0_id
+    set_expanded_folders((arg0_prev) => ({
+      ...arg0_prev,
+      [id]: !arg0_prev[id],
+    }))
   }, [])
 
   handle_start_export = useCallback(async () => {
@@ -314,6 +701,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
     if (props.onStartTimelapseExport) {
       on_close()
       await props.onStartTimelapseExport({
+        concurrency,
         endYear: end_year,
         filename: clean_filename,
         fps,
@@ -325,11 +713,13 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
         startYear: start_year,
         timestepStep: timestep_step,
         width: w,
+        zoom,
       })
     }
   }, [
     active_layer_id,
     available_layers,
+    concurrency,
     end_year,
     export_filename,
     export_mode,
@@ -343,6 +733,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
     selected_stationary_layer,
     start_year,
     timestep_step,
+    zoom,
   ])
 
   //Guard clauses
@@ -459,7 +850,7 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
             <div className="space-y-1.5 border border-border p-2.5 bg-muted/20">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-semibold text-foreground">
-                  Active Indicators to Cycle ({selected_cycling_layers.length} selected)
+                  Active Indicators & Cohorts to Cycle ({selected_cycling_layers.length} cohorts selected)
                 </Label>
                 <div className="flex items-center gap-1.5 text-[10px] font-mono">
                   <button
@@ -479,29 +870,184 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
                   </button>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-1 max-h-36 overflow-y-auto pr-1">
-                {all_layer_keys.map((arg0_key) => {
-                  let layer = available_layers[arg0_key]
-                  let is_checked = selected_cycling_layers.includes(arg0_key)
+
+              <div className="space-y-1 max-h-56 overflow-y-auto pr-1 border border-border/50 bg-background/50 p-1.5">
+                {indicator_folders.map((arg0_folder) => {
+                  let f_keys = arg0_folder.cohorts.map((arg0_c) => arg0_c.key)
+                  let selected_count = f_keys.filter((arg0_k) => selected_cycling_layers.includes(arg0_k)).length
+                  let is_all_selected = selected_count === f_keys.length && f_keys.length > 0
+                  let is_some_selected = selected_count > 0 && selected_count < f_keys.length
+                  let is_expanded = Boolean(expanded_folders[arg0_folder.id])
+
+                  if (!arg0_folder.isFolder) {
+                    let is_checked = selected_cycling_layers.includes(arg0_folder.cohorts[0]?.key || arg0_folder.id)
+                    return (
+                      <div
+                        key={arg0_folder.id}
+                        onClick={() => toggle_cycling_layer(arg0_folder.cohorts[0]?.key || arg0_folder.id)}
+                        className={`px-2 py-1 flex items-center justify-between border text-[11px] cursor-pointer transition-colors ${
+                          is_checked
+                            ? 'bg-primary/20 border-primary text-foreground font-medium'
+                            : 'bg-card border-border/60 text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 truncate">
+                          <Icon name="analytics" className="text-xs text-muted-foreground shrink-0" />
+                          <span className="truncate">{arg0_folder.name}</span>
+                        </div>
+                        {is_checked && <Icon name="check" className="text-xs text-primary shrink-0" />}
+                      </div>
+                    )
+                  }
+
                   return (
-                    <button
-                      key={arg0_key}
-                      type="button"
-                      onClick={() => toggle_cycling_layer(arg0_key)}
-                      className={`px-2 py-1 flex items-center justify-between border text-left text-[11px] cursor-pointer transition-colors ${
-                        is_checked
-                          ? 'bg-primary/20 border-primary text-foreground font-medium'
-                          : 'bg-card border-border text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      <span className="truncate pr-1">{layer?.name || arg0_key}</span>
-                      {is_checked && <Icon name="check" className="text-xs text-primary shrink-0" />}
-                    </button>
+                    <div key={arg0_folder.id} className="border border-border/70 bg-card/60 overflow-hidden">
+                      <div
+                        className={`px-2 py-1 flex items-center justify-between transition-colors ${
+                          is_all_selected ? 'bg-primary/15' : is_some_selected ? 'bg-primary/5' : 'bg-muted/30'
+                        }`}
+                      >
+                        <div
+                          onClick={() => toggle_folder_cohorts(arg0_folder)}
+                          className="flex items-center gap-1.5 min-w-0 flex-1 cursor-pointer select-none"
+                        >
+                          <button
+                            type="button"
+                            className={`w-3.5 h-3.5 border flex items-center justify-center shrink-0 text-[10px] ${
+                              is_all_selected
+                                ? 'border-primary bg-primary text-primary-foreground'
+                                : is_some_selected
+                                ? 'border-primary bg-primary/40 text-primary-foreground'
+                                : 'border-muted-foreground/60 bg-background'
+                            }`}
+                          >
+                            {is_all_selected && <Icon name="check" className="text-[10px]" />}
+                            {is_some_selected && <span className="w-1.5 h-1.5 bg-primary" />}
+                          </button>
+                          <Icon name={is_expanded ? 'folder_open' : 'folder'} className="text-primary text-xs shrink-0" />
+                          <span className="text-xs font-bold text-foreground truncate">{arg0_folder.name}</span>
+                          <span className="text-[10px] text-muted-foreground font-mono ml-1">
+                            ({selected_count}/{f_keys.length} cohorts)
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(arg0_e) => {
+                            arg0_e.stopPropagation()
+                            toggle_expanded_folder(arg0_folder.id)
+                          }}
+                          className="p-1 hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer shrink-0"
+                        >
+                          <Icon name={is_expanded ? 'expand_less' : 'expand_more'} className="text-xs" />
+                        </button>
+                      </div>
+
+                      {is_expanded && (
+                        <div className="p-1.5 bg-background/60 border-t border-border/40 grid grid-cols-2 gap-1 max-h-36 overflow-y-auto">
+                          {arg0_folder.cohorts.map((arg0_cohort) => {
+                            let is_cohort_checked = selected_cycling_layers.includes(arg0_cohort.key)
+                            return (
+                              <button
+                                key={arg0_cohort.key}
+                                type="button"
+                                onClick={() => toggle_cycling_layer(arg0_cohort.key)}
+                                className={`px-1.5 py-0.5 flex items-center justify-between border text-left text-[10px] cursor-pointer transition-colors ${
+                                  is_cohort_checked
+                                    ? 'bg-primary/20 border-primary text-foreground font-medium'
+                                    : 'bg-card border-border/50 text-muted-foreground hover:text-foreground'
+                                }`}
+                              >
+                                <span className="truncate pr-1">{arg0_cohort.label}</span>
+                                {is_cohort_checked && <Icon name="check" className="text-[10px] text-primary shrink-0" />}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
                   )
                 })}
               </div>
             </div>
           )}
+
+          {/* 16:9 Video Framing Preview & Zoom Adjustment */}
+          <div className="space-y-2 border border-border p-3 bg-muted/20">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Icon name="crop_16_9" className="text-primary text-sm" />
+                <Label className="text-xs font-semibold text-foreground">16:9 Video Framing Preview</Label>
+              </div>
+              <span className="text-[10px] text-muted-foreground font-mono">
+                Safe-Area & Overlay Alignment Preview
+              </span>
+            </div>
+
+            {/* 16:9 Preview Canvas Frame */}
+            <div className="relative w-full aspect-video rounded border border-border/80 bg-[#0B0F19] overflow-hidden flex items-center justify-center shadow-inner">
+              <canvas
+                ref={preview_canvas_ref}
+                className="w-full h-full object-contain"
+                style={{ imageRendering: 'pixelated' }}
+              />
+            </div>
+
+            {/* Zoom Controls Bar */}
+            <div className="flex flex-col gap-1.5 pt-1">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-muted-foreground font-medium flex items-center gap-1">
+                  <Icon name="zoom_in" className="text-xs" />
+                  Map Zoom Level: <strong className="font-mono text-foreground">{zoom.toFixed(2)}x</strong>
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handle_zoom_change(get_default_zoom(projection))}
+                    className="px-1.5 py-0.5 text-[10px] border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
+                    title="Fit whole world nicely inside 16:9 frame"
+                  >
+                    Fit World
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handle_zoom_change(zoom - 0.15)}
+                    className="px-1.5 py-0.5 text-[10px] border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    - Zoom
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handle_zoom_change(zoom + 0.15)}
+                    className="px-1.5 py-0.5 text-[10px] border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    + Zoom
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min="0.4"
+                  max="3.5"
+                  step="0.05"
+                  value={zoom}
+                  onChange={(arg0_e) => handle_zoom_change(parseFloat(arg0_e.target.value))}
+                  className="flex-1 accent-primary cursor-pointer h-1.5 bg-muted rounded-lg"
+                />
+                <Input
+                  type="number"
+                  step="0.05"
+                  min="0.1"
+                  max="5.0"
+                  value={zoom}
+                  onChange={(arg0_e) => handle_zoom_change(parseFloat(arg0_e.target.value) || 1.0)}
+                  className="h-7 w-20 text-xs bg-background font-mono text-center"
+                />
+              </div>
+            </div>
+          </div>
 
           {/* Timestep Settings */}
           <div className="space-y-2 border border-border p-2.5 bg-muted/20">
@@ -595,7 +1141,11 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
               <span className="text-[11px] text-muted-foreground">Map Projection</span>
               <select
                 value={projection}
-                onChange={(arg0_e) => set_projection(arg0_e.target.value)}
+                onChange={(arg0_e) => {
+                  let p = arg0_e.target.value
+                  set_projection(p)
+                  handle_zoom_change(get_default_zoom(p))
+                }}
                 className="w-full h-7 text-xs bg-background border border-border px-2 text-foreground focus:outline-hidden"
               >
                 <option value="EqualEarth">Equal Earth</option>
@@ -615,6 +1165,58 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
                 <option value="1440p">1440p (2560x1440 2K)</option>
                 <option value="720p">720p (1280x720 HD)</option>
               </select>
+            </div>
+          </div>
+
+          {/* Concurrency Threads Control */}
+          <div className="space-y-1.5 border border-border p-2.5 bg-muted/20">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <Icon name="memory" className="text-primary text-xs" />
+                <span>Parallel Concurrency Threads</span>
+              </Label>
+              <span className="text-[10px] text-muted-foreground font-mono">
+                {concurrency === 1 ? '1 worker (Sequential)' : `${concurrency} parallel browser workers`}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-4 gap-1.5">
+              {[
+                { count: 1, label: '1 (Single)' },
+                { count: 2, label: '2 Threads' },
+                { count: 4, label: '4 (Balanced)' },
+                { count: 8, label: '8 (Turbo)' },
+              ].map((arg0_t) => (
+                <button
+                  key={arg0_t.count}
+                  type="button"
+                  onClick={() => set_concurrency(arg0_t.count)}
+                  className={`h-7 text-xs border cursor-pointer transition-colors ${
+                    concurrency === arg0_t.count
+                      ? 'bg-primary text-primary-foreground font-bold border-primary'
+                      : 'bg-card border-border text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {arg0_t.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[10px] text-muted-foreground">
+                Spawns parallel headless browser workers per indicator to speed up render.
+              </span>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-muted-foreground">Custom:</span>
+                <Input
+                  type="number"
+                  min={1}
+                  max={16}
+                  value={concurrency}
+                  onChange={(arg0_e) => set_concurrency(Math.max(1, Math.min(16, parseInt(arg0_e.target.value) || 1)))}
+                  className="h-6 w-14 text-xs bg-background font-mono text-center"
+                />
+              </div>
             </div>
           </div>
 

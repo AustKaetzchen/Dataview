@@ -135,6 +135,8 @@ const applyLayerLegend = function (
   //Check if any selected variable option has a specific legend (e.g. occupation option)
   if (layer.variable_selectors) {
     let sel_keys = Object.keys(layer.variable_selectors)
+    let selected_option_names: string[] = []
+
     for (let i = 0; i < sel_keys.length; i++) {
       let sk = sel_keys[i]
       let opt_keys = Object.keys(layer.variable_selectors[sk]?.options || {})
@@ -147,13 +149,18 @@ const applyLayerLegend = function (
           candidate_legend = opt.legend
         if (opt.name) {
           if (chosen_vals.length > 1) {
-            candidate_title = `${layer.name} (${chosen_vals.length} selected)`
+            selected_option_names.push(`${chosen_vals.length} selected`)
+          } else if (opt.name === 'Total' && sel_keys.length > 1) {
+            //Skip redundant Total when other specific cohort option is present
           } else {
-            candidate_title = `${layer.name} (${opt.name})`
+            selected_option_names.push(opt.name)
           }
         }
       }
     }
+
+    if (selected_option_names.length > 0)
+      candidate_title = `${layer.name} (${selected_option_names.join(', ')})`
   }
 
   //Fall back to layer legend
@@ -676,9 +683,30 @@ export const App: React.FC = function () {
 
       set_active_layer_id(layer_id)
       set_timeline_year(yr)
+      set_active_variable_selectors(selectors)
       displayed_year_ref.current = yr
 
       let target_layer = layers[layer_id] || (active_layer?.id === layer_id ? active_layer : null)
+      if (!target_layer && layer_id.includes('.')) {
+        let parent_id = layer_id.split('.')[0]
+        let parent = layers[parent_id]
+        if (parent && parent.sub_layers) {
+          target_layer = parent.sub_layers.find((arg0_s) => arg0_s.id === layer_id) || null
+        }
+      }
+
+      if (target_layer) {
+        applyLayerLegend(
+          target_layer,
+          selectors,
+          set_color_palette,
+          set_invert_palette,
+          set_scale_type,
+          set_legend_title,
+          set_legend_subtitle
+        )
+      }
+
       let has_selectors = Boolean(target_layer?.variable_selectors && Object.keys(target_layer.variable_selectors).length > 0)
 
       let decoded = await fetchRasterKeyframe(
@@ -1220,16 +1248,20 @@ export const App: React.FC = function () {
       try {
         start_resp = await fetch('/api/export/start-render', {
           body: JSON.stringify({
+            concurrency: options.concurrency,
             endYear: options.endYear,
             fps: options.fps || 30,
             height: options.height || 1080,
+            keyframesOnly: options.keyframesOnly,
             mode: options.mode,
             outputFilename: options.filename,
             projection: options.projection || projection,
             selectedLayers: chosen_layers,
             startYear: options.startYear,
+            timestepStep: options.timestepStep,
             variableSelectors: active_variable_selectors,
             width: options.width || 1920,
+            zoom: options.zoom,
           }),
           headers: { 'Content-Type': 'application/json' },
           method: 'POST',
@@ -1624,12 +1656,19 @@ export const App: React.FC = function () {
         activeLayerId={active_layer_id}
         availableKeyframes={available_keyframes}
         availableLayers={layers}
+        colorPalette={color_palette}
         currentProjection={projection}
         isOpen={video_export_open}
+        legendSubtitle={legend_subtitle}
+        legendTitle={legend_title}
+        maxVal={max_val}
         maxYear={available_keyframes.length > 0 ? available_keyframes[available_keyframes.length - 1] : 2025}
+        minVal={min_val}
         minYear={available_keyframes.length > 0 ? available_keyframes[0] : -10000}
         onClose={() => set_video_export_open(false)}
         onStartTimelapseExport={handle_start_timelapse_export}
+        renderedCanvas={rendered_canvas}
+        timelineYear={timeline_year}
       />
     </div>
   )

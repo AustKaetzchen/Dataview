@@ -245,6 +245,30 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
     }
   }, [heightmap_config.enabled, set_proj_view_states])
 
+  useEffect(() => {
+    let params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+    let url_zoom = params?.get('zoom') ? parseFloat(params.get('zoom')!) : null
+    if (url_zoom && !Number.isNaN(url_zoom)) {
+      set_proj_view_states((prev) => ({
+        ...prev,
+        [projection]: {
+          ...prev[projection],
+          zoom: url_zoom,
+        },
+      }))
+    }
+    ;(window as any).__setMapZoom = (newZoom: number) => {
+      set_proj_view_states((prev) => ({
+        ...prev,
+        [projection]: {
+          ...prev[projection],
+          zoom: newZoom,
+        },
+      }))
+    }
+  }, [projection, set_proj_view_states])
+
+
   let [basemap, set_basemap] = useState<string>(MAP_CONFIG.basemapLayers[0]?.id || 'dark')
   let [show_graticule, set_show_graticule] = useState(true)
   let [inspect_data, set_inspect_data] = useState<InspectionData | null>(null)

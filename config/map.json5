@@ -14,7 +14,7 @@
     initialMercator: {
       longitude: 0,
       latitude: 20,
-      zoom: 1.2,
+      zoom: 0.95,
       pitch: 0,
       bearing: 0,
       maxZoom: 18,
@@ -33,14 +33,14 @@
     },
     initialEquirectangular: {
       target: [0, 0, 0],
-      zoom: 2.0,
+      zoom: 1.6,
       minZoom: 0.2,
       maxZoom: 10,
       pixelOffset: -1,
     },
     initialEqualEarth: {
       target: [0, 0, 0],
-      zoom: 2.0,
+      zoom: 1.65,
       minZoom: 0.2,
       maxZoom: 10,
       pixelOffset: -1,

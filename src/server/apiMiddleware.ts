@@ -403,7 +403,7 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
           let raw_body = Buffer.concat(body_chunks).toString('utf-8')
           let payload: TimelapseRenderOptions = JSON.parse(raw_body)
 
-          let job = await startTimelapseRenderJob(payload, exports_dir)
+          let job = await startTimelapseRenderJob(payload, exports_dir, undefined, registry.layers)
           res.statusCode = 200
           res.setHeader('Content-Type', 'application/json')
           res.end(JSON.stringify(job))
