@@ -341,21 +341,28 @@ self.onmessage = function (arg0_e: MessageEvent<WorkerInMessage>) {
           let sy: number
 
           if (projection === 'Globe') {
-            let center_lat = ((view_state?.latitude ?? 20) * Math.PI) / 180
-            let center_lng = ((view_state?.longitude ?? 0) * Math.PI) / 180
-            let lat = (cand.position[1] * Math.PI) / 180
-            let lng = (cand.position[0] * Math.PI) / 180
-            let d_lng = lng - center_lng
+            let center_lat = view_state?.latitude ?? 20
+            let center_lng = view_state?.longitude ?? 0
+            let c_lat_rad = (center_lat * Math.PI) / 180
+            let c_lng_rad = (center_lng * Math.PI) / 180
+            let p_lat_rad = (cand.position[1] * Math.PI) / 180
+            let p_lng_rad = (cand.position[0] * Math.PI) / 180
+            let d_lng = p_lng_rad - c_lng_rad
 
             // Check if on visible hemisphere (dot product with camera viewing vector)
-            let cos_c = Math.sin(center_lat) * Math.sin(lat) + Math.cos(center_lat) * Math.cos(lat) * Math.cos(d_lng)
+            let cos_c = Math.sin(c_lat_rad) * Math.sin(p_lat_rad) + Math.cos(c_lat_rad) * Math.cos(p_lat_rad) * Math.cos(d_lng)
             if (cos_c < 0.0)
               continue // Behind the horizon of the globe
 
-            // Orthographic projection to screen coordinates
-            let globe_radius = Math.min(window_w, window_h) * 0.38 * Math.pow(2, zoom)
-            let x_ortho = Math.cos(lat) * Math.sin(d_lng)
-            let y_ortho = Math.cos(center_lat) * Math.sin(lat) - Math.sin(center_lat) * Math.cos(lat) * Math.cos(d_lng)
+            // Orthographic projection to screen coordinates using SmoothGlobeViewport radius
+            let lat_clamp = Math.max(-89.9, Math.min(89.9, center_lat))
+            let scale_adjust = Math.PI * Math.cos((lat_clamp * Math.PI) / 180)
+            let lat_adjust = Math.log2(Math.max(0.0001, scale_adjust)) - Math.log2(Math.PI)
+            let effective_zoom = zoom + lat_adjust
+            let globe_radius = (512 / (2 * Math.PI)) * Math.pow(2, effective_zoom)
+
+            let x_ortho = Math.cos(p_lat_rad) * Math.sin(d_lng)
+            let y_ortho = Math.cos(c_lat_rad) * Math.sin(p_lat_rad) - Math.sin(c_lat_rad) * Math.cos(p_lat_rad) * Math.cos(d_lng)
 
             sx = window_w / 2 + x_ortho * globe_radius
             sy = window_h / 2 - y_ortho * globe_radius

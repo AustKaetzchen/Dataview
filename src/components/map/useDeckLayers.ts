@@ -773,10 +773,56 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
 
             let text_w = label_text.length * 7.5 + 12
             let text_h = 16
-            let r = c.pixelRadius
-            let sx = window_w / 2 + (c.position[0] / 360) * window_w
-            let sy = window_h / 2 - (c.position[1] / 180) * window_h
+            let sx: number
+            let sy: number
 
+            if (projection === 'Globe') {
+              let center_lat = options.viewState?.latitude ?? 20
+              let center_lng = options.viewState?.longitude ?? 0
+              let c_lat_rad = (center_lat * Math.PI) / 180
+              let c_lng_rad = (center_lng * Math.PI) / 180
+              let p_lat_rad = (c.position[1] * Math.PI) / 180
+              let p_lng_rad = (c.position[0] * Math.PI) / 180
+              let d_lng = p_lng_rad - c_lng_rad
+
+              let cos_c = Math.sin(c_lat_rad) * Math.sin(p_lat_rad) + Math.cos(c_lat_rad) * Math.cos(p_lat_rad) * Math.cos(d_lng)
+              if (cos_c < 0.0)
+                continue
+
+              let lat_clamp = Math.max(-89.9, Math.min(89.9, center_lat))
+              let scale_adjust = Math.PI * Math.cos((lat_clamp * Math.PI) / 180)
+              let lat_adjust = Math.log2(Math.max(0.0001, scale_adjust)) - Math.log2(Math.PI)
+              let effective_zoom = (options.viewState?.zoom ?? 1.2) + lat_adjust
+              let globe_radius = (512 / (2 * Math.PI)) * Math.pow(2, effective_zoom)
+
+              let x_ortho = Math.cos(p_lat_rad) * Math.sin(d_lng)
+              let y_ortho = Math.cos(c_lat_rad) * Math.sin(p_lat_rad) - Math.sin(c_lat_rad) * Math.cos(p_lat_rad) * Math.cos(d_lng)
+
+              sx = window_w / 2 + x_ortho * globe_radius
+              sy = window_h / 2 - y_ortho * globe_radius
+            } else if (is_cartesian) {
+              let target = options.viewState?.target || [0, 0, 0]
+              let scale = Math.pow(2, options.viewState?.zoom ?? 2.8)
+              sx = window_w / 2 + (c.position[0] - target[0]) * scale
+              sy = window_h / 2 - (c.position[1] - target[1]) * scale
+            } else {
+              let center_lat = options.viewState?.latitude ?? 20
+              let center_lng = options.viewState?.longitude ?? 0
+              let scale = Math.pow(2, options.viewState?.zoom ?? 1.2)
+              let rad_factor = Math.PI / 180
+
+              let x_norm = (c.position[0] + 180) / 360
+              let c_norm = (center_lng + 180) / 360
+              sx = window_w / 2 + (x_norm - c_norm) * 512 * scale
+
+              let lat_rad = Math.max(-85, Math.min(85, c.position[1])) * rad_factor
+              let c_lat_rad = Math.max(-85, Math.min(85, center_lat)) * rad_factor
+              let y_proj = (1 - Math.log(Math.tan(Math.PI / 4 + lat_rad / 2)) / Math.PI) / 2
+              let c_y_proj = (1 - Math.log(Math.tan(Math.PI / 4 + c_lat_rad / 2)) / Math.PI) / 2
+              sy = window_h / 2 + (y_proj - c_y_proj) * 512 * scale
+            }
+
+            let r = c.pixelRadius
             let box_x1 = sx + r + 8
             let box_y1 = sy - text_h / 2
             let box_x2 = box_x1 + text_w
