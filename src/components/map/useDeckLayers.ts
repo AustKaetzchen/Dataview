@@ -616,6 +616,10 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
       let is_halo = options.stadesterConfig.halo !== false && !options.stadesterConfig.filled
       let is_labels_visible = (options.stadesterConfig.showLabels !== undefined) ? options.stadesterConfig.showLabels : true
 
+      let circle_opacity = (options.stadesterConfig.opacity !== undefined) ? options.stadesterConfig.opacity : 0.7
+      let fill_alpha = Math.round(255 * circle_opacity)
+      let stroke_alpha = Math.min(255, Math.round(255 * Math.min(1.0, circle_opacity * 1.25)))
+
       // City circles layer (ScatterplotLayer rendered in screen pixels)
       layers_array.push(
         new ScatterplotLayer({
@@ -623,8 +627,8 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
           data: effective_points,
           getPosition: (d: any) => d.position,
           getRadius: (d: any) => d.pixelRadius,
-          getFillColor: (d: any) => d.color,
-          getLineColor: (d: any) => d.color,
+          getFillColor: (d: any) => [d.color[0], d.color[1], d.color[2], fill_alpha],
+          getLineColor: (d: any) => [d.color[0], d.color[1], d.color[2], stroke_alpha],
           getLineWidth: 1.5,
           lineWidthUnits: 'pixels',
           lineWidthMinPixels: 1.5,
@@ -690,7 +694,7 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
             if (!label_text)
               continue
 
-            let text_w = label_text.length * 7.2 + 12
+            let text_w = label_text.length * 7.5 + 12
             let text_h = 16
             let r = c.pixelRadius
             let sx = window_w / 2 + (c.position[0] / 360) * window_w
@@ -744,7 +748,7 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
               backgroundColor: [10, 15, 25, 220],
               backgroundPadding: [4, 2],
               borderRadius: 2,
-              fontFamily: 'Inter, system-ui, sans-serif',
+              fontFamily: 'Karla, sans-serif',
               fontWeight: 600,
               coordinateSystem: (is_cartesian) ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
               characterSet: 'auto',

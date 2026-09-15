@@ -8,6 +8,7 @@ import {
   findCountryAtLngLat,
   isPointInGeometry,
 } from '@/lib/geopng/polygonBinning'
+import { sampleRasterAt } from '@/lib/geopng/sampleRaster'
 import {
   invertEqualEarth,
   projectEqualEarth,
@@ -27,21 +28,11 @@ import {
   StadesterConfig,
 } from '@/lib/geopng/types'
 import { MAP_CONFIG, getPixelOffset } from '@config'
-import { UI_LAYOUT, getAnalyticsPanelRightOffset } from '@/lib/uiLayout'
+import { UI_LAYOUT } from '@/lib/uiLayout'
 import { ClickInfoPanel } from './ClickInfoPanel'
 import { CityDetailsPanel } from './CityDetailsPanel'
-import { ColorBarLegend } from './ColorBarLegend'
-import { StadesterLegendCard } from './StadesterLegendCard'
-import { Button } from '../ui/button'
-import { Icon } from '../ui/icon'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '../ui/tooltip'
 import { MapmodesTray } from './MapmodesTray'
-import { InfoFlyoutPanel } from './InfoFlyoutPanel'
+import { MapViewerHUD } from './MapViewerHUD'
 import {
   SmoothMapController,
   SmoothOrbitController,
@@ -54,6 +45,9 @@ import { UserRole } from '../controls/DataLayersTab'
 import { useCircleOverlay } from './useCircleOverlay'
 import { useDeckLayers } from './useDeckLayers'
 import { useStadesterWorker } from '@/lib/stadester/useStadesterWorker'
+
+const EMPTY_ARRAY: any[] = []
+const NOOP_FN = () => {}
 
 export interface MapViewerProps {
   raster: DecodedRaster | null
@@ -136,116 +130,101 @@ export interface MapViewerProps {
 export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewerProps) {
   //Convert from parameters
   let props = (arg0_props) ? arg0_props : ({} as MapViewerProps)
+  let analytics_open = props.analyticsOpen
+  let breaks = props.breaks
+  let circle_overlay_config = props.circleOverlayConfig
+  let colourbar_width = props.colourbarWidth
+  let countries_mode = props.countriesMode
+  let country_stats = props.countryStats
+  let heightmap_config = props.heightmapConfig
+  let hovered_country = props.hoveredCountry
+  let info_panel_open = props.infoPanelOpen ?? false
+  let invert_palette = props.invertPalette
+  let is_calculating_stats = props.isCalculatingStats
+  let is_timelapse_exporting = props.isTimelapseExporting ?? false
+  let legend_position = ((props.legendPosition || 'top-left') as string).replace('centre', 'center') as 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'
+  let legend_subtitle = props.legendSubtitle
+  let legend_title = props.legendTitle
+  let log_sigma = props.logSigma
+  let map_modes = props.mapModes
+  let max_val = props.maxVal
+  let min_val = props.minVal
   let on_change_legend_position = props.onChangeLegendPosition
+  let on_clear_countries = props.onClearCountries
   let on_close_city_details = props.onCloseCityDetails
+  let on_close_info_panel = props.onCloseInfoPanel
   let on_hover_city = props.onHoverCity
+  let on_hover_country = props.onHoverCountry
+  let on_inspect = props.onInspect
+  let on_reorder_map_modes = props.onReorderMapModes
+  let on_resize_colourbar_width = props.onResizeColourbarWidth
   let on_select_city = props.onSelectCity
+  let on_select_country = props.onSelectCountry
+  let on_toggle_analytics = props.onToggleAnalytics
+  let on_toggle_countries_mode = props.onToggleCountriesMode
+  let on_toggle_country = props.onToggleCountry
+  let on_toggle_map_mode = props.onToggleMapMode
   let on_toggle_performant_mode = props.onTogglePerformantMode
+  let on_toggle_settings_drawer = props.onToggleSettingsDrawer
   let on_toggle_ui = props.onToggleUi
+  let on_update_breaks = props.onUpdateBreaks
+  let opacity = props.opacity
+  let palette = props.palette
   let performant_mode = props.performantMode ?? false
-  let raw_legend_pos = (props.legendPosition || 'top-left') as string
-  let legend_position = raw_legend_pos.replace('centre', 'center') as 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'
+  let projection = props.projection
+  let raster = props.raster
+  let raster_bounds = props.rasterBounds
+  let rendered_canvas = props.renderedCanvas
+  let scale_type = props.scaleType
   let selected_city = props.selectedCity
   let selected_city_key = props.selectedCityKey
+  let selected_countries = props.selectedCountries
+  let selected_country = props.selectedCountry
+  let set_circle_overlay_config = props.setCircleOverlayConfig
+  let set_heightmap_config = props.setHeightmapConfig
+  let set_projection = props.setProjection
   let set_stadester_config = props.setStadesterConfig
+  let sidebar_width = props.sidebarWidth
   let stadester_cities = props.stadesterCities
   let stadester_config = props.stadesterConfig
   let timeline_year = props.timelineYear
   let ui_visible = props.uiVisible !== undefined ? props.uiVisible : true
 
   //Declare local instance variables
-  let active_layer: ParsedDataLayer | null = null
-  let analytics_open = props.analyticsOpen
-  let breaks = props.breaks
+  let active_layer: any = null
   let camera_tilt: number
-  let circle_overlay_config = props.circleOverlayConfig
   let circle_pixel_data: any
-  let colourbar_width = props.colourbarWidth
-  let countries_mode = props.countriesMode
-  let country_stats = props.countryStats
+  let deck_ref = useRef<any>(null)
   let elevation_spikes_data: any
   let equal_earth_land_geo_json: any
-  let flyout_open: boolean
   let graticule_paths: { path: [number, number][] }[]
   let handle_click: (info: any) => void
   let handle_double_click: () => void
   let handle_hover: (info: any) => void
   let handle_view_state_change: (e: any) => void
-  let heightmap_config = props.heightmapConfig
   let hover_raf_ref = useRef<number | null>(null)
-  let hovered_city: CityPoint | null
-  let hovered_city_pos: { x: number; y: number } | null
-  let hovered_country = props.hoveredCountry
-  let info_panel_open = props.infoPanelOpen ?? false
-  let invert_palette = props.invertPalette
-  let is_calculating_stats = props.isCalculatingStats
-  let is_timelapse_exporting = props.isTimelapseExporting ?? false
+  let is_interacting_ref = useRef<boolean>(false)
   let last_country_ref = useRef<CountryFeature | null>(null)
   let last_hovered_country_code_ref = useRef<string | null | undefined>(null)
   let layers: any[]
-  let legend_subtitle = props.legendSubtitle
-  let legend_title = props.legendTitle
-  let log_sigma = props.logSigma
-  let map_modes = props.mapModes
-  let mapmodes_bounds: { left: number; right: number; top: number } | null = null
-  let mapmodes_taken_right: number
-  let max_val = props.maxVal
-  let min_val = props.minVal
-  let on_clear_countries = props.onClearCountries
-  let on_close_info_panel = props.onCloseInfoPanel
-  let on_hover_country = props.onHoverCountry
-  let on_inspect = props.onInspect
-  let on_reorder_map_modes = props.onReorderMapModes
-  let on_resize_colourbar_width = props.onResizeColourbarWidth
-  let on_select_country = props.onSelectCountry
-  let on_toggle_analytics = props.onToggleAnalytics
-  let on_toggle_countries_mode = props.onToggleCountriesMode
-  let on_toggle_country = props.onToggleCountry
-  let on_toggle_map_mode = props.onToggleMapMode
-  let on_toggle_settings_drawer = props.onToggleSettingsDrawer
-  let on_update_breaks = props.onUpdateBreaks
-  let opacity = props.opacity
-  let palette = props.palette
   let pending_hover_info_ref = useRef<any>(null)
-  let projection = props.projection
-  let raster = props.raster
-  let raster_bounds = props.rasterBounds
-  let rendered_canvas = props.renderedCanvas
+  let pending_view_state_ref = useRef<any>(null)
   let sample_raster_at: (coordX: number, coordY: number) => InspectionData | null
-  let scale_type = props.scaleType
-  let selected_countries = props.selectedCountries
-  let selected_country = props.selectedCountry
-  let set_circle_overlay_config = props.setCircleOverlayConfig
-  let set_flyout_open: (open: boolean) => void
-  let set_heightmap_config = props.setHeightmapConfig
-  let set_hovered_city: React.Dispatch<React.SetStateAction<CityPoint | null>>
-  let set_hovered_city_pos: React.Dispatch<React.SetStateAction<{ x: number; y: number } | null>>
-  let set_mapmodes_bounds: React.Dispatch<React.SetStateAction<{ left: number; right: number; top: number } | null>>
-  let set_mapmodes_taken_right: React.Dispatch<React.SetStateAction<number>>
-  let set_projection = props.setProjection
-  let set_timeline_bounds: React.Dispatch<React.SetStateAction<{ left: number; right: number; top: number } | null>>
-  let set_timeline_clearance: React.Dispatch<React.SetStateAction<number>>
-  let set_top_right_taken: React.Dispatch<React.SetStateAction<number>>
-  let sidebar_width = props.sidebarWidth
-  let timeline_bounds: { left: number; right: number; top: number } | null = null
-  let timeline_clearance: number
-  let top_right_taken: number
+  let view_state_raf_ref = useRef<number | null>(null)
   let views: any
-
-  let deck_ref = useRef<any>(null)
 
   //Function body
   let [internal_flyout_open, set_internal_flyout_open] = useState(false)
-  flyout_open = (props.settingsDrawerOpen !== undefined) ? props.settingsDrawerOpen : internal_flyout_open
-  set_flyout_open = on_toggle_settings_drawer || set_internal_flyout_open
+  let flyout_open = (props.settingsDrawerOpen !== undefined) ? props.settingsDrawerOpen : internal_flyout_open
+  let set_flyout_open = on_toggle_settings_drawer || set_internal_flyout_open
 
-  ;[hovered_city, set_hovered_city] = useState<CityPoint | null>(null)
-  ;[hovered_city_pos, set_hovered_city_pos] = useState<{ x: number; y: number } | null>(null)
-  ;[mapmodes_bounds, set_mapmodes_bounds] = useState<{ left: number; right: number; top: number } | null>(null)
-  ;[mapmodes_taken_right, set_mapmodes_taken_right] = useState<number>(352)
-  ;[timeline_bounds, set_timeline_bounds] = useState<{ left: number; right: number; top: number } | null>(null)
-  ;[timeline_clearance, set_timeline_clearance] = useState<number>(128)
-  ;[top_right_taken, set_top_right_taken] = useState<number>(0)
+  let [hovered_city, set_hovered_city] = useState<CityPoint | null>(null)
+  let [hovered_city_pos, set_hovered_city_pos] = useState<{ x: number; y: number } | null>(null)
+  let [mapmodes_bounds, set_mapmodes_bounds] = useState<{ left: number; right: number; top: number } | null>(null)
+  let [mapmodes_taken_right, set_mapmodes_taken_right] = useState<number>(352)
+  let [timeline_bounds, set_timeline_bounds] = useState<{ left: number; right: number; top: number } | null>(null)
+  let [timeline_clearance, set_timeline_clearance] = useState<number>(128)
+  let [top_right_taken, set_top_right_taken] = useState<number>(0)
 
   //Dismiss city hover tooltip when cities overlay is disabled or mode changes
   useEffect(() => {
@@ -479,72 +458,17 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
 
   sample_raster_at = useCallback(
     (coordX: number, coordY: number): InspectionData | null => {
-      let cached_country: CountryFeature | null
-      let clamped_x: number
-      let clamped_y: number
-      let country_name: string | null = null
-      let eff_lat: number
-      let lat = coordY
-      let lng = coordX
-      let offset: number
-      let pixel_height: number
-      let pixel_offset: number
-      let pixel_x: number
-      let pixel_y: number
-      let raster_val: number
-
-      if (!raster)
-        return null
-
-      if (projection === 'EqualEarth') {
-        let local_inverted = invertEqualEarth(coordX, coordY)
-        lng = local_inverted[0]
-        lat = local_inverted[1]
-      }
-
-      if (lng < -180 || lng > 180 || lat < -90 || lat > 90)
-        return null
-
-      pixel_height = 180/raster.height
-      pixel_x = Math.floor(((lng + 180)/360)*raster.width)
-      pixel_offset = getPixelOffset(projection)
-      offset = pixel_offset*pixel_height
-      eff_lat = lat - offset
-      pixel_y = Math.floor(((90 - eff_lat)/180)*raster.height)
-
-      clamped_x = Math.max(0, Math.min(raster.width - 1, pixel_x))
-      clamped_y = Math.max(0, Math.min(raster.height - 1, pixel_y))
-
-      raster_val = raster.data[clamped_y*raster.width + clamped_x]
-
-      if (country_features.length > 0) {
-        cached_country = last_country_ref.current
-        if (cached_country && cached_country.bbox) {
-          let local_b_max_x = cached_country.bbox[2]
-          let local_b_max_y = cached_country.bbox[3]
-          let local_b_min_x = cached_country.bbox[0]
-          let local_b_min_y = cached_country.bbox[1]
-          if (lng >= local_b_min_x && lng <= local_b_max_x && lat >= local_b_min_y && lat <= local_b_max_y && isPointInGeometry(lng, lat, cached_country.geometry))
-            country_name = cached_country.properties.name || cached_country.properties.name_long || null
-        }
-        if (!country_name && countries_mode) {
-          let local_c = findCountryAtLngLat(lng, lat, country_features)
-          last_country_ref.current = local_c
-          if (local_c)
-            country_name = local_c.properties.name || local_c.properties.name_long || null
-        }
-      }
-
-      return {
-        pixelX: clamped_x,
-        pixelY: clamped_y,
-        lng,
-        lat,
-        value: Number.isNaN(raster_val) ? null : raster_val,
-        countryName: country_name,
-      }
+      return sampleRasterAt(
+        coordX,
+        coordY,
+        raster,
+        projection,
+        country_features,
+        Boolean(countries_mode),
+        last_country_ref.current
+      )
     },
-    [raster, country_features, projection]
+    [raster, country_features, projection, countries_mode]
   )
 
   handle_click = useCallback(
@@ -581,6 +505,10 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
 
   handle_hover = useCallback(
     (info: any) => {
+      // Guard clauses: immediately ignore hover events when user is dragging or interacting
+      if (is_interacting_ref.current)
+        return
+
       pending_hover_info_ref.current = info
       if (hover_raf_ref.current !== null)
         return
@@ -644,7 +572,10 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
 
   handle_view_state_change = useCallback(
     (e: any) => {
+      //Convert from parameters
       let next_view_state = e.viewState
+
+      //Function body
       if (projection === 'Globe') {
         let bearing = next_view_state.bearing ?? 0
         let clamped_lat = Math.max(-85, Math.min(85, next_view_state.latitude ?? 0))
@@ -656,10 +587,20 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
           bearing,
         }
       }
-      set_proj_view_states((prev) => ({
-        ...prev,
-        [projection]: next_view_state,
-      }))
+      pending_view_state_ref.current = next_view_state
+
+      if (view_state_raf_ref.current !== null)
+        return
+
+      view_state_raf_ref.current = requestAnimationFrame(() => {
+        view_state_raf_ref.current = null
+        if (pending_view_state_ref.current) {
+          set_proj_view_states((prev) => ({
+            ...prev,
+            [projection]: pending_view_state_ref.current,
+          }))
+        }
+      })
     },
     [projection, set_proj_view_states]
   )
@@ -848,6 +789,19 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
         views={views}
         viewState={proj_view_states[projection]}
         onViewStateChange={handle_view_state_change}
+        onInteractionStateChange={(arg0_state: any) => {
+          let state = arg0_state
+          let is_active = Boolean(state.isDragging || state.isPanning || state.isRotating || state.isZooming)
+          is_interacting_ref.current = is_active
+          if (is_active) {
+            if (hover_raf_ref.current !== null) {
+              cancelAnimationFrame(hover_raf_ref.current)
+              hover_raf_ref.current = null
+            }
+            set_inspect_data(null)
+            set_cursor_pos(null)
+          }
+        }}
         controller={false}
         layers={layers}
         onClick={handle_click}
@@ -925,7 +879,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
           let legend_min = (is_country_relative) ? country_stats!.min : min_val
           let legend_max = (is_country_relative) ? country_stats!.max : max_val
           let legend_breaks = (is_country_relative) ? undefined : breaks
-          let legend_country_name = (is_country_relative) ? country_stats!.name : null
+          let legend_country_name = (is_country_relative) ? country_stats!.name : undefined
 
           let current_sidebar_width = sidebar_width ?? UI_LAYOUT.sidebarWidth
           if (is_timelapse_exporting)
@@ -935,348 +889,59 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
             ? UI_LAYOUT.margin
             : UI_LAYOUT.margin + current_sidebar_width + UI_LAYOUT.gap
 
-          let is_center_pos = legend_position === 'bottom-center' || legend_position === 'top-center'
-          let container_style: React.CSSProperties = {}
-          let window_w = (typeof window !== 'undefined') ? window.innerWidth : 1920
-
-          //Timeline horizontal collision check
-          let effective_timeline_left = timeline_bounds ? timeline_bounds.left : ((window_w - Math.min(1100, window_w - 64))/2)
-          let effective_timeline_right = timeline_bounds ? timeline_bounds.right : (effective_timeline_left + Math.min(1100, window_w - 64))
-          let has_timeline = Boolean(timeline_bounds) || ui_visible || is_timelapse_exporting
-
-          if (legend_position === 'bottom-center') {
-            container_style.bottom = `${timeline_clearance}px`
-            container_style.left = '50%'
-            container_style.transform = 'translateX(-50%)'
-            container_style.width = 'min(1100px, calc(100vw - 64px))'
-          } else if (legend_position === 'bottom-left') {
-            let cb_x1 = colourbar_left
-            let cb_x2 = colourbar_left + current_colourbar_width
-            let overlaps_timeline = has_timeline && (cb_x1 < effective_timeline_right && cb_x2 > effective_timeline_left)
-
-            container_style.bottom = overlaps_timeline ? `${timeline_clearance}px` : `${UI_LAYOUT.margin}px`
-            container_style.left = `${colourbar_left}px`
-            container_style.width = `${current_colourbar_width}px`
-          } else if (legend_position === 'bottom-right') {
-            let effective_mapmodes_taken = (ui_visible && !is_timelapse_exporting) ? Math.max(mapmodes_taken_right, 352) : 0
-            let bottom_right_offset = (effective_mapmodes_taken > 0) ? (effective_mapmodes_taken + UI_LAYOUT.gap) : UI_LAYOUT.margin
-            let cb_x1 = window_w - bottom_right_offset - current_colourbar_width
-            let cb_x2 = window_w - bottom_right_offset
-            let overlaps_timeline = has_timeline && (cb_x1 < effective_timeline_right && cb_x2 > effective_timeline_left)
-
-            container_style.bottom = overlaps_timeline ? `${timeline_clearance}px` : `${UI_LAYOUT.margin}px`
-            container_style.right = `${bottom_right_offset}px`
-            container_style.width = `${current_colourbar_width}px`
-          } else if (legend_position === 'top-center') {
-            container_style.top = `${UI_LAYOUT.margin}px`
-            container_style.left = '50%'
-            container_style.transform = 'translateX(-50%)'
-            container_style.width = 'min(1100px, calc(100vw - 64px))'
-          } else if (legend_position === 'top-right') {
-            let theoretical_top_right = 0
-            if (ui_visible && !is_timelapse_exporting) {
-              if (analytics_open) {
-                let analytics_panel_offset = getAnalyticsPanelRightOffset(flyout_open)
-                let panel_width = Math.min(640, window_w - 720)
-                theoretical_top_right = analytics_panel_offset + panel_width
-              } else if (flyout_open) {
-                theoretical_top_right = UI_LAYOUT.settingsDrawerRight + UI_LAYOUT.settingsDrawerWidth
-              } else {
-                theoretical_top_right = UI_LAYOUT.margin + UI_LAYOUT.toolbarWidth
-              }
-            }
-            let effective_top_right = Math.max(top_right_taken, theoretical_top_right)
-            let top_right_offset = (effective_top_right > 0) ? (effective_top_right + UI_LAYOUT.gap) : UI_LAYOUT.margin
-
-            container_style.top = `${UI_LAYOUT.margin}px`
-            container_style.right = `${top_right_offset}px`
-            container_style.width = `${current_colourbar_width}px`
-          } else {
-            // 'top-left'
-            container_style.top = `${UI_LAYOUT.margin}px`
-            container_style.left = `${colourbar_left}px`
-            container_style.width = `${current_colourbar_width}px`
-          }
-
           return (
-            <div
-              id="dataview-colourbar-container"
-              style={container_style}
-              className={`absolute z-20 flex ${legend_position.startsWith('bottom') ? 'flex-col-reverse' : 'flex-col'} gap-3 pointer-events-none transition-all duration-150 ease-out`}
-            >
-              {/* Value Colourbar (when canvas/raster is available) */}
-              {(has_canvas || Boolean(raster) || is_timelapse_exporting) && (
-                <div className="pointer-events-auto">
-                  <ColorBarLegend
-                    palette={palette}
-                    invertPalette={invert_palette}
-                    minVal={legend_min}
-                    maxVal={legend_max}
-                    legendTitle={legend_title}
-                    legendSubtitle={legend_subtitle}
-                    scaleType={scale_type}
-                    logSigma={log_sigma}
-                    currentVal={inspect_data?.value ?? null}
-                    breaks={legend_breaks}
-                    countryName={legend_country_name}
-                    onUpdateBreaks={on_update_breaks}
-                    width={is_center_pos ? '100%' : current_colourbar_width}
-                    onResizeWidth={is_center_pos ? undefined : on_resize_colourbar_width}
-                  />
-                </div>
-              )}
-
-              {/* Stadestér Settlements Legend Card */}
-              {stadester_config?.enabled && (
-                <div className="pointer-events-auto">
-                  <StadesterLegendCard
-                    config={stadester_config}
-                    settlementCount={stadester_cities?.length ?? 0}
-                    width={is_center_pos ? '100%' : current_colourbar_width}
-                  />
-                </div>
-              )}
-
-              {/* Information & Controls Flyout Panel */}
-              {info_panel_open && (
-                <div className="pointer-events-auto">
-                  <InfoFlyoutPanel
-                    isOpen={info_panel_open}
-                    onClose={on_close_info_panel || (() => {})}
-                    mapModes={map_modes}
-                    heightmapConfig={heightmap_config}
-                    circleOverlayConfig={circle_overlay_config}
-                    selectedCountries={selected_countries || []}
-                    projection={projection}
-                    cameraTilt={camera_tilt}
-                    width={current_colourbar_width}
-                  />
-                </div>
-              )}
-            </div>
+            <MapViewerHUD
+              analyticsOpen={analytics_open}
+              basemap={basemap}
+              cameraTilt={camera_tilt}
+              circleOverlayConfig={circle_overlay_config}
+              colorPalette={palette}
+              colourbarLeft={colourbar_left}
+              colourbarWidth={current_colourbar_width}
+              flyoutOpen={flyout_open}
+              hasCanvas={has_canvas}
+              heightmapConfig={heightmap_config}
+              infoPanelOpen={info_panel_open}
+              inspectData={inspect_data}
+              invertPalette={invert_palette}
+              isTimelapseExporting={is_timelapse_exporting}
+              legendBreaks={legend_breaks}
+              legendCountryName={legend_country_name || undefined}
+              legendMax={legend_max}
+              legendMin={legend_min}
+              legendPosition={legend_position}
+              legendSubtitle={legend_subtitle}
+              legendTitle={legend_title}
+              logSigma={log_sigma}
+              mapModes={map_modes}
+              mapmodesTakenRight={mapmodes_taken_right}
+              onChangeLegendPosition={on_change_legend_position}
+              onCloseInfoPanel={on_close_info_panel}
+              onDoubleClick={handle_double_click}
+              onResizeColourbarWidth={on_resize_colourbar_width}
+              onToggleAnalytics={on_toggle_analytics}
+              onTogglePerformantMode={on_toggle_performant_mode}
+              onToggleUi={on_toggle_ui}
+              onUpdateBreaks={on_update_breaks}
+              performantMode={performant_mode}
+              projection={projection}
+              raster={raster}
+              scaleType={scale_type}
+              selectedCountries={selected_countries}
+              setBasemap={set_basemap}
+              setFlyoutOpen={set_flyout_open}
+              setProjection={set_projection}
+              setShowGraticule={set_show_graticule}
+              showGraticule={show_graticule}
+              stadesterCities={stadester_cities}
+              stadesterConfig={stadester_config}
+              timelineBounds={timeline_bounds}
+              timelineClearance={timeline_clearance}
+              topRightTaken={top_right_taken}
+              uiVisible={ui_visible}
+            />
           )
         })()}
-
-      {/* Map Control Tools Toolbar (Top Right) */}
-      {!is_timelapse_exporting && (
-        <TooltipProvider delayDuration={150}>
-        <div
-          id="dataview-top-right-toolbar"
-          style={{ top: `${UI_LAYOUT.margin}px`, right: `${UI_LAYOUT.margin}px` }}
-          className="absolute z-30 flex flex-col gap-[var(--cell-padding)] bg-card/95 backdrop-blur-md p-[var(--cell-padding)] rounded-none border border-border shadow-md"
-        >
-          {/* Map Display Settings Toggle (Basemaps & Projections) */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={(flyout_open) ? 'secondary' : 'ghost'}
-                size="icon"
-                onClick={() => set_flyout_open(!flyout_open)}
-                className="h-7 w-7 rounded-none text-white"
-                aria-label="Map Display Settings"
-              >
-                <Icon name="settings" className="text-white" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="left">
-              <span>Map Display Settings (Basemap & Projection)</span>
-            </TooltipContent>
-          </Tooltip>
-
-          {/* Toggle Raster Calculator View Panel */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={(analytics_open) ? 'secondary' : 'ghost'}
-                size="icon"
-                onClick={on_toggle_analytics}
-                className="h-7 w-7 rounded-none text-white"
-                aria-label="Toggle Raster Calculator"
-              >
-                <Icon name="analytics" className="text-white" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="left">
-              <span>Toggle Raster Calculator (Top Right View Panel)</span>
-            </TooltipContent>
-          </Tooltip>
-
-          {/* Toggle Graticule Grid Lines */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={(show_graticule) ? 'secondary' : 'ghost'}
-                size="icon"
-                onClick={() => set_show_graticule(!show_graticule)}
-                className="h-7 w-7 rounded-none text-white"
-                aria-label="Toggle Graticule Grid"
-              >
-                <Icon name="grid_on" className="text-white" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="left">
-              <span>Toggle Graticule Grid (Parallels & Meridians)</span>
-            </TooltipContent>
-          </Tooltip>
-
-          {/* Reset Map View (Centre & Zoom) */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handle_double_click}
-                className="h-7 w-7 rounded-none text-white"
-                aria-label="Reset View"
-              >
-                <Icon name="restart_alt" className="text-white" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="left">
-              <span>Reset Map View (Centre & Zoom)</span>
-            </TooltipContent>
-          </Tooltip>
-
-          {/* Toggle Fullscreen / UI Visibility */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={ui_visible ? 'ghost' : 'secondary'}
-                size="icon"
-                onClick={on_toggle_ui}
-                className="h-7 w-7 rounded-none text-white cursor-pointer"
-                aria-label={ui_visible ? 'Hide UI (Full Map View)' : 'Show UI'}
-              >
-                <Icon name={ui_visible ? 'visibility' : 'visibility_off'} className="text-white" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="left">
-              <span>{ui_visible ? 'Hide UI (Full Map View)' : 'Show UI'}</span>
-            </TooltipContent>
-          </Tooltip>
-        </div>
-
-        {/* Map Display Settings Flyout Panel */}
-        {(flyout_open && ui_visible) && (
-          <div
-            id="dataview-settings-drawer"
-            style={{
-              top: `${UI_LAYOUT.margin}px`,
-              right: `${UI_LAYOUT.settingsDrawerRight}px`,
-              width: `${UI_LAYOUT.settingsDrawerWidth}px`,
-            }}
-            className="absolute z-35 bg-card/98 backdrop-blur-md border border-border rounded-none p-[var(--padding)] shadow-2xl text-[var(--body-font-size)] text-card-foreground animate-in fade-in-0 zoom-in-95 duration-100 font-sans space-y-[var(--padding)]"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between pb-1.5 border-b border-border">
-              <span className="text-[var(--body-font-size)] font-bold text-foreground flex items-center gap-1.5">
-                <Icon name="settings" />
-                <span>Map Display Settings</span>
-              </span>
-              <button
-                type="button"
-                onClick={() => set_flyout_open(false)}
-                className="text-muted-foreground hover:text-foreground text-[var(--body-font-size)] cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Projection Selection Section */}
-            <div className="space-y-1.5">
-              <span className="text-[var(--body-font-size)] font-bold text-foreground">Projection Mode</span>
-              <div className="grid grid-cols-2 gap-1 bg-background/60 p-[var(--cell-padding)] rounded-none border border-border">
-                {(['Mercator', 'Equirectangular', 'Globe', 'EqualEarth'] as ProjectionType[]).map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => set_projection(p)}
-                    className={`px-2 py-1 rounded-none text-[var(--body-font-size)] transition-colors cursor-pointer text-center ${(projection === p)
-                      ? 'bg-primary text-primary-foreground font-bold shadow-xs'
-                      : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground font-light'
-                      }`}
-                  >
-                    {(p === 'Equirectangular') ? 'Equirect.' : (p === 'EqualEarth') ? 'Equal Earth' : p}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Basemap Selection Section */}
-            <div className="space-y-1.5">
-              <span className="text-[var(--body-font-size)] font-bold text-foreground">Basemap Layer</span>
-
-              <div className="space-y-1 bg-background/60 p-[var(--cell-padding)] rounded-none border border-border">
-                {MAP_CONFIG.basemapLayers.map((item: { id: string; label: string }) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => set_basemap(item.id)}
-                    className={`w-full flex items-center justify-between px-2 py-1 rounded-none text-[var(--body-font-size)] transition-colors cursor-pointer text-left ${(basemap === item.id)
-                      ? 'bg-muted text-foreground font-bold'
-                      : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground font-light'
-                      }`}
-                  >
-                    <span>{item.label}</span>
-                    {basemap === item.id && (
-                      <span className="w-1.5 h-1.5 rounded-none bg-primary" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Colourbar Position Selector */}
-            <div className="space-y-1.5">
-              <span className="text-[var(--body-font-size)] font-bold text-foreground">Colourbar Position</span>
-              <div className="grid grid-cols-3 gap-1 bg-background/60 p-[var(--cell-padding)] rounded-none border border-border">
-                {[
-                  { id: 'top-left', label: 'Top Left' },
-                  { id: 'top-center', label: 'Top Centre' },
-                  { id: 'top-right', label: 'Top Right' },
-                  { id: 'bottom-left', label: 'Bottom Left' },
-                  { id: 'bottom-center', label: 'Bottom Centre' },
-                  { id: 'bottom-right', label: 'Bottom Right' },
-                ].map((pos) => (
-                  <button
-                    key={pos.id}
-                    type="button"
-                    onClick={() => on_change_legend_position && on_change_legend_position(pos.id as any)}
-                    className={`px-1.5 py-1 rounded-none text-[10px] transition-colors cursor-pointer text-center ${(legend_position === pos.id)
-                      ? 'bg-primary text-primary-foreground font-bold shadow-xs'
-                      : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground font-light'
-                      }`}
-                  >
-                    {pos.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Performant Mode (Optimization Logic) */}
-            <div className="space-y-1.5 pt-1 border-t border-border">
-              <div className="flex items-center justify-between">
-                <span className="text-[var(--body-font-size)] font-bold text-foreground">Performant Mode</span>
-                <button
-                  type="button"
-                  onClick={() => on_toggle_performant_mode && on_toggle_performant_mode(!performant_mode)}
-                  className={`px-2 py-0.5 rounded-none text-[10px] font-mono font-bold cursor-pointer transition-colors ${
-                    performant_mode
-                      ? 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-xs'
-                      : 'bg-muted text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {performant_mode ? 'ENABLED' : 'DISABLED'}
-                </button>
-              </div>
-              <span className="text-[10px] text-muted-foreground block leading-normal">
-                Enables uninhabited land masking and bounded memory caching (active by default during video renders).
-              </span>
-            </div>
-          </div>
-        )}
-      </TooltipProvider>
-      )}
 
       {/* Bottom Right Tray: Unified Mapmodes with Inline Settings */}
       {ui_visible && (
@@ -1299,15 +964,15 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
           layers={props.dataLayers}
           mapModes={map_modes}
           onChangeVariableSelector={props.onChangeVariableSelector}
-          onClearCountries={on_clear_countries || (() => { })}
+          onClearCountries={on_clear_countries || NOOP_FN}
           onReorderMapModes={on_reorder_map_modes}
           onSelectLayer={props.onSelectLayer}
           onToggleCountriesMode={on_toggle_countries_mode}
-          onToggleCountry={on_toggle_country || (() => { })}
+          onToggleCountry={on_toggle_country || NOOP_FN}
           onToggleMapMode={on_toggle_map_mode}
-          selectedCountries={selected_countries || []}
-          setCircleOverlayConfig={set_circle_overlay_config || (() => { })}
-          setHeightmapConfig={set_heightmap_config || (() => { })}
+          selectedCountries={selected_countries || EMPTY_ARRAY}
+          setCircleOverlayConfig={set_circle_overlay_config || NOOP_FN}
+          setHeightmapConfig={set_heightmap_config || NOOP_FN}
           setStadesterConfig={set_stadester_config}
           settingsOpen={flyout_open}
           stadesterCityCount={stadester_cities?.length || 0}

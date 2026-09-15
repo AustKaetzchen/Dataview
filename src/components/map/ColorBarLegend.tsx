@@ -131,7 +131,7 @@ export const formatLegendValue = function (arg0_val: number): string {
  * @param {ColorBarLegendProps} arg0_props
  * @returns {React.ReactElement}
  */
-export const ColorBarLegend: React.FC<ColorBarLegendProps> = function (arg0_props: ColorBarLegendProps) {
+export const ColorBarLegend: React.FC<ColorBarLegendProps> = React.memo(function (arg0_props: ColorBarLegendProps) {
   //Convert from parameters
   let props = (arg0_props) ? arg0_props : ({} as ColorBarLegendProps)
 
@@ -432,6 +432,6 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = function (arg0_prop
       </div>
     </div>
   )
-}
+})
 
 export default ColorBarLegend

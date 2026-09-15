@@ -3,6 +3,7 @@ import { StadesterConfig, StadesterColorMode } from '@/lib/geopng/types'
 import { Icon } from '@/components/ui/icon'
 import { Slider } from '@/components/ui/slider'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import { D3ColorPaletteSelector } from '@/components/controls/D3ColorPaletteSelector'
 
 export interface StadesterSettingsProps {
   cityCount?: number
@@ -90,27 +91,10 @@ export const StadesterSettings: React.FC<StadesterSettingsProps> = function (arg
         </Select>
       </div>
 
-      {/* Circle Rendering Style: Halo Outline vs Solid Fill */}
+      {/* Circle Rendering Style: Outline vs Fill */}
       <div className="space-y-1">
         <label className="text-muted-foreground block text-[11px]">Circle Style</label>
         <div className="grid grid-cols-2 gap-1">
-          <button
-            type="button"
-            onClick={() =>
-              on_change_config((arg0_prev) => ({
-                ...arg0_prev,
-                filled: false,
-                halo: true,
-              }))
-            }
-            className={`px-1.5 py-1 text-[11px] rounded-none border text-center transition-colors cursor-pointer ${
-              config.halo !== false && !config.filled
-                ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
-                : 'bg-background hover:bg-muted text-muted-foreground border-border'
-            }`}
-          >
-            Halo Outline (No Fill)
-          </button>
           <button
             type="button"
             onClick={() =>
@@ -121,14 +105,54 @@ export const StadesterSettings: React.FC<StadesterSettingsProps> = function (arg
               }))
             }
             className={`px-1.5 py-1 text-[11px] rounded-none border text-center transition-colors cursor-pointer ${
-              config.filled
+              config.filled !== false && !config.halo
                 ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
                 : 'bg-background hover:bg-muted text-muted-foreground border-border'
             }`}
           >
-            Solid Circle
+            Fill
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              on_change_config((arg0_prev) => ({
+                ...arg0_prev,
+                filled: false,
+                halo: true,
+              }))
+            }
+            className={`px-1.5 py-1 text-[11px] rounded-none border text-center transition-colors cursor-pointer ${
+              config.halo || config.filled === false
+                ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
+                : 'bg-background hover:bg-muted text-muted-foreground border-border'
+            }`}
+          >
+            Outline
           </button>
         </div>
+      </div>
+
+      {/* Circle Transparency / Opacity Slider */}
+      <div className="space-y-1.5">
+        <div className="flex justify-between items-center text-[11px]">
+          <span className="text-muted-foreground">Circle Opacity</span>
+          <span className="font-mono text-[10px] text-foreground">
+            {Math.round(((config.opacity !== undefined) ? config.opacity : 0.7) * 100)}%
+          </span>
+        </div>
+        <Slider
+          value={[((config.opacity !== undefined) ? config.opacity : 0.7) * 100]}
+          min={10}
+          max={100}
+          step={5}
+          onValueChange={(arg0_val) =>
+            on_change_config((arg0_prev) => ({
+              ...arg0_prev,
+              opacity: arg0_val[0] / 100,
+            }))
+          }
+          className="py-1 cursor-pointer"
+        />
       </div>
 
       {/* Colour Mode Selector */}
@@ -188,32 +212,16 @@ export const StadesterSettings: React.FC<StadesterSettingsProps> = function (arg
 
       {/* D3 Growth Colour Palette Selector (active when Growth Rate is selected) */}
       {color_mode === 'growth' && (
-        <div className="space-y-1">
-          <div className="flex items-center justify-between text-[11px]">
-            <label className="text-muted-foreground block">Growth D3 Palette</label>
-            <span className="font-mono text-[10px] text-primary">{config.growthPalette || 'Rainbow'}</span>
-          </div>
-          <Select
-            value={config.growthPalette || 'Rainbow'}
-            onValueChange={(arg0_val) =>
-              on_change_config((arg0_prev) => ({
-                ...arg0_prev,
-                growthPalette: arg0_val,
-              }))
-            }
-          >
-            <SelectTrigger className="h-7 w-full text-xs">
-              <SelectValue placeholder="Select D3 palette" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Rainbow">Rainbow (Diverging heat/cool)</SelectItem>
-              <SelectItem value="Turbo">Turbo (High-contrast Rainbow)</SelectItem>
-              <SelectItem value="Spectral">Spectral (Multi-hue Spectrum)</SelectItem>
-              <SelectItem value="Viridis">Viridis</SelectItem>
-              <SelectItem value="Plasma">Plasma</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        <D3ColorPaletteSelector
+          label="Growth D3 Palette"
+          value={config.growthPalette || 'Rainbow'}
+          onChange={(arg0_pal) =>
+            on_change_config((arg0_prev) => ({
+              ...arg0_prev,
+              growthPalette: arg0_pal,
+            }))
+          }
+        />
       )}
 
       {/* Population Threshold (minPop) Slider & Number Input */}

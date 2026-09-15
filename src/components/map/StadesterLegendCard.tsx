@@ -27,7 +27,7 @@ const REGION_CHIPS = [
  *
  * @returns {React.ReactElement}
  */
-export const StadesterLegendCard: React.FC<StadesterLegendCardProps> = function (arg0_props) {
+export const StadesterLegendCard: React.FC<StadesterLegendCardProps> = React.memo(function (arg0_props) {
   //Convert from parameters
   let props = (arg0_props) ? arg0_props : ({} as StadesterLegendCardProps)
   let config = props.config
@@ -144,11 +144,11 @@ export const StadesterLegendCard: React.FC<StadesterLegendCardProps> = function 
       <div className="pt-1.5 border-t border-border/40 flex items-center justify-between text-[10px] text-muted-foreground font-mono">
         <span>Radius &prop; &radic;pop (min 4,5px &bull; {bubble_size.toFixed(2)}x)</span>
         <span className="text-white">
-          {is_halo ? 'Halo Ring' : 'Solid Circle'} &bull; {config.showLabels ? 'Labels Active' : 'No Labels'}
+          {is_halo ? 'Outline' : 'Fill'} &bull; {config.showLabels ? 'Labels Active' : 'No Labels'}
         </span>
       </div>
     </div>
   )
-}
+})
 
 export default StadesterLegendCard

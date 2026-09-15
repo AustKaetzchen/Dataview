@@ -101,8 +101,25 @@ let REGION_COLOR_MAP: Record<string, [number, number, number]> = {
   southeast_asia: [139, 92, 246],
 }
 
-function getGrowthRgb (arg0_rate: number): [number, number, number] {
+import { getPaletteLUT } from '../geopng/palettes'
+import { ColorPalette } from '../geopng/types'
+
+function getGrowthRgb (arg0_rate: number, arg1_palette?: string): [number, number, number] {
+  //Convert from parameters
+  let palette = (arg1_palette) ? arg1_palette : 'Rainbow'
   let r = arg0_rate
+
+  if (palette !== 'Rainbow') {
+    try {
+      let lut = getPaletteLUT(palette as ColorPalette)
+      let norm_t = Math.max(0, Math.min(1, (r - (-0.05)) / (0.08 - (-0.05))))
+      let lut_idx = Math.min(255, Math.max(0, Math.round(norm_t * 255)))
+      return [lut[lut_idx * 3], lut[lut_idx * 3 + 1], lut[lut_idx * 3 + 2]]
+    } catch (_err) {
+      //Fallback to rainbow
+    }
+  }
+
   if (r >= RAINBOW_GROWTH_STOPS[0][0])
     return RAINBOW_GROWTH_STOPS[0][1]
 
@@ -140,9 +157,8 @@ function getPopRgb (arg0_pop: number): [number, number, number] {
 function getShortCityLabel (arg0_name: string): string {
   if (!arg0_name)
     return ''
-  let before_semi = arg0_name.split(';')[0].trim()
-  let first_word = before_semi.split(/[\s,]+/)[0].trim()
-  return first_word || before_semi
+  let primary_name = arg0_name.split(';')[0].trim()
+  return primary_name
 }
 
 self.onmessage = function (arg0_e: MessageEvent<WorkerInMessage>) {
@@ -223,7 +239,7 @@ self.onmessage = function (arg0_e: MessageEvent<WorkerInMessage>) {
 
         if (color_mode === 'growth') {
           let g_rate = (c.growthRate !== undefined) ? c.growthRate : 0
-          let g_rgb = getGrowthRgb(g_rate)
+          let g_rgb = getGrowthRgb(g_rate, msg.growthPalette)
           fill_color = [g_rgb[0], g_rgb[1], g_rgb[2], 220]
         } else if (color_mode === 'population') {
           let p_rgb = getPopRgb(c.population)

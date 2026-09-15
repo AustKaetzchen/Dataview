@@ -92,6 +92,7 @@ export interface StadesterConfig {
   labelCollision: boolean
   maxCities: number
   minPop: number
+  opacity?: number
   showLabels: boolean
 }
 
@@ -179,3 +180,6 @@ export interface TransectPoint {
   lat: number
   value: number | null
 }
+
+export type { CountryFeature } from './polygonBinning'
+

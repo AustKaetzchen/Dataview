@@ -15,7 +15,7 @@ export interface ClickInfoPanelProps {
  * @param {ClickInfoPanelProps} arg0_props
  * @returns {React.ReactElement|null}
  */
-export const ClickInfoPanel: React.FC<ClickInfoPanelProps> = function (arg0_props: ClickInfoPanelProps) {
+export const ClickInfoPanel: React.FC<ClickInfoPanelProps> = React.memo(function (arg0_props: ClickInfoPanelProps) {
   //Convert from parameters
   let props = (arg0_props) ? arg0_props : ({} as ClickInfoPanelProps)
 
@@ -150,6 +150,6 @@ export const ClickInfoPanel: React.FC<ClickInfoPanelProps> = function (arg0_prop
       </div>
     </div>
   )
-}
+})
 
 export default ClickInfoPanel

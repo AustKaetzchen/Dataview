@@ -12,6 +12,21 @@
     
     <!-- Karla, Fira Code, and Material Icons -->
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Karla:ital,wght@0,300;0,400;0,500;0,700;1,300;1,400;1,700&family=Material+Icons&family=Material+Icons+Sharp&display=swap" rel="stylesheet">
+    <script>
+      (function() {
+        if (typeof console !== 'undefined') {
+          var noop = function() {};
+          if (typeof console.timeStamp === 'function') {
+            var nativeStamp = console.timeStamp.bind(console);
+            console.timeStamp = function() {
+              try { nativeStamp.apply(console, arguments); } catch (e) {}
+            };
+          } else {
+            console.timeStamp = noop;
+          }
+        }
+      })();
+    </script>
     <!-- Critical CSS for full-viewport loading screen without default margins -->
     <style>
       html, body {

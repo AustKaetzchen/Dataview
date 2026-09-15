@@ -22,6 +22,7 @@ import { Label } from '../ui/label'
 import { Icon } from '../ui/icon'
 import { LOCALISATION_CONFIG, UserRole } from '@config'
 import { ParsedDataLayer } from '@/server/layerParser'
+import { D3ColorPaletteSelector } from './D3ColorPaletteSelector'
 
 export interface SidebarControlsProps {
   activeFileName?: string
@@ -143,15 +144,9 @@ export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_pr
     { h: 180, label: '12× (360×180)', w: 360 },
   ]
   let current_width = (width !== undefined) ? width : 336
-  let filtered_palettes: typeof D3_COLOR_SCHEMES
   let handle_resize_mouse_down: (arg0_e: React.MouseEvent) => void
   let open_folders: Record<string, boolean>
-  let palette_open: boolean
-  let palette_picker_ref = useRef<HTMLDivElement>(null)
-  let palette_search: string
   let set_open_folders: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
-  let set_palette_open: React.Dispatch<React.SetStateAction<boolean>>
-  let set_palette_search: React.Dispatch<React.SetStateAction<string>>
   let toggle_folder: (arg0_folder_key: string) => void
 
   //Function body
@@ -160,9 +155,6 @@ export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_pr
     manual: false,
     visual: true,
   })
-
-  ;[palette_search, set_palette_search] = useState('')
-  ;[palette_open, set_palette_open] = useState(false)
 
   toggle_folder = function (arg0_folder_key: string) {
     let folder_key = arg0_folder_key
@@ -193,30 +185,6 @@ export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_pr
     window.addEventListener('mousemove', on_mouse_move)
     window.addEventListener('mouseup', on_mouse_up)
   }
-
-  //Close palette picker when clicking outside
-  useEffect(() => {
-    let handle_click_outside = function (arg0_e: MouseEvent) {
-      let e = arg0_e
-      if (palette_picker_ref.current)
-        if (!palette_picker_ref.current.contains(e.target as Node))
-          set_palette_open(false)
-    }
-    if (palette_open)
-      document.addEventListener('mousedown', handle_click_outside)
-
-    return () => document.removeEventListener('mousedown', handle_click_outside)
-  }, [palette_open])
-
-  //Filter D3 palettes
-  filtered_palettes = useMemo(() => {
-    let q = palette_search.toLowerCase().trim()
-    if (!q)
-      return D3_COLOR_SCHEMES
-    return D3_COLOR_SCHEMES.filter(
-      (arg0_scheme) => arg0_scheme.name.toLowerCase().includes(q) || arg0_scheme.category.toLowerCase().includes(q)
-    )
-  }, [palette_search])
 
   //Return statement
   return (
@@ -389,78 +357,13 @@ export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_pr
               )}
 
               {/* Colour Palette (D3) */}
-              <div className="space-y-1.5" ref={palette_picker_ref}>
-                <div className="flex items-center justify-between">
-                  <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">Colour Palette (D3)</Label>
-                  <label className="flex items-center gap-1.5 text-[var(--body-font-size)] text-foreground cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={invert_palette}
-                      onChange={(arg0_e) => set_invert_palette(arg0_e.target.checked)}
-                      className="w-[var(--body-font-size)] h-[var(--body-font-size)] rounded-none accent-emerald-500 cursor-pointer"
-                    />
-                    <span className="text-[var(--body-font-size)] text-muted-foreground">Invert</span>
-                  </label>
-                </div>
-
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => set_palette_open(!palette_open)}
-                    className="w-full h-8 px-2.5 flex items-center justify-between border border-input rounded-none bg-background text-foreground hover:bg-muted/40 cursor-pointer transition-colors text-[var(--body-font-size)]"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div
-                        className="w-16 h-3 rounded-none border border-border/80 shrink-0"
-                        style={{ background: getPaletteCssGradient(color_palette, invert_palette) }}
-                      />
-                      <span className="truncate font-medium">{color_palette}</span>
-                    </div>
-                    <Icon name={palette_open ? 'expand_less' : 'expand_more'} className="ml-1" />
-                  </button>
-
-                  {/* Dropdown Popover */}
-                  {palette_open && (
-                    <div className="absolute top-9 left-0 right-0 z-50 bg-card border border-border shadow-2xl rounded-none p-[var(--padding)] space-y-[var(--padding)] text-[var(--body-font-size)]">
-                      <input
-                        type="text"
-                        placeholder="Search schemes..."
-                        value={palette_search}
-                        onChange={(arg0_e) => set_palette_search(arg0_e.target.value)}
-                        className="w-full h-7 px-2 border border-input rounded-none bg-background text-foreground text-[var(--body-font-size)] focus:outline-none focus:ring-1 focus:ring-ring"
-                        autoFocus
-                      />
-
-                      <div className="max-h-48 overflow-y-auto space-y-0.5 pr-1">
-                        {filtered_palettes.map((arg0_scheme) => (
-                          <button
-                            key={arg0_scheme.id}
-                            type="button"
-                            onClick={() => {
-                              set_color_palette(arg0_scheme.id)
-                              set_palette_open(false)
-                            }}
-                            className={`w-full flex items-center justify-between px-2 py-1.5 rounded-none cursor-pointer text-left text-[var(--body-font-size)] transition-colors ${
-                              color_palette === arg0_scheme.id
-                                ? 'bg-primary text-primary-foreground font-bold'
-                                : 'hover:bg-muted text-foreground'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div
-                                className="w-14 h-3 rounded-none border border-black/20 shrink-0"
-                                style={{ background: getPaletteCssGradient(arg0_scheme.id, invert_palette) }}
-                              />
-                              <span className="truncate">{arg0_scheme.name}</span>
-                            </div>
-                            <span className="text-[var(--body-font-size)] opacity-60 ml-1 shrink-0">{arg0_scheme.category.split(' ')[0]}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <D3ColorPaletteSelector
+                value={color_palette}
+                onChange={set_color_palette}
+                invert={invert_palette}
+                onInvertChange={set_invert_palette}
+                showInvert={true}
+              />
 
               {/* Visual Bounds Mode */}
               <div className="space-y-2">
