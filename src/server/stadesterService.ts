@@ -1,7 +1,50 @@
 import fs from 'fs'
 import path from 'path'
 import { clearStadesterDiskCache, indexHistoricalCities, loadGhslCsvNames, resolveCityDisplayName } from './ghslResolver.ts'
-import { getPrimaryCityName, isCorruptedCityName } from '../lib/stadester/cityNameFramework.ts'
+import { getPrimaryCityName, isCorruptedCityName, isBuggedCityName } from '../lib/stadester/cityNameFramework.ts'
+
+let bugged_cities_set: Set<string> | null = null
+let bugged_cities_mtime = 0
+
+/**
+ * Loads and returns the set of bugged city names from data/stadester/bugged_cities.txt.
+ *
+ * @returns {Set<string>}
+ */
+export function getBuggedCitiesSet (): Set<string> {
+  let file_path = path.resolve(process.cwd(), 'data/stadester/bugged_cities.txt')
+
+  if (fs.existsSync(file_path)) {
+    try {
+      let stats = fs.statSync(file_path)
+      if (!bugged_cities_set || stats.mtimeMs > bugged_cities_mtime) {
+        bugged_cities_mtime = stats.mtimeMs
+        let content = fs.readFileSync(file_path, 'utf-8')
+        let lines = content.split(/\r?\n/)
+        let set = new Set<string>()
+
+        for (let i = 0; i < lines.length; i++) {
+          let line = lines[i].trim()
+          if (line && !line.startsWith('#')) {
+            set.add(line.toLowerCase())
+            let norm = line.toLowerCase().replace(/[-~'`^]/g, ' ').replace(/\s+/g, ' ').trim()
+            if (norm)
+              set.add(norm)
+            let strip = line.toLowerCase().replace(/[`'’\-\s]/g, '')
+            if (strip)
+              set.add(strip)
+          }
+        }
+        bugged_cities_set = set
+      }
+      return bugged_cities_set!
+    } catch (arg0_err) {
+      console.warn('[StadesterService] Failed to read bugged_cities.txt:', arg0_err)
+      return new Set()
+    }
+  }
+  return new Set()
+}
 
 export interface CityIndexEntry {
   area?: Record<string, number>
@@ -286,6 +329,7 @@ export const StadesterService = {
       return []
 
     //Function body
+    let bugged_set = getBuggedCitiesSet()
     all_city_keys = Object.keys(indexed)
 
     for (let i = 0; i < all_city_keys.length; i++) {
@@ -293,6 +337,9 @@ export const StadesterService = {
       let pop_years = city.years
 
       if (pop_years.length === 0 || !city.coords)
+        continue
+
+      if (isBuggedCityName(city.name, bugged_set) || (city.key && isBuggedCityName(city.key, bugged_set)))
         continue
 
       if (options.bbox) {
@@ -462,30 +509,33 @@ export const StadesterService = {
     let dataset_name = (arg0_dataset_name) ? arg0_dataset_name : 'stadester_1.1'
 
     //Declare local instance variables
+    let bugged_set = getBuggedCitiesSet()
     let indexed = StadesterService.loadDataset(dataset_name)
 
     //Guard clauses
     if (!city_key || !indexed)
       return null
 
-    //Check direct key match
-    if (indexed[city_key])
-      return indexed[city_key]
+    if (isBuggedCityName(city_key, bugged_set))
+      return null
 
-    //Check common prefixes in raw JSON
-    if (indexed['stadester-' + city_key])
-      return indexed['stadester-' + city_key]
-    if (indexed['ghsl-' + city_key])
-      return indexed['ghsl-' + city_key]
-    if (indexed['oxford-' + city_key])
-      return indexed['oxford-' + city_key]
+    //Check direct key match
+    let found = indexed[city_key] || indexed['stadester-' + city_key] || indexed['ghsl-' + city_key] || indexed['oxford-' + city_key]
+    if (found) {
+      if (isBuggedCityName(found.name, bugged_set) || (found.key && isBuggedCityName(found.key, bugged_set)))
+        return null
+      return found
+    }
 
     //Fallback linear search by key, id or name
     let all_keys = Object.keys(indexed)
     for (let i = 0; i < all_keys.length; i++) {
       let entry = indexed[all_keys[i]]
-      if (entry.key === city_key || String(entry.id) === city_key || entry.name === city_key)
+      if (entry.key === city_key || String(entry.id) === city_key || entry.name === city_key) {
+        if (isBuggedCityName(entry.name, bugged_set) || (entry.key && isBuggedCityName(entry.key, bugged_set)))
+          return null
         return entry
+      }
     }
 
     //Return statement

@@ -55,14 +55,17 @@ export const StadesterLegendCard: React.FC<StadesterLegendCardProps> = React.mem
   //Function body
   if (colour_mode === 'growth') {
     metric_title = 'Annual Population Growth Rate (%/yr)'
+    metric_subtitle = 'Visualising annual compound growth rates across global urban centres.'
     palette_label = `${growth_palette} (Heat / Cool Spectrum)`
     gradient_style = 'linear-gradient(to right, rgb(93, 96, 226), rgb(72, 156, 240), rgb(69, 207, 119), rgb(198, 219, 85), rgb(253, 224, 71), rgb(251, 146, 60), rgb(239, 68, 68), rgb(232, 121, 249))'
   } else if (colour_mode === 'population') {
     metric_title = 'Settlement Population'
+    metric_subtitle = 'Visualising urban settlement population totals.'
     palette_label = 'Logarithmic Scale (Blue to Warm Gold)'
     gradient_style = 'linear-gradient(to right, rgb(13, 8, 135), rgb(80, 18, 170), rgb(140, 41, 129), rgb(200, 72, 73), rgb(245, 125, 21), rgb(240, 249, 33))'
   } else {
     metric_title = 'World Geographic Region'
+    metric_subtitle = 'Visualising settlement distribution by continent or region.'
     palette_label = 'Regional Categorical Palette'
     gradient_style = ''
   }

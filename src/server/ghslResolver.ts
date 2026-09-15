@@ -5,7 +5,6 @@ import {
   getPrimaryCityName,
   isCorruptedCityName,
   isSubordinateDistrictName,
-  parseDelimitedCandidates,
 } from '../lib/stadester/cityNameFramework.ts'
 
 export interface CityCacheRecord {
@@ -258,40 +257,7 @@ export const findClosestHistoricalCity = function (
   return best_city
 }
 
-function isSubordinateDistrict (arg0_name: string): boolean {
-  //Convert from parameters
-  let name = arg0_name
 
-  //Guard clauses
-  if (!name)
-    return false
-
-  //Function body
-  let lower = name.toLowerCase()
-  let district_terms = [
-    'district',
-    'subdistrict',
-    'county',
-    'ward',
-    'township',
-    'arrondissement',
-    'borough',
-    'prefecture',
-    'subprefecture',
-    'new area',
-    'zone',
-    'locality',
-    'suburb',
-  ]
-
-  for (let i = 0; i < district_terms.length; i++) {
-    if (lower.includes(district_terms[i]))
-      return true
-  }
-
-  //Return statement
-  return false
-}
 
 /**
  * Dispatches the FIFO background queue at strictly 1 request per second (1000ms delay).
@@ -321,7 +287,7 @@ function startQueueProcessor (): void {
       })
 
       if (resp.ok) {
-        let json = await resp.json()
+        let json: any = await resp.json()
         let props = json.features?.[0]?.properties
         if (props) {
           let resolved = ''
@@ -329,20 +295,20 @@ function startQueueProcessor (): void {
 
           //Respect administrative importance based on target population:
           //1. For large urban agglomerations, prioritize true city/municipality level
-          if (props.city && !isCorruptedName(props.city)) {
-            resolved = cleanCandidateString(props.city)
-          } else if (props.town && !isCorruptedName(props.town)) {
-            resolved = cleanCandidateString(props.town)
-          } else if (props.municipality && !isCorruptedName(props.municipality)) {
-            resolved = cleanCandidateString(props.municipality)
+          if (props.city && !isCorruptedCityName(props.city)) {
+            resolved = cleanCandidateCityString(props.city)
+          } else if (props.town && !isCorruptedCityName(props.town)) {
+            resolved = cleanCandidateCityString(props.town)
+          } else if (props.municipality && !isCorruptedCityName(props.municipality)) {
+            resolved = cleanCandidateCityString(props.municipality)
           }
 
           //2. Correlate with semicolon-delimited list candidates
           if (task.delimitedNames && task.delimitedNames.length > 0) {
             //Check if any primary candidate in the delimited list matches the photon city
             for (let i = 0; i < task.delimitedNames.length; i++) {
-              let cand = cleanCandidateString(task.delimitedNames[i])
-              if (!isCorruptedName(cand) && !isSubordinateDistrict(cand)) {
+              let cand = cleanCandidateCityString(task.delimitedNames[i])
+              if (!isCorruptedCityName(cand) && !isSubordinateDistrictName(cand)) {
                 if (resolved && cand.toLowerCase().includes(resolved.toLowerCase())) {
                   resolved = cand
                   break
@@ -351,10 +317,10 @@ function startQueueProcessor (): void {
             }
 
             //If resolved name is still a district and city population is large, prevent district from taking over
-            if (isSubordinateDistrict(resolved) && target_pop > 200000) {
+            if (isSubordinateDistrictName(resolved) && target_pop > 200000) {
               for (let i = 0; i < task.delimitedNames.length; i++) {
-                let cand = cleanCandidateString(task.delimitedNames[i])
-                if (!isCorruptedName(cand) && !isSubordinateDistrict(cand)) {
+                let cand = cleanCandidateCityString(task.delimitedNames[i])
+                if (!isCorruptedCityName(cand) && !isSubordinateDistrictName(cand)) {
                   resolved = cand
                   break
                 }
@@ -364,13 +330,13 @@ function startQueueProcessor (): void {
 
           //3. Fallback for smaller settlements where only district/county is returned
           if (!resolved && target_pop < 100000) {
-            if (props.county && !isCorruptedName(props.county))
-              resolved = cleanCandidateString(props.county)
-            else if (props.district && !isCorruptedName(props.district))
-              resolved = cleanCandidateString(props.district)
+            if (props.county && !isCorruptedCityName(props.county))
+              resolved = cleanCandidateCityString(props.county)
+            else if (props.district && !isCorruptedCityName(props.district))
+              resolved = cleanCandidateCityString(props.district)
           }
 
-          if (resolved && !isCorruptedName(resolved)) {
+          if (resolved && !isCorruptedCityName(resolved)) {
             city_cache[task.cityKey] = {
               resolvedName: resolved,
               source: 'photon',

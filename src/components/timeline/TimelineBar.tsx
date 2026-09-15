@@ -55,6 +55,7 @@ export const TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
   let handle_step_backward: () => void
   let handle_step_forward: () => void
   let is_collapsed: boolean
+  let is_loading_ref = useRef<boolean>(is_loading)
   let is_looping: boolean
   let is_looping_ref = useRef<boolean>(false)
   let is_settings_open: boolean
@@ -78,6 +79,7 @@ export const TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
   ;[is_settings_open, set_is_settings_open] = useState(false)
 
   current_year_ref.current = current_year
+  is_loading_ref.current = is_loading
   is_looping_ref.current = is_looping
   keyframes_ref.current = available_keyframes
   on_change_year_ref.current = on_change_year
@@ -195,6 +197,13 @@ export const TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
     last_snap_time_ref.current = performance.now()
 
     let tick = function (arg0_now: number) {
+      if (is_loading_ref.current) {
+        last_tick_ref.current = arg0_now
+        last_snap_time_ref.current = arg0_now
+        anim_frame_ref.current = requestAnimationFrame(tick)
+        return
+      }
+
       let delta_ms = arg0_now - last_tick_ref.current
       last_tick_ref.current = arg0_now
 

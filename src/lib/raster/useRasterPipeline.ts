@@ -119,30 +119,48 @@ export function shiftRasterNorth (
  *
  * @returns {void}
  */
+/**
+ * Culls the in-memory raster cache dynamically based on memory pressure and performant mode.
+ *
+ * @param {Map<string, DecodedRaster>} arg0_cache
+ * @param {boolean} [arg1_performant_mode=false]
+ * @param {string | string[]} [arg2_preserve_keys]
+ *
+ * @returns {void}
+ */
 export function cullRasterCache (
   arg0_cache: Map<string, DecodedRaster>,
   arg1_performant_mode?: boolean,
-  arg2_preserve_key?: string
+  arg2_preserve_keys?: string | string[]
 ): void {
   //Convert from parameters
   let cache = arg0_cache
   let performant_mode = Boolean(arg1_performant_mode)
-  let preserve_key = arg2_preserve_key
+  let preserve_keys_raw = arg2_preserve_keys
 
   //Declare local instance variables
   let is_memory_pressured = false
   let max_allowed_entries: number
   let memory_info = (performance as any)?.memory
+  let min_required: number
+  let preserve_set = new Set<string>()
 
   //Function body
+  if (typeof preserve_keys_raw === 'string') {
+    preserve_set.add(preserve_keys_raw)
+  } else if (Array.isArray(preserve_keys_raw)) {
+    for (let i = 0; i < preserve_keys_raw.length; i++)
+      preserve_set.add(preserve_keys_raw[i])
+  }
+
   if (memory_info && memory_info.jsHeapSizeLimit > 0) {
     let heap_ratio = memory_info.usedJSHeapSize/memory_info.jsHeapSizeLimit
     if (heap_ratio > 0.6)
       is_memory_pressured = true
   }
 
-  //In performant mode, strictly cap to 1 entry to eliminate RAM spikes
-  max_allowed_entries = performant_mode ? 1 : (is_memory_pressured ? 2 : 3)
+  min_required = Math.max(1, preserve_set.size)
+  max_allowed_entries = performant_mode ? min_required : (is_memory_pressured ? Math.max(2, min_required) : Math.max(3, min_required))
 
   if (cache.size > max_allowed_entries) {
     let all_keys = Array.from(cache.keys())
@@ -150,7 +168,7 @@ export function cullRasterCache (
       let k = all_keys[i]
       if (cache.size <= max_allowed_entries)
         break
-      if (k.startsWith('raw:') && k !== preserve_key)
+      if (k.startsWith('raw:') && !preserve_set.has(k))
         cache.delete(k)
     }
 
@@ -160,7 +178,7 @@ export function cullRasterCache (
         let k = all_keys[i]
         if (cache.size <= max_allowed_entries)
           break
-        if (k !== preserve_key)
+        if (!preserve_set.has(k))
           cache.delete(k)
       }
     }
@@ -492,6 +510,89 @@ export async function fetchRasterKeyframe (
   return composite_promise
 }
 
+/**
+ * Fetches and interpolates rasters between bounding keyframe years for arbitrary timeline years.
+ *
+ * @param {string} arg0_layer_id
+ * @param {number} arg1_timeline_year
+ * @param {number[]} arg2_available_years
+ * @param {Record<string, string | string[]>} arg3_selectors
+ * @param {DataFormat} arg4_format
+ * @param {Map<string, DecodedRaster>} arg5_cache
+ * @param {boolean} [arg6_has_selectors]
+ * @param {number | { covariate?: string; x?: number; y?: number }} [arg7_pixel_offset]
+ * @param {boolean} [arg8_performant_mode]
+ * @param {boolean} [arg9_snap_to_keyframes]
+ * @param {AbortSignal} [arg10_signal]
+ *
+ * @returns {Promise<DecodedRaster | null>}
+ */
+export async function fetchInterpolatedRasterAsync (
+  arg0_layer_id: string,
+  arg1_timeline_year: number,
+  arg2_available_years: number[],
+  arg3_selectors: Record<string, string | string[]>,
+  arg4_format: DataFormat,
+  arg5_cache: Map<string, DecodedRaster>,
+  arg6_has_selectors?: boolean,
+  arg7_pixel_offset?: number | { covariate?: string; x?: number; y?: number },
+  arg8_performant_mode?: boolean,
+  arg9_snap_to_keyframes?: boolean,
+  arg10_signal?: AbortSignal
+): Promise<DecodedRaster | null> {
+  //Convert from parameters
+  let cache = arg5_cache
+  let format = arg4_format
+  let has_selectors = Boolean(arg6_has_selectors)
+  let layer_id = arg0_layer_id
+  let performant_mode = Boolean(arg8_performant_mode)
+  let pixel_offset = arg7_pixel_offset
+  let selectors = arg3_selectors
+  let signal = arg10_signal
+  let snap_to_keyframes = Boolean(arg9_snap_to_keyframes)
+  let timeline_year = arg1_timeline_year
+  let years = arg2_available_years
+
+  //Guard clauses
+  if (!years || years.length === 0)
+    return fetchRasterKeyframe(layer_id, timeline_year, selectors, format, cache, has_selectors, pixel_offset, performant_mode, signal)
+
+  //Declare local instance variables
+  let next_year = years[years.length - 1]
+  let prev_year = years[0]
+  let primary_year: number
+
+  //Function body
+  for (let i = 0; i < years.length; i++) {
+    if (years[i] <= timeline_year)
+      prev_year = years[i]
+    if (years[i] >= timeline_year) {
+      next_year = years[i]
+      break
+    }
+  }
+
+  if (snap_to_keyframes || prev_year === next_year || timeline_year <= prev_year || timeline_year >= next_year) {
+    primary_year = snap_to_keyframes
+      ? (Math.abs(timeline_year - prev_year) <= Math.abs(timeline_year - next_year) ? prev_year : next_year)
+      : prev_year
+    return fetchRasterKeyframe(layer_id, primary_year, selectors, format, cache, has_selectors, pixel_offset, performant_mode, signal)
+  }
+
+  let [r_a, r_b] = await Promise.all([
+    fetchRasterKeyframe(layer_id, prev_year, selectors, format, cache, has_selectors, pixel_offset, performant_mode, signal),
+    fetchRasterKeyframe(layer_id, next_year, selectors, format, cache, has_selectors, pixel_offset, performant_mode, signal),
+  ])
+
+  if (r_a && r_b) {
+    let t = (timeline_year - prev_year)/(next_year - prev_year)
+    return interpolateRasters(r_a, r_b, t)
+  }
+
+  //Return statement
+  return r_a || r_b || null
+}
+
 export interface UseRasterPipelineParams {
   activeLayer: ParsedDataLayer | null
   activeLayerId: string | null
@@ -631,6 +732,8 @@ export function useRasterPipeline (arg0_params: UseRasterPipelineParams): UseRas
         : next_year
       : prev_year
 
+    let is_interpolating = !snap_to_keyframes && prev_year !== next_year && timeline_year > prev_year && timeline_year < next_year
+
     let effective_format: DataFormat = (active_layer.encoding as DataFormat) || (active_layer as any).format || data_format
     let effective_selectors = active_variable_selectors
     let has_selectors = Boolean(active_layer.variable_selectors && Object.keys(active_layer.variable_selectors).length > 0) || Boolean((active_layer as any).has_selectors)
@@ -647,57 +750,109 @@ export function useRasterPipeline (arg0_params: UseRasterPipelineParams): UseRas
       return `${arg0_k}=${str_val}`
     }).join(':')
 
-    let cache_key = has_selectors && sel_part.length > 0
-      ? `${requested_layer_id}:${sel_part}:${primary_year}:${effective_format}:${po_key}`
-      : `${requested_layer_id}:${primary_year}:${effective_format}:${po_key}`
+    let cache_key_a = has_selectors && sel_part.length > 0
+      ? `${requested_layer_id}:${sel_part}:${is_interpolating ? prev_year : primary_year}:${effective_format}:${po_key}`
+      : `${requested_layer_id}:${is_interpolating ? prev_year : primary_year}:${effective_format}:${po_key}`
 
-    //Fast path: already in memory cache
-    if (raster_cache_ref.current.has(cache_key)) {
-      let cached = raster_cache_ref.current.get(cache_key)!
-      displayed_year_ref.current = primary_year
-      set_raster_a(cached)
-      set_active_file_name(`${requested_layer_id}_${primary_year}.png`)
-      set_raster_version((arg0_v) => arg0_v + 1)
-      set_is_loading_raster(false)
+    let cache_key_b = has_selectors && sel_part.length > 0
+      ? `${requested_layer_id}:${sel_part}:${next_year}:${effective_format}:${po_key}`
+      : `${requested_layer_id}:${next_year}:${effective_format}:${po_key}`
+
+    if (is_interpolating) {
+      let has_a = raster_cache_ref.current.has(cache_key_a)
+      let has_b = raster_cache_ref.current.has(cache_key_b)
+
+      if (has_a && has_b) {
+        displayed_year_ref.current = timeline_year
+        set_raster_a(raster_cache_ref.current.get(cache_key_a)!)
+        set_raster_b(raster_cache_ref.current.get(cache_key_b)!)
+        set_active_file_name(`${requested_layer_id}_${timeline_year}.png`)
+        set_raster_version((arg0_v) => arg0_v + 1)
+        set_is_loading_raster(false)
+        cullRasterCache(raster_cache_ref.current, performant_mode, [cache_key_a, cache_key_b])
+      } else {
+        set_is_loading_raster(true)
+        in_flight_fetches_count_ref.current++
+
+        Promise.all([
+          fetchRasterKeyframe(requested_layer_id, prev_year, effective_selectors, effective_format, raster_cache_ref.current, has_selectors, layer_pixel_offset, performant_mode, controller.signal),
+          fetchRasterKeyframe(requested_layer_id, next_year, effective_selectors, effective_format, raster_cache_ref.current, has_selectors, layer_pixel_offset, performant_mode, controller.signal),
+        ])
+          .then(([arg0_primary, arg0_secondary]) => {
+            in_flight_fetches_count_ref.current = Math.max(0, in_flight_fetches_count_ref.current - 1)
+            if (in_flight_fetches_count_ref.current === 0)
+              set_is_loading_raster(false)
+
+            if (active_layer_id_ref.current !== requested_layer_id || load_req_id_ref.current !== current_req_id)
+              return
+
+            if (arg0_primary) {
+              displayed_year_ref.current = timeline_year
+              set_raster_a(arg0_primary)
+              if (arg0_secondary)
+                set_raster_b(arg0_secondary)
+              set_active_file_name(`${requested_layer_id}_${timeline_year}.png`)
+              set_raster_version((arg0_v) => arg0_v + 1)
+              cullRasterCache(raster_cache_ref.current, performant_mode, [cache_key_a, cache_key_b])
+            }
+          })
+          .catch((arg0_err) => {
+            in_flight_fetches_count_ref.current = Math.max(0, in_flight_fetches_count_ref.current - 1)
+            if (in_flight_fetches_count_ref.current === 0)
+              set_is_loading_raster(false)
+            if (arg0_err?.name !== 'AbortError')
+              console.error('Failed to load raster keyframe pair:', arg0_err)
+          })
+      }
     } else {
-      //Slow path: asynchronous fetch with cancellation
-      set_is_loading_raster(true)
-      in_flight_fetches_count_ref.current++
+      if (raster_cache_ref.current.has(cache_key_a)) {
+        let cached = raster_cache_ref.current.get(cache_key_a)!
+        displayed_year_ref.current = primary_year
+        set_raster_a(cached)
+        set_raster_b(null)
+        set_active_file_name(`${requested_layer_id}_${primary_year}.png`)
+        set_raster_version((arg0_v) => arg0_v + 1)
+        set_is_loading_raster(false)
+      } else {
+        set_is_loading_raster(true)
+        in_flight_fetches_count_ref.current++
 
-      fetchRasterKeyframe(
-        requested_layer_id,
-        primary_year,
-        effective_selectors,
-        effective_format,
-        raster_cache_ref.current,
-        has_selectors,
-        layer_pixel_offset,
-        performant_mode,
-        controller.signal
-      )
-        .then((arg0_primary) => {
-          in_flight_fetches_count_ref.current = Math.max(0, in_flight_fetches_count_ref.current - 1)
-          if (in_flight_fetches_count_ref.current === 0)
-            set_is_loading_raster(false)
+        fetchRasterKeyframe(
+          requested_layer_id,
+          primary_year,
+          effective_selectors,
+          effective_format,
+          raster_cache_ref.current,
+          has_selectors,
+          layer_pixel_offset,
+          performant_mode,
+          controller.signal
+        )
+          .then((arg0_primary) => {
+            in_flight_fetches_count_ref.current = Math.max(0, in_flight_fetches_count_ref.current - 1)
+            if (in_flight_fetches_count_ref.current === 0)
+              set_is_loading_raster(false)
 
-          if (active_layer_id_ref.current !== requested_layer_id || load_req_id_ref.current !== current_req_id)
-            return
+            if (active_layer_id_ref.current !== requested_layer_id || load_req_id_ref.current !== current_req_id)
+              return
 
-          if (arg0_primary) {
-            displayed_year_ref.current = primary_year
-            set_raster_a(arg0_primary)
-            set_active_file_name(`${requested_layer_id}_${primary_year}.png`)
-            set_raster_version((arg0_v) => arg0_v + 1)
-            cullRasterCache(raster_cache_ref.current, performant_mode, cache_key)
-          }
-        })
-        .catch((arg0_err) => {
-          in_flight_fetches_count_ref.current = Math.max(0, in_flight_fetches_count_ref.current - 1)
-          if (in_flight_fetches_count_ref.current === 0)
-            set_is_loading_raster(false)
-          if (arg0_err?.name !== 'AbortError')
-            console.error('Failed to load raster keyframe:', arg0_err)
-        })
+            if (arg0_primary) {
+              displayed_year_ref.current = primary_year
+              set_raster_a(arg0_primary)
+              set_raster_b(null)
+              set_active_file_name(`${requested_layer_id}_${primary_year}.png`)
+              set_raster_version((arg0_v) => arg0_v + 1)
+              cullRasterCache(raster_cache_ref.current, performant_mode, cache_key_a)
+            }
+          })
+          .catch((arg0_err) => {
+            in_flight_fetches_count_ref.current = Math.max(0, in_flight_fetches_count_ref.current - 1)
+            if (in_flight_fetches_count_ref.current === 0)
+              set_is_loading_raster(false)
+            if (arg0_err?.name !== 'AbortError')
+              console.error('Failed to load raster keyframe:', arg0_err)
+          })
+      }
     }
 
     //Prefetch upcoming keyframe only when performant mode is OFF to conserve RAM
@@ -747,7 +902,27 @@ export function useRasterPipeline (arg0_params: UseRasterPipelineParams): UseRas
     else
       display_raster = raster_a
   } else {
-    display_raster = raster_a
+    if (!snap_to_keyframes && raster_a && raster_b) {
+      let years = active_layer?.available_years || (active_layer as any)?.years || []
+      let p_yr = years[0]
+      let n_yr = years[years.length - 1]
+      for (let i = 0; i < years.length; i++) {
+        if (years[i] <= timeline_year)
+          p_yr = years[i]
+        if (years[i] >= timeline_year) {
+          n_yr = years[i]
+          break
+        }
+      }
+      if (p_yr !== n_yr && timeline_year > p_yr && timeline_year < n_yr) {
+        let t = (timeline_year - p_yr)/(n_yr - p_yr)
+        display_raster = interpolateRasters(raster_a, raster_b, t)
+      } else {
+        display_raster = raster_a
+      }
+    } else {
+      display_raster = raster_a
+    }
   }
 
   //Return statement

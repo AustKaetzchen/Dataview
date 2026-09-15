@@ -193,3 +193,46 @@ export const getPrimaryCityName = function (arg0_raw_name: string, arg1_target_p
   //4. Fallback to candidate 0's text without destroying characters
   return cand_zero.cleanName || cleanCandidateCityString(raw_name)
 }
+
+/**
+ * Checks whether a city name or candidate string matches an entry in the bugged cities set.
+ *
+ * @param {string} arg0_name
+ * @param {Set<string>} arg1_bugged_set
+ *
+ * @returns {boolean}
+ */
+export const isBuggedCityName = function (
+  arg0_name: string,
+  arg1_bugged_set: Set<string>
+): boolean {
+  //Convert from parameters
+  let bugged_set = arg1_bugged_set
+  let name = arg0_name
+
+  //Guard clauses
+  if (!name || !bugged_set || bugged_set.size === 0)
+    return false
+
+  //Function body
+  let lower_name = name.toLowerCase().trim()
+  let normalized_name = lower_name.replace(/[-~'`^]/g, ' ').replace(/\s+/g, ' ').trim()
+  let stripped_name = lower_name.replace(/[`'’\-\s]/g, '')
+
+  if (bugged_set.has(lower_name) || bugged_set.has(normalized_name) || bugged_set.has(stripped_name))
+    return true
+
+  //Check parts if semicolon delimited
+  let parts = name.split(';')
+  for (let i = 0; i < parts.length; i++) {
+    let p = parts[i].trim().toLowerCase()
+    let p_norm = p.replace(/[-~'`^]/g, ' ').replace(/\s+/g, ' ').trim()
+    let p_strip = p.replace(/[`'’\-\s]/g, '')
+    if (bugged_set.has(p) || bugged_set.has(p_norm) || bugged_set.has(p_strip))
+      return true
+  }
+
+  //Return statement
+  return false
+}
+

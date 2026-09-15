@@ -23,6 +23,108 @@ export interface UseStadesterCitiesResult {
   setSelectedCityKey: (arg0_key: string | null) => void
 }
 
+let in_flight_city_fetches = new Map<string, Promise<CityPoint[]>>()
+
+/**
+ * Fetches Stadester city points for a given dataset and year with in-flight deduplication and caching.
+ *
+ * @param {string} arg0_dataset
+ * @param {number} arg1_year
+ * @param {number} [arg2_min_pop=0]
+ * @param {number} [arg3_max_cities=4000]
+ * @param {string} [arg4_color_mode='growth']
+ * @param {Map<string, CityPoint[]>} [arg5_cache]
+ *
+ * @returns {Promise<CityPoint[]>}
+ */
+export async function fetchStadesterCitiesAsync (
+  arg0_dataset: string,
+  arg1_year: number,
+  arg2_min_pop?: number,
+  arg3_max_cities?: number,
+  arg4_color_mode?: string,
+  arg5_cache?: Map<string, CityPoint[]>
+): Promise<CityPoint[]> {
+  //Convert from parameters
+  let cache = arg5_cache
+  let color_mode = arg4_color_mode || 'growth'
+  let dataset = arg0_dataset || 'stadester_1.1'
+  let max_cities = (arg3_max_cities !== undefined) ? arg3_max_cities : 4000
+  let min_pop = (arg2_min_pop !== undefined) ? arg2_min_pop : 0
+  let year = Math.round(arg1_year)
+
+  //Declare local instance variables
+  let cache_key = `${dataset}:${year}:${min_pop}:${max_cities}:${color_mode}`
+  let pending_promise: Promise<CityPoint[]>
+
+  //Guard clauses
+  if (cache && cache.has(cache_key))
+    return cache.get(cache_key)!
+
+  if (in_flight_city_fetches.has(cache_key))
+    return in_flight_city_fetches.get(cache_key)!
+
+  //Function body
+  pending_promise = (async () => {
+    try {
+      let url_params = new URLSearchParams({
+        colorMode: color_mode,
+        dataset,
+        format: 'compact',
+        maxCities: String(max_cities),
+        minPop: String(min_pop),
+        year: String(year),
+      })
+
+      let res = await fetch(`/api/stadester/cities?${url_params.toString()}`)
+      if (!res.ok)
+        return []
+
+      let data = await res.json()
+      let city_list: CityPoint[] = []
+
+      if (data.coords && data.keys) {
+        let count = data.count || data.keys.length
+        for (let i = 0; i < count; i++) {
+          city_list.push({
+            coords: [data.coords[i * 2], data.coords[i * 2 + 1]],
+            country: data.countries ? data.countries[i] : undefined,
+            growthRate: data.growth ? data.growth[i] : 0,
+            id: data.keys[i],
+            key: data.keys[i],
+            name: data.names[i],
+            population: data.pops[i],
+            region: data.regions ? data.regions[i] : undefined,
+          })
+        }
+      } else if (Array.isArray(data.cities)) {
+        city_list = data.cities
+      }
+
+      if (cache) {
+        if (cache.size >= 60) {
+          let first_key = cache.keys().next().value
+          if (first_key)
+            cache.delete(first_key)
+        }
+        cache.set(cache_key, city_list)
+      }
+
+      return city_list
+    } catch (arg0_err) {
+      console.error('[fetchStadesterCitiesAsync] Error fetching cities:', arg0_err)
+      return []
+    } finally {
+      in_flight_city_fetches.delete(cache_key)
+    }
+  })()
+
+  in_flight_city_fetches.set(cache_key, pending_promise)
+
+  //Return statement
+  return pending_promise
+}
+
 /**
  * Hook to stream and manage Stadestér historical cities data with client-side caching.
  *
@@ -78,6 +180,7 @@ export const useStadesterCities = function (arg0_options: UseStadesterCitiesPara
   useEffect(() => {
     if (!enabled) {
       set_cities([])
+      set_is_loading(false)
       return
     }
 
@@ -87,75 +190,36 @@ export const useStadesterCities = function (arg0_options: UseStadesterCitiesPara
     if (client_cache_ref.current.has(cache_key)) {
       set_cities(client_cache_ref.current.get(cache_key)!)
       set_error(null)
+      set_is_loading(false)
+
+      fetchStadesterCitiesAsync(dataset, rounded_year + 1, min_pop, max_cities, color_mode, client_cache_ref.current).catch(() => {})
+      fetchStadesterCitiesAsync(dataset, rounded_year + 2, min_pop, max_cities, color_mode, client_cache_ref.current).catch(() => {})
       return
     }
 
-    if (abort_controller_ref.current)
-      abort_controller_ref.current.abort()
-
-    let controller = new AbortController()
-    abort_controller_ref.current = controller
-
+    let is_cancelled = false
     set_is_loading(true)
     set_error(null)
 
-    let url_params = new URLSearchParams({
-      colorMode: color_mode,
-      dataset,
-      format: 'compact',
-      maxCities: String(max_cities),
-      minPop: String(min_pop),
-      year: String(rounded_year),
-    })
+    fetchStadesterCitiesAsync(dataset, rounded_year, min_pop, max_cities, color_mode, client_cache_ref.current)
+      .then((arg0_list) => {
+        if (!is_cancelled) {
+          set_cities(arg0_list)
+          set_is_loading(false)
 
-    fetch(`/api/stadester/cities?${url_params.toString()}`, { signal: controller.signal })
-      .then((arg0_res) => {
-        if (!arg0_res.ok)
-          throw new Error(`Failed to load cities: HTTP ${arg0_res.status}`)
-        return arg0_res.json()
-      })
-      .then((arg0_data) => {
-        let city_list: CityPoint[] = []
-
-        if (arg0_data.coords && arg0_data.keys) {
-          let count = arg0_data.count || arg0_data.keys.length
-          for (let i = 0; i < count; i++) {
-            city_list.push({
-              coords: [arg0_data.coords[i * 2], arg0_data.coords[i * 2 + 1]],
-              country: arg0_data.countries ? arg0_data.countries[i] : undefined,
-              growthRate: arg0_data.growth ? arg0_data.growth[i] : 0,
-              id: arg0_data.keys[i],
-              key: arg0_data.keys[i],
-              name: arg0_data.names[i],
-              population: arg0_data.pops[i],
-              region: arg0_data.regions ? arg0_data.regions[i] : undefined,
-            })
-          }
-        } else if (Array.isArray(arg0_data.cities)) {
-          city_list = arg0_data.cities
+          fetchStadesterCitiesAsync(dataset, rounded_year + 1, min_pop, max_cities, color_mode, client_cache_ref.current).catch(() => {})
+          fetchStadesterCitiesAsync(dataset, rounded_year + 2, min_pop, max_cities, color_mode, client_cache_ref.current).catch(() => {})
         }
-
-        //Maintain LRU bounds on client memory cache
-        if (client_cache_ref.current.size >= 25) {
-          let first_key = client_cache_ref.current.keys().next().value
-          if (first_key)
-            client_cache_ref.current.delete(first_key)
-        }
-
-        client_cache_ref.current.set(cache_key, city_list)
-        set_cities(city_list)
-        set_is_loading(false)
       })
       .catch((arg0_err) => {
-        if (arg0_err.name !== 'AbortError') {
-          console.error('[useStadesterCities] Error fetching cities:', arg0_err)
-          set_error(arg0_err.message || 'Error loading cities')
+        if (!is_cancelled) {
+          set_error(arg0_err?.message || 'Error loading cities')
           set_is_loading(false)
         }
       })
 
     return () => {
-      controller.abort()
+      is_cancelled = true
     }
   }, [enabled, dataset, Math.round(year), min_pop, max_cities, color_mode])
 

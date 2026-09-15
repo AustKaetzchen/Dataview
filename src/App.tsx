@@ -30,8 +30,8 @@ import { VideoExportModal, type StartTimelapseExportOptions } from './components
 import { ParsedDataLayer } from './server/layerParser'
 import { UserRole } from './components/controls/DataLayersTab'
 import { Icon } from './components/ui/icon'
-import { useStadesterCities } from './components/map/useStadesterCities'
-import { useRasterPipeline, fetchRasterKeyframe } from './lib/raster/useRasterPipeline'
+import { useStadesterCities, fetchStadesterCitiesAsync } from './components/map/useStadesterCities'
+import { useRasterPipeline, fetchRasterKeyframe, fetchInterpolatedRasterAsync } from './lib/raster/useRasterPipeline'
 import { useRasterRenderer } from './lib/raster/useRasterRenderer'
 import { useTimelapseExportOrchestrator } from './components/export/useTimelapseExportOrchestrator'
 import { applyLayerLegend } from './lib/raster/legendUtils'
@@ -356,20 +356,49 @@ export const App: React.FC = function () {
       if (is_headless_export && raster_cache_ref.current.size > 1)
         raster_cache_ref.current.clear()
 
-      let decoded = await fetchRasterKeyframe(
-        layer_id,
-        yr,
-        selectors,
-        data_format,
-        raster_cache_ref.current,
-        has_selectors,
-        layer_pixel_offset,
-        performant_mode
-      )
+      let available_years = target_layer?.available_years || (target_layer as any)?.years || []
+      let decoded: DecodedRaster | null = null
+
+      if (available_years.length > 0) {
+        decoded = await fetchInterpolatedRasterAsync(
+          layer_id,
+          yr,
+          available_years,
+          selectors,
+          data_format,
+          raster_cache_ref.current,
+          has_selectors,
+          layer_pixel_offset,
+          performant_mode,
+          snap_to_keyframes
+        )
+      } else {
+        decoded = await fetchRasterKeyframe(
+          layer_id,
+          yr,
+          selectors,
+          data_format,
+          raster_cache_ref.current,
+          has_selectors,
+          layer_pixel_offset,
+          performant_mode
+        )
+      }
 
       if (decoded) {
         set_raster_a(decoded)
+        set_raster_b(null)
         set_raster_version((arg0_v) => arg0_v + 1)
+      }
+
+      if (stadester_config.enabled) {
+        await fetchStadesterCitiesAsync(
+          stadester_config.dataset,
+          yr,
+          stadester_config.minPop,
+          stadester_config.maxCities,
+          stadester_config.colorMode
+        ).catch(() => {})
       }
 
       await new Promise((arg0_res) => {
@@ -385,7 +414,7 @@ export const App: React.FC = function () {
       await new Promise((arg0_res) => setTimeout(arg0_res, 40))
       return true
     }
-  }, [active_layer, data_format, is_headless_export, layers, performant_mode, raster_cache_ref, set_raster_a, set_raster_version])
+  }, [active_layer, data_format, is_headless_export, layers, performant_mode, raster_cache_ref, set_raster_a, set_raster_version, stadester_config])
 
   let deferred_selected_countries = useDeferredValue(selected_countries)
 
@@ -895,7 +924,7 @@ export const App: React.FC = function () {
         <TimelineBar
           availableKeyframes={available_keyframes}
           currentYear={timeline_year}
-          isLoading={is_loading_raster}
+          isLoading={is_loading_raster || (stadester_config.enabled && stadester_result.isLoading)}
           isPlaying={is_playing}
           maxYear={available_keyframes.length > 0 ? available_keyframes[available_keyframes.length - 1] : 2025}
           minYear={available_keyframes.length > 0 ? available_keyframes[0] : -10000}
