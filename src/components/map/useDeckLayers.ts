@@ -746,7 +746,7 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
             let sx = window_w / 2 + (c.position[0] / 360) * window_w
             let sy = window_h / 2 - (c.position[1] / 180) * window_h
 
-            let box_x1 = sx + r + 4
+            let box_x1 = sx + r + 8
             let box_y1 = sy - text_h / 2
             let box_x2 = box_x1 + text_w
             let box_y2 = box_y1 + text_h
@@ -789,7 +789,7 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
               getColor: [255, 255, 255, 255],
               getTextAnchor: 'start',
               getAlignmentBaseline: 'center',
-              getPixelOffset: (d: any) => [d.pixelRadius + 4, 0],
+              getPixelOffset: (d: any) => [d.pixelRadius + 8, 0],
               background: true,
               backgroundColor: [10, 15, 25, 220],
               backgroundPadding: [4, 2],

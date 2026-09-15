@@ -245,11 +245,39 @@ export const CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_
 
     return {
       animation: false,
+      dataZoom: [
+        {
+          filterMode: 'filter',
+          type: 'inside',
+          xAxisIndex: [0],
+        },
+        {
+          backgroundColor: 'rgba(15, 23, 42, 0.6)',
+          borderColor: '#334155',
+          bottom: 2,
+          brushSelect: false,
+          fillerColor: 'rgba(239, 68, 68, 0.3)',
+          handleStyle: {
+            borderColor: '#ef4444',
+            color: '#ef4444',
+          },
+          height: 14,
+          moveHandleStyle: {
+            color: '#ef4444',
+          },
+          textStyle: {
+            color: '#94a3b8',
+            fontSize: 9,
+          },
+          type: 'slider',
+          xAxisIndex: [0],
+        },
+      ],
       grid: {
-        bottom: 25,
+        bottom: 34,
         left: 55,
         right: 20,
-        top: 25,
+        top: 20,
       },
       series: [
         {
@@ -329,8 +357,8 @@ export const CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_
           formatter: (arg0_v: number) => UfDate.formatYear(arg0_v),
         },
         axisLine: { lineStyle: { color: '#334155' } },
-        min: x_min,
         max: x_max,
+        min: x_min,
         splitLine: { show: false },
         type: 'value',
       },
