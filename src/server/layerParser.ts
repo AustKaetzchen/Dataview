@@ -475,8 +475,9 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
           !metadata_keys.includes(arg0_sk)
       )
       let has_sub_layers = sub_keys.length > 0
+      let is_vector_layer = typeof item.type === 'string' && item.type.startsWith('vector.')
 
-      if (has_filepath || has_sub_layers) {
+      if (has_filepath || has_sub_layers || is_vector_layer) {
         //Resolve filepath template with root folders
         let resolved_template = item.filepath || ''
         let root_keys = Object.keys(resolved_roots)
@@ -566,7 +567,7 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
         //Scan files and discover available years using scanLayerTemplate if template exists and is raster
         let years: number[] = []
         if (layer_type.startsWith('vector.')) {
-          years = [-3300, 2025]
+          years = [-10000, 2025]
           if (has_filepath)
             file_cache.set(k, resolved_template)
         } else if (has_filepath) {

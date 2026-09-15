@@ -102,6 +102,7 @@ export const useStadesterCities = function (arg0_options: UseStadesterCitiesPara
     let url_params = new URLSearchParams({
       colorMode: color_mode,
       dataset,
+      format: 'compact',
       maxCities: String(max_cities),
       minPop: String(min_pop),
       year: String(rounded_year),
@@ -114,7 +115,32 @@ export const useStadesterCities = function (arg0_options: UseStadesterCitiesPara
         return arg0_res.json()
       })
       .then((arg0_data) => {
-        let city_list: CityPoint[] = Array.isArray(arg0_data.cities) ? arg0_data.cities : []
+        let city_list: CityPoint[] = []
+
+        if (arg0_data.coords && arg0_data.keys) {
+          let count = arg0_data.count || arg0_data.keys.length
+          for (let i = 0; i < count; i++) {
+            city_list.push({
+              coords: [arg0_data.coords[i * 2], arg0_data.coords[i * 2 + 1]],
+              country: arg0_data.countries ? arg0_data.countries[i] : undefined,
+              growthRate: arg0_data.growth ? arg0_data.growth[i] : 0,
+              id: arg0_data.keys[i],
+              key: arg0_data.keys[i],
+              name: arg0_data.names[i],
+              population: arg0_data.pops[i],
+            })
+          }
+        } else if (Array.isArray(arg0_data.cities)) {
+          city_list = arg0_data.cities
+        }
+
+        //Maintain LRU bounds on client memory cache
+        if (client_cache_ref.current.size >= 25) {
+          let first_key = client_cache_ref.current.keys().next().value
+          if (first_key)
+            client_cache_ref.current.delete(first_key)
+        }
+
         client_cache_ref.current.set(cache_key, city_list)
         set_cities(city_list)
         set_is_loading(false)
@@ -131,6 +157,8 @@ export const useStadesterCities = function (arg0_options: UseStadesterCitiesPara
       controller.abort()
     }
   }, [enabled, dataset, Math.round(year), min_pop, max_cities, color_mode])
+
+  let effective_city_key = (options.selectedCityKey !== undefined) ? options.selectedCityKey : selected_city_key
 
   //Fetch full city details when selected
   fetch_full_city_record = useCallback(async function (arg0_key: string) {
@@ -156,13 +184,13 @@ export const useStadesterCities = function (arg0_options: UseStadesterCitiesPara
   }, [dataset])
 
   useEffect(() => {
-    if (!selected_city_key) {
+    if (!effective_city_key) {
       set_selected_city(null)
       return
     }
 
     let is_cancelled = false
-    fetch_full_city_record(selected_city_key).then((arg0_data) => {
+    fetch_full_city_record(effective_city_key).then((arg0_data) => {
       if (!is_cancelled && arg0_data)
         set_selected_city(arg0_data)
     })
@@ -170,7 +198,7 @@ export const useStadesterCities = function (arg0_options: UseStadesterCitiesPara
     return () => {
       is_cancelled = true
     }
-  }, [selected_city_key, fetch_full_city_record])
+  }, [effective_city_key, fetch_full_city_record])
 
   //Return statement
   return {

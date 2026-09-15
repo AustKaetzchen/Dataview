@@ -1,0 +1,14 @@
+{
+    name: "Basemap",
+    basemap_only: {
+        name: "Default Basemap (No Data)",
+        type: "vector.basemap",
+        unit: "",
+        icon: "map",
+        description: [
+            "### Default Basemap",
+            "Clean geographic basemap without raster overlays, optimised for inspecting settlement distributions and territorial boundaries."
+        ],
+        permissions: ["default"]
+    }
+}

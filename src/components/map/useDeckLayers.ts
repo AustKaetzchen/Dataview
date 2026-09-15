@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { COORDINATE_SYSTEM } from '@deck.gl/core'
+import { COORDINATE_SYSTEM, WebMercatorViewport } from '@deck.gl/core'
 import {
   BitmapLayer,
   PathLayer,
@@ -72,21 +72,44 @@ function getShortCityLabel (arg0_name: string): string {
   return first_word || before_semi
 }
 
+const RAINBOW_GROWTH_STOPS: Array<[number, [number, number, number]]> = [
+  [0.08, [232, 121, 249]],
+  [0.06, [239, 68, 68]],
+  [0.03, [251, 146, 60]],
+  [0.01, [253, 224, 71]],
+  [0.00, [198, 219, 85]],
+  [-0.02, [69, 207, 119]],
+  [-0.04, [72, 156, 240]],
+  [-0.05, [93, 96, 226]],
+]
+
 function getGrowthRgb (arg0_rate: number, arg1_palette?: string): [number, number, number] {
   //Convert from parameters
   let palette = arg1_palette || 'Rainbow'
   let r = arg0_rate
 
-  //If Rainbow default, use calibrated heat/cool diverging stops matching Anita's cityhistory
+  //If Rainbow default, use calibrated heat/cool continuous piecewise interpolation matching Anita's cityhistory
   if (palette === 'Rainbow' || !palette) {
-    if (r >= 0.08) return [232, 121, 249]
-    if (r >= 0.06) return [239, 68, 68]
-    if (r >= 0.03) return [251, 146, 60]
-    if (r >= 0.01) return [253, 224, 71]
-    if (r >= 0.00) return [198, 219, 85]
-    if (r >= -0.02) return [69, 207, 119]
-    if (r >= -0.04) return [72, 156, 240]
-    return [93, 96, 226]
+    if (r >= RAINBOW_GROWTH_STOPS[0][0])
+      return RAINBOW_GROWTH_STOPS[0][1]
+    let last_idx = RAINBOW_GROWTH_STOPS.length - 1
+    if (r <= RAINBOW_GROWTH_STOPS[last_idx][0])
+      return RAINBOW_GROWTH_STOPS[last_idx][1]
+
+    for (let i = 0; i < last_idx; i++) {
+      let hi = RAINBOW_GROWTH_STOPS[i][0]
+      let lo = RAINBOW_GROWTH_STOPS[i + 1][0]
+      if (r <= hi && r >= lo) {
+        let t = (hi === lo) ? 0 : (r - lo) / (hi - lo)
+        let c_hi = RAINBOW_GROWTH_STOPS[i][1]
+        let c_lo = RAINBOW_GROWTH_STOPS[i + 1][1]
+        let res_r = Math.round(c_lo[0] + t * (c_hi[0] - c_lo[0]))
+        let res_g = Math.round(c_lo[1] + t * (c_hi[1] - c_lo[1]))
+        let res_b = Math.round(c_lo[2] + t * (c_hi[2] - c_lo[2]))
+        return [res_r, res_g, res_b]
+      }
+    }
+    return RAINBOW_GROWTH_STOPS[4][1]
   }
 
   //D3 continuous colour interpolation from -0.05 to +0.08
@@ -144,9 +167,13 @@ export interface UseDeckLayersParams {
   hoveredCountry?: CountryFeature | null
   stadesterConfig?: StadesterConfig
   stadesterCities?: CityPoint[]
+  stadesterLabels?: any[]
+  stadesterPoints?: any[]
   selectedCityKey?: string | null
   onSelectCity?: (city: CityPoint) => void
   onHoverCity?: (city: CityPoint | null, x?: number, y?: number) => void
+  viewport?: any
+  viewState?: any
 }
 
 /**
@@ -185,9 +212,10 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
         py = projected[1]
       }
 
-      // Equal-area pixel radius scaled by sqrt(population):
-      // r = sqrt(pop) * 0.0115 * b_scale (1M city -> 11.5px, 10M city -> 36.4px, 100k -> 3.6px)
-      let pixel_radius = Math.max(2.0, Math.min(65.0, Math.sqrt(Math.max(100, city.population)) * 0.0115 * b_scale))
+      // Equal-area pixel radius scaled by sqrt(population) with guaranteed minimum bubble size for smaller settlements:
+      let min_radius = 4.5 * b_scale
+      let pop_radius = Math.sqrt(Math.max(0, city.population)) * 0.0115 * b_scale
+      let pixel_radius = Math.max(min_radius, Math.min(65.0, min_radius + pop_radius))
 
       if (color_mode === 'growth') {
         let growth_rate = (city.growthRate !== undefined) ? city.growthRate : 0
@@ -579,7 +607,11 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
     }
 
     //8. Stadestér Historical Cities
-    if (options.stadesterConfig?.enabled && stadester_points_data.length > 0) {
+    let effective_points = (options.stadesterPoints && options.stadesterPoints.length > 0)
+      ? options.stadesterPoints
+      : stadester_points_data
+
+    if (options.stadesterConfig?.enabled && effective_points.length > 0) {
       let is_collision_active = (options.stadesterConfig.labelCollision !== undefined) ? options.stadesterConfig.labelCollision : true
       let is_halo = options.stadesterConfig.halo !== false && !options.stadesterConfig.filled
       let is_labels_visible = (options.stadesterConfig.showLabels !== undefined) ? options.stadesterConfig.showLabels : true
@@ -588,7 +620,7 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
       layers_array.push(
         new ScatterplotLayer({
           id: `stadester-cities-${projection}`,
-          data: stadester_points_data,
+          data: effective_points,
           getPosition: (d: any) => d.position,
           getRadius: (d: any) => d.pixelRadius,
           getFillColor: (d: any) => d.color,
@@ -619,7 +651,7 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
 
       // City selection highlight ring
       if (options.selectedCityKey) {
-        let selected_city_item = stadester_points_data.find((c: any) => c.key === options.selectedCityKey)
+        let selected_city_item = effective_points.find((c: any) => c.key === options.selectedCityKey)
         if (selected_city_item) {
           layers_array.push(
             new ScatterplotLayer({
@@ -640,34 +672,87 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
         }
       }
 
-      // City text labels with dark backdrop and collision filter
+      // City text labels
       if (is_labels_visible) {
-        layers_array.push(
-          new TextLayer({
-            id: `stadester-labels-${projection}`,
-            data: stadester_points_data,
-            getPosition: (d: any) => d.position,
-            getText: (d: any) => d.shortName,
-            getSize: (d: any) => Math.max(10, Math.min(14, 9 + Math.log10(Math.max(1000, d.population))*1.1)),
-            sizeUnits: 'pixels',
-            getColor: [255, 255, 255, 255],
-            getTextAnchor: 'start',
-            getAlignmentBaseline: 'center',
-            getPixelOffset: (d: any) => [d.pixelRadius + 4, 0],
-            background: true,
-            backgroundColor: [10, 15, 25, 220],
-            backgroundPadding: [4, 2],
-            borderRadius: 2,
-            fontFamily: 'Inter, system-ui, sans-serif',
-            fontWeight: 600,
-            pickable: false,
-            extensions: [new CollisionFilterExtension()],
-            collisionEnabled: is_collision_active,
-            collisionGroup: 'stadester-city-labels',
-            getCollisionPriority: (d: any) => Math.max(-1000, Math.min(1000, Math.log10(Math.max(1, d.population))*250 - 800)),
-            parameters: { depthTest: false },
-          })
-        )
+        let visible_label_cities = options.stadesterLabels
+
+        // Fallback local placement if worker labels have not yet arrived
+        if (!visible_label_cities || visible_label_cities.length === 0) {
+          let sorted_cities = [...effective_points].sort((arg0_a, arg0_b) => arg0_b.population - arg0_a.population)
+          let placed_label_boxes: Array<[number, number, number, number]> = []
+          visible_label_cities = []
+          let window_w = (typeof window !== 'undefined') ? window.innerWidth : 1920
+          let window_h = (typeof window !== 'undefined') ? window.innerHeight : 1080
+
+          for (let i = 0; i < sorted_cities.length; i++) {
+            let c = sorted_cities[i]
+            let label_text = c.shortName || ''
+            if (!label_text)
+              continue
+
+            let text_w = label_text.length * 7.2 + 12
+            let text_h = 16
+            let r = c.pixelRadius
+            let sx = window_w / 2 + (c.position[0] / 360) * window_w
+            let sy = window_h / 2 - (c.position[1] / 180) * window_h
+
+            let box_x1 = sx + r + 4
+            let box_y1 = sy - text_h / 2
+            let box_x2 = box_x1 + text_w
+            let box_y2 = box_y1 + text_h
+
+            if (is_collision_active) {
+              let collides = false
+              for (let b = 0; b < placed_label_boxes.length; b++) {
+                let pb = placed_label_boxes[b]
+                if (
+                  box_x1 < pb[2] + 4 &&
+                  box_x2 > pb[0] - 4 &&
+                  box_y1 < pb[3] + 2 &&
+                  box_y2 > pb[1] - 2
+                ) {
+                  collides = true
+                  break
+                }
+              }
+              if (collides)
+                continue
+            }
+
+            placed_label_boxes.push([box_x1, box_y1, box_x2, box_y2])
+            visible_label_cities.push(c)
+
+            if (visible_label_cities.length >= 60)
+              break
+          }
+        }
+
+        if (visible_label_cities.length > 0) {
+          layers_array.push(
+            new TextLayer({
+              id: `stadester-labels-${projection}`,
+              data: visible_label_cities,
+              getPosition: (d: any) => d.position,
+              getText: (d: any) => d.shortName,
+              getSize: (d: any) => Math.max(10, Math.min(13, 9 + Math.log10(Math.max(1000, d.population))*0.9)),
+              sizeUnits: 'pixels',
+              getColor: [255, 255, 255, 255],
+              getTextAnchor: 'start',
+              getAlignmentBaseline: 'center',
+              getPixelOffset: (d: any) => [d.pixelRadius + 4, 0],
+              background: true,
+              backgroundColor: [10, 15, 25, 220],
+              backgroundPadding: [4, 2],
+              borderRadius: 2,
+              fontFamily: 'Inter, system-ui, sans-serif',
+              fontWeight: 600,
+              coordinateSystem: (is_cartesian) ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
+              characterSet: 'auto',
+              pickable: false,
+              parameters: { depthTest: false },
+            })
+          )
+        }
       }
     }
 
@@ -697,6 +782,8 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
     options.countriesMode,
     options.hoveredCountry,
     stadester_points_data,
+    options.stadesterPoints,
+    options.stadesterLabels,
     options.stadesterConfig,
     options.selectedCityKey,
     options.onSelectCity,

@@ -232,13 +232,16 @@ export const CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_
     if (!city)
       return {}
 
+    let line_color = '#ef4444'
     let metric_label = active_metric_tab === 'population'
       ? 'Urban Population'
       : active_metric_tab === 'area'
         ? 'Estimated Area (km²)'
         : 'Density (people/km²)'
 
-    let line_color = '#ef4444'
+    let x_min = timeseries_data.length > 0 ? timeseries_data[0][0] : undefined
+    let x_max = timeseries_data.length > 0 ? timeseries_data[timeseries_data.length - 1][0] : undefined
+    let is_current_in_domain = x_min !== undefined && x_max !== undefined && current_year >= x_min && current_year <= x_max
 
     return {
       animation: false,
@@ -271,7 +274,7 @@ export const CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_
             color: line_color,
             width: 2,
           },
-          markLine: {
+          markLine: is_current_in_domain ? {
             data: [
               {
                 label: {
@@ -291,7 +294,7 @@ export const CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_
             ],
             silent: true,
             symbol: 'none',
-          },
+          } : undefined,
           name: metric_label,
           showSymbol: timeseries_data.length < 30,
           smooth: true,
@@ -326,6 +329,8 @@ export const CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_
           formatter: (arg0_v: number) => UfDate.formatYear(arg0_v),
         },
         axisLine: { lineStyle: { color: '#334155' } },
+        min: x_min,
+        max: x_max,
         splitLine: { show: false },
         type: 'value',
       },

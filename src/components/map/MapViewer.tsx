@@ -31,6 +31,7 @@ import { UI_LAYOUT, getAnalyticsPanelRightOffset } from '@/lib/uiLayout'
 import { ClickInfoPanel } from './ClickInfoPanel'
 import { CityDetailsPanel } from './CityDetailsPanel'
 import { ColorBarLegend } from './ColorBarLegend'
+import { StadesterLegendCard } from './StadesterLegendCard'
 import { Button } from '../ui/button'
 import { Icon } from '../ui/icon'
 import {
@@ -52,6 +53,7 @@ import { ParsedDataLayer } from '@/server/layerParser'
 import { UserRole } from '../controls/DataLayersTab'
 import { useCircleOverlay } from './useCircleOverlay'
 import { useDeckLayers } from './useDeckLayers'
+import { useStadesterWorker } from '@/lib/stadester/useStadesterWorker'
 
 export interface MapViewerProps {
   raster: DecodedRaster | null
@@ -166,11 +168,11 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
   let flyout_open: boolean
   let graticule_paths: { path: [number, number][] }[]
   let handle_click: (info: any) => void
-  let handle_container_pointer_move: (e: React.PointerEvent<HTMLDivElement>) => void
   let handle_double_click: () => void
   let handle_hover: (info: any) => void
   let handle_view_state_change: (e: any) => void
   let heightmap_config = props.heightmapConfig
+  let hover_raf_ref = useRef<number | null>(null)
   let hovered_city: CityPoint | null
   let hovered_city_pos: { x: number; y: number } | null
   let hovered_country = props.hoveredCountry
@@ -204,6 +206,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
   let on_update_breaks = props.onUpdateBreaks
   let opacity = props.opacity
   let palette = props.palette
+  let pending_hover_info_ref = useRef<any>(null)
   let projection = props.projection
   let raster = props.raster
   let raster_bounds = props.rasterBounds
@@ -316,10 +319,16 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
 
     updateClearance()
     window.addEventListener('resize', updateClearance)
-    let interval = setInterval(updateClearance, 250)
+    let ro = new ResizeObserver(updateClearance)
+    let timeline_el = document.getElementById('dataview-timelinebar-container')
+    let mapmodes_el = document.getElementById('dataview-mapmodes-tray')
+    if (timeline_el)
+      ro.observe(timeline_el)
+    if (mapmodes_el)
+      ro.observe(mapmodes_el)
 
     return () => {
-      clearInterval(interval)
+      ro.disconnect()
       window.removeEventListener('resize', updateClearance)
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps
@@ -414,11 +423,6 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
   let [show_graticule, set_show_graticule] = useState(true)
   let [inspect_data, set_inspect_data] = useState<InspectionData | null>(null)
   let [cursor_pos, set_cursor_pos] = useState<{ x: number; y: number } | null>(null)
-
-  handle_container_pointer_move = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    let local_rect = e.currentTarget.getBoundingClientRect()
-    set_cursor_pos({ x: e.clientX - local_rect.left, y: e.clientY - local_rect.top })
-  }, [set_cursor_pos])
 
   let [land_geo_json, set_land_geo_json] = useState<any>(null)
   let [country_features, set_country_features] = useState<CountryFeature[]>([])
@@ -523,7 +527,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
           if (lng >= local_b_min_x && lng <= local_b_max_x && lat >= local_b_min_y && lat <= local_b_max_y && isPointInGeometry(lng, lat, cached_country.geometry))
             country_name = cached_country.properties.name || cached_country.properties.name_long || null
         }
-        if (!country_name) {
+        if (!country_name && countries_mode) {
           let local_c = findCountryAtLngLat(lng, lat, country_features)
           last_country_ref.current = local_c
           if (local_c)
@@ -577,37 +581,42 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
 
   handle_hover = useCallback(
     (info: any) => {
-      let insp: InspectionData | null
-      let x_coord: number
-      let y_coord: number
-
-      if (!info.coordinate) {
-        set_inspect_data(null)
-        set_cursor_pos(null)
-        last_hovered_country_code_ref.current = null
-        if (countries_mode && on_hover_country)
-          on_hover_country(null)
+      pending_hover_info_ref.current = info
+      if (hover_raf_ref.current !== null)
         return
-      }
 
-      x_coord = info.coordinate[0]
-      y_coord = info.coordinate[1]
-      insp = sample_raster_at(x_coord, y_coord)
-      set_inspect_data(insp)
-
-      if (info.x !== undefined && info.y !== undefined)
-        set_cursor_pos({ x: info.x, y: info.y })
-      if (on_inspect)
-        on_inspect(insp)
-
-      if (countries_mode && insp && country_features.length > 0 && on_hover_country) {
-        let next_code = insp.countryName
-        if (last_hovered_country_code_ref.current !== next_code) {
-          last_hovered_country_code_ref.current = next_code
-          let local_country = findCountryAtLngLat(insp.lng, insp.lat, country_features)
-          on_hover_country(local_country)
+      hover_raf_ref.current = requestAnimationFrame(() => {
+        hover_raf_ref.current = null
+        let cur_info = pending_hover_info_ref.current
+        if (!cur_info || !cur_info.coordinate) {
+          set_inspect_data(null)
+          set_cursor_pos(null)
+          last_hovered_country_code_ref.current = null
+          if (countries_mode && on_hover_country)
+            on_hover_country(null)
+          return
         }
-      }
+
+        let x_coord = cur_info.coordinate[0]
+        let y_coord = cur_info.coordinate[1]
+        let insp = sample_raster_at(x_coord, y_coord)
+        set_inspect_data(insp)
+
+        if (cur_info.x !== undefined && cur_info.y !== undefined)
+          set_cursor_pos({ x: cur_info.x, y: cur_info.y })
+
+        if (on_inspect)
+          on_inspect(insp)
+
+        if (countries_mode && insp && country_features.length > 0 && on_hover_country) {
+          let next_code = insp.countryName
+          if (last_hovered_country_code_ref.current !== next_code) {
+            last_hovered_country_code_ref.current = next_code
+            let local_country = findCountryAtLngLat(insp.lng, insp.lat, country_features)
+            on_hover_country(local_country)
+          }
+        }
+      })
     },
     [sample_raster_at, on_inspect, countries_mode, country_features, on_hover_country, set_inspect_data, set_cursor_pos]
   )
@@ -738,6 +747,14 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
     selectedCountry: selected_country,
   })
 
+  let worker_result = useStadesterWorker({
+    cities: stadester_cities || [],
+    config: stadester_config,
+    projection,
+    viewState: proj_view_states[projection],
+    year: timeline_year || 1950,
+  })
+
   layers = useDeckLayers({
     projection,
     basemap,
@@ -772,6 +789,8 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
     selectedCityKey: selected_city_key,
     stadesterCities: stadester_cities,
     stadesterConfig: stadester_config,
+    stadesterLabels: worker_result.labels,
+    stadesterPoints: worker_result.points,
   })
 
   if (props.activeLayerId && props.dataLayers) {
@@ -818,7 +837,6 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
       style={{ imageRendering: 'pixelated' }}
       onDoubleClick={handle_double_click}
       onContextMenu={(e) => e.preventDefault()}
-      onPointerMove={handle_container_pointer_move}
       onPointerLeave={() => {
         set_hovered_city(null)
         set_hovered_city_pos(null)
@@ -837,6 +855,8 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
         onAfterRender={() => {
           if (typeof window !== 'undefined') {
             ;(window as any).__deckRendered = true
+            ;(window as any).deck = deck_ref.current
+            ;(window as any).deckLayers = layers
           }
         }}
         getCursor={({ isHovering }) => ((isHovering) ? 'crosshair' : 'grab')}
@@ -890,7 +910,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
       )}
 
       {/* Top Left: Value Colourbar & Information Flyout Container */}
-      {(ui_visible || is_timelapse_exporting) && (Boolean(rendered_canvas) || Boolean(raster) || is_timelapse_exporting || info_panel_open) &&
+      {(ui_visible || is_timelapse_exporting) && (Boolean(rendered_canvas) || Boolean(raster) || is_timelapse_exporting || info_panel_open || stadester_config?.enabled) &&
         (() => {
           let has_canvas = Boolean(rendered_canvas)
           let is_country_relative = Boolean(
@@ -1002,6 +1022,17 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
                     onUpdateBreaks={on_update_breaks}
                     width={is_center_pos ? '100%' : current_colourbar_width}
                     onResizeWidth={is_center_pos ? undefined : on_resize_colourbar_width}
+                  />
+                </div>
+              )}
+
+              {/* Stadestér Settlements Legend Card */}
+              {stadester_config?.enabled && (
+                <div className="pointer-events-auto">
+                  <StadesterLegendCard
+                    config={stadester_config}
+                    settlementCount={stadester_cities?.length ?? 0}
+                    width={is_center_pos ? '100%' : current_colourbar_width}
                   />
                 </div>
               )}

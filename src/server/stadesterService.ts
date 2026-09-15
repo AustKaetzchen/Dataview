@@ -22,9 +22,20 @@ export interface CityIndexEntry {
 }
 
 export interface StadesterQueryOptions {
+  bbox?: [number, number, number, number] // [west, south, east, north]
   color_mode?: 'growth' | 'population' | 'continent'
   max_cities?: number
   min_pop?: number
+}
+
+export interface CompactCitiesPayload {
+  coords: number[] // [lat0, lon0, lat1, lon1, ...]
+  count: number
+  countries: (string | undefined)[]
+  growth: number[]
+  keys: string[]
+  names: string[]
+  pops: number[]
 }
 
 export interface CityRenderPoint {
@@ -237,6 +248,19 @@ export const StadesterService = {
       if (pop_years.length === 0 || !city.coords)
         continue
 
+      if (options.bbox) {
+        let b = options.bbox
+        let c_lat = city.coords[0]
+        let c_lon = city.coords[1]
+        if (b[0] <= b[2]) {
+          if (c_lon < b[0] || c_lon > b[2] || c_lat < b[1] || c_lat > b[3])
+            continue
+        } else {
+          if ((c_lon < b[0] && c_lon > b[2]) || c_lat < b[1] || c_lat > b[3])
+            continue
+        }
+      }
+
       let start_yr = city.min_year
       let end_yr = city.max_year
 
@@ -275,11 +299,39 @@ export const StadesterService = {
           let t = (target_year - prev_yr)/(next_yr - prev_yr)
           let log_val = Math.log10(p0) + t*(Math.log10(p1) - Math.log10(p0))
           pop = Math.round(Math.pow(10, log_val))
-          growth_rate = Math.pow(p1/p0, 1/(next_yr - prev_yr)) - 1
         } else if (p1 > 0) {
           pop = p1
         } else {
           pop = p0
+        }
+      }
+
+      //Calculate continuous annual growth rate around target_year (logarithmic slope)
+      if (city.population && pop_years.length > 1) {
+        let g_next_yr = pop_years[pop_years.length - 1]
+        let g_prev_yr = pop_years[0]
+
+        if (target_year <= pop_years[0]) {
+          g_prev_yr = pop_years[0]
+          g_next_yr = pop_years[1]
+        } else if (target_year >= pop_years[pop_years.length - 1]) {
+          g_prev_yr = pop_years[pop_years.length - 2]
+          g_next_yr = pop_years[pop_years.length - 1]
+        } else {
+          for (let x = 0; x < pop_years.length - 1; x++) {
+            if (target_year >= pop_years[x] && target_year <= pop_years[x + 1]) {
+              g_prev_yr = pop_years[x]
+              g_next_yr = pop_years[x + 1]
+              break
+            }
+          }
+        }
+
+        let gp0 = city.population[String(g_prev_yr)] || 0
+        let gp1 = city.population[String(g_next_yr)] || 0
+
+        if (gp0 > 0 && gp1 > 0 && g_next_yr > g_prev_yr) {
+          growth_rate = Math.pow(gp1/gp0, 1/(g_next_yr - g_prev_yr)) - 1
         }
       }
 
@@ -415,4 +467,58 @@ export const StadesterService = {
     //Return statement
     return StadesterService.getCitiesAtYear(dataset_name, year, { max_cities: limit, min_pop: 0 })
   },
+
+  /**
+   * Returns compact columnar arrays for fast transfer and minimal JSON serialization overhead.
+   *
+   * @param {string} [arg0_dataset_name='stadester_1.1']
+   * @param {number} [arg1_year=1950]
+   * @param {StadesterQueryOptions} [arg2_options]
+   *
+   * @returns {CompactCitiesPayload}
+   */
+  getCompactCitiesAtYear: function (
+    arg0_dataset_name?: string,
+    arg1_year?: number,
+    arg2_options?: StadesterQueryOptions
+  ): CompactCitiesPayload {
+    //Convert from parameters
+    let dataset_name = (arg0_dataset_name) ? arg0_dataset_name : 'stadester_1.1'
+    let options = (arg2_options) ? arg2_options : {}
+    let year = arg1_year !== undefined ? arg1_year : 1950
+
+    //Declare local instance variables
+    let cities = StadesterService.getCitiesAtYear(dataset_name, year, options)
+    let len = cities.length
+    let coords: number[] = new Array(len * 2)
+    let countries: (string | undefined)[] = new Array(len)
+    let growth: number[] = new Array(len)
+    let keys: string[] = new Array(len)
+    let names: string[] = new Array(len)
+    let pops: number[] = new Array(len)
+
+    //Function body
+    for (let i = 0; i < len; i++) {
+      let c = cities[i]
+      keys[i] = c.key
+      names[i] = c.name
+      countries[i] = c.country
+      coords[i * 2] = c.coords[0]
+      coords[i * 2 + 1] = c.coords[1]
+      pops[i] = c.population
+      growth[i] = c.growthRate !== undefined ? Math.round(c.growthRate * 10000) / 10000 : 0
+    }
+
+    //Return statement
+    return {
+      coords,
+      count: len,
+      countries,
+      growth,
+      keys,
+      names,
+      pops,
+    }
+  },
 }
+

@@ -981,9 +981,13 @@ export const App: React.FC = function () {
 
     updateSidebarClearance()
     window.addEventListener('resize', updateSidebarClearance)
-    let interval = setInterval(updateSidebarClearance, 250)
+    let ro = new ResizeObserver(updateSidebarClearance)
+    let timeline_el = document.getElementById('dataview-timelinebar-container')
+    if (timeline_el)
+      ro.observe(timeline_el)
+
     return () => {
-      clearInterval(interval)
+      ro.disconnect()
       window.removeEventListener('resize', updateSidebarClearance)
     }
   }, [sidebar_width, ui_visible])
@@ -1070,7 +1074,14 @@ export const App: React.FC = function () {
   stadester_cities = stadester_result.cities
   is_loading_stadester = stadester_result.isLoading
   selected_city_record = stadester_result.selectedCity
-
+  useEffect(() => {
+    ;(window as any).setStadesterConfig = set_stadester_config
+    ;(window as any).stadesterConfig = stadester_config
+    ;(window as any).setActiveLayerId = set_active_layer_id
+    ;(window as any).setSelectedCityKey = set_selected_city_key
+    ;(window as any).selectedCityRecord = selected_city_record
+    ;(window as any).selectedCityKey = selected_city_key
+  }, [set_stadester_config, stadester_config, set_active_layer_id, set_selected_city_key, selected_city_record, selected_city_key])
 
   handle_close_city_details = useCallback(() => {
     set_selected_city_key(null)
@@ -1243,6 +1254,11 @@ export const App: React.FC = function () {
     let target = layers[layer_id]
     if (target?.encoding)
       set_data_format(target.encoding)
+    if (target?.type === 'vector.basemap' || layer_id === 'basemap_only') {
+      set_raster_a(null)
+      set_active_file_name('basemap_only')
+      set_is_loading_raster(false)
+    }
     set_max_val_override('')
     set_min_val_override('')
   }, [layers])
@@ -1328,6 +1344,12 @@ export const App: React.FC = function () {
         return
       if (!active_layer || !active_layer.available_years || active_layer.available_years.length === 0)
         return
+      if (active_layer.type === 'vector.basemap' || active_layer.id === 'basemap_only') {
+        set_raster_a(null)
+        set_active_file_name('basemap_only')
+        set_is_loading_raster(false)
+        return
+      }
 
       let current_req_id = ++load_req_id_ref.current
       let requested_layer_id = active_layer.id

@@ -610,10 +610,18 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
       return
     }
 
-    //Route 13: GET /api/stadester/cities (Active cities at year, with streaming support)
+    //Route 13: GET /api/stadester/cities (Active cities at year, with streaming and compact support)
     if (pathname === '/stadester/cities' || pathname === '/api/stadester/cities') {
+      let bbox_param = query.bbox as string
+      let bbox: [number, number, number, number] | undefined = undefined
+      if (bbox_param) {
+        let parts = bbox_param.split(',').map(Number)
+        if (parts.length === 4 && !parts.some(Number.isNaN))
+          bbox = [parts[0], parts[1], parts[2], parts[3]]
+      }
       let color_mode = (query.colorMode as 'growth' | 'population' | 'continent') || 'growth'
       let dataset = (query.dataset as string) || 'stadester_1.1'
+      let format = (query.format as string) || 'standard'
       let is_streaming = query.stream === '1' || query.stream === 'true'
       let max_cities = query.maxCities !== undefined ? parseInt(query.maxCities as string, 10) : 4000
       let min_pop = query.minPop !== undefined ? parseFloat(query.minPop as string) : 0
@@ -621,7 +629,21 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
       let year = Number.isNaN(raw_year) ? 1950 : raw_year
 
       try {
+        if (format === 'compact') {
+          let compact_payload = StadesterService.getCompactCitiesAtYear(dataset, year, {
+            bbox,
+            color_mode,
+            max_cities,
+            min_pop,
+          })
+          res.statusCode = 200
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify(compact_payload))
+          return
+        }
+
         let cities = StadesterService.getCitiesAtYear(dataset, year, {
+          bbox,
           color_mode,
           max_cities,
           min_pop,
