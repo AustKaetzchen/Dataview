@@ -242,15 +242,17 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
         )}
 
         {filtered_layers.map((arg0_layer) => {
-          let is_active = active_layer_id === arg0_layer.id || (active_layer && active_layer.parent_id === arg0_layer.id)
           let accessible = is_layer_accessible(arg0_layer)
+          let is_exact_active = active_layer_id === arg0_layer.id
+          let is_parent_of_active = Boolean(active_layer && active_layer.parent_id === arg0_layer.id)
+          let is_highlighted = is_exact_active || is_parent_of_active
           let years_count = arg0_layer.available_years ? arg0_layer.available_years.length : 0
 
           return (
             <div
               key={arg0_layer.id}
               className={`border transition-all overflow-hidden ${
-                is_active
+                is_highlighted
                   ? 'border-primary bg-primary/10 shadow-sm'
                   : 'border-border bg-card/40 hover:bg-muted/40'
               }`}
@@ -266,7 +268,7 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
                 <div className="flex items-start gap-2 min-w-0">
                   <Icon
                     name={arg0_layer.icon || 'layers'}
-                    className={`mt-0.5 text-sm shrink-0 ${is_active ? 'text-primary' : 'text-muted-foreground'}`}
+                    className={`mt-0.5 text-sm shrink-0 ${is_exact_active ? 'text-primary' : 'text-muted-foreground'}`}
                   />
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
@@ -298,7 +300,7 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
                       <span>RESTRICTED</span>
                     </span>
                   )}
-                  {is_active && (
+                  {is_exact_active && (
                     <span className="text-[10px] px-1.5 py-0.5 bg-primary text-primary-foreground font-bold shadow-xs">
                       ACTIVE
                     </span>
@@ -403,14 +405,20 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
                           <button
                             key={arg0_opt_key}
                             type="button"
-                            onClick={() => {
+                            onClick={(arg0_e) => {
+                              let is_modifier = Boolean(arg0_e.ctrlKey || arg0_e.metaKey || arg0_e.shiftKey)
                               let next_vals: string[]
-                              if (is_opt_active) {
-                                next_vals = selected_vals.filter((arg0_v) => arg0_v !== arg0_opt_key)
-                                if (next_vals.length === 0)
-                                  next_vals = [arg0_opt_key]
+                              if (is_modifier) {
+                                if (is_opt_active) {
+                                  next_vals = selected_vals.filter((arg0_v) => arg0_v !== arg0_opt_key)
+                                  if (next_vals.length === 0)
+                                    next_vals = [arg0_opt_key]
+                                } else {
+                                  next_vals = [...selected_vals, arg0_opt_key]
+                                }
                               } else {
-                                next_vals = [...selected_vals, arg0_opt_key]
+                                //Single-select: switch directly to clicked category
+                                next_vals = [arg0_opt_key]
                               }
                               on_change_variable_selector(arg0_sel_key, next_vals)
                             }}

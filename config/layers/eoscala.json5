@@ -53,16 +53,21 @@
             type: "linear"
         }
     },
-    labourforce_total: {
+    labourforce: {
         name: "Raw Labourforce",
-        filepath: "${h2}LFPR_OLS/4.active_labourforce/labourforce_t_${year}.png",
         unit: "Total",
-        legend: {
-            colourscheme: "plasma"
+        labourforce_total: {
+            name: "Raw Labourforce (Total)",
+            filepath: "${h2}LFPR_OLS/4.active_labourforce/labourforce_t_${year}.png",
+            unit: "Total",
+            legend: {
+                colourscheme: "plasma"
+            }
         },
         labourforce_female: {
             name: "Labourforce (Female)",
             filepath: "${h2}LFPR_OLS/4.active_labourforce/labourforce_f_${year}.png",
+            unit: "Total",
             legend: {
                 colourscheme: "reds"
             }
@@ -70,6 +75,7 @@
         labourforce_male: {
             name: "Labourforce (Male)",
             filepath: "${h2}LFPR_OLS/4.active_labourforce/labourforce_m_${year}.png",
+            unit: "Total",
             legend: {
                 colourscheme: "blues"
             }

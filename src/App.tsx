@@ -307,6 +307,62 @@ const shiftRasterNorth = function (
 }
 
 /**
+ * Culls the in-memory raster cache dynamically based on memory pressure and performant mode.
+ *
+ * @param {Map<string, DecodedRaster>} arg0_cache
+ * @param {boolean} [arg1_performant_mode=false]
+ * @param {string} [arg2_preserve_key]
+ *
+ * @returns {void}
+ */
+const cullRasterCache = function (
+  arg0_cache: Map<string, DecodedRaster>,
+  arg1_performant_mode?: boolean,
+  arg2_preserve_key?: string
+): void {
+  //Convert from parameters
+  let cache = arg0_cache
+  let performant_mode = Boolean(arg1_performant_mode)
+  let preserve_key = arg2_preserve_key
+
+  //Declare local instance variables
+  let is_memory_pressured = false
+  let max_allowed_entries: number
+  let memory_info = (performance as any)?.memory
+
+  //Function body
+  if (memory_info && memory_info.jsHeapSizeLimit > 0) {
+    let heap_ratio = memory_info.usedJSHeapSize/memory_info.jsHeapSizeLimit
+    if (heap_ratio > 0.6)
+      is_memory_pressured = true
+  }
+
+  max_allowed_entries = (performant_mode || is_memory_pressured) ? 2 : 5
+
+  if (cache.size > max_allowed_entries) {
+    let all_keys = Array.from(cache.keys())
+    for (let i = 0; i < all_keys.length; i++) {
+      let k = all_keys[i]
+      if (cache.size <= max_allowed_entries)
+        break
+      if (k.startsWith('raw:') && k !== preserve_key)
+        cache.delete(k)
+    }
+
+    if (cache.size > max_allowed_entries) {
+      all_keys = Array.from(cache.keys())
+      for (let i = 0; i < all_keys.length; i++) {
+        let k = all_keys[i]
+        if (cache.size <= max_allowed_entries)
+          break
+        if (k !== preserve_key)
+          cache.delete(k)
+      }
+    }
+  }
+}
+
+/**
  * Fetches and decodes a single GeoPNG raster from backend API.
  *
  * @param {string} arg0_layer_id
@@ -511,6 +567,7 @@ const fetchSingleDecodedRasterAsync = async function (
       }
 
       cache.set(cache_key, decoded)
+      cullRasterCache(cache, performant_mode, cache_key)
       return decoded
     } catch (arg0_e) {
       console.error(`Failed to fetch raster for ${layer_id} at year ${year}:`, arg0_e)
@@ -687,6 +744,7 @@ const fetchRasterKeyframe = async function (
       }
 
       cache.set(composite_cache_key, composite)
+      cullRasterCache(cache, performant_mode, composite_cache_key)
       return composite
     } catch (arg0_err) {
       console.error(`Failed to composite multi-selector raster for ${layer_id}:`, arg0_err)
@@ -824,6 +882,7 @@ export const App: React.FC = function () {
   let set_scale_type: React.Dispatch<React.SetStateAction<ScaleType>>
   let set_selected_countries: React.Dispatch<React.SetStateAction<CountryFeature[]>>
   let set_settings_drawer_open: React.Dispatch<React.SetStateAction<boolean>>
+  let set_sidebar_bottom_clearance: React.Dispatch<React.SetStateAction<number | undefined>>
   let set_sidebar_width: React.Dispatch<React.SetStateAction<number>>
   let set_snap_to_keyframes: React.Dispatch<React.SetStateAction<boolean>>
   let set_timelapse_export_pct: React.Dispatch<React.SetStateAction<number>>
@@ -834,6 +893,7 @@ export const App: React.FC = function () {
   let set_user_role: React.Dispatch<React.SetStateAction<UserRole>>
   let set_video_export_open: React.Dispatch<React.SetStateAction<boolean>>
   let settings_drawer_open: boolean
+  let sidebar_bottom_clearance: number | undefined
   let sidebar_width: number
   let snap_to_keyframes: boolean
   let timelapse_export_pct: number
@@ -886,6 +946,32 @@ export const App: React.FC = function () {
     resolutionArcmin: 60,
   })
   ;[sidebar_width, set_sidebar_width] = useState<number>(336)
+  ;[sidebar_bottom_clearance, set_sidebar_bottom_clearance] = useState<number | undefined>(undefined)
+
+  useEffect(() => {
+    let updateSidebarClearance = () => {
+      let is_vertical = window.innerHeight > window.innerWidth
+      let timeline_el = document.getElementById('dataview-timelinebar-container')
+      if (timeline_el) {
+        let rect = timeline_el.getBoundingClientRect()
+        let from_bottom = window.innerHeight - rect.top
+        let clearance = Math.max(from_bottom, 0) + 12
+        let overlaps = is_vertical || (rect.left < (sidebar_width + 24))
+        let next_val = overlaps ? clearance : undefined
+        set_sidebar_bottom_clearance((arg0_prev) => (arg0_prev === next_val ? arg0_prev : next_val))
+      } else {
+        set_sidebar_bottom_clearance((arg0_prev) => (arg0_prev === undefined ? undefined : undefined))
+      }
+    }
+
+    updateSidebarClearance()
+    window.addEventListener('resize', updateSidebarClearance)
+    let interval = setInterval(updateSidebarClearance, 250)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('resize', updateSidebarClearance)
+    }
+  }, [sidebar_width, ui_visible])
   ;[colourbar_width, set_colourbar_width] = useState<number>(336)
   ;[info_panel_open, set_info_panel_open] = useState<boolean>(false)
   ;[circle_overlay_config, set_circle_overlay_config] = useState<CircleOverlayConfig>({
@@ -1334,6 +1420,7 @@ export const App: React.FC = function () {
             set_raster_a(arg0_primary)
             set_active_file_name(`${requested_layer_id}_${primary_year}.png`)
             set_raster_version((arg0_v) => arg0_v + 1)
+            cullRasterCache(raster_cache_ref.current, performant_mode, cache_key)
           }
         }).catch((arg0_err) => {
           in_flight_fetches_count_ref.current = Math.max(0, in_flight_fetches_count_ref.current - 1)
@@ -1343,27 +1430,36 @@ export const App: React.FC = function () {
         })
       }
 
-      //Prefetch upcoming 4 keyframes in the background for ultra-smooth 60fps playback
+      //Prefetch upcoming keyframes in the background when browser is idle to avoid Chromium startup stutter
       let curr_idx = years.indexOf(next_year)
-      if (curr_idx !== -1) {
+      if (curr_idx !== -1 && !is_headless_export) {
         let can_be_uninhabited = Boolean(active_layer.can_be_uninhabited)
-        for (let step = 1; step <= 4; step++) {
-          if (curr_idx + step < years.length) {
-            let future_year = years[curr_idx + step]
-            fetchRasterKeyframe(
-              requested_layer_id,
-              future_year,
-              effective_selectors,
-              effective_format,
-              raster_cache_ref.current,
-              has_selectors,
-              can_be_uninhabited,
-              layer_pixel_offset,
-              performant_mode,
-              is_headless_export
-            ).catch(() => {})
+        let max_prefetch = performant_mode ? 1 : 2
+        let schedule_idle = (window as any).requestIdleCallback
+          ? (arg0_cb: () => void) => (window as any).requestIdleCallback(arg0_cb, { timeout: 800 })
+          : (arg0_cb: () => void) => setTimeout(arg0_cb, 300)
+
+        schedule_idle(() => {
+          if (load_req_id_ref.current !== current_req_id)
+            return
+          for (let step = 1; step <= max_prefetch; step++) {
+            if (curr_idx + step < years.length) {
+              let future_year = years[curr_idx + step]
+              fetchRasterKeyframe(
+                requested_layer_id,
+                future_year,
+                effective_selectors,
+                effective_format,
+                raster_cache_ref.current,
+                has_selectors,
+                can_be_uninhabited,
+                layer_pixel_offset,
+                performant_mode,
+                is_headless_export
+              ).catch(() => {})
+            }
           }
-        }
+        })
       }
     }
 
@@ -1963,6 +2059,7 @@ export const App: React.FC = function () {
           activeVariableSelectors={active_variable_selectors}
           appMode={app_mode}
           binningConfig={binning_config}
+          bottomClearance={sidebar_bottom_clearance}
           boundsMode={bounds_mode}
           circleOverlayConfig={circle_overlay_config}
           colorPalette={color_palette}

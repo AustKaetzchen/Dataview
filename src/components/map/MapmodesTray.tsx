@@ -33,6 +33,7 @@ export interface MapmodesTrayProps {
   activeVariableSelectors?: Record<string, string | string[]>
   allCountries: CountryFeature[]
   analyticsOpen?: boolean
+  bottomClearance?: number
   cameraTilt?: number
   circleOverlayConfig: CircleOverlayConfig
   countriesMode: boolean
@@ -72,6 +73,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
     activeVariableSelectors: active_variable_selectors = {},
     allCountries: all_countries,
     analyticsOpen: analytics_open = false,
+    bottomClearance: bottom_clearance,
     cameraTilt: camera_tilt,
     circleOverlayConfig: circle_overlay_config,
     countriesMode: countries_mode,
@@ -371,14 +373,20 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
                     <button
                       key={arg0_opt_key}
                       type="button"
-                      onClick={() => {
+                      onClick={(arg0_e) => {
+                        let is_modifier = Boolean(arg0_e.ctrlKey || arg0_e.metaKey || arg0_e.shiftKey)
                         let next_vals: string[]
-                        if (is_selected) {
-                          next_vals = selected_vals.filter((v) => v !== arg0_opt_key)
-                          if (next_vals.length === 0)
-                            next_vals = [arg0_opt_key]
+                        if (is_modifier) {
+                          if (is_selected) {
+                            next_vals = selected_vals.filter((v) => v !== arg0_opt_key)
+                            if (next_vals.length === 0)
+                              next_vals = [arg0_opt_key]
+                          } else {
+                            next_vals = [...selected_vals, arg0_opt_key]
+                          }
                         } else {
-                          next_vals = [...selected_vals, arg0_opt_key]
+                          //Single-select: switch directly to clicked category
+                          next_vals = [arg0_opt_key]
                         }
                         if (on_change_variable_selector)
                           on_change_variable_selector(arg0_key, next_vals)
@@ -426,47 +434,14 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
         {has_sub_layers ? (
           <div>
             <div
-              className={`flex items-center justify-between px-2 py-1 cursor-pointer border border-border/60 transition-colors ${
-                is_active ? 'bg-primary/20 border-primary text-primary font-bold shadow-xs' : 'bg-muted/30 hover:bg-muted/60'
-              }`}
+              onClick={() => toggle_node(layer.id)}
+              className="flex items-center justify-between px-2 py-1 cursor-pointer border border-border/60 bg-muted/30 hover:bg-muted/60 transition-colors"
             >
               <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                <button
-                  type="button"
-                  onClick={(arg0_e) => {
-                    arg0_e.stopPropagation()
-                    if (on_select_layer)
-                      on_select_layer(layer.id)
-                    if (!is_node_expanded)
-                      toggle_node(layer.id)
-                  }}
-                  className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 cursor-pointer transition-colors ${
-                    is_active ? 'border-primary bg-primary' : 'border-muted-foreground/60 hover:border-primary'
-                  }`}
-                  title={`Select ${layer.name}`}
-                >
-                  {is_active && <span className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
-                </button>
-                <div
-                  onClick={() => {
-                    if (on_select_layer)
-                      on_select_layer(layer.id)
-                    if (!is_node_expanded)
-                      toggle_node(layer.id)
-                  }}
-                  className="flex items-center gap-1.5 min-w-0 flex-1"
-                >
-                  <Icon name={is_node_expanded ? 'folder_open' : 'folder'} className="text-primary text-xs shrink-0" />
-                  <span className="text-xs font-bold text-foreground truncate">{layer.name}</span>
-                </div>
+                <Icon name={is_node_expanded ? 'folder_open' : 'folder'} className="text-primary text-xs shrink-0" />
+                <span className="text-xs font-bold text-foreground truncate">{layer.name}</span>
               </div>
-              <div
-                onClick={(arg0_e) => {
-                  arg0_e.stopPropagation()
-                  toggle_node(layer.id)
-                }}
-                className="flex items-center shrink-0 p-0.5"
-              >
+              <div className="flex items-center shrink-0 p-0.5">
                 <Icon
                   name={is_node_expanded ? 'expand_less' : 'expand_more'}
                   className="text-xs text-muted-foreground shrink-0"
@@ -476,41 +451,8 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
 
             {is_node_expanded && (
               <div className="mt-1 space-y-1 border-l-2 border-border/40 pl-1.5 ml-2">
-                {/* Parent layer entry itself if it has an individual raster */}
-                {layer.id !== 'lfpr' && (
-                  <button
-                    type="button"
-                    disabled={!is_accessible}
-                    onClick={() => on_select_layer && on_select_layer(layer.id)}
-                    className={`w-full flex items-center justify-between px-2 py-1 text-left cursor-pointer border transition-colors ${
-                      is_active
-                        ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
-                        : 'hover:bg-muted/40 text-foreground border-transparent'
-                    } ${!is_accessible ? 'opacity-40 cursor-not-allowed' : ''}`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
-                        is_active ? 'border-primary bg-primary' : 'border-muted-foreground/60'
-                      }`}>
-                        {is_active && <span className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
-                      </span>
-                      <span className="text-xs truncate">
-                        {layer.name.endsWith('(Total)') ? layer.name : `${layer.name} (Total)`}
-                      </span>
-                    </div>
-                    {layer.unit && (
-                      <span
-                        className="text-[10px] text-muted-foreground font-mono truncate max-w-[110px] shrink ml-1"
-                        title={layer.unit}
-                      >
-                        {layer.unit}
-                      </span>
-                    )}
-                  </button>
-                )}
-
-                {/* Child sub-layers */}
-                {layer.sub_layers!.map((arg0_sub) => render_data_layer_node(arg0_sub, depth + 1))}
+                {/* Child sub-layers rendered uniformly at same indentation */}
+                {layer.sub_layers!.map((arg0_sub) => render_data_layer_node(arg0_sub, 0))}
               </div>
             )}
           </div>
@@ -664,16 +606,22 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
                               <button
                                 key={arg0_opt_key}
                                 type="button"
-                                onClick={() => {
+                                onClick={(arg0_e) => {
                                   if (!is_active && on_select_layer)
                                     on_select_layer(layer.id)
+                                  let is_modifier = Boolean(arg0_e.ctrlKey || arg0_e.metaKey || arg0_e.shiftKey)
                                   let next_vals: string[]
-                                  if (selected_vals.includes(arg0_opt_key)) {
-                                    next_vals = selected_vals.filter((arg0_v) => arg0_v !== arg0_opt_key)
-                                    if (next_vals.length === 0)
-                                      next_vals = [arg0_opt_key]
+                                  if (is_modifier) {
+                                    if (selected_vals.includes(arg0_opt_key)) {
+                                      next_vals = selected_vals.filter((arg0_v) => arg0_v !== arg0_opt_key)
+                                      if (next_vals.length === 0)
+                                        next_vals = [arg0_opt_key]
+                                    } else {
+                                      next_vals = [...selected_vals, arg0_opt_key]
+                                    }
                                   } else {
-                                    next_vals = [...selected_vals, arg0_opt_key]
+                                    //Single-select: switch directly to clicked category
+                                    next_vals = [arg0_opt_key]
                                   }
                                   if (on_change_variable_selector)
                                     on_change_variable_selector(arg0_var_key, next_vals)
@@ -795,14 +743,14 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
       <div
         id="dataview-mapmodes-tray"
         style={{
-          bottom: '12px',
+          bottom: (bottom_clearance !== undefined) ? `${bottom_clearance}px` : '12px',
           height: is_tray_collapsed ? 'auto' : `${tray_height}px`,
-          maxHeight: is_tray_collapsed ? 'auto' : 'calc(100vh - 40px)',
+          maxHeight: is_tray_collapsed ? 'auto' : (bottom_clearance !== undefined ? `calc(100vh - ${bottom_clearance + 28}px)` : 'calc(100vh - 40px)'),
           maxWidth: 'calc(100vw - 40px)',
           right: '12px',
           width: `${tray_width}px`,
         }}
-        className="absolute z-20 flex flex-col bg-card/95 backdrop-blur-md border border-border shadow-2xl p-2.5 space-y-2 text-[var(--body-font-size)] select-none font-sans overflow-hidden"
+        className="absolute z-20 flex flex-col bg-card/95 backdrop-blur-md border border-border shadow-2xl p-2.5 space-y-2 text-[var(--body-font-size)] select-none font-sans overflow-hidden transition-all duration-150 ease-out"
       >
         {/* Resize Handles (Active when tray is not collapsed) */}
         {!is_tray_collapsed && (

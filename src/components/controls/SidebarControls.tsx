@@ -29,6 +29,7 @@ export interface SidebarControlsProps {
   activeVariableSelectors?: Record<string, string | string[]>
   appMode: AppMode
   binningConfig: BinningConfig
+  bottomClearance?: number
   boundsMode: BoundsMode
   circleOverlayConfig?: CircleOverlayConfig
   colorPalette: ColorPalette
@@ -93,6 +94,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_pr
     activeFileName: active_file_name,
     appMode: app_mode,
     binningConfig: binning_config,
+    bottomClearance: bottom_clearance,
     boundsMode: bounds_mode,
     colorPalette: color_palette,
     dataFormat: data_format,
@@ -219,8 +221,11 @@ export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_pr
   //Return statement
   return (
     <div
-      style={{ width: `${current_width}px` }}
-      className="absolute top-3 left-3 bottom-3 z-20 flex flex-col bg-card/95 backdrop-blur-md border border-border text-card-foreground overflow-hidden select-none font-sans shadow-2xl transition-shadow"
+      style={{
+        bottom: (bottom_clearance !== undefined) ? `${bottom_clearance}px` : '12px',
+        width: `${current_width}px`,
+      }}
+      className="absolute top-3 left-3 z-20 flex flex-col bg-card/95 backdrop-blur-md border border-border text-card-foreground overflow-hidden select-none font-sans shadow-2xl transition-all duration-150 ease-out"
     >
       {/* Draggable Right Border Resize Handle */}
       <div

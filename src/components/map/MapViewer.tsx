@@ -220,11 +220,16 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
       if (timeline_el) {
         let rect = timeline_el.getBoundingClientRect()
         let from_bottom = window.innerHeight - rect.top
-        set_timeline_clearance(Math.max(from_bottom, 0) + UI_LAYOUT.margin)
-        set_timeline_bounds({ left: rect.left, right: rect.right, top: rect.top })
+        let next_clearance = Math.max(from_bottom, 0) + UI_LAYOUT.margin
+        set_timeline_clearance((arg0_prev) => (arg0_prev === next_clearance ? arg0_prev : next_clearance))
+        set_timeline_bounds((arg0_prev) => {
+          if (arg0_prev && arg0_prev.left === rect.left && arg0_prev.right === rect.right && arg0_prev.top === rect.top)
+            return arg0_prev
+          return { left: rect.left, right: rect.right, top: rect.top }
+        })
       } else {
-        set_timeline_clearance(UI_LAYOUT.margin)
-        set_timeline_bounds(null)
+        set_timeline_clearance((arg0_prev) => (arg0_prev === UI_LAYOUT.margin ? arg0_prev : UI_LAYOUT.margin))
+        set_timeline_bounds((arg0_prev) => (arg0_prev === null ? null : null))
       }
 
       //2. Mapmodes tray bounds
@@ -232,15 +237,20 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
       if (mapmodes_el) {
         let rect = mapmodes_el.getBoundingClientRect()
         if (rect.width > 0 && rect.left < window.innerWidth) {
-          set_mapmodes_taken_right(Math.max(window.innerWidth - rect.left, 0))
-          set_mapmodes_bounds({ left: rect.left, right: rect.right, top: rect.top })
+          let next_taken = Math.max(window.innerWidth - rect.left, 0)
+          set_mapmodes_taken_right((arg0_prev) => (arg0_prev === next_taken ? arg0_prev : next_taken))
+          set_mapmodes_bounds((arg0_prev) => {
+            if (arg0_prev && arg0_prev.left === rect.left && arg0_prev.right === rect.right && arg0_prev.top === rect.top)
+              return arg0_prev
+            return { left: rect.left, right: rect.right, top: rect.top }
+          })
         } else {
-          set_mapmodes_taken_right(0)
-          set_mapmodes_bounds(null)
+          set_mapmodes_taken_right((arg0_prev) => (arg0_prev === 0 ? 0 : 0))
+          set_mapmodes_bounds((arg0_prev) => (arg0_prev === null ? null : null))
         }
       } else {
-        set_mapmodes_taken_right(0)
-        set_mapmodes_bounds(null)
+        set_mapmodes_taken_right((arg0_prev) => (arg0_prev === 0 ? 0 : 0))
+        set_mapmodes_bounds((arg0_prev) => (arg0_prev === null ? null : null))
       }
 
       //3. Top-right trays (AnalyticsDrawer, Settings, Toolbar)
@@ -264,7 +274,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
         if (rect.width > 0 && rect.left < window.innerWidth)
           current_top_right = Math.max(current_top_right, window.innerWidth - rect.left)
       }
-      set_top_right_taken(current_top_right)
+      set_top_right_taken((arg0_prev) => (arg0_prev === current_top_right ? arg0_prev : current_top_right))
     }
 
     updateClearance()
@@ -900,7 +910,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
         })()}
 
       {/* Map Control Tools Toolbar (Top Right) */}
-      {(ui_visible && !is_timelapse_exporting) && (
+      {!is_timelapse_exporting && (
         <TooltipProvider delayDuration={150}>
         <div
           id="dataview-top-right-toolbar"
@@ -999,7 +1009,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
         </div>
 
         {/* Map Display Settings Flyout Panel */}
-        {flyout_open && (
+        {(flyout_open && ui_visible) && (
           <div
             id="dataview-settings-drawer"
             style={{
@@ -1104,7 +1114,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
                   onClick={() => on_toggle_performant_mode && on_toggle_performant_mode(!performant_mode)}
                   className={`px-2 py-0.5 rounded-none text-[10px] font-mono font-bold cursor-pointer transition-colors ${
                     performant_mode
-                      ? 'bg-primary text-primary-foreground'
+                      ? 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-xs'
                       : 'bg-muted text-muted-foreground hover:text-foreground'
                   }`}
                 >
@@ -1127,6 +1137,11 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
           activeVariableSelectors={props.activeVariableSelectors}
           allCountries={country_features}
           analyticsOpen={props.analyticsOpen}
+          bottomClearance={
+            (window.innerHeight > window.innerWidth || Boolean(timeline_bounds && mapmodes_bounds && timeline_bounds.right > mapmodes_bounds.left)) && timeline_clearance > UI_LAYOUT.margin
+              ? timeline_clearance
+              : undefined
+          }
           circleOverlayConfig={circle_overlay_config}
           countriesMode={Boolean(countries_mode)}
           countryStats={country_stats}
