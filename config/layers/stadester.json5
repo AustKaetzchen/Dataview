@@ -3,6 +3,11 @@
     root_folders: {
         l_stad: "D:/Project 1436 - Dataview/data/stadester"
     },
+    display_options: {
+        strip_parentheses: true,
+        prefer_least_diacritics: true,
+        skip_unknown_unicode: true
+    },
     "stadester_1.0": {
         name: "Stadestér 1.0",
         type: "vector.points",
@@ -15,6 +20,11 @@
         ],
         filepath: "${l_stad}/stadester_1.0.json",
         permissions: ["default"],
+        display_options: {
+            strip_parentheses: true,
+            prefer_least_diacritics: true,
+            skip_unknown_unicode: true
+        },
         legend: {
             colourscheme: "Plasma",
             type: "pseudo-log",
@@ -39,6 +49,11 @@
         ],
         filepath: "${l_stad}/stadester_1.1.json",
         permissions: ["default"],
+        display_options: {
+            strip_parentheses: true,
+            prefer_least_diacritics: true,
+            skip_unknown_unicode: true
+        },
         legend: {
             colourscheme: "Plasma",
             type: "pseudo-log",

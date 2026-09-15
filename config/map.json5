@@ -3,11 +3,9 @@
   // GeoPNG Dataview Map Configuration (JSON5 format)
   // Edit values directly in this file. Comments & trailing commas supported.
   // =========================================================================
-
   // Default percentile breaks for quantile scale calculation (comma-separated).
   // Can also be edited live by the user in the sidebar controls.
   defaultPercentileBreaks: "0, 1, 5, 25, 50, 75, 95, 99, 100",
-
   // Camera viewport definitions, graticule settings, and projection pixel offsets.
   // pixelOffset: -1 shifts the raster SOUTH by 1 pixel height to correct northern offset.
   mapDefines: {
@@ -24,7 +22,7 @@
     initialGlobe: {
       longitude: 0,
       latitude: 20,
-      zoom: 0,
+      zoom: 3,
       pitch: 0,
       bearing: 0,
       maxZoom: 18,
@@ -32,14 +30,22 @@
       pixelOffset: -1,
     },
     initialEquirectangular: {
-      target: [0, 0, 0],
+      target: [
+        0,
+        0,
+        0
+      ],
       zoom: 2.83,
       minZoom: 0.2,
       maxZoom: 10,
       pixelOffset: -1,
     },
     initialEqualEarth: {
-      target: [0, 0, 0],
+      target: [
+        0,
+        0,
+        0
+      ],
       zoom: 2.80,
       minZoom: 0.2,
       maxZoom: 10,
@@ -48,30 +54,34 @@
     graticule: {
       latInterval: 10,
       lngInterval: 20,
-      color: [255, 255, 255, 40],
+      color: [
+        255,
+        255,
+        255,
+        40
+      ],
     },
   },
-
   // Basemap Tile Layers
   basemapLayers: [
     {
       id: "dark",
-      label: "Dark Canvas (ESRI)",
+      label: "Dark",
       url: "https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
     },
     {
-      id: "satellite",
-      label: "Satellite Imagery (ESRI)",
-      url: "https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    },
-    {
       id: "light",
-      label: "Light Canvas (ESRI)",
+      label: "Light",
       url: "https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
     },
     {
+      id: "satellite",
+      label: "Satellite",
+      url: "https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    },
+    {
       id: "topo",
-      label: "Topographic (ESRI)",
+      label: "Topographic",
       url: "https://services.arcgisonline.com/arcgis/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
     },
     {

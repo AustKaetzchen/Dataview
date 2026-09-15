@@ -49,9 +49,11 @@ export type WorkerInMessage =
   | {
       bubbleSize: number
       colorMode: 'growth' | 'population' | 'continent'
+      displayOptions?: StadesterDisplayOptions
       growthPalette: string
       isHalo: boolean
       labelCollision: boolean
+      largeCityContrast?: number
       projection: string
       reqId: number
       showLabels: boolean
@@ -102,7 +104,8 @@ let REGION_COLOR_MAP: Record<string, [number, number, number]> = {
 }
 
 import { getPaletteLUT } from '../geopng/palettes'
-import { ColorPalette } from '../geopng/types'
+import { ColorPalette, StadesterDisplayOptions } from '../geopng/types'
+import { pickBestCityDisplayName } from './stadesterUtils'
 
 function getGrowthRgb (arg0_rate: number, arg1_palette?: string): [number, number, number] {
   //Convert from parameters
@@ -183,8 +186,10 @@ self.onmessage = function (arg0_e: MessageEvent<WorkerInMessage>) {
     let {
       bubbleSize: b_scale,
       colorMode: color_mode,
+      displayOptions: display_options,
       isHalo: is_halo,
       labelCollision: is_collision_active,
+      largeCityContrast: large_city_contrast,
       projection,
       reqId: req_id,
       showLabels: is_labels_visible,
@@ -204,6 +209,8 @@ self.onmessage = function (arg0_e: MessageEvent<WorkerInMessage>) {
 
       let processed_points: WorkerProcessedPoint[] = []
       let label_candidates: WorkerProcessedPoint[] = []
+      let contrast = (large_city_contrast !== undefined) ? large_city_contrast : 1.0
+      let zoom_factor = Math.max(1.0, Math.min(1.8, 1.0 + (is_cartesian ? (zoom - 2.8) * 0.12 : (zoom - 1.2) * 0.08)))
 
       for (let i = 0; i < current_cities.length; i++) {
         let c = current_cities[i]
@@ -233,9 +240,9 @@ self.onmessage = function (arg0_e: MessageEvent<WorkerInMessage>) {
           py = projected[1]
         }
 
-        let min_radius = 4.5 * b_scale
-        let pop_radius = Math.sqrt(Math.max(0, c.population)) * 0.0115 * b_scale
-        let pixel_radius = Math.max(min_radius, Math.min(65.0, min_radius + pop_radius))
+        let min_radius = 4.5 * b_scale * Math.min(1.4, zoom_factor)
+        let pop_scaled = Math.pow(Math.max(0, c.population) / 100000, 0.5 * contrast) * 3.6 * b_scale
+        let pixel_radius = Math.max(min_radius, Math.min(65.0, (min_radius + pop_scaled) * zoom_factor))
 
         if (color_mode === 'growth') {
           let g_rate = (c.growthRate !== undefined) ? c.growthRate : 0
@@ -258,7 +265,7 @@ self.onmessage = function (arg0_e: MessageEvent<WorkerInMessage>) {
           pixelRadius: pixel_radius,
           population: c.population,
           position: [px, py, 0],
-          shortName: getShortCityLabel(c.name),
+          shortName: pickBestCityDisplayName(c.name, c.other_names, display_options),
         }
 
         processed_points.push(pt)
@@ -284,7 +291,26 @@ self.onmessage = function (arg0_e: MessageEvent<WorkerInMessage>) {
           let sx: number
           let sy: number
 
-          if (is_cartesian) {
+          if (projection === 'Globe') {
+            let center_lat = ((view_state?.latitude ?? 20) * Math.PI) / 180
+            let center_lng = ((view_state?.longitude ?? 0) * Math.PI) / 180
+            let lat = (cand.position[1] * Math.PI) / 180
+            let lng = (cand.position[0] * Math.PI) / 180
+            let d_lng = lng - center_lng
+
+            // Check if on visible hemisphere (dot product with camera viewing vector)
+            let cos_c = Math.sin(center_lat) * Math.sin(lat) + Math.cos(center_lat) * Math.cos(lat) * Math.cos(d_lng)
+            if (cos_c < 0.1)
+              continue // Behind the horizon of the globe
+
+            // Orthographic projection to screen coordinates
+            let globe_radius = Math.min(window_w, window_h) * 0.38 * Math.pow(2, zoom)
+            let x_ortho = Math.cos(lat) * Math.sin(d_lng)
+            let y_ortho = Math.cos(center_lat) * Math.sin(lat) - Math.sin(center_lat) * Math.cos(lat) * Math.cos(d_lng)
+
+            sx = window_w / 2 + x_ortho * globe_radius
+            sy = window_h / 2 - y_ortho * globe_radius
+          } else if (is_cartesian) {
             let target = view_state?.target || [0, 0, 0]
             sx = window_w / 2 + (cand.position[0] - target[0]) * scale
             sy = window_h / 2 - (cand.position[1] - target[1]) * scale

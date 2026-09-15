@@ -23,6 +23,11 @@ export interface ParsedDataLayer {
   can_be_uninhabited?: boolean
   category?: string
   description?: string
+  display_options?: {
+    prefer_least_diacritics?: boolean
+    skip_unknown_unicode?: boolean
+    strip_parentheses?: boolean
+  }
   encoding: 'float32' | 'int32'
   filepath_template: string
   icon?: string
@@ -635,6 +640,7 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
           can_be_uninhabited: Boolean(item.can_be_uninhabited ?? parsed_json.can_be_uninhabited),
           category: dataset_name,
           description: desc_text,
+          display_options: item.display_options || parsed_json.display_options,
           encoding: item.encoding || 'float32',
           filepath_template: resolved_template,
           icon: getLayerIcon(k),

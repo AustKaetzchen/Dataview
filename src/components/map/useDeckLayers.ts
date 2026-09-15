@@ -644,6 +644,7 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
           onClick: (info: any) => {
             if (info.object && options.onSelectCity)
               options.onSelectCity(info.object)
+            return true
           },
           onHover: (info: any) => {
             if (options.onHoverCity)
@@ -671,6 +672,7 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
               radiusUnits: 'pixels',
               coordinateSystem: (is_cartesian) ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
               parameters: { depthTest: false },
+              pickable: false,
             })
           )
         }
@@ -736,9 +738,9 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
             new TextLayer({
               id: `stadester-labels-${projection}`,
               data: visible_label_cities,
-              getPosition: (d: any) => d.position,
+              getPosition: (d: any) => (projection === 'Globe' ? [d.position[0], d.position[1], 30] : d.position),
               getText: (d: any) => d.shortName,
-              getSize: (d: any) => Math.max(10, Math.min(13, 9 + Math.log10(Math.max(1000, d.population))*0.9)),
+              getSize: (d: any) => Math.max(10, Math.min(15, 9 + Math.log10(Math.max(1000, d.population))*0.9)),
               sizeUnits: 'pixels',
               getColor: [255, 255, 255, 255],
               getTextAnchor: 'start',

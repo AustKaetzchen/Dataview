@@ -87,7 +87,7 @@ export const D3ColorPaletteSelector: React.FC<D3ColorPaletteSelectorProps> = fun
                 type="checkbox"
                 checked={invert}
                 onChange={(arg0_e) => on_invert_change(arg0_e.target.checked)}
-                className="w-3.5 h-3.5 rounded border-input text-primary focus:ring-1 focus:ring-ring"
+                className="w-3.5 h-3.5 rounded-none border-input text-primary focus:ring-1 focus:ring-ring"
               />
               Invert
             </label>
@@ -104,7 +104,7 @@ export const D3ColorPaletteSelector: React.FC<D3ColorPaletteSelectorProps> = fun
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <div
-            className="w-16 h-3.5 rounded-xs shrink-0 border border-border/50 shadow-2xs"
+            className="w-16 h-3.5 rounded-none shrink-0 border border-border/50 shadow-2xs"
             style={{ background: getPaletteCssGradient(value, invert) }}
           />
           <span className="truncate font-medium text-foreground">{value}</span>
@@ -147,7 +147,7 @@ export const D3ColorPaletteSelector: React.FC<D3ColorPaletteSelectorProps> = fun
                 >
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     <div
-                      className="w-14 h-3 rounded-xs shrink-0 border border-border/50 shadow-2xs"
+                      className="w-14 h-3 rounded-none shrink-0 border border-border/50 shadow-2xs"
                       style={{ background: getPaletteCssGradient(arg0_scheme.id, invert) }}
                     />
                     <span className="truncate">{arg0_scheme.name}</span>

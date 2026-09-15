@@ -4,12 +4,13 @@ import { Icon } from '@/components/ui/icon'
 
 export interface StadesterLegendCardProps {
   config: StadesterConfig
+  hoveredCity?: any | null
   settlementCount?: number
   width?: number | string
 }
 
 const REGION_CHIPS = [
-  { name: 'East Asia', colour: '#ef4444' },
+  { name: 'East Asia', colour: '#f59e0b' },
   { name: 'Europe', colour: '#6366f1' },
   { name: 'Africa', colour: '#f97316' },
   { name: 'N. America', colour: '#0ea5e9' },
@@ -31,6 +32,7 @@ export const StadesterLegendCard: React.FC<StadesterLegendCardProps> = React.mem
   //Convert from parameters
   let props = (arg0_props) ? arg0_props : ({} as StadesterLegendCardProps)
   let config = props.config
+  let hovered_city = props.hoveredCity
   let settlement_count = props.settlementCount
   let width = props.width ?? 336
 
@@ -40,6 +42,7 @@ export const StadesterLegendCard: React.FC<StadesterLegendCardProps> = React.mem
   let dataset_version = (config.dataset === 'stadester_1.0') ? 'Stadestér 1.0' : 'Stadestér 1.1'
   let gradient_style: string
   let growth_palette = config.growthPalette || 'Rainbow'
+  let indicator_pct: number | null = null
   let is_halo = config.halo !== false && !config.filled
   let metric_subtitle: string
   let metric_title: string
@@ -61,6 +64,16 @@ export const StadesterLegendCard: React.FC<StadesterLegendCardProps> = React.mem
     metric_subtitle = 'Categorical grouping by global geographical region'
     palette_label = 'Continental Categorical Palette'
     gradient_style = ''
+  }
+
+  if (hovered_city) {
+    if (colour_mode === 'growth' && hovered_city.growthRate !== undefined) {
+      let g = hovered_city.growthRate
+      indicator_pct = Math.max(0, Math.min(100, ((g - (-0.05)) / (0.08 - (-0.05))) * 100))
+    } else if (colour_mode === 'population' && hovered_city.population !== undefined) {
+      let p = Math.max(5000, hovered_city.population)
+      indicator_pct = Math.max(0, Math.min(100, ((Math.log10(p) - Math.log10(5000)) / (Math.log10(10000000) - Math.log10(5000))) * 100))
+    }
   }
 
   //Return statement
@@ -119,10 +132,22 @@ export const StadesterLegendCard: React.FC<StadesterLegendCardProps> = React.mem
           </div>
         ) : (
           <div className="space-y-1">
-            <div
-              className="h-3 w-full border border-border/80 shadow-inner"
-              style={{ background: gradient_style }}
-            />
+            <div className="relative">
+              <div
+                className="h-3 w-full border border-border/80 shadow-inner"
+                style={{ background: gradient_style }}
+              />
+              {indicator_pct !== null && (
+                <div
+                  className="absolute top-[-4px] bottom-[-4px] pointer-events-none transition-all duration-75 ease-out z-20 flex flex-col items-center justify-between"
+                  style={{ left: `${indicator_pct}%` }}
+                >
+                  <div className="w-0 h-0 border-l-[4.5px] border-l-transparent border-r-[4.5px] border-r-transparent border-t-[6px] border-t-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]" />
+                  <div className="w-[2.5px] flex-1 bg-white rounded-none shadow-[0_0_6px_rgba(0,0,0,0.9)] border border-black/30" />
+                  <div className="w-0 h-0 border-l-[4.5px] border-l-transparent border-r-[4.5px] border-r-transparent border-b-[6px] border-b-white drop-shadow-[0_-1px_2px_rgba(0,0,0,0.9)]" />
+                </div>
+              )}
+            </div>
             {colour_mode === 'growth' ? (
               <div className="flex justify-between items-center text-[9px] text-muted-foreground font-mono">
                 <span>&le; -5%/yr (Loss)</span>

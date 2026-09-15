@@ -33,6 +33,7 @@ export interface MapViewerHUDProps {
   flyoutOpen: boolean
   hasCanvas?: boolean
   heightmapConfig: HeightmapConfig
+  hoveredCity?: CityPoint | null
   infoPanelOpen?: boolean
   inspectData?: any
   invertPalette?: boolean
@@ -95,6 +96,7 @@ export const MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
   let flyout_open = props.flyoutOpen
   let has_canvas = Boolean(props.hasCanvas)
   let heightmap_config = props.heightmapConfig
+  let hovered_city = props.hoveredCity
   let info_panel_open = props.infoPanelOpen
   let inspect_data = props.inspectData
   let invert_palette = props.invertPalette
@@ -141,7 +143,7 @@ export const MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
   let window_w = (typeof window !== 'undefined') ? window.innerWidth : 1920
 
   //Function body
-  let effective_timeline_left = timeline_bounds ? timeline_bounds.left : ((window_w - Math.min(1100, window_w - 64))/2)
+  let effective_timeline_left = timeline_bounds ? timeline_bounds.left : ((window_w - Math.min(1100, window_w - 64)) / 2)
   let effective_timeline_right = timeline_bounds ? timeline_bounds.right : (effective_timeline_left + Math.min(1100, window_w - 64))
   let has_timeline = Boolean(timeline_bounds) || ui_visible || is_timelapse_exporting
 
@@ -191,9 +193,8 @@ export const MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
         <div
           id="dataview-legend-card-container"
           style={container_style}
-          className={`absolute z-30 pointer-events-none flex flex-col gap-2 ${
-            is_bottom ? 'justify-end' : 'justify-start'
-          }`}
+          className={`absolute z-30 pointer-events-none flex flex-col gap-2 ${is_bottom ? 'justify-end' : 'justify-start'
+            }`}
         >
           {/* Main Raster ColourBar Legend */}
           {legend_title !== 'None' && (
@@ -222,6 +223,7 @@ export const MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
             <div className="pointer-events-auto">
               <StadesterLegendCard
                 config={stadester_config}
+                hoveredCity={hovered_city}
                 settlementCount={stadester_cities?.length ?? 0}
                 width={is_center_pos ? '100%' : current_colourbar_width}
               />
@@ -233,7 +235,7 @@ export const MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
             <div className="pointer-events-auto">
               <InfoFlyoutPanel
                 isOpen={info_panel_open}
-                onClose={on_close_info_panel || (() => {})}
+                onClose={on_close_info_panel || (() => { })}
                 mapModes={map_modes}
                 heightmapConfig={heightmap_config}
                 circleOverlayConfig={circle_overlay_config}
@@ -355,7 +357,7 @@ export const MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
                 top: `${UI_LAYOUT.margin}px`,
                 width: `${UI_LAYOUT.settingsDrawerWidth}px`,
               }}
-              className="absolute z-35 bg-card/98 backdrop-blur-md border border-border rounded-none p-[var(--padding)] shadow-2xl text-[var(--body-font-size)] text-card-foreground animate-in fade-in-0 zoom-in-95 duration-100 font-sans space-y-[var(--padding)]"
+              className="absolute z-35 bg-card/98 backdrop-blur-md border border-border rounded-none p-[var(--padding)] shadow-2xl text-[var(--body-font-size)] text-card-foreground animate-in fade-in-0 zoom-in-95 duration-100 font-sans space-y-[var(--padding)] max-h-[340px] overflow-y-auto custom-scrollbar"
             >
               <div className="flex items-center justify-between pb-1.5 border-b border-border">
                 <span className="text-[var(--body-font-size)] font-bold text-foreground flex items-center gap-1.5">
@@ -380,11 +382,10 @@ export const MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
                       key={p}
                       type="button"
                       onClick={() => set_projection(p)}
-                      className={`px-2 py-1 rounded-none text-[var(--body-font-size)] transition-colors cursor-pointer text-center ${
-                        projection === p
-                          ? 'bg-primary text-primary-foreground font-bold shadow-xs'
-                          : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground font-light'
-                      }`}
+                      className={`px-2 py-1 rounded-none text-[var(--body-font-size)] transition-colors cursor-pointer text-center ${projection === p
+                        ? 'bg-primary text-primary-foreground font-bold shadow-xs'
+                        : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground font-light'
+                        }`}
                     >
                       {p === 'Equirectangular' ? 'Equirect.' : p === 'EqualEarth' ? 'Equal Earth' : p}
                     </button>
@@ -401,11 +402,10 @@ export const MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
                       key={arg0_item.id}
                       type="button"
                       onClick={() => set_basemap(arg0_item.id)}
-                      className={`w-full flex items-center justify-between px-2 py-1 rounded-none text-[var(--body-font-size)] transition-colors cursor-pointer text-left ${
-                        basemap === arg0_item.id
-                          ? 'bg-muted text-foreground font-bold'
-                          : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground font-light'
-                      }`}
+                      className={`w-full flex items-center justify-between px-2 py-1 rounded-none text-[var(--body-font-size)] transition-colors cursor-pointer text-left ${basemap === arg0_item.id
+                        ? 'bg-muted text-foreground font-bold'
+                        : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground font-light'
+                        }`}
                     >
                       <span>{arg0_item.label}</span>
                       {basemap === arg0_item.id && <span className="w-1.5 h-1.5 rounded-none bg-primary" />}
@@ -430,11 +430,10 @@ export const MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
                       key={pos.id}
                       type="button"
                       onClick={() => on_change_legend_position && on_change_legend_position(pos.id as any)}
-                      className={`px-1.5 py-1 rounded-none text-[10px] transition-colors cursor-pointer text-center ${
-                        legend_position === pos.id
-                          ? 'bg-primary text-primary-foreground font-bold shadow-xs'
-                          : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground font-light'
-                      }`}
+                      className={`px-1.5 py-1 rounded-none text-[10px] transition-colors cursor-pointer text-center ${legend_position === pos.id
+                        ? 'bg-primary text-primary-foreground font-bold shadow-xs'
+                        : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground font-light'
+                        }`}
                     >
                       {pos.label}
                     </button>
@@ -449,11 +448,10 @@ export const MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
                   <button
                     type="button"
                     onClick={() => on_toggle_performant_mode && on_toggle_performant_mode(!performant_mode)}
-                    className={`px-2 py-0.5 rounded-none text-[10px] font-mono font-bold cursor-pointer transition-colors ${
-                      performant_mode
-                        ? 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-xs'
-                        : 'bg-muted text-muted-foreground hover:text-foreground'
-                    }`}
+                    className={`px-2 py-0.5 rounded-none text-[10px] font-mono font-bold cursor-pointer transition-colors ${performant_mode
+                      ? 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-xs'
+                      : 'bg-muted text-muted-foreground hover:text-foreground'
+                      }`}
                   >
                     {performant_mode ? 'ENABLED' : 'DISABLED'}
                   </button>

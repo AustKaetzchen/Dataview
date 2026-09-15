@@ -48,6 +48,7 @@ export const StadesterSettings: React.FC<StadesterSettingsProps> = function (arg
   let bubble_size = config.bubbleSize
   let color_mode = config.colorMode
   let dataset = config.dataset
+  let large_city_contrast = (config.largeCityContrast !== undefined) ? config.largeCityContrast : 1.0
   let max_cities = config.maxCities
   let min_pop = config.minPop
   let show_labels = config.showLabels
@@ -341,6 +342,23 @@ export const StadesterSettings: React.FC<StadesterSettingsProps> = function (arg
           step={0.05}
           onValueChange={(arg0_vals) => {
             on_change_config((arg0_prev) => ({ ...arg0_prev, bubbleSize: arg0_vals[0] }))
+          }}
+        />
+      </div>
+
+      {/* Large-City Contrast Slider */}
+      <div className="space-y-1.5">
+        <div className="flex justify-between items-center text-[11px]">
+          <span className="text-muted-foreground">Large-City Contrast</span>
+          <span className="text-foreground font-mono font-bold">{large_city_contrast.toFixed(2)}x</span>
+        </div>
+        <Slider
+          value={[large_city_contrast]}
+          min={0.2}
+          max={2.5}
+          step={0.05}
+          onValueChange={(arg0_vals) => {
+            on_change_config((arg0_prev) => ({ ...arg0_prev, largeCityContrast: arg0_vals[0] }))
           }}
         />
       </div>

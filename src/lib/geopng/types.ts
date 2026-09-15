@@ -81,15 +81,23 @@ export interface MapModeItem {
 
 export type StadesterColorMode = 'growth' | 'population' | 'continent'
 
+export interface StadesterDisplayOptions {
+  prefer_least_diacritics?: boolean
+  skip_unknown_unicode?: boolean
+  strip_parentheses?: boolean
+}
+
 export interface StadesterConfig {
   bubbleSize: number
   colorMode: StadesterColorMode
   dataset: 'stadester_1.1' | 'stadester_1.0'
+  display_options?: StadesterDisplayOptions
   enabled: boolean
   filled?: boolean
   growthPalette?: string
   halo?: boolean
   labelCollision: boolean
+  largeCityContrast?: number
   maxCities: number
   minPop: number
   opacity?: number
@@ -112,6 +120,7 @@ export interface CityPoint {
   pixelRadius?: number
   population: number
   region?: string
+  shortName?: string
 }
 
 export interface CityFullRecord {

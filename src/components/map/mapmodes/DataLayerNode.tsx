@@ -3,7 +3,6 @@ import { ParsedDataLayer } from '@/server/layerParser'
 import { StadesterConfig } from '@/lib/geopng/types'
 import { Icon } from '@/components/ui/icon'
 import { StadesterSettings } from './StadesterSettings'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 
 export interface DataLayerNodeProps {
   activeLayerId: string | null
@@ -50,9 +49,10 @@ export const DataLayerNode: React.FC<DataLayerNodeProps> = function (arg0_props)
   let is_accessible = is_layer_accessible(layer)
   let is_active = active_layer_id === layer.id
   let is_node_expanded = Boolean(search_query.trim()) || (expanded_nodes[layer.id] ?? true)
-  let is_overlay_active = layer.id.includes('stadester') ? Boolean(stadester_config?.enabled) : false
-  let is_searching = Boolean(search_query.trim())
   let is_stadester = layer.id.includes('stadester')
+  let is_dataset_match = is_stadester ? (stadester_config?.dataset === layer.id || (!stadester_config?.dataset && layer.id === 'stadester_1.1')) : true
+  let is_overlay_active = is_stadester ? (Boolean(stadester_config?.enabled) && is_dataset_match) : false
+  let is_searching = Boolean(search_query.trim())
   let is_vector_overlay = layer.type === 'vector.points' || layer.id.includes('stadester')
 
   //Return statement
@@ -63,10 +63,21 @@ export const DataLayerNode: React.FC<DataLayerNodeProps> = function (arg0_props)
           <div
             onClick={() => {
               if (is_stadester && set_stadester_config) {
-                set_stadester_config((arg0_prev) => ({
-                  ...arg0_prev,
-                  enabled: !arg0_prev.enabled,
-                }))
+                set_stadester_config((arg0_prev) => {
+                  let is_currently_active = arg0_prev.enabled && (arg0_prev.dataset === layer.id || (!arg0_prev.dataset && layer.id === 'stadester_1.1'))
+                  if (is_currently_active) {
+                    return {
+                      ...arg0_prev,
+                      enabled: false,
+                    }
+                  }
+                  return {
+                    ...arg0_prev,
+                    dataset: layer.id as 'stadester_1.1' | 'stadester_1.0',
+                    display_options: layer.display_options || arg0_prev.display_options,
+                    enabled: true,
+                  }
+                })
               }
             }}
             className={`flex items-center justify-between px-2 py-1.5 text-left cursor-pointer border transition-colors ${
@@ -286,105 +297,46 @@ export const DataLayerNode: React.FC<DataLayerNodeProps> = function (arg0_props)
                     </div>
 
                     {is_var_open && (
-                      <div className="p-1.5 space-y-1">
-                        {opts.length > 6 ? (
-                          <div className="space-y-1">
-                            <Select
-                              value={selected_vals[0] || ''}
-                              onValueChange={(arg0_val) => {
+                      <div className="p-1.5 max-h-52 overflow-y-auto space-y-0.5">
+                        {opts.map(([arg0_opt_key, arg0_opt_val]) => {
+                          let is_opt_selected = selected_vals.includes(arg0_opt_key)
+                          return (
+                            <div
+                              key={arg0_opt_key}
+                              onClick={(arg0_e) => {
+                                arg0_e.stopPropagation()
                                 if (!is_active && on_select_layer)
                                   on_select_layer(layer.id)
-                                if (on_change_variable_selector)
-                                  on_change_variable_selector(arg0_var_key, [arg0_val])
+                                if (on_change_variable_selector) {
+                                  let next = is_opt_selected
+                                    ? selected_vals.filter((arg0_k) => arg0_k !== arg0_opt_key)
+                                    : [...selected_vals, arg0_opt_key]
+                                  if (next.length === 0)
+                                    next = [arg0_opt_key]
+                                  on_change_variable_selector(arg0_var_key, next)
+                                }
                               }}
+                              className={`flex items-center justify-between px-2 py-0.5 cursor-pointer text-xs transition-colors rounded-none ${
+                                is_opt_selected
+                                  ? 'bg-primary/20 text-primary font-bold'
+                                  : 'hover:bg-muted/40 text-muted-foreground hover:text-foreground'
+                              }`}
                             >
-                              <SelectTrigger className="w-full text-xs h-7 bg-background border-border/80">
-                                <SelectValue placeholder={`Select ${arg0_sel.name || arg0_var_key}`} />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {opts.map(([arg0_opt_key, arg0_opt_val]) => (
-                                  <SelectItem key={arg0_opt_key} value={arg0_opt_key} className="text-xs">
-                                    {arg0_opt_val.name || arg0_opt_key}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-
-                            <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pr-1">
-                              {opts.map(([arg0_opt_key, arg0_opt_val]) => {
-                                let is_opt_selected = selected_vals.includes(arg0_opt_key)
-                                return (
-                                  <button
-                                    key={arg0_opt_key}
-                                    type="button"
-                                    onClick={(arg0_e) => {
-                                      arg0_e.stopPropagation()
-                                      if (!is_active && on_select_layer)
-                                        on_select_layer(layer.id)
-                                      if (on_change_variable_selector) {
-                                        let next = is_opt_selected
-                                          ? selected_vals.filter((arg0_k) => arg0_k !== arg0_opt_key)
-                                          : [...selected_vals, arg0_opt_key]
-                                        if (next.length === 0)
-                                          next = [arg0_opt_key]
-                                        on_change_variable_selector(arg0_var_key, next)
-                                      }
-                                    }}
-                                    className={`px-1.5 py-0.5 text-[10px] rounded border transition-colors cursor-pointer ${
-                                      is_opt_selected
-                                        ? 'bg-primary/20 border-primary text-primary font-bold'
-                                        : 'bg-muted/40 border-border/60 text-muted-foreground hover:text-foreground'
-                                    }`}
-                                  >
-                                    {arg0_opt_val.name || arg0_opt_key}
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="space-y-0.5">
-                            {opts.map(([arg0_opt_key, arg0_opt_val]) => {
-                              let is_opt_selected = selected_vals.includes(arg0_opt_key)
-                              return (
-                                <div
-                                  key={arg0_opt_key}
-                                  onClick={(arg0_e) => {
-                                    arg0_e.stopPropagation()
-                                    if (!is_active && on_select_layer)
-                                      on_select_layer(layer.id)
-                                    if (on_change_variable_selector) {
-                                      let next = is_opt_selected
-                                        ? selected_vals.filter((arg0_k) => arg0_k !== arg0_opt_key)
-                                        : [...selected_vals, arg0_opt_key]
-                                      if (next.length === 0)
-                                        next = [arg0_opt_key]
-                                      on_change_variable_selector(arg0_var_key, next)
-                                    }
-                                  }}
-                                  className={`flex items-center justify-between px-2 py-0.5 cursor-pointer text-xs transition-colors rounded ${
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span
+                                  className={`w-3 h-3 rounded-none border flex items-center justify-center shrink-0 transition-colors ${
                                     is_opt_selected
-                                      ? 'bg-primary/20 text-primary font-bold'
-                                      : 'hover:bg-muted/40 text-muted-foreground hover:text-foreground'
+                                      ? 'border-primary bg-primary text-primary-foreground'
+                                      : 'border-muted-foreground/60'
                                   }`}
                                 >
-                                  <div className="flex items-center gap-1.5 min-w-0">
-                                    <span
-                                      className={`w-3 h-3 rounded-none border flex items-center justify-center shrink-0 transition-colors ${
-                                        is_opt_selected
-                                          ? 'border-primary bg-primary text-primary-foreground'
-                                          : 'border-muted-foreground/60'
-                                      }`}
-                                    >
-                                      {is_opt_selected && <Icon name="check" className="text-[9px]" />}
-                                    </span>
-                                    <span className="truncate">{arg0_opt_val.name || arg0_opt_key}</span>
-                                  </div>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )}
+                                  {is_opt_selected && <Icon name="check" className="text-[9px]" />}
+                                </span>
+                                <span className="truncate">{arg0_opt_val.name || arg0_opt_key}</span>
+                              </div>
+                            </div>
+                          )
+                        })}
                       </div>
                     )}
                   </div>

@@ -127,6 +127,11 @@ export const App: React.FC = function () {
     bubbleSize: 1.0,
     colorMode: 'growth',
     dataset: 'stadester_1.1',
+    display_options: {
+      prefer_least_diacritics: true,
+      skip_unknown_unicode: true,
+      strip_parentheses: true,
+    },
     enabled: false,
     filled: true,
     growthPalette: 'Rainbow',

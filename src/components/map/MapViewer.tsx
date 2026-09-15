@@ -46,8 +46,7 @@ import { useCircleOverlay } from './useCircleOverlay'
 import { useDeckLayers } from './useDeckLayers'
 import { useStadesterWorker } from '@/lib/stadester/useStadesterWorker'
 
-const EMPTY_ARRAY: any[] = []
-const NOOP_FN = () => {}
+let EMPTY_ARRAY: any[] = [], NOOP_FN = () => {}
 
 export interface MapViewerProps {
   raster: DecodedRaster | null
@@ -473,6 +472,10 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
 
   handle_click = useCallback(
     (info: any) => {
+      // Guard clauses: if a city or higher z-index overlay was clicked, intercept and do not click the country behind it
+      if (info.layer?.id?.includes('stadester') || (info.object && info.object.coords))
+        return
+
       let insp: InspectionData | null
       let x_coord: number
       let y_coord: number
@@ -816,41 +819,16 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
         getCursor={({ isHovering }) => ((isHovering) ? 'crosshair' : 'grab')}
       />
 
-      {/* Floating HUD Inspector */}
-      {ui_visible && (
+      {/* Unified Floating Tooltip Container (HUD Inspector & Stadestér City) */}
+      {ui_visible && !selected_city && (
         <ClickInfoPanel
-          info={inspect_data}
-          pos={cursor_pos}
           activeLayer={active_layer}
           activeVariableSelectors={props.activeVariableSelectors}
+          hoveredCity={hovered_city}
+          info={inspect_data}
+          pos={cursor_pos || hovered_city_pos}
+          stadesterConfig={stadester_config}
         />
-      )}
-
-      {/* Floating City Hover Tooltip */}
-      {ui_visible && stadester_config?.enabled && hovered_city && hovered_city_pos && !selected_city && (
-        <div
-          className="pointer-events-none fixed z-50 bg-card/95 border border-border shadow-2xl px-2.5 py-1.5 backdrop-blur-md text-xs font-sans rounded-none"
-          style={{
-            left: `${hovered_city_pos.x + 14}px`,
-            top: `${hovered_city_pos.y + 14}px`,
-          }}
-        >
-          <div className="font-semibold text-white flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-primary" />
-            <span>{hovered_city.name}</span>
-            {hovered_city.country && (
-              <span className="text-[10px] text-muted-foreground font-normal">({hovered_city.country})</span>
-            )}
-          </div>
-          <div className="flex items-center gap-3 text-[11px] text-muted-foreground font-mono mt-0.5">
-            <span>Pop: <strong className="text-white">{Math.round(hovered_city.population).toLocaleString('de-DE')}</strong></span>
-            {hovered_city.growthRate !== undefined && (
-              <span className="text-white">
-                {(hovered_city.growthRate >= 0) ? '+' : ''}{(hovered_city.growthRate*100).toFixed(2)}%/yr
-              </span>
-            )}
-          </div>
-        </div>
       )}
 
       {/* Stadestér City Details Panel */}
@@ -901,6 +879,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
               flyoutOpen={flyout_open}
               hasCanvas={has_canvas}
               heightmapConfig={heightmap_config}
+              hoveredCity={hovered_city}
               infoPanelOpen={info_panel_open}
               inspectData={inspect_data}
               invertPalette={invert_palette}
