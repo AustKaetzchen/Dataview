@@ -287,3 +287,158 @@ export function computeViewportBoundingBox (
   //Return statement
   return [west, south, east, north]
 }
+
+/**
+ * Checks whether a geographic point is on the visible front hemisphere of the 3D globe.
+ * Accounts for camera latitude, longitude, bearing, and pitch to eliminate antipodal points.
+ *
+ * @param {number} arg0_lng
+ * @param {number} arg1_lat
+ * @param {any} arg2_view_state
+ * @param {number} [arg3_min_cosine=0.0]
+ *
+ * @returns {boolean}
+ */
+export function isGlobePointVisible (
+  arg0_lng: number,
+  arg1_lat: number,
+  arg2_view_state: any,
+  arg3_min_cosine?: number
+): boolean {
+  //Convert from parameters
+  let lat = arg1_lat
+  let lng = arg0_lng
+  let min_cosine = (arg3_min_cosine !== undefined) ? arg3_min_cosine : 0.0
+  let view_state = arg2_view_state
+
+  //Guard clauses
+  if (!view_state)
+    return true
+
+  //Declare local instance variables
+  let bearing = view_state.bearing ?? 0
+  let bearing_rad = (bearing*Math.PI)/180
+  let c_lat = view_state.latitude ?? 20
+  let c_lat_rad = (c_lat*Math.PI)/180
+  let c_lng = view_state.longitude ?? 0
+  let c_lng_rad = (c_lng*Math.PI)/180
+  let cos_b = Math.cos(bearing_rad)
+  let cos_c: number
+  let cos_pitch: number
+  let d_lng = ((lng - c_lng)*Math.PI)/180
+  let p_lat_rad = (lat*Math.PI)/180
+  let pitch = view_state.pitch ?? 0
+  let pitch_rad = (pitch*Math.PI)/180
+  let sin_b = Math.sin(bearing_rad)
+  let sin_pitch: number
+  let visibility_dot: number
+  let x_ortho: number
+  let x_rot: number
+  let y_ortho: number
+  let y_rot: number
+
+  //Function body
+  //1. Compute spherical orthographic coordinates relative to camera center
+  cos_c = Math.sin(c_lat_rad)*Math.sin(p_lat_rad) + Math.cos(c_lat_rad)*Math.cos(p_lat_rad)*Math.cos(d_lng)
+
+  //2. If pitch and bearing are zero, check direct hemisphere dot product
+  if (Math.abs(pitch) < 0.5 && Math.abs(bearing) < 0.5)
+    return (cos_c >= min_cosine)
+
+  //3. Factor in camera bearing rotation
+  x_ortho = Math.cos(p_lat_rad)*Math.sin(d_lng)
+  y_ortho = Math.cos(c_lat_rad)*Math.sin(p_lat_rad) - Math.sin(c_lat_rad)*Math.cos(p_lat_rad)*Math.cos(d_lng)
+
+  x_rot = x_ortho*cos_b - y_ortho*sin_b
+  y_rot = x_ortho*sin_b + y_ortho*cos_b
+
+  //4. Factor in camera pitch tilt
+  cos_pitch = Math.cos(pitch_rad)
+  sin_pitch = Math.sin(pitch_rad)
+  visibility_dot = cos_c*cos_pitch + y_rot*sin_pitch
+
+  //Return statement
+  return (visibility_dot >= min_cosine)
+}
+
+/**
+ * Projects a geographic point to 2D screen coordinates under Globe projection with camera rotation.
+ *
+ * @param {number} arg0_lng
+ * @param {number} arg1_lat
+ * @param {any} arg2_view_state
+ * @param {number} arg3_window_w
+ * @param {number} arg4_window_h
+ *
+ * @returns {{ dot: number; is_visible: boolean; sx: number; sy: number }}
+ */
+export function projectGlobeCoordinates (
+  arg0_lng: number,
+  arg1_lat: number,
+  arg2_view_state: any,
+  arg3_window_w: number,
+  arg4_window_h: number
+): { dot: number; is_visible: boolean; sx: number; sy: number } {
+  //Convert from parameters
+  let lat = arg1_lat
+  let lng = arg0_lng
+  let view_state = arg2_view_state
+  let window_h = arg4_window_h
+  let window_w = arg3_window_w
+
+  //Declare local instance variables
+  let bearing = view_state?.bearing ?? 0
+  let bearing_rad = (bearing*Math.PI)/180
+  let c_lat = view_state?.latitude ?? 20
+  let c_lat_rad = (c_lat*Math.PI)/180
+  let c_lng = view_state?.longitude ?? 0
+  let c_lng_rad = (c_lng*Math.PI)/180
+  let cos_b = Math.cos(bearing_rad)
+  let cos_c: number
+  let cos_pitch: number
+  let d_lng = ((lng - c_lng)*Math.PI)/180
+  let effective_zoom: number
+  let globe_radius: number
+  let is_visible: boolean
+  let lat_adjust: number
+  let lat_clamp = Math.max(-89.9, Math.min(89.9, c_lat))
+  let p_lat_rad = (lat*Math.PI)/180
+  let pitch = view_state?.pitch ?? 0
+  let pitch_rad = (pitch*Math.PI)/180
+  let scale_adjust: number
+  let sin_b = Math.sin(bearing_rad)
+  let sin_pitch: number
+  let sx: number
+  let sy: number
+  let visibility_dot: number
+  let x_ortho: number
+  let x_rot: number
+  let y_ortho: number
+  let y_rot: number
+  let zoom = view_state?.zoom ?? 3
+
+  //Function body
+  cos_c = Math.sin(c_lat_rad)*Math.sin(p_lat_rad) + Math.cos(c_lat_rad)*Math.cos(p_lat_rad)*Math.cos(d_lng)
+  x_ortho = Math.cos(p_lat_rad)*Math.sin(d_lng)
+  y_ortho = Math.cos(c_lat_rad)*Math.sin(p_lat_rad) - Math.sin(c_lat_rad)*Math.cos(p_lat_rad)*Math.cos(d_lng)
+
+  x_rot = x_ortho*cos_b - y_ortho*sin_b
+  y_rot = x_ortho*sin_b + y_ortho*cos_b
+
+  cos_pitch = Math.cos(pitch_rad)
+  sin_pitch = Math.sin(pitch_rad)
+  visibility_dot = cos_c*cos_pitch + y_rot*sin_pitch
+  is_visible = (visibility_dot >= 0.0)
+
+  scale_adjust = Math.PI*Math.cos((lat_clamp*Math.PI)/180)
+  lat_adjust = Math.log2(Math.max(0.0001, scale_adjust)) - Math.log2(Math.PI)
+  effective_zoom = zoom + lat_adjust
+  globe_radius = (512/(2*Math.PI))*Math.pow(2, effective_zoom)
+
+  sx = window_w/2 + x_rot*globe_radius
+  sy = window_h/2 - (y_rot*cos_pitch - cos_c*sin_pitch)*globe_radius
+
+  //Return statement
+  return { dot: visibility_dot, is_visible, sx, sy }
+}
+

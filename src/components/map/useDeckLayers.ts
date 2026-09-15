@@ -24,6 +24,10 @@ import {
   CityPoint,
   StadesterConfig,
 } from '@/lib/geopng/types'
+import {
+  isGlobePointVisible,
+  projectGlobeCoordinates,
+} from '@/lib/stadester/stadesterHeuristics'
 import { MAP_CONFIG } from '@config'
 import {
   EquirectangularTileset2D,
@@ -656,6 +660,13 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
       ? options.stadesterPoints
       : stadester_points_data
 
+    //In Globe mode, filter effective_points to ensure no antipodal cities are rendered through the globe
+    if (projection === 'Globe' && effective_points.length > 0) {
+      effective_points = effective_points.filter((arg0_pt: any) =>
+        isGlobePointVisible(arg0_pt.position[0], arg0_pt.position[1], options.viewState, 0.02)
+      )
+    }
+
     if (options.stadesterConfig?.enabled && effective_points.length > 0) {
       let is_collision_active = (options.stadesterConfig.labelCollision !== undefined) ? options.stadesterConfig.labelCollision : true
       let is_halo = options.stadesterConfig.halo !== false && !options.stadesterConfig.filled
@@ -735,6 +746,10 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
       // City selection highlight ring
       if (options.selectedCityKey) {
         let selected_city_item = effective_points.find((c: any) => c.key === options.selectedCityKey)
+        if (selected_city_item && projection === 'Globe') {
+          if (!isGlobePointVisible(selected_city_item.position[0], selected_city_item.position[1], options.viewState, 0.02))
+            selected_city_item = null
+        }
         if (selected_city_item) {
           layers_array.push(
             new ScatterplotLayer({
@@ -783,36 +798,12 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
             let sy: number
 
             if (projection === 'Globe') {
-              let center_lat = options.viewState?.latitude ?? 20
-              let center_lng = options.viewState?.longitude ?? 0
-              let c_lat_rad = (center_lat * Math.PI) / 180
-              let c_lng_rad = (center_lng * Math.PI) / 180
-              let p_lat_rad = (c.position[1] * Math.PI) / 180
-              let p_lng_rad = (c.position[0] * Math.PI) / 180
-              let d_lng = p_lng_rad - c_lng_rad
-
-              let cos_c = Math.sin(c_lat_rad) * Math.sin(p_lat_rad) + Math.cos(c_lat_rad) * Math.cos(p_lat_rad) * Math.cos(d_lng)
-              if (cos_c < 0.0)
+              let proj = projectGlobeCoordinates(c.position[0], c.position[1], options.viewState, window_w, window_h)
+              if (!proj.is_visible || proj.dot < 0.08)
                 continue
 
-              let lat_clamp = Math.max(-89.9, Math.min(89.9, center_lat))
-              let scale_adjust = Math.PI * Math.cos((lat_clamp * Math.PI) / 180)
-              let lat_adjust = Math.log2(Math.max(0.0001, scale_adjust)) - Math.log2(Math.PI)
-              let effective_zoom = (options.viewState?.zoom ?? ((projection === 'Globe') ? 3 : 1.2)) + lat_adjust
-              let globe_radius = (512 / (2 * Math.PI)) * Math.pow(2, effective_zoom)
-
-              let x_ortho = Math.cos(p_lat_rad) * Math.sin(d_lng)
-              let y_ortho = Math.cos(c_lat_rad) * Math.sin(p_lat_rad) - Math.sin(c_lat_rad) * Math.cos(p_lat_rad) * Math.cos(d_lng)
-
-              let bearing_deg = options.viewState?.bearing ?? 0
-              let bearing_rad = (bearing_deg * Math.PI) / 180
-              let cos_b = Math.cos(bearing_rad)
-              let sin_b = Math.sin(bearing_rad)
-              let x_rot = x_ortho * cos_b - y_ortho * sin_b
-              let y_rot = x_ortho * sin_b + y_ortho * cos_b
-
-              sx = window_w / 2 + x_rot * globe_radius
-              sy = window_h / 2 - y_rot * globe_radius
+              sx = proj.sx
+              sy = proj.sy
             } else if (is_cartesian) {
               let target = options.viewState?.target || [0, 0, 0]
               let scale = Math.pow(2, options.viewState?.zoom ?? 2.8)
@@ -867,7 +858,15 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
           }
         }
 
-        if (visible_label_cities.length > 0) {
+        if (visible_label_cities && visible_label_cities.length > 0) {
+          if (projection === 'Globe') {
+            visible_label_cities = visible_label_cities.filter((arg0_c: any) =>
+              isGlobePointVisible(arg0_c.position[0], arg0_c.position[1], options.viewState, 0.08)
+            )
+          }
+        }
+
+        if (visible_label_cities && visible_label_cities.length > 0) {
           layers_array.push(
             new TextLayer({
               id: `stadester-labels-${projection}`,

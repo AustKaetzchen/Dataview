@@ -3,6 +3,8 @@ import {
   computeViewportBoundingBox,
   getZoomPopulationThreshold,
   getEraDisplayFloor,
+  isGlobePointVisible,
+  projectGlobeCoordinates,
 } from './stadesterHeuristics'
 
 export interface WorkerCityInput {
@@ -252,7 +254,13 @@ function processViewportLayout (arg0_msg: WorkerInMessage & { type: 'LAYOUT_VIEW
         let c_lat = c.coords[0]
         let c_lon = c.coords[1]
 
-        //Viewport bounding box culling
+        //1. Globe orthographic culling (eliminates antipodal cities completely)
+        if (is_globe) {
+          if (!isGlobePointVisible(c_lon, c_lat, view_state, 0.02))
+            continue
+        }
+
+        //2. Viewport bounding box culling
         if (w <= east_bound) {
           if (c_lon < w || c_lon > east_bound || c_lat < s || c_lat > n)
             continue
@@ -328,38 +336,12 @@ function processViewportLayout (arg0_msg: WorkerInMessage & { type: 'LAYOUT_VIEW
           let sy: number
 
           if (projection === 'Globe') {
-            let center_lat = view_state?.latitude ?? 20
-            let center_lng = view_state?.longitude ?? 0
-            let c_lat_rad = (center_lat * Math.PI) / 180
-            let c_lng_rad = (center_lng * Math.PI) / 180
-            let p_lat_rad = (cand.position[1] * Math.PI) / 180
-            let p_lng_rad = (cand.position[0] * Math.PI) / 180
-            let d_lng = p_lng_rad - c_lng_rad
+            let proj = projectGlobeCoordinates(cand.position[0], cand.position[1], view_state, window_w, window_h)
+            if (!proj.is_visible || proj.dot < 0.08)
+              continue
 
-            // Check if on visible hemisphere (dot product with camera viewing vector)
-            let cos_c = Math.sin(c_lat_rad) * Math.sin(p_lat_rad) + Math.cos(c_lat_rad) * Math.cos(p_lat_rad) * Math.cos(d_lng)
-            if (cos_c < 0.0)
-              continue // Behind the horizon of the globe
-
-            // Orthographic projection to screen coordinates using SmoothGlobeViewport radius
-            let lat_clamp = Math.max(-89.9, Math.min(89.9, center_lat))
-            let scale_adjust = Math.PI * Math.cos((lat_clamp * Math.PI) / 180)
-            let lat_adjust = Math.log2(Math.max(0.0001, scale_adjust)) - Math.log2(Math.PI)
-            let effective_zoom = zoom + lat_adjust
-            let globe_radius = (512 / (2 * Math.PI)) * Math.pow(2, effective_zoom)
-
-            let x_ortho = Math.cos(p_lat_rad) * Math.sin(d_lng)
-            let y_ortho = Math.cos(c_lat_rad) * Math.sin(p_lat_rad) - Math.sin(c_lat_rad) * Math.cos(p_lat_rad) * Math.cos(d_lng)
-
-            let bearing_deg = view_state?.bearing ?? 0
-            let bearing_rad = (bearing_deg * Math.PI) / 180
-            let cos_b = Math.cos(bearing_rad)
-            let sin_b = Math.sin(bearing_rad)
-            let x_rot = x_ortho * cos_b - y_ortho * sin_b
-            let y_rot = x_ortho * sin_b + y_ortho * cos_b
-
-            sx = window_w / 2 + x_rot * globe_radius
-            sy = window_h / 2 - y_rot * globe_radius
+            sx = proj.sx
+            sy = proj.sy
           } else if (is_cartesian) {
             let target = view_state?.target || [0, 0, 0]
             sx = window_w / 2 + (cand.position[0] - target[0]) * scale
