@@ -25,7 +25,7 @@ export interface CityIndexEntry {
 
 export interface StadesterQueryOptions {
   bbox?: [number, number, number, number] // [west, south, east, north]
-  color_mode?: 'growth' | 'population' | 'continent'
+  color_mode?: 'growth' | 'population' | 'region' | 'continent'
   max_cities?: number
   min_pop?: number
 }
@@ -38,6 +38,7 @@ export interface CompactCitiesPayload {
   keys: string[]
   names: string[]
   pops: number[]
+  regions: (string | undefined)[]
 }
 
 export interface CityRenderPoint {
@@ -550,6 +551,7 @@ export const StadesterService = {
     let keys: string[] = new Array(len)
     let names: string[] = new Array(len)
     let pops: number[] = new Array(len)
+    let regions: (string | undefined)[] = new Array(len)
 
     //Function body
     for (let i = 0; i < len; i++) {
@@ -561,6 +563,7 @@ export const StadesterService = {
       coords[i * 2 + 1] = c.coords[1]
       pops[i] = c.population
       growth[i] = c.growthRate !== undefined ? Math.round(c.growthRate * 10000) / 10000 : 0
+      regions[i] = c.region
     }
 
     //Return statement
@@ -572,6 +575,7 @@ export const StadesterService = {
       keys,
       names,
       pops,
+      regions,
     }
   },
 }

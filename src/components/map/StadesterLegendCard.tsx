@@ -10,13 +10,17 @@ export interface StadesterLegendCardProps {
 }
 
 const REGION_CHIPS = [
-  { name: 'East Asia', colour: '#f59e0b' },
+  { name: 'Sub-Saharan Africa', colour: '#f97316' },
+  { name: 'Maghreb & Egypt', colour: '#eab308' },
+  { name: 'Middle East', colour: '#d97706' },
+  { name: 'Central Asia', colour: '#a855f7' },
+  { name: 'Indian Subcontinent', colour: '#ec4899' },
+  { name: 'East Asia', colour: '#ef4444' },
+  { name: 'Southeast Asia', colour: '#8b5cf6' },
   { name: 'Europe', colour: '#6366f1' },
-  { name: 'Africa', colour: '#f97316' },
+  { name: 'E. Europe & Russia', colour: '#3b82f6' },
   { name: 'N. America', colour: '#0ea5e9' },
   { name: 'Latin America', colour: '#10b981' },
-  { name: 'Mid East', colour: '#eab308' },
-  { name: 'S. Asia', colour: '#ec4899' },
   { name: 'Oceania', colour: '#14b8a6' },
 ]
 
@@ -58,8 +62,8 @@ export const StadesterLegendCard: React.FC<StadesterLegendCardProps> = React.mem
     palette_label = 'Logarithmic Scale (Blue to Warm Gold)'
     gradient_style = 'linear-gradient(to right, rgb(13, 8, 135), rgb(80, 18, 170), rgb(140, 41, 129), rgb(200, 72, 73), rgb(245, 125, 21), rgb(240, 249, 33))'
   } else {
-    metric_title = 'World Continental Macro-Region'
-    palette_label = 'Continental Categorical Palette'
+    metric_title = 'World Geographic Region'
+    palette_label = 'Regional Categorical Palette'
     gradient_style = ''
   }
 
@@ -110,7 +114,7 @@ export const StadesterLegendCard: React.FC<StadesterLegendCardProps> = React.mem
 
       {/* Colour Scheme Information & Gradient Bar */}
       <div className="space-y-1 mb-2">
-        {colour_mode === 'continent' ? (
+        {colour_mode === 'region' || colour_mode === 'continent' ? (
           <div className="flex flex-wrap gap-1 pt-0.5">
             {REGION_CHIPS.map((chip) => (
               <span

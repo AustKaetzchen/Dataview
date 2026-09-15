@@ -67,24 +67,30 @@ function resolveRegionColorHex (arg0_region?: string, arg1_coords?: [number, num
 
     if (lat < -10 && lon > 110)
       return REGION_COLOR_MAP.oceania
-    if (lat > 10 && lon > 60 && lon < 95)
-      return REGION_COLOR_MAP.indian_subcontinent
-    if (lat > 0 && lon >= 95 && lon < 150)
-      return REGION_COLOR_MAP.southeast_asia
-    if (lat > 20 && lon >= 100 && lon <= 145)
+    if (lat > 18 && lon >= 98 && lon <= 150)
       return REGION_COLOR_MAP.eastasia
-    if (lat > 35 && lon > -15 && lon < 45)
+    if (lat > 0 && lat <= 25 && lon >= 90 && lon < 150)
+      return REGION_COLOR_MAP.southeast_asia
+    if (lat > 5 && lat < 38 && lon > 60 && lon < 90)
+      return REGION_COLOR_MAP.indian_subcontinent
+    if (lat > 40 && lon >= 30 && lon <= 180)
+      return REGION_COLOR_MAP.eastern_europe_and_russia
+    if (lat > 35 && lat < 72 && lon > -15 && lon < 30)
       return REGION_COLOR_MAP.europe
-    if (lat > -35 && lat < 38 && lon > -20 && lon < 55)
+    if (lat > 15 && lat <= 36 && lon > 25 && lon < 60)
+      return REGION_COLOR_MAP.middle_east
+    if (lat > 20 && lat <= 37 && lon > -18 && lon < 35)
+      return REGION_COLOR_MAP.maghreb_egypt
+    if (lat <= 20 && lon > -20 && lon < 55)
       return REGION_COLOR_MAP.sub_saharan_africa
     if (lat > 15 && lon > -170 && lon < -50)
       return REGION_COLOR_MAP.northern_america
-    if (lat < 15 && lon > -120 && lon < -30)
+    if (lat <= 15 && lon > -120 && lon < -30)
       return REGION_COLOR_MAP.latin_america
   }
 
   //Return statement
-  return '#8b5cf6'
+  return '#ef4444'
 }
 
 function hexToRgb (arg0_hex: string): [number, number, number] {
@@ -263,7 +269,7 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
       } else if (color_mode === 'population') {
         let pop_rgb = getPopRgb(city.population)
         fill_color = [pop_rgb[0], pop_rgb[1], pop_rgb[2], 220]
-      } else if (color_mode === 'continent') {
+      } else if (color_mode === 'region' || color_mode === 'continent') {
         let reg_hex = resolveRegionColorHex(city.region, [c_lat, c_lon])
         let reg_rgb = hexToRgb(reg_hex)
         fill_color = [reg_rgb[0], reg_rgb[1], reg_rgb[2], 220]

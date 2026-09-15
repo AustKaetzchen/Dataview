@@ -48,7 +48,7 @@ export type WorkerInMessage =
     }
   | {
       bubbleSize: number
-      colorMode: 'growth' | 'population' | 'continent'
+      colorMode: 'growth' | 'population' | 'region' | 'continent'
       displayOptions?: StadesterDisplayOptions
       growthPalette: string
       isHalo: boolean
@@ -122,24 +122,30 @@ function resolveRegionColorRgb (arg0_region?: string, arg1_coords?: [number, num
 
     if (lat < -10 && lon > 110)
       return REGION_COLOR_MAP.oceania
-    if (lat > 10 && lon > 60 && lon < 95)
-      return REGION_COLOR_MAP.indian_subcontinent
-    if (lat > 0 && lon >= 95 && lon < 150)
-      return REGION_COLOR_MAP.southeast_asia
-    if (lat > 20 && lon >= 100 && lon <= 145)
+    if (lat > 18 && lon >= 98 && lon <= 150)
       return REGION_COLOR_MAP.eastasia
-    if (lat > 35 && lon > -15 && lon < 45)
+    if (lat > 0 && lat <= 25 && lon >= 90 && lon < 150)
+      return REGION_COLOR_MAP.southeast_asia
+    if (lat > 5 && lat < 38 && lon > 60 && lon < 90)
+      return REGION_COLOR_MAP.indian_subcontinent
+    if (lat > 40 && lon >= 30 && lon <= 180)
+      return REGION_COLOR_MAP.eastern_europe_and_russia
+    if (lat > 35 && lat < 72 && lon > -15 && lon < 30)
       return REGION_COLOR_MAP.europe
-    if (lat > -35 && lat < 38 && lon > -20 && lon < 55)
+    if (lat > 15 && lat <= 36 && lon > 25 && lon < 60)
+      return REGION_COLOR_MAP.middle_east
+    if (lat > 20 && lat <= 37 && lon > -18 && lon < 35)
+      return REGION_COLOR_MAP.maghreb_egypt
+    if (lat <= 20 && lon > -20 && lon < 55)
       return REGION_COLOR_MAP.sub_saharan_africa
     if (lat > 15 && lon > -170 && lon < -50)
       return REGION_COLOR_MAP.northern_america
-    if (lat < 15 && lon > -120 && lon < -30)
+    if (lat <= 15 && lon > -120 && lon < -30)
       return REGION_COLOR_MAP.latin_america
   }
 
   //Return statement
-  return [139, 92, 246]
+  return [239, 68, 68]
 }
 
 import { getPaletteLUT } from '../geopng/palettes'
@@ -291,7 +297,7 @@ self.onmessage = function (arg0_e: MessageEvent<WorkerInMessage>) {
         } else if (color_mode === 'population') {
           let p_rgb = getPopRgb(c.population)
           fill_color = [p_rgb[0], p_rgb[1], p_rgb[2], 220]
-        } else if (color_mode === 'continent') {
+        } else if (color_mode === 'region' || color_mode === 'continent') {
           let reg_rgb = resolveRegionColorRgb(c.region, [c_lat, c_lon])
           fill_color = [reg_rgb[0], reg_rgb[1], reg_rgb[2], 220]
         }

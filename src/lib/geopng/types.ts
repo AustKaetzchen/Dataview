@@ -79,7 +79,7 @@ export interface MapModeItem {
   active: boolean
 }
 
-export type StadesterColorMode = 'growth' | 'population' | 'continent'
+export type StadesterColorMode = 'growth' | 'population' | 'region' | 'continent'
 
 export interface StadesterDisplayOptions {
   prefer_least_diacritics?: boolean

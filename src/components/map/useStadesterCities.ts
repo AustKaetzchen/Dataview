@@ -128,6 +128,7 @@ export const useStadesterCities = function (arg0_options: UseStadesterCitiesPara
               key: arg0_data.keys[i],
               name: arg0_data.names[i],
               population: arg0_data.pops[i],
+              region: arg0_data.regions ? arg0_data.regions[i] : undefined,
             })
           }
         } else if (Array.isArray(arg0_data.cities)) {

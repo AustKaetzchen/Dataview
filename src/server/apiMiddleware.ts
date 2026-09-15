@@ -619,7 +619,7 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
         if (parts.length === 4 && !parts.some(Number.isNaN))
           bbox = [parts[0], parts[1], parts[2], parts[3]]
       }
-      let color_mode = (query.colorMode as 'growth' | 'population' | 'continent') || 'growth'
+      let color_mode = (query.colorMode as 'growth' | 'population' | 'region' | 'continent') || 'growth'
       let dataset = (query.dataset as string) || 'stadester_1.1'
       let format = (query.format as string) || 'standard'
       let is_streaming = query.stream === '1' || query.stream === 'true'

@@ -197,16 +197,16 @@ export const StadesterSettings: React.FC<StadesterSettingsProps> = function (arg
             onClick={() =>
               on_change_config((arg0_prev) => ({
                 ...arg0_prev,
-                colorMode: 'continent',
+                colorMode: 'region',
               }))
             }
             className={`px-1.5 py-1 text-[11px] rounded-none border text-center transition-colors cursor-pointer ${
-              color_mode === 'continent'
+              color_mode === 'region' || color_mode === 'continent'
                 ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
                 : 'bg-background hover:bg-muted text-muted-foreground border-border'
             }`}
           >
-            Continent
+            Region
           </button>
         </div>
       </div>
