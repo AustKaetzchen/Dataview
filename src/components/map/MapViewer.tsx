@@ -568,7 +568,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
           : (projection === 'EqualEarth')
             ? { target: [0, 0, 0], zoom: equal_earth_zoom, minZoom: 0.2, maxZoom: 10, rotationX: 0, rotationOrbit: 0, minRotationX: -85, maxRotationX: 0 }
             : (projection === 'Globe')
-              ? { longitude: 0, latitude: 20, zoom: 0, pitch: 0, bearing: 0, maxZoom: 18, minZoom: 0, minPitch: 0, maxPitch: 85 }
+              ? { longitude: 0, latitude: 20, zoom: 3, pitch: 0, bearing: 0, maxZoom: 18, minZoom: 0, minPitch: 0, maxPitch: 85 }
               : { longitude: 0, latitude: 20, zoom: 1.2, pitch: 0, bearing: 0, maxZoom: 18, minZoom: 0, minPitch: 0, maxPitch: 85 },
     }))
   }, [projection, set_proj_view_states])
@@ -613,6 +613,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
       return new SmoothGlobeView({
         id: 'globe-view',
         resolution: 1,
+        parameters: { cullMode: 'none' },
         controller: {
           type: SmoothGlobeController,
           doubleClickZoom: false,
@@ -765,6 +766,17 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
         let proj = projectEqualEarth(c_lon, c_lat)
         px = proj[0]
         py = proj[1]
+      } else if (projection === 'Globe') {
+        let center_lat = proj_view_states.Globe?.latitude ?? 20
+        let center_lng = proj_view_states.Globe?.longitude ?? 0
+        let c_lat_rad = (center_lat*Math.PI)/180
+        let c_lng_rad = (center_lng*Math.PI)/180
+        let p_lat_rad = (c_lat*Math.PI)/180
+        let p_lng_rad = (c_lon*Math.PI)/180
+        let d_lng = p_lng_rad - c_lng_rad
+        let cos_c = Math.sin(c_lat_rad)*Math.sin(p_lat_rad) + Math.cos(c_lat_rad)*Math.cos(p_lat_rad)*Math.cos(d_lng)
+        if (cos_c < 0.0)
+          return null
       }
       let projected = vp.project([px, py])
       if (projected && projected.length >= 2)

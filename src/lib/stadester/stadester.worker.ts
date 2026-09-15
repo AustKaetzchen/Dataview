@@ -233,10 +233,11 @@ function processViewportLayout (arg0_msg: WorkerInMessage & { type: 'LAYOUT_VIEW
 
     try {
       let is_cartesian = (projection === 'EqualEarth' || projection === 'Equirectangular')
-      let zoom = view_state?.zoom ?? 1.2
+      let is_globe = (projection === 'Globe')
+      let zoom = view_state?.zoom ?? ((is_globe) ? 3 : 1.2)
       let thresholds = getZoomPopulationThreshold(zoom, projection)
       let era_floor = getEraDisplayFloor(current_year)
-      let norm_zoom = (is_cartesian) ? (zoom - 1.2) : zoom
+      let norm_zoom = (is_cartesian) ? (zoom - 1.2) : ((is_globe) ? (zoom - 1.65) : zoom)
       let effective_min_pop = (norm_zoom >= 4.5) ? 0 : Math.max(thresholds.bubbleMinPop, era_floor)
       let bbox = computeViewportBoundingBox(view_state, projection, window_w, window_h)
       let [w, s, east_bound, n] = bbox
@@ -244,7 +245,7 @@ function processViewportLayout (arg0_msg: WorkerInMessage & { type: 'LAYOUT_VIEW
       let processed_points: WorkerProcessedPoint[] = []
       let label_candidates: WorkerProcessedPoint[] = []
       let contrast = (large_city_contrast !== undefined) ? large_city_contrast : 1.0
-      let zoom_factor = Math.max(1.0, Math.min(1.8, 1.0 + (is_cartesian ? (zoom - 2.8) * 0.12 : (zoom - 1.2) * 0.08)))
+      let zoom_factor = Math.max(1.0, Math.min(1.8, 1.0 + (is_cartesian ? (zoom - 2.8) * 0.12 : (is_globe ? (zoom - 3.0) * 0.08 : (zoom - 1.2) * 0.08))))
 
       for (let i = 0; i < current_cities.length; i++) {
         let c = current_cities[i]
@@ -350,8 +351,15 @@ function processViewportLayout (arg0_msg: WorkerInMessage & { type: 'LAYOUT_VIEW
             let x_ortho = Math.cos(p_lat_rad) * Math.sin(d_lng)
             let y_ortho = Math.cos(c_lat_rad) * Math.sin(p_lat_rad) - Math.sin(c_lat_rad) * Math.cos(p_lat_rad) * Math.cos(d_lng)
 
-            sx = window_w / 2 + x_ortho * globe_radius
-            sy = window_h / 2 - y_ortho * globe_radius
+            let bearing_deg = view_state?.bearing ?? 0
+            let bearing_rad = (bearing_deg * Math.PI) / 180
+            let cos_b = Math.cos(bearing_rad)
+            let sin_b = Math.sin(bearing_rad)
+            let x_rot = x_ortho * cos_b - y_ortho * sin_b
+            let y_rot = x_ortho * sin_b + y_ortho * cos_b
+
+            sx = window_w / 2 + x_rot * globe_radius
+            sy = window_h / 2 - y_rot * globe_radius
           } else if (is_cartesian) {
             let target = view_state?.target || [0, 0, 0]
             sx = window_w / 2 + (cand.position[0] - target[0]) * scale

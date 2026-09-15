@@ -54,9 +54,18 @@ export function getZoomPopulationThreshold (
 
   //Declare local instance variables
   let is_cartesian = (projection === 'EqualEarth' || projection === 'Equirectangular')
-  let norm_zoom = (is_cartesian) ? (zoom - 1.2) : zoom
+  let is_globe = (projection === 'Globe')
+  let norm_zoom: number
 
   //Function body
+  if (is_cartesian) {
+    norm_zoom = zoom - 1.2
+  } else if (is_globe) {
+    norm_zoom = zoom - 1.65
+  } else {
+    norm_zoom = zoom
+  }
+
   //1. World View (norm_zoom < 2.0)
   if (norm_zoom < 2.0) {
     return {
@@ -122,6 +131,7 @@ export function computeViewportBoundingBox (
   //Declare local instance variables
   let east: number
   let is_cartesian = (projection === 'EqualEarth' || projection === 'Equirectangular')
+  let is_globe = (projection === 'Globe')
   let north: number
   let south: number
   let west: number
@@ -159,6 +169,54 @@ export function computeViewportBoundingBox (
       south = Math.max(-90, min_y)
       east = Math.min(180, max_x)
       north = Math.min(90, max_y)
+    }
+  } else if (is_globe) {
+    let center_lat = view_state.latitude ?? 20
+    let center_lng = view_state.longitude ?? 0
+    let cos_max_lat: number
+    let effective_zoom: number
+    let globe_radius: number
+    let lat_adjust: number
+    let lat_clamp = Math.max(-89.9, Math.min(89.9, center_lat))
+    let max_lat_rad: number
+    let scale_adjust: number
+    let screen_r: number
+    let span_lng: number
+    let theta_max_deg: number
+
+    scale_adjust = Math.PI*Math.cos((lat_clamp*Math.PI)/180)
+    lat_adjust = Math.log2(Math.max(0.0001, scale_adjust)) - Math.log2(Math.PI)
+    effective_zoom = (view_state.zoom ?? 3) + lat_adjust
+    globe_radius = (512/(2*Math.PI))*Math.pow(2, effective_zoom)
+
+    screen_r = Math.sqrt((window_w/2)*(window_w/2) + (window_h/2)*(window_h/2))*1.35
+    theta_max_deg = (globe_radius > 0) ? (screen_r/globe_radius)*(180/Math.PI) : 90
+    theta_max_deg = Math.min(90, theta_max_deg)
+
+    if (center_lat + theta_max_deg >= 90 || center_lat - theta_max_deg <= -90 || theta_max_deg >= 85) {
+      east = 180
+      north = Math.min(90, center_lat + theta_max_deg)
+      south = Math.max(-90, center_lat - theta_max_deg)
+      west = -180
+    } else {
+      north = Math.min(90, center_lat + theta_max_deg)
+      south = Math.max(-90, center_lat - theta_max_deg)
+      max_lat_rad = (Math.max(Math.abs(south), Math.abs(north))*Math.PI)/180
+      cos_max_lat = Math.max(0.1, Math.cos(max_lat_rad))
+      span_lng = theta_max_deg/cos_max_lat
+
+      if (span_lng >= 180) {
+        east = 180
+        west = -180
+      } else {
+        east = center_lng + span_lng
+        west = center_lng - span_lng
+
+        if (west < -180)
+          west += 360
+        if (east > 180)
+          east -= 360
+      }
     }
   } else {
     let center_lat = view_state.latitude ?? 20

@@ -725,7 +725,10 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
             if (options.onHoverCity)
               options.onHoverCity(info.object || null, info.x, info.y)
           },
-          parameters: { depthTest: false },
+          parameters: {
+            cullMode: 'none',
+            depthTest: false,
+          },
         })
       )
 
@@ -746,7 +749,10 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
               lineWidthUnits: 'pixels',
               radiusUnits: 'pixels',
               coordinateSystem: (is_cartesian) ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
-              parameters: { depthTest: false },
+              parameters: {
+                cullMode: 'none',
+                depthTest: false,
+              },
               pickable: false,
             })
           )
@@ -792,14 +798,21 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
               let lat_clamp = Math.max(-89.9, Math.min(89.9, center_lat))
               let scale_adjust = Math.PI * Math.cos((lat_clamp * Math.PI) / 180)
               let lat_adjust = Math.log2(Math.max(0.0001, scale_adjust)) - Math.log2(Math.PI)
-              let effective_zoom = (options.viewState?.zoom ?? 1.2) + lat_adjust
+              let effective_zoom = (options.viewState?.zoom ?? ((projection === 'Globe') ? 3 : 1.2)) + lat_adjust
               let globe_radius = (512 / (2 * Math.PI)) * Math.pow(2, effective_zoom)
 
               let x_ortho = Math.cos(p_lat_rad) * Math.sin(d_lng)
               let y_ortho = Math.cos(c_lat_rad) * Math.sin(p_lat_rad) - Math.sin(c_lat_rad) * Math.cos(p_lat_rad) * Math.cos(d_lng)
 
-              sx = window_w / 2 + x_ortho * globe_radius
-              sy = window_h / 2 - y_ortho * globe_radius
+              let bearing_deg = options.viewState?.bearing ?? 0
+              let bearing_rad = (bearing_deg * Math.PI) / 180
+              let cos_b = Math.cos(bearing_rad)
+              let sin_b = Math.sin(bearing_rad)
+              let x_rot = x_ortho * cos_b - y_ortho * sin_b
+              let y_rot = x_ortho * sin_b + y_ortho * cos_b
+
+              sx = window_w / 2 + x_rot * globe_radius
+              sy = window_h / 2 - y_rot * globe_radius
             } else if (is_cartesian) {
               let target = options.viewState?.target || [0, 0, 0]
               let scale = Math.pow(2, options.viewState?.zoom ?? 2.8)
@@ -868,7 +881,7 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
               getAlignmentBaseline: 'center',
               getPixelOffset: (d: any) => [d.pixelRadius + 8, 0],
               background: true,
-              backgroundColor: [10, 15, 25, 220],
+              getBackgroundColor: [10, 15, 25, 220],
               backgroundPadding: [4, 2],
               borderRadius: 2,
               fontFamily: 'Karla, sans-serif',
@@ -876,7 +889,10 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
               coordinateSystem: (is_cartesian) ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
               characterSet: 'auto',
               pickable: false,
-              parameters: { depthTest: false },
+              parameters: {
+                cullMode: 'none',
+                depthTest: false,
+              },
             })
           )
         }
@@ -915,5 +931,6 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
     options.selectedCityKey,
     options.onSelectCity,
     options.onHoverCity,
+    options.viewState,
   ])
 }
