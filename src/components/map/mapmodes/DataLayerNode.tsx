@@ -1,7 +1,8 @@
 import React from 'react'
 import { ParsedDataLayer } from '@/server/layerParser'
-import { StadesterConfig } from '@/lib/geopng/types'
+import { HistoricalBordersConfig, StadesterConfig } from '@/lib/geopng/types'
 import { Icon } from '@/components/ui/icon'
+import { HistoricalBordersSettings } from './HistoricalBordersSettings'
 import { StadesterSettings } from './StadesterSettings'
 
 export interface DataLayerNodeProps {
@@ -9,11 +10,13 @@ export interface DataLayerNodeProps {
   activeVariableSelectors: Record<string, string | string[]>
   depth?: number
   expandedNodes: Record<string, boolean>
+  historicalBordersConfig?: HistoricalBordersConfig
   isLayerAccessible: (arg0_layer: ParsedDataLayer) => boolean
   layer: ParsedDataLayer
   onChangeVariableSelector?: (arg0_key: string, arg1_option: string | string[]) => void
   onSelectLayer?: (arg0_layer_id: string) => void
   searchQuery: string
+  setHistoricalBordersConfig?: React.Dispatch<React.SetStateAction<HistoricalBordersConfig>>
   setStadesterConfig?: React.Dispatch<React.SetStateAction<StadesterConfig>>
   stadesterCityCount?: number
   stadesterConfig?: StadesterConfig
@@ -33,11 +36,13 @@ export const DataLayerNode: React.FC<DataLayerNodeProps> = function (arg0_props)
   let active_variable_selectors = arg0_props.activeVariableSelectors
   let depth = arg0_props.depth || 0
   let expanded_nodes = arg0_props.expandedNodes
+  let historical_borders_config = arg0_props.historicalBordersConfig
   let is_layer_accessible = arg0_props.isLayerAccessible
   let layer = arg0_props.layer
   let on_change_variable_selector = arg0_props.onChangeVariableSelector
   let on_select_layer = arg0_props.onSelectLayer
   let search_query = arg0_props.searchQuery
+  let set_historical_borders_config = arg0_props.setHistoricalBordersConfig
   let set_stadester_config = arg0_props.setStadesterConfig
   let stadester_city_count = arg0_props.stadesterCityCount ?? 0
   let stadester_config = arg0_props.stadesterConfig
@@ -48,12 +53,17 @@ export const DataLayerNode: React.FC<DataLayerNodeProps> = function (arg0_props)
   let has_variable_selectors = Boolean(layer.variable_selectors && Object.keys(layer.variable_selectors).length > 0)
   let is_accessible = is_layer_accessible(layer)
   let is_active = active_layer_id === layer.id
+  let is_borders = layer.id === 'statistical_borders' || layer.type === 'vector.polygon' || layer.id.includes('borders')
+  let is_dataset_match = layer.id.includes('stadester') ? (layer.id === 'stadester' || stadester_config?.dataset === layer.id || (!stadester_config?.dataset && layer.id === 'stadester_1.1')) : true
   let is_node_expanded = Boolean(search_query.trim()) || (expanded_nodes[layer.id] ?? true)
-  let is_stadester = layer.id.includes('stadester')
-  let is_dataset_match = is_stadester ? (layer.id === 'stadester' || stadester_config?.dataset === layer.id || (!stadester_config?.dataset && layer.id === 'stadester_1.1')) : true
-  let is_overlay_active = is_stadester ? (Boolean(stadester_config?.enabled) && is_dataset_match) : false
+  let is_overlay_active = is_borders
+    ? Boolean(historical_borders_config?.enabled)
+    : layer.id.includes('stadester')
+      ? (Boolean(stadester_config?.enabled) && is_dataset_match)
+      : false
   let is_searching = Boolean(search_query.trim())
-  let is_vector_overlay = layer.type === 'vector.points' || layer.id.includes('stadester')
+  let is_stadester = layer.id.includes('stadester')
+  let is_vector_overlay = layer.type === 'vector.points' || is_stadester || is_borders
 
   //Return statement
   return (
@@ -62,7 +72,12 @@ export const DataLayerNode: React.FC<DataLayerNodeProps> = function (arg0_props)
         <div className="border border-border/70 bg-card/40 mb-1">
           <div
             onClick={() => {
-              if (is_stadester && set_stadester_config) {
+              if (is_borders && set_historical_borders_config) {
+                set_historical_borders_config((arg0_prev) => ({
+                  ...arg0_prev,
+                  enabled: !arg0_prev.enabled,
+                }))
+              } else if (is_stadester && set_stadester_config) {
                 set_stadester_config((arg0_prev) => {
                   let is_currently_active = arg0_prev.enabled && (layer.id === 'stadester' || arg0_prev.dataset === layer.id || (!arg0_prev.dataset && layer.id === 'stadester_1.1'))
                   if (is_currently_active) {
@@ -94,14 +109,14 @@ export const DataLayerNode: React.FC<DataLayerNodeProps> = function (arg0_props)
               >
                 {is_overlay_active && <Icon name="check" className="text-[10px]" />}
               </span>
-              <Icon name="location_city" className="text-primary text-xs shrink-0" />
+              <Icon name={is_borders ? 'flag' : 'location_city'} className="text-primary text-xs shrink-0" />
               <span className="text-xs truncate">{layer.name}</span>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
               <span className="text-[10px] text-muted-foreground font-mono">
                 {is_overlay_active ? 'OVERLAY ON' : 'OVERLAY OFF'}
               </span>
-              {is_stadester && (
+              {(is_stadester || is_borders) && (
                 <Icon
                   name={is_overlay_active ? 'expand_less' : 'expand_more'}
                   className="text-xs text-muted-foreground"
@@ -109,6 +124,15 @@ export const DataLayerNode: React.FC<DataLayerNodeProps> = function (arg0_props)
               )}
             </div>
           </div>
+
+          {is_borders && is_overlay_active && historical_borders_config && set_historical_borders_config && (
+            <div className="p-2 border-t border-border/60 bg-card/60 space-y-1 text-xs">
+              <HistoricalBordersSettings
+                config={historical_borders_config}
+                onChangeConfig={set_historical_borders_config}
+              />
+            </div>
+          )}
 
           {is_stadester && is_overlay_active && stadester_config && set_stadester_config && (
             <div className="p-2 border-t border-border/60 bg-card/60 space-y-1 text-xs">

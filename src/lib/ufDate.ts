@@ -232,6 +232,94 @@ export const UfDate = {
   },
 
   /**
+   * Converts a continuous Confoederatio minute timestamp to a UfDateObject.
+   * Matches SVEA Date.convertTimestampToDate (date_conversion.js).
+   *
+   * @param {number|string} arg0_timestamp
+   *
+   * @returns {UfDateObject}
+   */
+  convertTimestampToDate: function (arg0_timestamp: number | string): UfDateObject {
+    //Convert from parameters
+    let raw_ts = arg0_timestamp
+
+    //Declare local instance variables
+    let all_months: (keyof typeof UfDate.months)[]
+    let date_obj = UfDate.getBlankDate()
+    let minutes: number
+    let minutes_per_400_years = 210379680 // 146097 days * 24 * 60
+    let timestamp = typeof raw_ts === 'number' ? raw_ts : parseFloat(raw_ts)
+
+    //Guard clauses
+    if (Number.isNaN(timestamp))
+      return date_obj
+
+    //Function body
+    all_months = Object.keys(UfDate.months) as (keyof typeof UfDate.months)[]
+    minutes = timestamp
+
+    //Handle BCE (negative timestamps)
+    if (minutes < 0) {
+      while (true) {
+        let prev_year = date_obj.year - 1
+        let year_minutes = (UfDate.isLeapYear(prev_year) ? 366 : 365)*24*60
+
+        if (-minutes <= year_minutes)
+          break
+        minutes += year_minutes
+        date_obj.year--
+
+        if (date_obj.year === -46) {
+          let four_hundred_years = Math.floor((-minutes)/minutes_per_400_years)
+          minutes += four_hundred_years*minutes_per_400_years
+          date_obj.year -= four_hundred_years*400
+        }
+      }
+
+      date_obj.year--
+
+      let total_year_minutes = (UfDate.isLeapYear(date_obj.year) ? 366 : 365)*24*60
+      minutes = total_year_minutes + minutes
+    } else {
+      //Handle CE (positive or zero timestamps)
+      while (true) {
+        let y_minutes = (UfDate.isLeapYear(date_obj.year) ? 366 : 365)*24*60
+        if (minutes < y_minutes)
+          break
+        minutes -= y_minutes
+        date_obj.year++
+
+        if (date_obj.year === 46) {
+          let four_hundred_years = Math.floor(minutes/minutes_per_400_years)
+          minutes -= four_hundred_years*minutes_per_400_years
+          date_obj.year += four_hundred_years*400
+        }
+      }
+    }
+
+    //Decompose remaining minutes into month/day/hour/minute
+    for (let i = 0; i < all_months.length; i++) {
+      let m = UfDate.months[all_months[i]]
+      let dim = UfDate.isLeapYear(date_obj.year) ? (m.leap_year_days || m.days) : m.days
+      let m_minutes = dim*24*60
+      if (minutes < m_minutes) {
+        date_obj.month = i + 1
+        break
+      }
+      minutes -= m_minutes
+    }
+
+    date_obj.day = Math.floor(minutes/(24*60)) + 1
+    minutes -= (date_obj.day - 1)*24*60
+
+    date_obj.hour = Math.floor(minutes/60)
+    date_obj.minute = minutes%60
+
+    //Return statement
+    return date_obj
+  },
+
+  /**
    * Formats a year number into standard UF year notation (e.g. 10000BC, 351AD, 2025AD).
    *
    * @param {number} arg0_year

@@ -2,11 +2,13 @@ import React, { useEffect, useRef } from 'react'
 import { CityPoint, InspectionData, StadesterConfig } from '@/lib/geopng/types'
 import { ParsedDataLayer } from '@/server/layerParser'
 import { pickBestCityDisplayName } from '@/lib/stadester/stadesterUtils'
+import type { HistoricalBorderFeature } from '@/server/atlasBordersService'
 
 export interface ClickInfoPanelProps {
   activeLayer?: ParsedDataLayer | null
   activeVariableSelectors?: Record<string, string | string[]>
   hoveredCity?: CityPoint | null
+  hoveredHistoricalFeature?: HistoricalBorderFeature | null
   info: InspectionData | null
   pos: { x: number; y: number } | null
   stadesterConfig?: StadesterConfig
@@ -158,9 +160,11 @@ export const ClickInfoPanel: React.FC<ClickInfoPanelProps> = React.memo(function
   let formatted_lat = ''
   let formatted_lng = ''
   let formatted_val = ''
+  let has_historical = Boolean(props.hoveredHistoricalFeature)
   let has_raster = Boolean(props.info && (props.info.pixelX !== undefined || (props.info.value !== null && Number.isFinite(props.info.value))))
   let has_stadester = Boolean(props.stadesterConfig?.enabled && props.hoveredCity)
   let hovered_city = props.hoveredCity
+  let hovered_historical = props.hoveredHistoricalFeature
   let info = props.info
   let is_age_sex = Boolean(
     active_layer?.type === 'raster.age_sex' ||
@@ -177,7 +181,7 @@ export const ClickInfoPanel: React.FC<ClickInfoPanelProps> = React.memo(function
     active_layer?.type === 'raster.category_profession' ||
     active_layer?.id?.includes('profession')
   )
-  let offset_y = has_raster ? -70 : -24
+  let offset_y = has_raster ? -70 : (has_stadester ? -24 : -16)
   let panel_ref = useRef<HTMLDivElement>(null)
   let pos = props.pos
   let profession_label = ''
@@ -190,7 +194,7 @@ export const ClickInfoPanel: React.FC<ClickInfoPanelProps> = React.memo(function
   }, [pos, offset_y])
 
   //Guard clauses
-  if ((!has_raster && !has_stadester) || !pos)
+  if ((!has_raster && !has_stadester && !has_historical) || !pos)
     return null
 
   if (has_raster && info) {
@@ -310,6 +314,26 @@ export const ClickInfoPanel: React.FC<ClickInfoPanelProps> = React.memo(function
               <span className="text-white">
                 {(hovered_city.growthRate >= 0) ? '+' : ''}{(hovered_city.growthRate*100).toFixed(2)}%/yr
               </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 3. Appended Historical Country Section */}
+      {has_historical && hovered_historical && (
+        <div className={(has_raster || (has_stadester && hovered_city)) ? 'pt-1.5 mt-1.5 border-t border-border/60' : ''}>
+          <div className="font-semibold text-amber-300 flex items-center gap-1.5">
+            <span className="w-2 h-2 bg-amber-400 shrink-0" />
+            <span className="truncate">{hovered_historical.properties?.name || 'Historical Entity'}</span>
+          </div>
+          <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono mt-0.5">
+            <span>
+              {hovered_historical.properties?.startYear !== undefined && hovered_historical.properties?.endYear !== undefined
+                ? `${hovered_historical.properties.startYear} – ${hovered_historical.properties.endYear}`
+                : hovered_historical.properties?.date || ''}
+            </span>
+            {hovered_historical.properties?.keyframes && (
+              <span className="text-amber-400">({hovered_historical.properties.keyframes.length} kf)</span>
             )}
           </div>
         </div>

@@ -26,6 +26,7 @@ import {
   MapModeId,
   CityPoint,
   CityFullRecord,
+  HistoricalBordersConfig,
   StadesterConfig,
 } from '@/lib/geopng/types'
 import { MAP_CONFIG, getPixelOffset } from '@config'
@@ -46,6 +47,9 @@ import { UserRole } from '../controls/DataLayersTab'
 import { useCircleOverlay } from './useCircleOverlay'
 import { useDeckLayers } from './useDeckLayers'
 import { useStadesterWorker } from '@/lib/stadester/useStadesterWorker'
+import { useHistoricalBorders } from './useHistoricalBorders'
+import { HistoricalBorderDetailsPanel } from './HistoricalBorderDetailsPanel'
+import type { HistoricalBorderFeature } from '@/server/atlasBordersService'
 
 let EMPTY_ARRAY: any[] = [], NOOP_FN = () => {}
 
@@ -72,6 +76,9 @@ export interface MapViewerProps {
   onReorderMapModes: (newModes: MapModeItem[]) => void
   heightmapConfig: HeightmapConfig
   setHeightmapConfig?: React.Dispatch<React.SetStateAction<HeightmapConfig>>
+  historicalBordersConfig?: HistoricalBordersConfig
+  historicalBordersEnabled?: boolean
+  setHistoricalBordersConfig?: React.Dispatch<React.SetStateAction<HistoricalBordersConfig>>
   circleOverlayConfig: CircleOverlayConfig
   setCircleOverlayConfig?: React.Dispatch<React.SetStateAction<CircleOverlayConfig>>
   analyticsOpen: boolean
@@ -119,6 +126,8 @@ export interface MapViewerProps {
   timelineYear?: number
   uiVisible?: boolean
   userRole?: UserRole
+  onChangeYear?: (arg0_year: number) => void
+  onToggleHistoricalBorders?: (arg0_enabled: boolean) => void
 }
 
 /**
@@ -137,6 +146,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
   let countries_mode = props.countriesMode
   let country_stats = props.countryStats
   let heightmap_config = props.heightmapConfig
+  let historical_borders_config = props.historicalBordersConfig
   let hovered_country = props.hoveredCountry
   let info_panel_open = props.infoPanelOpen ?? false
   let invert_palette = props.invertPalette
@@ -182,6 +192,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
   let selected_country = props.selectedCountry
   let set_circle_overlay_config = props.setCircleOverlayConfig
   let set_heightmap_config = props.setHeightmapConfig
+  let set_historical_borders_config = props.setHistoricalBordersConfig
   let set_projection = props.setProjection
   let set_stadester_config = props.setStadesterConfig
   let sidebar_width = props.sidebarWidth
@@ -220,17 +231,42 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
 
   let [hovered_city, set_hovered_city] = useState<CityPoint | null>(null)
   let [hovered_city_pos, set_hovered_city_pos] = useState<{ x: number; y: number } | null>(null)
+  let [hovered_historical_feature, set_hovered_historical_feature] = useState<HistoricalBorderFeature | null>(null)
+  let [selected_historical_feature, set_selected_historical_feature] = useState<HistoricalBorderFeature | null>(null)
+  let [selected_historical_anchor_coord, set_selected_historical_anchor_coord] = useState<[number, number] | null>(null)
+  let [selected_historical_anchor_screen, set_selected_historical_anchor_screen] = useState<{ x: number; y: number } | null>(null)
   let [mapmodes_bounds, set_mapmodes_bounds] = useState<{ left: number; right: number; top: number } | null>(null)
   let [mapmodes_taken_right, set_mapmodes_taken_right] = useState<number>(352)
   let [timeline_bounds, set_timeline_bounds] = useState<{ left: number; right: number; top: number } | null>(null)
   let [timeline_clearance, set_timeline_clearance] = useState<number>(128)
   let [top_right_taken, set_top_right_taken] = useState<number>(0)
 
+  let is_historical_borders_active = Boolean(
+    historical_borders_config?.enabled ||
+    props.historicalBordersEnabled ||
+    props.activeLayerId === 'statistical_borders' ||
+    (props.activeLayerId && props.activeLayerId.includes('border')) ||
+    map_modes.find((arg0_m) => arg0_m.id === 'historical_borders')?.active
+  )
+
+  let historical_borders_result = useHistoricalBorders(
+    props.activeLayerId,
+    timeline_year || 1950,
+    is_historical_borders_active
+  )
+
   //Dismiss city hover tooltip when cities overlay is disabled or mode changes
   useEffect(() => {
     set_hovered_city(null)
     set_hovered_city_pos(null)
   }, [stadester_config?.enabled, props.activeLayerId, map_modes, projection])
+
+  useEffect(() => {
+    if (!selected_countries || selected_countries.length === 0) {
+      if (!selected_country)
+        set_selected_historical_feature(null)
+    }
+  }, [selected_countries, selected_country])
 
   useEffect(() => {
     let updateClearance = () => {
@@ -456,6 +492,12 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
     return paths_array
   }, [projection])
 
+  let effective_country_features = useMemo(() => {
+    if (is_historical_borders_active && historical_borders_result.bordersData?.features && historical_borders_result.bordersData.features.length > 0)
+      return historical_borders_result.bordersData.features as unknown as CountryFeature[]
+    return country_features
+  }, [is_historical_borders_active, historical_borders_result.bordersData, country_features])
+
   sample_raster_at = useCallback(
     (coordX: number, coordY: number): InspectionData | null => {
       return sampleRasterAt(
@@ -463,12 +505,12 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
         coordY,
         raster,
         projection,
-        country_features,
-        Boolean(countries_mode),
+        effective_country_features,
+        Boolean(countries_mode || is_historical_borders_active),
         last_country_ref.current
       )
     },
-    [raster, country_features, projection, countries_mode]
+    [raster, effective_country_features, projection, countries_mode, is_historical_borders_active]
   )
 
   handle_click = useCallback(
@@ -476,6 +518,23 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
       // Guard clauses: if a city or higher z-index overlay was clicked, intercept and do not click the country behind it
       if (info.layer?.id?.includes('stadester') || (info.object && info.object.coords))
         return
+
+      if (info.layer?.id?.includes('historical-borders') || (info.object && (info.object.properties?.gwcode !== undefined || info.object.properties?.keyframes !== undefined))) {
+        let hist_feat = info.object as HistoricalBorderFeature
+        set_selected_historical_feature(hist_feat)
+        if (info.coordinate) {
+          set_selected_historical_anchor_coord([info.coordinate[0], info.coordinate[1]])
+        }
+        if (info.x !== undefined && info.y !== undefined) {
+          set_selected_historical_anchor_screen({ x: info.x, y: info.y })
+        }
+        if (on_toggle_country) {
+          on_toggle_country(hist_feat as unknown as CountryFeature)
+        } else if (on_select_country) {
+          on_select_country(hist_feat as unknown as CountryFeature)
+        }
+        return
+      }
 
       let insp: InspectionData | null
       let x_coord: number
@@ -537,20 +596,26 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
         if (cur_info.x !== undefined && cur_info.y !== undefined)
           set_cursor_pos({ x: cur_info.x, y: cur_info.y })
 
+        if (cur_info.layer?.id?.includes('historical-borders') || (cur_info.object && (cur_info.object.properties?.gwcode !== undefined || cur_info.object.properties?.keyframes !== undefined))) {
+          set_hovered_historical_feature(cur_info.object || null)
+        } else {
+          set_hovered_historical_feature(null)
+        }
+
         if (on_inspect)
           on_inspect(insp)
 
-        if (countries_mode && insp && country_features.length > 0 && on_hover_country) {
+        if ((countries_mode || is_historical_borders_active) && insp && effective_country_features.length > 0 && on_hover_country) {
           let next_code = insp.countryName
           if (last_hovered_country_code_ref.current !== next_code) {
             last_hovered_country_code_ref.current = next_code
-            let local_country = findCountryAtLngLat(insp.lng, insp.lat, country_features)
+            let local_country = findCountryAtLngLat(insp.lng, insp.lat, effective_country_features)
             on_hover_country(local_country)
           }
         }
       })
     },
-    [sample_raster_at, on_inspect, countries_mode, country_features, on_hover_country, set_inspect_data, set_cursor_pos]
+    [sample_raster_at, on_inspect, countries_mode, is_historical_borders_active, effective_country_features, on_hover_country, set_inspect_data, set_cursor_pos]
   )
 
   handle_double_click = useCallback(() => {
@@ -738,6 +803,28 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
     stadesterConfig: stadester_config,
     stadesterLabels: worker_result.labels,
     stadesterPoints: worker_result.points,
+    historicalBordersConfig: historical_borders_config,
+    historicalBordersData: is_historical_borders_active ? historical_borders_result.bordersData : null,
+    selectedHistoricalFeature: selected_historical_feature,
+    hoveredHistoricalFeature: hovered_historical_feature,
+    onSelectHistoricalFeature: (feat, coord, x, y) => {
+      set_selected_historical_feature(feat)
+      if (coord) {
+        set_selected_historical_anchor_coord([coord[0], coord[1]])
+      }
+      if (x !== undefined && y !== undefined) {
+        set_selected_historical_anchor_screen({ x, y })
+      }
+      if (on_toggle_country) {
+        on_toggle_country(feat as unknown as CountryFeature)
+      } else if (on_select_country) {
+        on_select_country(feat as unknown as CountryFeature)
+      }
+    },
+    onHoverHistoricalFeature: (feat) => {
+      set_hovered_historical_feature(feat)
+    },
+    timelineYear: timeline_year || 1950,
     viewState: proj_view_states[projection],
   })
 
@@ -780,6 +867,36 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
     }
     return null
   }, [selected_city, projection, proj_view_states[projection]])
+
+  //Compute screen anchor coordinates for selected historical borders panel
+  let selected_historical_anchor = useMemo(() => {
+    if (!selected_historical_feature || !deck_ref.current)
+      return selected_historical_anchor_screen || null
+    if (!selected_historical_anchor_coord)
+      return selected_historical_anchor_screen || null
+    try {
+      let vp = deck_ref.current.deck?.getViewports?.()[0]
+      if (!vp)
+        return selected_historical_anchor_screen || null
+      let [c_lon, c_lat] = selected_historical_anchor_coord
+      let px = c_lon
+      let py = c_lat
+      if (projection === 'EqualEarth') {
+        let proj = projectEqualEarth(c_lon, c_lat)
+        px = proj[0]
+        py = proj[1]
+      } else if (projection === 'Globe') {
+        if (!isGlobePointVisible(c_lon, c_lat, proj_view_states.Globe, 0.02))
+          return null
+      }
+      let projected = vp.project([px, py])
+      if (projected && projected.length >= 2)
+        return { x: projected[0], y: projected[1] }
+    } catch {
+      // Ignore projection errors
+    }
+    return selected_historical_anchor_screen || null
+  }, [selected_historical_feature, selected_historical_anchor_coord, selected_historical_anchor_screen, projection, proj_view_states[projection]])
 
   //Return statement
   return (
@@ -831,6 +948,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
           activeLayer={active_layer}
           activeVariableSelectors={props.activeVariableSelectors}
           hoveredCity={hovered_city}
+          hoveredHistoricalFeature={hovered_historical_feature}
           info={inspect_data}
           pos={cursor_pos || hovered_city_pos}
           stadesterConfig={stadester_config}
@@ -844,6 +962,36 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
           city={selected_city}
           currentYear={timeline_year || 2025}
           onClose={on_close_city_details || (() => {})}
+        />
+      )}
+
+      {/* Historical Country Details Panel */}
+      {ui_visible && selected_historical_feature && (
+        <HistoricalBorderDetailsPanel
+          anchorPos={selected_historical_anchor}
+          countryStats={country_stats}
+          currentYear={timeline_year || 1950}
+          feature={selected_historical_feature}
+          isCalculatingStats={is_calculating_stats}
+          onClose={() => {
+            set_selected_historical_feature(null)
+            set_selected_historical_anchor_coord(null)
+            set_selected_historical_anchor_screen(null)
+            if (on_clear_countries) {
+              on_clear_countries()
+            } else if (on_select_country) {
+              on_select_country(null)
+            }
+          }}
+          onJumpToYear={(yr) => {
+            if (props.onChangeYear)
+              props.onChangeYear(yr)
+          }}
+          onOpenAnalytics={() => {
+            if (!analytics_open && on_toggle_analytics)
+              on_toggle_analytics()
+          }}
+          sidebarWidth={sidebar_width}
         />
       )}
 
@@ -944,6 +1092,8 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
           countriesMode={Boolean(countries_mode)}
           countryStats={country_stats}
           heightmapConfig={heightmap_config}
+          historicalBordersConfig={historical_borders_config}
+          setHistoricalBordersConfig={set_historical_borders_config}
           isCalculatingStats={is_calculating_stats}
           isLoadingLayers={props.isLoadingLayers}
           layers={props.dataLayers}

@@ -33,6 +33,13 @@
       active: false,
       controlDescription: "High-value circle sizing with equal-area scaling",
     },
+    {
+      id: "historical_borders",
+      label: "Historical Borders",
+      description: "Temporally sliced historical borders from CShapes-2.0 and Svea atlas.naissance",
+      active: false,
+      controlDescription: "Display historical country boundaries and keyframe timelines",
+    },
   ],
   // Control shortcut descriptions
   controlsFooter: [

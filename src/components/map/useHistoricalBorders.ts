@@ -1,0 +1,134 @@
+import { useState, useEffect, useRef } from 'react'
+import type { HistoricalBorderFeature, HistoricalBordersResponse } from '@/server/atlasBordersService'
+
+export interface HistoricalBordersHookResult {
+  bordersData: {
+    features: HistoricalBorderFeature[]
+    type: 'FeatureCollection'
+  } | null
+  domain: [number, number] | null
+  error: string | null
+  isLoading: boolean
+  source: 'cshapes' | 'naissance' | null
+  year: number
+}
+
+let client_borders_cache = new Map<number, HistoricalBordersResponse>()
+
+/**
+ * Hook to asynchronously fetch and cache historical borders from CShapes-2.0 and atlas.naissance.
+ *
+ * @param {string | null} [arg0_active_layer_id]
+ * @param {number} arg1_timeline_year
+ * @param {boolean} [arg2_enabled=false]
+ *
+ * @returns {HistoricalBordersHookResult}
+ */
+export const useHistoricalBorders = function (
+  arg0_active_layer_id?: string | null,
+  arg1_timeline_year: number = 1950,
+  arg2_enabled: boolean = false
+): HistoricalBordersHookResult {
+  //Convert from parameters
+  let active_layer_id = arg0_active_layer_id
+  let enabled = arg2_enabled
+  let timeline_year = arg1_timeline_year
+
+  //Declare local instance variables
+  let abort_controller_ref = useRef<AbortController | null>(null)
+  let borders_data: { features: HistoricalBorderFeature[]; type: 'FeatureCollection' } | null
+  let domain: [number, number] | null
+  let error: string | null
+  let is_active: boolean
+  let is_loading: boolean
+  let set_borders_data: React.Dispatch<React.SetStateAction<{ features: HistoricalBorderFeature[]; type: 'FeatureCollection' } | null>>
+  let set_domain: React.Dispatch<React.SetStateAction<[number, number] | null>>
+  let set_error: React.Dispatch<React.SetStateAction<string | null>>
+  let set_is_loading: React.Dispatch<React.SetStateAction<boolean>>
+  let set_source: React.Dispatch<React.SetStateAction<'cshapes' | 'naissance' | null>>
+  let source: 'cshapes' | 'naissance' | null
+  let target_year = Math.round(timeline_year)
+
+  //Function body
+  ;[borders_data, set_borders_data] = useState<{ features: HistoricalBorderFeature[]; type: 'FeatureCollection' } | null>(null)
+  ;[domain, set_domain] = useState<[number, number] | null>(null)
+  ;[error, set_error] = useState<string | null>(null)
+  ;[is_loading, set_is_loading] = useState<boolean>(false)
+  ;[source, set_source] = useState<'cshapes' | 'naissance' | null>(null)
+
+  is_active = enabled || active_layer_id === 'statistical_borders' || Boolean(active_layer_id && active_layer_id.includes('border'))
+
+  useEffect(() => {
+    //Guard clauses
+    if (!is_active) {
+      set_borders_data(null)
+      set_is_loading(false)
+      set_error(null)
+      return
+    }
+
+    //Check client cache
+    if (client_borders_cache.has(target_year)) {
+      let cached = client_borders_cache.get(target_year)!
+      set_borders_data({
+        features: cached.features,
+        type: 'FeatureCollection',
+      })
+      set_domain(cached.domain)
+      set_source(cached.source)
+      set_is_loading(false)
+      set_error(null)
+      return
+    }
+
+    //Abort any pending in-flight request
+    if (abort_controller_ref.current)
+      abort_controller_ref.current.abort()
+
+    let controller = new AbortController()
+    abort_controller_ref.current = controller
+    set_is_loading(true)
+    set_error(null)
+
+    //Fetch sliced borders from backend API
+    fetch(`/api/atlas/borders?year=${target_year}`, {
+      signal: controller.signal,
+    })
+      .then((arg0_res) => {
+        if (!arg0_res.ok)
+          throw new Error(`HTTP error ${arg0_res.status}`)
+        return arg0_res.json()
+      })
+      .then((arg0_json: HistoricalBordersResponse) => {
+        client_borders_cache.set(target_year, arg0_json)
+        set_borders_data({
+          features: arg0_json.features,
+          type: 'FeatureCollection',
+        })
+        set_domain(arg0_json.domain)
+        set_source(arg0_json.source)
+        set_is_loading(false)
+      })
+      .catch((arg0_err: any) => {
+        if (arg0_err?.name === 'AbortError')
+          return
+        console.error('[useHistoricalBorders] Failed to load borders:', arg0_err)
+        set_error(arg0_err?.message || 'Error loading historical borders')
+        set_is_loading(false)
+      })
+
+    return () => {
+      controller.abort()
+    }
+  }, [is_active, target_year])
+
+  //Return statement
+  return {
+    bordersData: borders_data,
+    domain,
+    error,
+    isLoading: is_loading,
+    source,
+    year: target_year,
+  }
+}

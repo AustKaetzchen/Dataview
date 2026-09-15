@@ -14,6 +14,8 @@ import {
   MapModeId,
   CityPoint,
   CityFullRecord,
+  HistoricalBordersConfig,
+  DEFAULT_HISTORICAL_BORDERS_CONFIG,
   StadesterConfig,
 } from './lib/geopng/types'
 import { decodeRawGeoPngBufferAsync, computeRasterDifference } from './lib/geopng/decoder'
@@ -138,6 +140,7 @@ export const App: React.FC = function () {
     showLabels: true,
   })
   let [selected_city_key, set_selected_city_key] = useState<string | null>(null)
+  let [historical_borders_config, set_historical_borders_config] = useState<HistoricalBordersConfig>(DEFAULT_HISTORICAL_BORDERS_CONFIG)
 
   let [map_modes, set_map_modes] = useState<MapModeItem[]>(() =>
     MAPMODES_CONFIG.modes.map((arg0_m) => ({
@@ -433,6 +436,13 @@ export const App: React.FC = function () {
     let layer_id = arg0_layer_id
     if (layer_id === 'lfpr')
       layer_id = 'lfpr.lfpr_female'
+    if (layer_id === 'statistical_borders') {
+      set_historical_borders_config((arg0_prev) => ({
+        ...arg0_prev,
+        enabled: !arg0_prev.enabled,
+      }))
+      return
+    }
     set_active_layer_id(layer_id)
     let target = layers[layer_id]
     if (target?.encoding)
@@ -701,8 +711,22 @@ export const App: React.FC = function () {
     )
   }, [])
 
+  useEffect(() => {
+    set_map_modes((arg0_prev) =>
+      arg0_prev.map((arg0_m) =>
+        arg0_m.id === 'historical_borders' ? { ...arg0_m, active: historical_borders_config.enabled } : arg0_m
+      )
+    )
+  }, [historical_borders_config.enabled])
+
   let handle_toggle_map_mode = useCallback((arg0_id: MapModeId) => {
     let id = arg0_id
+    if (id === 'historical_borders') {
+      set_historical_borders_config((arg0_prev) => ({
+        ...arg0_prev,
+        enabled: !arg0_prev.enabled,
+      }))
+    }
     set_map_modes((arg0_prev) => {
       let circle_active: boolean
       let country_active: boolean
@@ -844,6 +868,8 @@ export const App: React.FC = function () {
           setHeightmapConfig={set_heightmap_config}
           circleOverlayConfig={circle_overlay_config}
           setCircleOverlayConfig={set_circle_overlay_config}
+          historicalBordersConfig={historical_borders_config}
+          setHistoricalBordersConfig={set_historical_borders_config}
           analyticsOpen={analytics_open}
           onToggleAnalytics={() => set_analytics_open((arg0_prev) => !arg0_prev)}
           selectedCountry={selected_countries[0] || null}
@@ -889,6 +915,7 @@ export const App: React.FC = function () {
           stadesterConfig={stadester_config}
           timelineYear={Math.round(timeline_year)}
           userRole={user_role}
+          onChangeYear={set_timeline_year}
         />
 
         {/* ECharts Analytical View Panel (Top Right) */}
@@ -917,6 +944,7 @@ export const App: React.FC = function () {
           onSelectCity={(arg0_key) => {
             set_selected_city_key(arg0_key)
           }}
+          onChangeYear={set_timeline_year}
           stadesterDataset={stadester_config.dataset}
         />
       </div>

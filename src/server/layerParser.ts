@@ -18,6 +18,12 @@ export interface LayerVariableSelector {
   options: Record<string, LayerVariableOption>
 }
 
+export interface LayerFilepathItem {
+  domain: [number, number]
+  path: string
+  type: string
+}
+
 export interface ParsedDataLayer {
   available_years: number[]
   can_be_uninhabited?: boolean
@@ -26,6 +32,7 @@ export interface ParsedDataLayer {
   display_options?: Record<string, any>
   encoding: 'float32' | 'int32'
   filepath_template: string
+  filepaths?: LayerFilepathItem[]
   icon?: string
   id: string
   is_nested?: boolean
@@ -400,6 +407,10 @@ export const getLayerIcon = function (arg0_layer_id: string): string {
     return 'water_drop'
   if (id.includes('alcc') || id.includes('landuse') || id.includes('shifting'))
     return 'terrain'
+  if (id.includes('border') || id.includes('atlas'))
+    return 'flag'
+  if (id.includes('basemap'))
+    return 'map'
   return 'layers'
 }
 
@@ -450,6 +461,7 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
       'description',
       'encoding',
       'filepath',
+      'filepaths',
       'legend',
       'name',
       'permissions',
@@ -468,6 +480,7 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
         continue
 
       let has_filepath = Boolean(item.filepath)
+      let has_filepaths = Array.isArray(item.filepaths) && item.filepaths.length > 0
       let sub_keys = Object.keys(item).filter(
         (arg0_sk) =>
           typeof item[arg0_sk] === 'object' &&
@@ -476,10 +489,13 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
           !metadata_keys.includes(arg0_sk)
       )
       let has_sub_layers = sub_keys.length > 0
-      let is_vector_layer = typeof item.type === 'string' && item.type.startsWith('vector.')
+      let is_vector_layer =
+        (typeof item.type === 'string' && item.type.startsWith('vector.')) ||
+        (has_filepaths && item.filepaths.some((arg0_fp: any) => typeof arg0_fp.type === 'string' && arg0_fp.type.startsWith('vector.')))
 
-      if (has_filepath || has_sub_layers || is_vector_layer) {
+      if (has_filepath || has_filepaths || has_sub_layers || is_vector_layer) {
         //Resolve filepath template with root folders
+        let resolved_filepaths: LayerFilepathItem[] = []
         let resolved_template = item.filepath || ''
         let root_keys = Object.keys(resolved_roots)
 
@@ -489,6 +505,25 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
             resolved_template = resolved_template.replace(new RegExp(`(\\$\\{${rk}\\}|\\{${rk}\\})`, 'g'), resolved_roots[rk])
           }
           resolved_template = normaliseLayerPath(resolved_template)
+        }
+
+        if (has_filepaths) {
+          for (let f = 0; f < item.filepaths.length; f++) {
+            let fp = item.filepaths[f]
+            let resolved_fp_path = fp.path || ''
+            for (let y = 0; y < root_keys.length; y++) {
+              let rk = root_keys[y]
+              resolved_fp_path = resolved_fp_path.replace(new RegExp(`(\\$\\{${rk}\\}|\\{${rk}\\})`, 'g'), resolved_roots[rk])
+            }
+            resolved_fp_path = normaliseLayerPath(resolved_fp_path)
+            resolved_filepaths.push({
+              domain: fp.domain || [-10000, 2026],
+              path: resolved_fp_path,
+              type: fp.type || 'vector.naissance',
+            })
+          }
+          if (!resolved_template && resolved_filepaths.length > 0)
+            resolved_template = resolved_filepaths[0].path
         }
 
         //Extract variable selectors (either from variable_selectors or top-level properties)
@@ -557,6 +592,8 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
         let layer_type = 'raster'
         if (item.type) {
           layer_type = item.type
+        } else if (has_filepaths && resolved_filepaths.length > 0) {
+          layer_type = resolved_filepaths[0].type
         } else if (k.includes('professions') || k.includes('profession')) {
           layer_type = 'raster.category_profession'
         } else if (k.includes('age_sex') || item.type === 'raster.age_sex') {
@@ -567,7 +604,19 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
 
         //Scan files and discover available years using scanLayerTemplate if template exists and is raster
         let years: number[] = []
-        if (layer_type.startsWith('vector.')) {
+        if (has_filepaths && resolved_filepaths.length > 0) {
+          let min_domain = Infinity
+          let max_domain = -Infinity
+          for (let f = 0; f < resolved_filepaths.length; f++) {
+            let dom = resolved_filepaths[f].domain
+            if (dom[0] < min_domain)
+              min_domain = dom[0]
+            if (dom[1] > max_domain)
+              max_domain = dom[1]
+          }
+          years = [min_domain, max_domain]
+          file_cache.set(k, resolved_template)
+        } else if (layer_type.startsWith('vector.')) {
           years = [-10000, 2025]
           if (has_filepath)
             file_cache.set(k, resolved_template)
@@ -639,6 +688,7 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
           display_options: item.display_options || parsed_json.display_options,
           encoding: item.encoding || 'float32',
           filepath_template: resolved_template,
+          filepaths: has_filepaths ? resolved_filepaths : undefined,
           icon: getLayerIcon(k),
           id: k,
           legend: item.legend,

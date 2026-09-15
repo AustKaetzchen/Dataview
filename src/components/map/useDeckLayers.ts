@@ -22,8 +22,11 @@ import {
   HeightmapConfig,
   CircleOverlayConfig,
   CityPoint,
+  HistoricalBordersConfig,
   StadesterConfig,
 } from '@/lib/geopng/types'
+import { createHistoricalBordersDeckLayer } from './useHistoricalBordersLayer'
+import type { HistoricalBorderFeature } from '@/server/atlasBordersService'
 import {
   isGlobePointVisible,
   projectGlobeCoordinates,
@@ -222,6 +225,16 @@ export interface UseDeckLayersParams {
   hoveredCity?: CityPoint | null
   onSelectCity?: (city: CityPoint) => void
   onHoverCity?: (city: CityPoint | null, x?: number, y?: number) => void
+  historicalBordersConfig?: HistoricalBordersConfig
+  historicalBordersData?: {
+    features: HistoricalBorderFeature[]
+    type: 'FeatureCollection'
+  } | null
+  selectedHistoricalFeature?: HistoricalBorderFeature | null
+  hoveredHistoricalFeature?: HistoricalBorderFeature | null
+  onSelectHistoricalFeature?: (arg0_feature: HistoricalBorderFeature, arg1_coord?: [number, number], arg2_x?: number, arg3_y?: number) => void
+  onHoverHistoricalFeature?: (arg0_feature: HistoricalBorderFeature | null, arg1_x?: number, arg2_y?: number) => void
+  timelineYear?: number
   viewport?: any
   viewState?: any
 }
@@ -664,7 +677,21 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
       )
     }
 
-    //8. Stadestér Historical Cities
+    //8. Historical Statistical Borders (CShapes-2.0 & atlas.naissance)
+    let historical_borders_layer = createHistoricalBordersDeckLayer({
+      config: options.historicalBordersConfig,
+      historicalBordersData: options.historicalBordersData,
+      hoveredHistoricalId: options.hoveredHistoricalFeature?.id || options.hoveredHistoricalFeature?.properties?.id,
+      onHoverHistoricalFeature: options.onHoverHistoricalFeature,
+      onSelectHistoricalFeature: options.onSelectHistoricalFeature,
+      projection,
+      selectedHistoricalId: options.selectedHistoricalFeature?.id || options.selectedHistoricalFeature?.properties?.id,
+      timelineYear: options.timelineYear || 1950,
+    })
+    if (historical_borders_layer)
+      layers_array.push(historical_borders_layer)
+
+    //9. Stadestér Historical Cities
     let effective_points = (options.stadesterPoints && options.stadesterPoints.length > 0)
       ? options.stadesterPoints
       : stadester_points_data
@@ -939,6 +966,13 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
     options.selectedCityKey,
     options.onSelectCity,
     options.onHoverCity,
+    options.historicalBordersData,
+    options.historicalBordersConfig,
+    options.selectedHistoricalFeature,
+    options.hoveredHistoricalFeature,
+    options.onSelectHistoricalFeature,
+    options.onHoverHistoricalFeature,
+    options.timelineYear,
     options.viewState,
   ])
 }

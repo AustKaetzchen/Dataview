@@ -1,6 +1,6 @@
 import React from 'react'
 import { ParsedDataLayer } from '@/server/layerParser'
-import { StadesterConfig } from '@/lib/geopng/types'
+import { HistoricalBordersConfig, StadesterConfig } from '@/lib/geopng/types'
 import { Icon } from '@/components/ui/icon'
 import { DataLayerNode } from './DataLayerNode'
 
@@ -10,10 +10,12 @@ export interface DatasetFolderNodeProps {
   expandedNodes: Record<string, boolean>
   folderLayers: ParsedDataLayer[]
   folderName: string
+  historicalBordersConfig?: HistoricalBordersConfig
   isLayerAccessible: (arg0_layer: ParsedDataLayer) => boolean
   onChangeVariableSelector?: (arg0_key: string, arg1_option: string | string[]) => void
   onSelectLayer?: (arg0_layer_id: string) => void
   searchQuery: string
+  setHistoricalBordersConfig?: React.Dispatch<React.SetStateAction<HistoricalBordersConfig>>
   setStadesterConfig?: React.Dispatch<React.SetStateAction<StadesterConfig>>
   stadesterCityCount?: number
   stadesterConfig?: StadesterConfig
@@ -34,10 +36,12 @@ export const DatasetFolderNode: React.FC<DatasetFolderNodeProps> = function (arg
   let expanded_nodes = arg0_props.expandedNodes
   let folder_layers = arg0_props.folderLayers
   let folder_name = arg0_props.folderName
+  let historical_borders_config = arg0_props.historicalBordersConfig
   let is_layer_accessible = arg0_props.isLayerAccessible
   let on_change_variable_selector = arg0_props.onChangeVariableSelector
   let on_select_layer = arg0_props.onSelectLayer
   let search_query = arg0_props.searchQuery
+  let set_historical_borders_config = arg0_props.setHistoricalBordersConfig
   let set_stadester_config = arg0_props.setStadesterConfig
   let stadester_city_count = arg0_props.stadesterCityCount
   let stadester_config = arg0_props.stadesterConfig
@@ -63,7 +67,7 @@ export const DatasetFolderNode: React.FC<DatasetFolderNodeProps> = function (arg
             name={is_open ? 'folder_open' : 'folder'}
             className="text-primary text-sm shrink-0"
           />
-          <span className="text-xs font-bold uppercase tracking-wider text-foreground truncate">
+          <span className="text-xs font-bold uppercase tracking-wide text-foreground truncate">
             {folder_name}
           </span>
         </div>
@@ -87,11 +91,13 @@ export const DatasetFolderNode: React.FC<DatasetFolderNodeProps> = function (arg
               activeVariableSelectors={active_variable_selectors}
               depth={0}
               expandedNodes={expanded_nodes}
+              historicalBordersConfig={historical_borders_config}
               isLayerAccessible={is_layer_accessible}
               layer={arg0_layer}
               onChangeVariableSelector={on_change_variable_selector}
               onSelectLayer={on_select_layer}
               searchQuery={search_query}
+              setHistoricalBordersConfig={set_historical_borders_config}
               setStadesterConfig={set_stadester_config}
               stadesterCityCount={stadester_city_count}
               stadesterConfig={stadester_config}

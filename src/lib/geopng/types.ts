@@ -71,7 +71,7 @@ export interface HeightmapConfig {
   blendWeight?: number // 0.0 (pure linear) to 1.0 (pure percentile), defaults to 0.5
 }
 
-export type MapModeId = 'default' | 'country_analysis' | 'spike_map' | 'circle_sizing'
+export type MapModeId = 'default' | 'country_analysis' | 'spike_map' | 'circle_sizing' | 'historical_borders'
 
 export interface MapModeItem {
   id: MapModeId
@@ -147,6 +147,20 @@ export interface CityFullRecord {
   region?: string
   rni?: Record<string, number>
   type?: string
+}
+
+export interface HistoricalBordersConfig {
+  enabled: boolean
+  fillOpacity: number
+  strokeColor: string
+  strokeWidth: number
+}
+
+export const DEFAULT_HISTORICAL_BORDERS_CONFIG: HistoricalBordersConfig = {
+  enabled: false,
+  fillOpacity: 0.0,
+  strokeColor: '#d4af37',
+  strokeWidth: 1.25,
 }
 
 export interface CircleOverlayConfig {

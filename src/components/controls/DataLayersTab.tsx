@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useCallback } from 'react'
 import { ParsedDataLayer } from '@/server/layerParser'
 import { Icon } from '@/components/ui/icon'
-import { StadesterConfig } from '@/lib/geopng/types'
+import { HistoricalBordersConfig, StadesterConfig } from '@/lib/geopng/types'
+import { HistoricalBordersSettings } from '@/components/map/mapmodes/HistoricalBordersSettings'
 import { StadesterSettings } from '@/components/map/mapmodes/StadesterSettings'
 
 export type UserRole = 'developer' | 'privileged' | 'default'
@@ -9,8 +10,10 @@ export type UserRole = 'developer' | 'privileged' | 'default'
 export interface DataLayersTabProps {
   activeLayerId: string | null
   activeVariableSelectors: Record<string, string | string[]>
+  historicalBordersConfig?: HistoricalBordersConfig
   isLoadingLayers?: boolean
   layers: Record<string, ParsedDataLayer>
+  onChangeHistoricalBordersConfig?: React.Dispatch<React.SetStateAction<HistoricalBordersConfig>>
   onChangeStadesterConfig?: React.Dispatch<React.SetStateAction<StadesterConfig>>
   onChangeUserRole?: (arg0_role: UserRole) => void
   onChangeVariableSelector: (arg0_key: string, arg1_option: string | string[]) => void
@@ -34,8 +37,10 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
   let {
     activeLayerId: active_layer_id,
     activeVariableSelectors: active_variable_selectors,
+    historicalBordersConfig: historical_borders_config,
     isLoadingLayers: is_loading_layers = false,
     layers,
+    onChangeHistoricalBordersConfig: on_change_historical_borders_config,
     onChangeStadesterConfig: on_change_stadester_config,
     onChangeUserRole: on_change_user_role,
     onChangeVariableSelector: on_change_variable_selector,
@@ -254,9 +259,14 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
           let is_parent_of_active = Boolean(active_layer && active_layer.parent_id === arg0_layer.id)
           let is_highlighted = is_exact_active || is_parent_of_active
           let years_count = arg0_layer.available_years ? arg0_layer.available_years.length : 0
-          let is_vector_overlay = arg0_layer.type === 'vector.points' || arg0_layer.id.includes('stadester')
+          let is_borders = arg0_layer.id === 'statistical_borders' || arg0_layer.type === 'vector.polygon' || arg0_layer.id.includes('borders')
           let is_stadester = arg0_layer.id.includes('stadester')
-          let is_overlay_active = is_stadester ? Boolean(stadester_config?.enabled) : false
+          let is_vector_overlay = arg0_layer.type === 'vector.points' || is_stadester || is_borders
+          let is_overlay_active = is_borders
+            ? Boolean(historical_borders_config?.enabled)
+            : is_stadester
+              ? Boolean(stadester_config?.enabled)
+              : false
 
           return (
             <div
@@ -271,7 +281,12 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
                 type="button"
                 onClick={() => {
                   if (accessible) {
-                    if (is_vector_overlay && is_stadester && on_change_stadester_config) {
+                    if (is_borders && on_change_historical_borders_config) {
+                      on_change_historical_borders_config((arg0_prev) => ({
+                        ...arg0_prev,
+                        enabled: !arg0_prev.enabled,
+                      }))
+                    } else if (is_vector_overlay && is_stadester && on_change_stadester_config) {
                       on_change_stadester_config((arg0_prev) => ({
                         ...arg0_prev,
                         enabled: !arg0_prev.enabled,
@@ -288,7 +303,7 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
               >
                 <div className="flex items-start gap-2 min-w-0">
                   <Icon
-                    name={arg0_layer.icon || 'layers'}
+                    name={arg0_layer.icon || (is_borders ? 'flag' : 'layers')}
                     className={`mt-0.5 text-sm shrink-0 ${is_exact_active || (is_vector_overlay && is_overlay_active) ? 'text-primary' : 'text-muted-foreground'}`}
                   />
                   <div className="min-w-0">
@@ -334,7 +349,12 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
                         type="checkbox"
                         checked={is_overlay_active}
                         onChange={() => {
-                          if (is_stadester && on_change_stadester_config) {
+                          if (is_borders && on_change_historical_borders_config) {
+                            on_change_historical_borders_config((arg0_prev) => ({
+                              ...arg0_prev,
+                              enabled: !arg0_prev.enabled,
+                            }))
+                          } else if (is_stadester && on_change_stadester_config) {
                             on_change_stadester_config((arg0_prev) => ({
                               ...arg0_prev,
                               enabled: !arg0_prev.enabled,
@@ -354,6 +374,16 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
                   )}
                 </div>
               </button>
+
+              {/* Historical Borders Inline Configuration */}
+              {is_borders && is_overlay_active && historical_borders_config && on_change_historical_borders_config && (
+                <div className="px-3 pb-3 pt-1 border-t border-border/40 bg-card/60">
+                  <HistoricalBordersSettings
+                    config={historical_borders_config}
+                    onChangeConfig={on_change_historical_borders_config}
+                  />
+                </div>
+              )}
 
               {/* Stadestér Inline Configuration */}
               {is_stadester && is_overlay_active && stadester_config && on_change_stadester_config && (

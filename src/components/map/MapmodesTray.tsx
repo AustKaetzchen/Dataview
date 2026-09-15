@@ -4,6 +4,7 @@ import {
   MapModeId,
   HeightmapConfig,
   CircleOverlayConfig,
+  HistoricalBordersConfig,
   StadesterConfig,
 } from '@/lib/geopng/types'
 import { CountryFeature, CountryStats } from '@/lib/geopng/polygonBinning'
@@ -20,6 +21,7 @@ import {
 } from './mapmodes/SpikeMapSettings'
 import { CircleOverlaySettings } from './mapmodes/CircleOverlaySettings'
 import { DatasetFolderNode } from './mapmodes/DatasetFolderNode'
+import { HistoricalBordersSettings } from './mapmodes/HistoricalBordersSettings'
 import { ParsedDataLayer } from '@/server/layerParser'
 
 export {
@@ -40,6 +42,7 @@ export interface MapmodesTrayProps {
   countriesMode: boolean
   countryStats?: CountryStats | null
   heightmapConfig: HeightmapConfig
+  historicalBordersConfig?: HistoricalBordersConfig
   isCalculatingStats?: boolean
   isLoadingLayers?: boolean
   layers?: Record<string, ParsedDataLayer>
@@ -55,6 +58,7 @@ export interface MapmodesTrayProps {
   selectedCountries: CountryFeature[]
   setCircleOverlayConfig: React.Dispatch<React.SetStateAction<CircleOverlayConfig>>
   setHeightmapConfig: React.Dispatch<React.SetStateAction<HeightmapConfig>>
+  setHistoricalBordersConfig?: React.Dispatch<React.SetStateAction<HistoricalBordersConfig>>
   setStadesterConfig?: React.Dispatch<React.SetStateAction<StadesterConfig>>
   settingsOpen?: boolean
   stadesterCityCount?: number
@@ -83,6 +87,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (ar
     countriesMode: countries_mode,
     countryStats: country_stats,
     heightmapConfig: heightmap_config,
+    historicalBordersConfig: historical_borders_config,
     isCalculatingStats: is_calculating_stats,
     isLoadingLayers: is_loading_layers = false,
     layers = {},
@@ -98,6 +103,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (ar
     selectedCountries: selected_countries,
     setCircleOverlayConfig: set_circle_overlay_config,
     setHeightmapConfig: set_heightmap_config,
+    setHistoricalBordersConfig: set_historical_borders_config,
     setStadesterConfig: set_stadester_config,
     settingsOpen: settings_open = false,
     stadesterCityCount: stadester_city_count = 0,
@@ -450,9 +456,11 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (ar
                         folderLayers={arg0_folder_layers}
                         folderName={arg0_folder_name}
                         isLayerAccessible={is_layer_accessible}
+                        historicalBordersConfig={historical_borders_config}
                         onChangeVariableSelector={on_change_variable_selector}
                         onSelectLayer={on_select_layer}
                         searchQuery={search_query}
+                        setHistoricalBordersConfig={set_historical_borders_config}
                         setStadesterConfig={set_stadester_config}
                         stadesterCityCount={stadester_city_count}
                         stadesterConfig={stadester_config}
@@ -547,6 +555,15 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (ar
                               <CircleOverlaySettings
                                 circleOverlayConfig={circle_overlay_config}
                                 setCircleOverlayConfig={set_circle_overlay_config}
+                              />
+                            </div>
+                          )}
+
+                          {is_active && arg0_mode.id === 'historical_borders' && historical_borders_config && set_historical_borders_config && (
+                            <div className="mt-0.5 p-1 border-t border-border/60 bg-card/40 space-y-1 text-xs">
+                              <HistoricalBordersSettings
+                                config={historical_borders_config}
+                                onChangeConfig={set_historical_borders_config}
                               />
                             </div>
                           )}

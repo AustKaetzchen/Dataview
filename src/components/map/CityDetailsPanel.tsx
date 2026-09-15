@@ -79,13 +79,9 @@ export const CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_
   //Function body
   ;[active_metric_tab, set_active_metric_tab] = useState<'population' | 'area' | 'density'>('population')
 
-  //Guard clauses
-  if (!city)
-    return null
-
   full_record = city ? (city as CityFullRecord) : null
   formatted_current_year = UfDate.formatYear(current_year)
-  display_city_name = formatPanelCityName(city.name)
+  display_city_name = city ? formatPanelCityName(city.name) : ''
 
   //Extract population for current year (safely handle primitive vs dictionary)
   pop_at_year = 0
@@ -380,6 +376,10 @@ export const CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_
       },
     }
   }, [timeseries_data, active_metric_tab, current_year, city])
+
+  //Guard clauses
+  if (!city)
+    return null
 
   //Anchored positioning calculations
   panel_style = {}
