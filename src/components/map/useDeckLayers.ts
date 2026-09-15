@@ -39,13 +39,52 @@ let REGION_COLOR_MAP: Record<string, string> = {
   africa: '#f97316',
   central_asia: '#a855f7',
   eastasia: '#ef4444',
+  eastern_europe_and_russia: '#3b82f6',
   europe: '#6366f1',
+  indian_subcontinent: '#ec4899',
   latin_america: '#10b981',
-  middle_east: '#eab308',
+  maghreb_egypt: '#eab308',
+  middle_east: '#d97706',
   northern_america: '#0ea5e9',
   oceania: '#14b8a6',
   south_asia: '#ec4899',
   southeast_asia: '#8b5cf6',
+  sub_saharan_africa: '#f97316',
+}
+
+function resolveRegionColorHex (arg0_region?: string, arg1_coords?: [number, number]): string {
+  //Convert from parameters
+  let coords = arg1_coords
+  let reg = (arg0_region || '').toLowerCase().trim()
+
+  //Guard clauses
+  if (reg && REGION_COLOR_MAP[reg])
+    return REGION_COLOR_MAP[reg]
+
+  if (coords && Array.isArray(coords) && coords.length >= 2) {
+    let lat = coords[0]
+    let lon = coords[1]
+
+    if (lat < -10 && lon > 110)
+      return REGION_COLOR_MAP.oceania
+    if (lat > 10 && lon > 60 && lon < 95)
+      return REGION_COLOR_MAP.indian_subcontinent
+    if (lat > 0 && lon >= 95 && lon < 150)
+      return REGION_COLOR_MAP.southeast_asia
+    if (lat > 20 && lon >= 100 && lon <= 145)
+      return REGION_COLOR_MAP.eastasia
+    if (lat > 35 && lon > -15 && lon < 45)
+      return REGION_COLOR_MAP.europe
+    if (lat > -35 && lat < 38 && lon > -20 && lon < 55)
+      return REGION_COLOR_MAP.sub_saharan_africa
+    if (lat > 15 && lon > -170 && lon < -50)
+      return REGION_COLOR_MAP.northern_america
+    if (lat < 15 && lon > -120 && lon < -30)
+      return REGION_COLOR_MAP.latin_america
+  }
+
+  //Return statement
+  return '#8b5cf6'
 }
 
 function hexToRgb (arg0_hex: string): [number, number, number] {
@@ -213,7 +252,7 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
       }
 
       // Equal-area pixel radius scaled by sqrt(population) with guaranteed minimum bubble size for smaller settlements:
-      let min_radius = 4.5 * b_scale
+      let min_radius = 3.25 * b_scale
       let pop_radius = Math.sqrt(Math.max(0, city.population)) * 0.0115 * b_scale
       let pixel_radius = Math.max(min_radius, Math.min(65.0, min_radius + pop_radius))
 
@@ -225,8 +264,7 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
         let pop_rgb = getPopRgb(city.population)
         fill_color = [pop_rgb[0], pop_rgb[1], pop_rgb[2], 220]
       } else if (color_mode === 'continent') {
-        let reg_key = city.region || ''
-        let reg_hex = REGION_COLOR_MAP[reg_key] || '#94a3b8'
+        let reg_hex = resolveRegionColorHex(city.region, [c_lat, c_lon])
         let reg_rgb = hexToRgb(reg_hex)
         fill_color = [reg_rgb[0], reg_rgb[1], reg_rgb[2], 220]
       }
@@ -635,7 +673,7 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
           stroked: is_halo,
           filled: !is_halo,
           radiusUnits: 'pixels',
-          radiusMinPixels: 2.0,
+          radiusMinPixels: 3.25,
           radiusMaxPixels: 65.0,
           coordinateSystem: (is_cartesian) ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
           pickable: true,
@@ -728,7 +766,7 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
             placed_label_boxes.push([box_x1, box_y1, box_x2, box_y2])
             visible_label_cities.push(c)
 
-            if (visible_label_cities.length >= 60)
+            if (visible_label_cities.length >= 300)
               break
           }
         }

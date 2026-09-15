@@ -3,56 +3,35 @@
     root_folders: {
         l_stad: "D:/Project 1436 - Dataview/data/stadester"
     },
-    display_options: {
-        strip_parentheses: true,
-        prefer_least_diacritics: true,
-        skip_unknown_unicode: true
-    },
-    "stadester_1.0": {
-        name: "Stadestér 1.0",
+    "stadester": {
+        name: "Cities/Settlements",
         type: "vector.points",
         unit: "Urban Population",
         icon: "location_city",
         description: [
-            "### Stadestér 1.0",
-            "A global historical database of 41,000+ cities and urban settlements from 3000BC to the present.",
+            "### Stadestér Settlements",
+            "A global historical database of 34,400+ cities and urban settlements from 3300BC to the present.",
             "Includes estimated urban populations, areas, and densities compiled from Chandler, Bairoch/Buringh, de Vries, and modern census sources."
         ],
-        filepath: "${l_stad}/stadester_1.0.json",
-        permissions: ["default"],
-        display_options: {
-            strip_parentheses: true,
-            prefer_least_diacritics: true,
-            skip_unknown_unicode: true
-        },
-        legend: {
-            colourscheme: "Plasma",
-            type: "pseudo-log",
-            modes: [
-                "population",
-                "growth",
-                "area",
-                "density",
-                "continent"
-            ]
-        }
-    },
-    "stadester_1.1": {
-        name: "Stadestér 1.1",
-        type: "vector.points",
-        unit: "Urban Population",
-        icon: "location_city",
-        description: [
-            "### Stadestér 1.1",
-            "Updated and recalibrated global urban dataset spanning 3300BC to 2025AD with 34,400+ settlements.",
-            "Features harmonised coordinates, historical aliases, area measurements, and annualised growth calculations."
-        ],
         filepath: "${l_stad}/stadester_1.1.json",
-        permissions: ["default"],
+        permissions: [
+            "default"
+        ],
         display_options: {
-            strip_parentheses: true,
+            bubble_size: 0.4,
+            color_mode: "growth",
+            dataset: "stadester_1.1",
+            filled: true,
+            growth_palette: "Rainbow",
+            halo: false,
+            label_collision: true,
+            max_cities: 4000,
+            min_pop: 0,
+            opacity: 0.7,
             prefer_least_diacritics: true,
-            skip_unknown_unicode: true
+            show_labels: true,
+            skip_unknown_unicode: true,
+            strip_parentheses: true
         },
         legend: {
             colourscheme: "Plasma",

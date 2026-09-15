@@ -23,11 +23,7 @@ export interface ParsedDataLayer {
   can_be_uninhabited?: boolean
   category?: string
   description?: string
-  display_options?: {
-    prefer_least_diacritics?: boolean
-    skip_unknown_unicode?: boolean
-    strip_parentheses?: boolean
-  }
+  display_options?: Record<string, any>
   encoding: 'float32' | 'int32'
   filepath_template: string
   icon?: string

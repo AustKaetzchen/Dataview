@@ -387,7 +387,7 @@ export const MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
                         : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground font-light'
                         }`}
                     >
-                      {p === 'Equirectangular' ? 'Equirect.' : p === 'EqualEarth' ? 'Equal Earth' : p}
+                      {p === 'Equirectangular' ? 'Equirectangular' : p === 'EqualEarth' ? 'Equal Earth' : p}
                     </button>
                   ))}
                 </div>

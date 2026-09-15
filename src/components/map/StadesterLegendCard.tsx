@@ -51,17 +51,14 @@ export const StadesterLegendCard: React.FC<StadesterLegendCardProps> = React.mem
   //Function body
   if (colour_mode === 'growth') {
     metric_title = 'Annual Population Growth Rate (%/yr)'
-    metric_subtitle = 'Logarithmic CAGR slope between keyframe settlement censuses'
     palette_label = `${growth_palette} (Heat / Cool Spectrum)`
     gradient_style = 'linear-gradient(to right, rgb(93, 96, 226), rgb(72, 156, 240), rgb(69, 207, 119), rgb(198, 219, 85), rgb(253, 224, 71), rgb(251, 146, 60), rgb(239, 68, 68), rgb(232, 121, 249))'
   } else if (colour_mode === 'population') {
     metric_title = 'Settlement Population'
-    metric_subtitle = 'Continuous logarithmic population domain (5k to 10M+)'
     palette_label = 'Logarithmic Scale (Blue to Warm Gold)'
     gradient_style = 'linear-gradient(to right, rgb(13, 8, 135), rgb(80, 18, 170), rgb(140, 41, 129), rgb(200, 72, 73), rgb(245, 125, 21), rgb(240, 249, 33))'
   } else {
     metric_title = 'World Continental Macro-Region'
-    metric_subtitle = 'Categorical grouping by global geographical region'
     palette_label = 'Continental Categorical Palette'
     gradient_style = ''
   }
@@ -87,14 +84,14 @@ export const StadesterLegendCard: React.FC<StadesterLegendCardProps> = React.mem
       <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-border/50 gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
           <Icon name="location_city" className="text-primary text-xs shrink-0" />
-          <span className="font-bold text-white text-xs truncate">Stadestér Settlements</span>
+          <span className="font-bold text-white text-xs truncate">Settlements</span>
           <span className="text-[10px] px-1 py-0.2 bg-muted text-muted-foreground border border-border shrink-0 font-mono">
             {dataset_version}
           </span>
         </div>
 
         {settlement_count !== undefined && (
-          <span className="text-[10px] px-1.5 py-0.2 bg-primary/20 text-white font-bold border border-primary/40 shrink-0 font-mono">
+          <span className="text-white text-[11px] font-mono shrink-0">
             {settlement_count.toLocaleString('de-DE')} cities
           </span>
         )}
@@ -113,11 +110,6 @@ export const StadesterLegendCard: React.FC<StadesterLegendCardProps> = React.mem
 
       {/* Colour Scheme Information & Gradient Bar */}
       <div className="space-y-1 mb-2">
-        <div className="flex items-center justify-between text-[11px]">
-          <span className="text-muted-foreground">Colour Scheme:</span>
-          <span className="font-mono text-[10px] text-primary">{palette_label}</span>
-        </div>
-
         {colour_mode === 'continent' ? (
           <div className="flex flex-wrap gap-1 pt-0.5">
             {REGION_CHIPS.map((chip) => (

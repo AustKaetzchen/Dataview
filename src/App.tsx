@@ -124,14 +124,9 @@ export const App: React.FC = function () {
     strokeWidth: 2,
   })
   let [stadester_config, set_stadester_config] = useState<StadesterConfig>({
-    bubbleSize: 1.0,
+    bubbleSize: 0.4,
     colorMode: 'growth',
     dataset: 'stadester_1.1',
-    display_options: {
-      prefer_least_diacritics: true,
-      skip_unknown_unicode: true,
-      strip_parentheses: true,
-    },
     enabled: false,
     filled: true,
     growthPalette: 'Rainbow',
@@ -160,7 +155,7 @@ export const App: React.FC = function () {
   let [inspect_data, set_inspect_data] = useState<any>(null)
 
   let [layers, set_layers] = useState<Record<string, ParsedDataLayer>>({})
-  let [active_layer_id, set_active_layer_id] = useState<string | null>('GDP_nominal_pc')
+  let [active_layer_id, set_active_layer_id] = useState<string | null>('basemap_only')
   let [active_variable_selectors, set_active_variable_selectors] = useState<Record<string, string | string[]>>({
     gender: ['t'],
     profession: ['agriculture'],
@@ -285,12 +280,12 @@ export const App: React.FC = function () {
   let selected_city_record: CityFullRecord | null = stadester_result.selectedCity
 
   useEffect(() => {
-    ;(window as any).setStadesterConfig = set_stadester_config
-    ;(window as any).stadesterConfig = stadester_config
-    ;(window as any).setActiveLayerId = set_active_layer_id
-    ;(window as any).setSelectedCityKey = set_selected_city_key
-    ;(window as any).selectedCityRecord = selected_city_record
-    ;(window as any).selectedCityKey = selected_city_key
+    ; (window as any).setStadesterConfig = set_stadester_config
+      ; (window as any).stadesterConfig = stadester_config
+      ; (window as any).setActiveLayerId = set_active_layer_id
+      ; (window as any).setSelectedCityKey = set_selected_city_key
+      ; (window as any).selectedCityRecord = selected_city_record
+      ; (window as any).selectedCityKey = selected_city_key
   }, [set_stadester_config, stadester_config, set_active_layer_id, set_selected_city_key, selected_city_record, selected_city_key])
 
   let handle_close_city_details = useCallback(() => {
@@ -318,7 +313,7 @@ export const App: React.FC = function () {
 
   //Headless export hook for server render keyframes
   useEffect(() => {
-    ;(window as any).__renderKeyframe = async (
+    ; (window as any).__renderKeyframe = async (
       arg0_layer_id: string,
       arg0_year: number,
       arg0_selectors?: Record<string, string | string[]>
@@ -467,8 +462,27 @@ export const App: React.FC = function () {
           let data = await resp.json()
           if (!cancelled && data && data.layers) {
             set_layers(data.layers)
-            ;(window as any).__layersLoaded = true
+              ; (window as any).__layersLoaded = true
             let layer_keys = Object.keys(data.layers)
+            let stadester_layer = data.layers.stadester || data.layers['stadester_1.1'] || data.layers['stadester_1.0']
+            if (stadester_layer && stadester_layer.display_options) {
+              let opts = stadester_layer.display_options
+              set_stadester_config((arg0_prev) => ({
+                ...arg0_prev,
+                bubbleSize: opts.bubble_size ?? arg0_prev.bubbleSize,
+                colorMode: opts.color_mode ?? arg0_prev.colorMode,
+                dataset: opts.dataset ?? arg0_prev.dataset,
+                display_options: opts,
+                filled: opts.filled ?? arg0_prev.filled,
+                growthPalette: opts.growth_palette ?? arg0_prev.growthPalette,
+                halo: opts.halo ?? arg0_prev.halo,
+                labelCollision: opts.label_collision ?? arg0_prev.labelCollision,
+                maxCities: opts.max_cities ?? arg0_prev.maxCities,
+                minPop: opts.min_pop ?? arg0_prev.minPop,
+                opacity: opts.opacity ?? arg0_prev.opacity,
+                showLabels: opts.show_labels ?? arg0_prev.showLabels,
+              }))
+            }
             if (layer_keys.length > 0) {
               let default_key = layer_keys.includes('GDP_nominal_pc') ? 'GDP_nominal_pc' : layer_keys[0]
               set_active_layer_id((arg0_prev) => (arg0_prev && data.layers[arg0_prev] ? arg0_prev : default_key))
@@ -578,7 +592,7 @@ export const App: React.FC = function () {
         .split(',')
         .map((arg0_s) => parseFloat(arg0_s.trim()))
         .filter((arg0_n) => !Number.isNaN(arg0_n))
-        .map((arg0_p) => arg0_p/100)
+        .map((arg0_p) => arg0_p / 100)
 
       if (parts.length > 0) {
         let q_breaks = computeQuantiles(r.data, parts)
@@ -683,7 +697,7 @@ export const App: React.FC = function () {
   let handle_update_breaks = useCallback((arg0_new_breaks: number[]) => {
     let new_breaks = arg0_new_breaks
     set_bounds_mode('Absolute')
-    set_absolute_breaks(new_breaks.map((arg0_n) => (Math.round(arg0_n*1000)/1000).toString()).join(', '))
+    set_absolute_breaks(new_breaks.map((arg0_n) => (Math.round(arg0_n * 1000) / 1000).toString()).join(', '))
   }, [set_absolute_breaks, set_bounds_mode])
 
   let active_countries = useMemo<CountryFeature[]>(() => {
@@ -760,12 +774,12 @@ export const App: React.FC = function () {
               File: <span className="font-mono text-foreground">{timelapse_export_result.filename}</span>
             </div>
             <div className="text-[10px] text-muted-foreground">
-              Size: {(timelapse_export_result.sizeBytes / (1024*1024)).toFixed(2)} MB • Saved in exports/
+              Size: {(timelapse_export_result.sizeBytes / (1024 * 1024)).toFixed(2)} MB • Saved in exports/
             </div>
           </div>
           <button
             type="button"
-            onClick={() => {}}
+            onClick={() => { }}
             className="p-1 hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
           >
             <Icon name="close" className="text-sm" />

@@ -47,7 +47,7 @@ export const StadesterSettings: React.FC<StadesterSettingsProps> = function (arg
   //Declare local instance variables
   let bubble_size = config.bubbleSize
   let color_mode = config.colorMode
-  let dataset = config.dataset
+  let dataset = config.dataset || 'stadester_1.1'
   let large_city_contrast = (config.largeCityContrast !== undefined) ? config.largeCityContrast : 1.0
   let max_cities = config.maxCities
   let min_pop = config.minPop
@@ -65,7 +65,7 @@ export const StadesterSettings: React.FC<StadesterSettingsProps> = function (arg
         </div>
         {city_count !== undefined && (
           <span className="text-[10px] px-1.5 py-0.2 bg-primary/20 text-primary border border-primary/40 font-mono">
-            {city_count.toLocaleString()} rendered
+            {city_count.toLocaleString('de-DE')} rendered
           </span>
         )}
       </div>

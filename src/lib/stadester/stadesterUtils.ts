@@ -1,4 +1,5 @@
 import { StadesterDisplayOptions } from '@/lib/geopng/types'
+import { getPrimaryCityName, isCorruptedCityName } from './cityNameFramework'
 
 /**
  * Counts the number of diacritical combining marks in a given string.
@@ -95,7 +96,13 @@ export const pickBestCityDisplayName = function (
   //4. Filter out candidates with corrupt or unknown unicode characters
   if (skip_unknown_unicode) {
     clean_candidates = candidates.filter((arg0_c) => {
-      return !arg0_c.includes('\uFFFD') && !arg0_c.includes('\u00EF\u00BF\u00BD') && !arg0_c.includes('')
+      let is_corrupted =
+        arg0_c.includes('?') ||
+        arg0_c.includes('\uFFFD') ||
+        arg0_c.includes('\u00EF\u00BF\u00BD') ||
+        arg0_c.includes('') ||
+        /^[?\s\-_.,]+$/.test(arg0_c)
+      return !is_corrupted
     })
     if (clean_candidates.length > 0)
       candidates = clean_candidates
@@ -113,5 +120,9 @@ export const pickBestCityDisplayName = function (
   }
 
   //Return statement
-  return candidates[0]
+  let chosen = candidates[0]
+  if (chosen && !isCorruptedCityName(chosen))
+    return chosen
+
+  return getPrimaryCityName(name)
 }

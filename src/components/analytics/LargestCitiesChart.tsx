@@ -3,6 +3,7 @@ import ReactECharts from 'echarts-for-react'
 import { CityPoint } from '@/lib/geopng/types'
 import { Icon } from '@/components/ui/icon'
 import { UfDate } from '@/lib/ufDate'
+import { getPrimaryCityName } from '@/lib/stadester/cityNameFramework'
 
 export interface LargestCitiesChartProps {
   currentYear: number
@@ -14,13 +15,17 @@ const REGION_COLOR_MAP: Record<string, string> = {
   africa: '#f97316',
   central_asia: '#a855f7',
   eastasia: '#ef4444',
+  eastern_europe_and_russia: '#3b82f6',
   europe: '#6366f1',
+  indian_subcontinent: '#ec4899',
   latin_america: '#10b981',
-  middle_east: '#eab308',
+  maghreb_egypt: '#eab308',
+  middle_east: '#d97706',
   northern_america: '#0ea5e9',
   oceania: '#14b8a6',
   south_asia: '#ec4899',
   southeast_asia: '#8b5cf6',
+  sub_saharan_africa: '#f97316',
 }
 
 /**
@@ -38,6 +43,7 @@ export const LargestCitiesChart: React.FC<LargestCitiesChartProps> = function (a
   let on_select_city = props.onSelectCity
 
   //Declare local instance variables
+  let chart_height: number
   let cities_list: CityPoint[]
   let dominant_region: string
   let echart_option: any
@@ -53,6 +59,8 @@ export const LargestCitiesChart: React.FC<LargestCitiesChartProps> = function (a
   ;[cities_list, set_cities_list] = useState<CityPoint[]>([])
   ;[is_loading, set_is_loading] = useState<boolean>(false)
   ;[limit, set_limit] = useState<number>(15)
+
+  chart_height = Math.max(150, Math.min(360, (limit * 14) + 25))
 
   //Fetch largest cities whenever year, dataset or limit changes
   useEffect(() => {
@@ -115,7 +123,7 @@ export const LargestCitiesChart: React.FC<LargestCitiesChartProps> = function (a
   //Construct ECharts horizontal bar options (reversed so rank 1 is at top)
   echart_option = useMemo(() => {
     let sorted_for_chart = [...cities_list].reverse()
-    let y_names = sorted_for_chart.map((arg0_c) => arg0_c.name)
+    let y_names = sorted_for_chart.map((arg0_c) => getPrimaryCityName(arg0_c.name))
     let pop_values = sorted_for_chart.map((arg0_c) => arg0_c.population)
 
     return {
@@ -165,17 +173,20 @@ export const LargestCitiesChart: React.FC<LargestCitiesChartProps> = function (a
           let c: CityPoint = arg0_params.data?.cityData
           if (!c)
             return ''
+          let clean_name = getPrimaryCityName(c.name)
           let rank = cities_list.findIndex((arg0_item) => arg0_item.key === c.key) + 1
           let pop_formatted = Math.round(c.population).toLocaleString('de-DE')
-          return `<div style="font-size: 11px;">
-            <div style="font-weight: bold; color: #ffffff;">#${rank} ${c.name}</div>
+          let other_parts = c.name && c.name.includes(';') ? c.name.split(';').slice(1, 4).map((s) => s.trim()).join(', ') : ''
+          return `<div style="font-size: 11px; max-width: 280px;">
+            <div style="font-weight: bold; color: #ffffff;">#${rank} ${clean_name}</div>
             <div style="color: #94a3b8; font-size: 10px; margin-bottom: 3px;">
               ${[c.country, c.region].filter(Boolean).join(' • ')}
             </div>
             <div>Population: <b style="color: #38bdf8;">${pop_formatted}</b></div>
             ${c.area ? `<div style="color: #cbd5e1;">Area: ${Math.round(c.area).toLocaleString('de-DE')} km²</div>` : ''}
             ${c.density ? `<div style="color: #cbd5e1;">Density: ${Math.round(c.density).toLocaleString('de-DE')} /km²</div>` : ''}
-            <div style="font-size: 9px; color: #64748b; margin-top: 4px;">Click to inspect city on map</div>
+            ${other_parts ? `<div style="color: #64748b; font-size: 9px; margin-top: 3px; line-height: 1.2;">Agglomeration includes: ${other_parts}...</div>` : ''}
+            <div style="font-size: 9px; color: #475569; margin-top: 4px;">Click to inspect city on map</div>
           </div>`
         },
         trigger: 'item',
@@ -199,8 +210,10 @@ export const LargestCitiesChart: React.FC<LargestCitiesChartProps> = function (a
       yAxis: {
         axisLabel: {
           color: '#f8fafc',
+          ellipsis: '...',
           fontSize: 10,
-          width: 85,
+          overflow: 'truncate',
+          width: 95,
         },
         axisLine: { lineStyle: { color: '#334155' } },
         axisTick: { show: false },
@@ -212,15 +225,15 @@ export const LargestCitiesChart: React.FC<LargestCitiesChartProps> = function (a
 
   //Return statement
   return (
-    <div className="flex flex-col h-full space-y-2 text-xs select-none">
+    <div className="flex flex-col space-y-2 text-xs select-none">
       {/* Top Controls: Ranking limits & summary */}
       <div className="flex items-center justify-between border-b border-border/60 pb-1.5 shrink-0">
         <div className="flex items-center gap-1.5">
-          <Icon name="leaderboard" className="text-primary text-xs" />
+          <Icon name="leaderboard" className="text-white text-xs" />
           <span className="font-bold text-foreground text-xs uppercase tracking-wider">
             Largest Urban Centers
           </span>
-          <span className="text-[10px] px-1 py-0.2 bg-primary/20 text-primary font-mono ml-1">
+          <span className="text-[10px] px-1.5 py-0.5 bg-muted text-muted-foreground font-mono ml-1 border border-border/50">
             {UfDate.formatYear(current_year)}
           </span>
         </div>
@@ -248,17 +261,20 @@ export const LargestCitiesChart: React.FC<LargestCitiesChartProps> = function (a
       <div className="grid grid-cols-3 gap-1.5 shrink-0">
         <div className="bg-muted/30 border border-border/50 p-1.5">
           <div className="text-[9px] text-muted-foreground uppercase tracking-wider">#1 City</div>
-          <div className="text-xs font-bold text-foreground truncate mt-0.5" title={largest_city?.name || '–'}>
-            {largest_city?.name || '–'}
+          <div
+            className="text-xs font-bold text-foreground truncate mt-0.5"
+            title={largest_city ? getPrimaryCityName(largest_city.name) : '–'}
+          >
+            {largest_city ? getPrimaryCityName(largest_city.name) : '–'}
           </div>
-          <div className="text-[10px] font-mono text-primary font-semibold truncate">
+          <div className="text-[10px] font-mono text-foreground font-semibold truncate">
             {largest_city ? Math.round(largest_city.population).toLocaleString('de-DE') : '–'}
           </div>
         </div>
 
         <div className="bg-muted/30 border border-border/50 p-1.5">
           <div className="text-[9px] text-muted-foreground uppercase tracking-wider">Top {limit} Total</div>
-          <div className="text-xs font-bold font-mono text-emerald-400 truncate mt-0.5">
+          <div className="text-xs font-bold font-mono text-foreground truncate mt-0.5">
             {total_top_population.toLocaleString('de-DE')}
           </div>
           <div className="text-[9px] text-muted-foreground truncate">Inhabitants</div>
@@ -266,7 +282,7 @@ export const LargestCitiesChart: React.FC<LargestCitiesChartProps> = function (a
 
         <div className="bg-muted/30 border border-border/50 p-1.5">
           <div className="text-[9px] text-muted-foreground uppercase tracking-wider">Leading Region</div>
-          <div className="text-xs font-bold text-amber-400 capitalize truncate mt-0.5">
+          <div className="text-xs font-bold text-foreground capitalize truncate mt-0.5">
             {dominant_region}
           </div>
           <div className="text-[9px] text-muted-foreground truncate">Most represented</div>
@@ -274,7 +290,10 @@ export const LargestCitiesChart: React.FC<LargestCitiesChartProps> = function (a
       </div>
 
       {/* Ranked Bar Chart Container */}
-      <div className="flex-1 min-h-[260px] relative border border-border/40 bg-card/30">
+      <div
+        className="relative border border-border/40 bg-card/30 shrink-0 w-full"
+        style={{ height: `${chart_height}px` }}
+      >
         {is_loading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 backdrop-blur-xs text-xs text-muted-foreground animate-pulse">
             Ranking urban settlements for {UfDate.formatYear(current_year)}...

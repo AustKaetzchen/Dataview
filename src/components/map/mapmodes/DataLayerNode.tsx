@@ -50,7 +50,7 @@ export const DataLayerNode: React.FC<DataLayerNodeProps> = function (arg0_props)
   let is_active = active_layer_id === layer.id
   let is_node_expanded = Boolean(search_query.trim()) || (expanded_nodes[layer.id] ?? true)
   let is_stadester = layer.id.includes('stadester')
-  let is_dataset_match = is_stadester ? (stadester_config?.dataset === layer.id || (!stadester_config?.dataset && layer.id === 'stadester_1.1')) : true
+  let is_dataset_match = is_stadester ? (layer.id === 'stadester' || stadester_config?.dataset === layer.id || (!stadester_config?.dataset && layer.id === 'stadester_1.1')) : true
   let is_overlay_active = is_stadester ? (Boolean(stadester_config?.enabled) && is_dataset_match) : false
   let is_searching = Boolean(search_query.trim())
   let is_vector_overlay = layer.type === 'vector.points' || layer.id.includes('stadester')
@@ -64,7 +64,7 @@ export const DataLayerNode: React.FC<DataLayerNodeProps> = function (arg0_props)
             onClick={() => {
               if (is_stadester && set_stadester_config) {
                 set_stadester_config((arg0_prev) => {
-                  let is_currently_active = arg0_prev.enabled && (arg0_prev.dataset === layer.id || (!arg0_prev.dataset && layer.id === 'stadester_1.1'))
+                  let is_currently_active = arg0_prev.enabled && (layer.id === 'stadester' || arg0_prev.dataset === layer.id || (!arg0_prev.dataset && layer.id === 'stadester_1.1'))
                   if (is_currently_active) {
                     return {
                       ...arg0_prev,
@@ -73,7 +73,7 @@ export const DataLayerNode: React.FC<DataLayerNodeProps> = function (arg0_props)
                   }
                   return {
                     ...arg0_prev,
-                    dataset: layer.id as 'stadester_1.1' | 'stadester_1.0',
+                    dataset: (layer.id === 'stadester') ? (arg0_prev.dataset || 'stadester_1.1') : (layer.id as 'stadester_1.1' | 'stadester_1.0'),
                     display_options: layer.display_options || arg0_prev.display_options,
                     enabled: true,
                   }

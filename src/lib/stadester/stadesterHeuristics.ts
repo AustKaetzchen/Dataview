@@ -19,37 +19,14 @@ export function getEraDisplayFloor (arg0_year: number): number {
   //Convert from parameters
   let year = arg0_year
 
-  //Declare local instance variables
-  let knots = FLOOR_KNOTS
-
   //Guard clauses
-  if (year <= knots[0][0])
-    return knots[0][1]
-
-  let last_idx = knots.length - 1
-  if (year >= knots[last_idx][0])
-    return knots[last_idx][1]
-
-  //Function body
-  for (let i = 1; i < knots.length; i++) {
-    let a = knots[i - 1]
-    let b = knots[i]
-
-    if (year <= b[0]) {
-      if (a[1] === b[1])
-        return a[1]
-
-      let f = (year - a[0]) / (b[0] - a[0])
-      let log_a = Math.log10(a[1])
-      let log_b = Math.log10(b[1])
-
-      //Return statement
-      return Math.round(Math.pow(10, log_a + (log_b - log_a) * f))
-    }
-  }
+  if (year <= 600)
+    return 0
+  if (year <= 1500)
+    return 500
 
   //Return statement
-  return knots[last_idx][1]
+  return 1000
 }
 
 export interface ZoomThresholds {
@@ -83,40 +60,40 @@ export function getZoomPopulationThreshold (
   //1. World View (norm_zoom < 2.0)
   if (norm_zoom < 2.0) {
     return {
-      bubbleMinPop: 50000,
-      labelMinPop: 1000000,
-      maxBubbles: 600,
-      maxLabels: 25,
+      bubbleMinPop: 15000,
+      labelMinPop: 250000,
+      maxBubbles: 1500,
+      maxLabels: 40,
     }
   }
 
   //2. Continental View (2.0 <= norm_zoom < 3.5)
   if (norm_zoom < 3.5) {
     return {
-      bubbleMinPop: 20000,
-      labelMinPop: 250000,
-      maxBubbles: 1500,
-      maxLabels: 50,
+      bubbleMinPop: 4000,
+      labelMinPop: 50000,
+      maxBubbles: 3500,
+      maxLabels: 90,
     }
   }
 
   //3. Regional View (3.5 <= norm_zoom < 5.0)
   if (norm_zoom < 5.0) {
     return {
-      bubbleMinPop: 5000,
-      labelMinPop: 50000,
-      maxBubbles: 3000,
-      maxLabels: 75,
+      bubbleMinPop: 500,
+      labelMinPop: 5000,
+      maxBubbles: 10000,
+      maxLabels: 250,
     }
   }
 
   //4. Local View (norm_zoom >= 5.0)
   //Return statement
   return {
-    bubbleMinPop: 1000,
-    labelMinPop: 10000,
-    maxBubbles: 5000,
-    maxLabels: 100,
+    bubbleMinPop: 0,
+    labelMinPop: 0,
+    maxBubbles: 30000,
+    maxLabels: 800,
   }
 }
 
@@ -154,19 +131,25 @@ export function computeViewportBoundingBox (
     return [-180, -90, 180, 90]
 
   if (is_cartesian) {
+    let half_h: number
+    let half_w: number
+    let max_x: number
+    let max_y: number
+    let min_x: number
+    let min_y: number
     let scale = Math.pow(2, view_state.zoom ?? 2.8)
     let target = view_state.target || [0, 0, 0]
-    let half_w = (window_w / 2) / scale
-    let half_h = (window_h / 2) / scale
 
-    let min_x = target[0] - half_w * 1.2
-    let max_x = target[0] + half_w * 1.2
-    let min_y = target[1] - half_h * 1.2
-    let max_y = target[1] + half_h * 1.2
+    half_w = (window_w/2)/scale
+    half_h = (window_h/2)/scale
+    min_x = target[0] - half_w*1.3
+    max_x = target[0] + half_w*1.3
+    min_y = target[1] - half_h*1.3
+    max_y = target[1] + half_h*1.3
 
     if (projection === 'EqualEarth') {
-      let sw = invertEqualEarth(min_x, min_y)
       let ne = invertEqualEarth(max_x, max_y)
+      let sw = invertEqualEarth(min_x, min_y)
       west = Math.max(-180, sw[0])
       south = Math.max(-90, sw[1])
       east = Math.min(180, ne[0])
@@ -180,20 +163,66 @@ export function computeViewportBoundingBox (
   } else {
     let center_lat = view_state.latitude ?? 20
     let center_lng = view_state.longitude ?? 0
+    let delta_y_mercator: number
+    let half_h: number
+    let half_w: number
+    let lat_clamped: number
+    let lat_rad: number
+    let margin = 1.35
+    let north_rad: number
+    let south_rad: number
+    let span_lng: number
+    let world_size: number
+    let y_mercator_center: number
+    let y_north: number
+    let y_south: number
     let zoom = view_state.zoom ?? 1.2
 
-    //Approximate geographic span from zoom
-    let span_lng = (360 / Math.pow(2, zoom)) * (window_w / 512) * 1.2
-    let span_lat = (180 / Math.pow(2, zoom)) * (window_h / 512) * 1.2
+    //World scale in pixels at zoom: world_size = 512 * 2^zoom
+    world_size = 512*Math.pow(2, zoom)
 
-    west = Math.max(-180, center_lng - span_lng / 2)
-    east = Math.min(180, center_lng + span_lng / 2)
-    south = Math.max(-90, center_lat - span_lat / 2)
-    north = Math.min(90, center_lat + span_lat / 2)
+    //Longitude span
+    half_w = (window_w/2)*margin
+    span_lng = (360*half_w)/world_size
 
-    if (span_lng >= 360) {
+    if (span_lng >= 180) {
       west = -180
       east = 180
+    } else {
+      west = center_lng - span_lng
+      east = center_lng + span_lng
+
+      if (west < -180)
+        west += 360
+      if (east > 180)
+        east -= 360
+    }
+
+    //Latitude calculation via conformal Web Mercator Gudermannian inverse
+    half_h = (window_h/2)*margin
+    lat_clamped = Math.max(-85.051129, Math.min(85.051129, center_lat))
+    lat_rad = (lat_clamped*Math.PI)/180
+    y_mercator_center = Math.log(Math.tan(Math.PI/4 + lat_rad/2))
+
+    //Pixel delta to Mercator radian delta
+    delta_y_mercator = (2*Math.PI*half_h)/world_size
+
+    y_north = y_mercator_center + delta_y_mercator
+    y_south = y_mercator_center - delta_y_mercator
+
+    //Invert Web Mercator Y to latitude degrees
+    if (y_north >= Math.PI) {
+      north = 90
+    } else {
+      north_rad = 2*Math.atan(Math.exp(y_north)) - Math.PI/2
+      north = Math.min(90, (north_rad*180)/Math.PI)
+    }
+
+    if (y_south <= -Math.PI) {
+      south = -90
+    } else {
+      south_rad = 2*Math.atan(Math.exp(y_south)) - Math.PI/2
+      south = Math.max(-90, (south_rad*180)/Math.PI)
     }
   }
 

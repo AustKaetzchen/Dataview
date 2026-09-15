@@ -251,31 +251,6 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_pr
               Statistics
             </button>
           </div>
-
-          {/* Active country filter badge */}
-          {effective_countries.length > 0 && (
-            <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-none bg-primary/15 text-primary text-[var(--body-font-size)] font-medium border border-primary/30 truncate">
-              <span className={`w-1.5 h-1.5 rounded-none ${is_calculating_stats ? 'bg-amber-400 animate-pulse' : 'bg-primary'} shrink-0`} />
-              <span className="truncate max-w-[140px]">
-                {effective_countries.length === 1
-                  ? effective_countries[0].properties.name
-                  : `${effective_countries[0].properties.name} (+${effective_countries.length - 1})`}
-              </span>
-              {is_calculating_stats && (
-                <span className="text-[10px] text-amber-400 font-normal ml-0.5 animate-pulse shrink-0">
-                  (calculating...)
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={handle_clear}
-                className="ml-0.5 hover:text-foreground opacity-70 hover:opacity-100 cursor-pointer text-xs rounded-none"
-                title="Clear country filter"
-              >
-                ✕
-              </button>
-            </div>
-          )}
         </div>
 
         <div className="flex items-center gap-1">
@@ -306,8 +281,36 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_pr
         </div>
       </div>
 
+      {/* Dedicated Second Row: Active country filter badge */}
+      {effective_countries.length > 0 && (
+        <div className="flex items-center justify-between px-[var(--padding)] py-1 bg-muted/20 border-b border-border text-xs shrink-0 select-none">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className={`w-1.5 h-1.5 rounded-none ${is_calculating_stats ? 'bg-amber-400 animate-pulse' : 'bg-primary'} shrink-0`} />
+            <span className="text-muted-foreground font-light text-[var(--body-font-size)]">Filter:</span>
+            <span className="font-medium text-foreground text-[var(--body-font-size)] truncate max-w-[320px]">
+              {effective_countries.length === 1
+                ? effective_countries[0].properties.name
+                : `${effective_countries[0].properties.name} (+${effective_countries.length - 1} other${effective_countries.length > 2 ? 's' : ''})`}
+            </span>
+            {is_calculating_stats && (
+              <span className="text-[10px] text-amber-400 font-normal ml-1 animate-pulse shrink-0">
+                (calculating stats...)
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={handle_clear}
+            className="text-muted-foreground hover:text-foreground text-[10px] underline cursor-pointer shrink-0 ml-2"
+            title="Clear country filter"
+          >
+            Clear Filter
+          </button>
+        </div>
+      )}
+
       {/* Panel Body */}
-      <div className="flex-1 p-[var(--padding)] overflow-hidden bg-background/50 flex flex-col min-h-0">
+      <div className="flex-1 p-[var(--padding)] overflow-y-auto custom-scrollbar bg-background/50 flex flex-col min-h-0">
         {active_tab === 'cities' ? (
           <LargestCitiesChart
             key={`cities-${stadester_dataset}-${current_year}`}

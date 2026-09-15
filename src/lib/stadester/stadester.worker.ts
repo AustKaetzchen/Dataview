@@ -94,13 +94,52 @@ let REGION_COLOR_MAP: Record<string, [number, number, number]> = {
   africa: [249, 115, 22],
   central_asia: [168, 85, 247],
   eastasia: [239, 68, 68],
+  eastern_europe_and_russia: [59, 130, 246],
   europe: [99, 102, 241],
+  indian_subcontinent: [236, 72, 153],
   latin_america: [16, 185, 129],
-  middle_east: [234, 179, 8],
+  maghreb_egypt: [234, 179, 8],
+  middle_east: [217, 119, 6],
   northern_america: [14, 165, 233],
   oceania: [20, 184, 166],
   south_asia: [236, 72, 153],
   southeast_asia: [139, 92, 246],
+  sub_saharan_africa: [249, 115, 22],
+}
+
+function resolveRegionColorRgb (arg0_region?: string, arg1_coords?: [number, number]): [number, number, number] {
+  //Convert from parameters
+  let coords = arg1_coords
+  let reg = (arg0_region || '').toLowerCase().trim()
+
+  //Guard clauses
+  if (reg && REGION_COLOR_MAP[reg])
+    return REGION_COLOR_MAP[reg]
+
+  if (coords && Array.isArray(coords) && coords.length >= 2) {
+    let lat = coords[0]
+    let lon = coords[1]
+
+    if (lat < -10 && lon > 110)
+      return REGION_COLOR_MAP.oceania
+    if (lat > 10 && lon > 60 && lon < 95)
+      return REGION_COLOR_MAP.indian_subcontinent
+    if (lat > 0 && lon >= 95 && lon < 150)
+      return REGION_COLOR_MAP.southeast_asia
+    if (lat > 20 && lon >= 100 && lon <= 145)
+      return REGION_COLOR_MAP.eastasia
+    if (lat > 35 && lon > -15 && lon < 45)
+      return REGION_COLOR_MAP.europe
+    if (lat > -35 && lat < 38 && lon > -20 && lon < 55)
+      return REGION_COLOR_MAP.sub_saharan_africa
+    if (lat > 15 && lon > -170 && lon < -50)
+      return REGION_COLOR_MAP.northern_america
+    if (lat < 15 && lon > -120 && lon < -30)
+      return REGION_COLOR_MAP.latin_america
+  }
+
+  //Return statement
+  return [139, 92, 246]
 }
 
 import { getPaletteLUT } from '../geopng/palettes'
@@ -203,7 +242,8 @@ self.onmessage = function (arg0_e: MessageEvent<WorkerInMessage>) {
       let zoom = view_state?.zoom ?? 1.2
       let thresholds = getZoomPopulationThreshold(zoom, projection)
       let era_floor = getEraDisplayFloor(current_year)
-      let effective_min_pop = Math.max(thresholds.bubbleMinPop, era_floor)
+      let norm_zoom = (is_cartesian) ? (zoom - 1.2) : zoom
+      let effective_min_pop = (norm_zoom >= 4.5) ? 0 : Math.max(thresholds.bubbleMinPop, era_floor)
       let bbox = computeViewportBoundingBox(view_state, projection, window_w, window_h)
       let [w, s, east_bound, n] = bbox
 
@@ -240,7 +280,7 @@ self.onmessage = function (arg0_e: MessageEvent<WorkerInMessage>) {
           py = projected[1]
         }
 
-        let min_radius = 4.5 * b_scale * Math.min(1.4, zoom_factor)
+        let min_radius = 3.25 * b_scale * Math.min(1.4, zoom_factor)
         let pop_scaled = Math.pow(Math.max(0, c.population) / 100000, 0.5 * contrast) * 3.6 * b_scale
         let pixel_radius = Math.max(min_radius, Math.min(65.0, (min_radius + pop_scaled) * zoom_factor))
 
@@ -252,8 +292,7 @@ self.onmessage = function (arg0_e: MessageEvent<WorkerInMessage>) {
           let p_rgb = getPopRgb(c.population)
           fill_color = [p_rgb[0], p_rgb[1], p_rgb[2], 220]
         } else if (color_mode === 'continent') {
-          let reg_key = c.region || ''
-          let reg_rgb = REGION_COLOR_MAP[reg_key] || [148, 163, 184]
+          let reg_rgb = resolveRegionColorRgb(c.region, [c_lat, c_lon])
           fill_color = [reg_rgb[0], reg_rgb[1], reg_rgb[2], 220]
         }
 

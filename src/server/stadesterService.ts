@@ -1,5 +1,7 @@
 import fs from 'fs'
 import path from 'path'
+import { clearStadesterDiskCache, indexHistoricalCities, loadGhslCsvNames, resolveCityDisplayName } from './ghslResolver.ts'
+import { getPrimaryCityName, isCorruptedCityName } from '../lib/stadester/cityNameFramework.ts'
 
 export interface CityIndexEntry {
   area?: Record<string, number>
@@ -103,10 +105,42 @@ export const StadesterService = {
       return {}
     }
 
+    //Check lite disk cache for pre-resolved names
+    let cache_dir = path.resolve(process.cwd(), 'data/stadester/cache')
+    let has_stale_settlements = false
+    let lite_file_path = path.join(cache_dir, `${dataset_name}_lite.json`)
+    let lite_name_map = new Map<string, string>()
+
+    if (fs.existsSync(lite_file_path)) {
+      try {
+        let lite_data = JSON.parse(fs.readFileSync(lite_file_path, 'utf-8'))
+        if (Array.isArray(lite_data)) {
+          for (let i = 0; i < lite_data.length; i++) {
+            if (lite_data[i].key && lite_data[i].name) {
+              if (isCorruptedCityName(lite_data[i].name))
+                has_stale_settlements = true
+              lite_name_map.set(lite_data[i].key, lite_data[i].name)
+            }
+          }
+          if (has_stale_settlements) {
+            console.log(`[StadesterService] Stale/corrupted entries detected in ${lite_file_path}, invalidating cache...`)
+            lite_name_map.clear()
+            clearStadesterDiskCache()
+          } else {
+            console.log(`[StadesterService] Loaded ${lite_name_map.size} pre-resolved city names from ${lite_file_path}`)
+          }
+        }
+      } catch (arg0_err) {
+        console.warn('[StadesterService] Failed to read lite cache for names:', arg0_err)
+      }
+    }
+
     //Function body
+    loadGhslCsvNames()
     console.log(`[StadesterService] Indexing dataset ${dataset_name} from ${file_path}...`)
     raw_text = fs.readFileSync(file_path, 'utf-8')
     raw_data = JSON.parse(raw_text)
+    indexHistoricalCities(raw_data)
     all_city_keys = Object.keys(raw_data)
 
     for (let i = 0; i < all_city_keys.length; i++) {
@@ -124,6 +158,11 @@ export const StadesterService = {
           max_p = p_val
       }
 
+      let cached_name = lite_name_map.get(key)
+      let clean_display_name = (cached_name && !isCorruptedCityName(cached_name))
+        ? cached_name
+        : resolveCityDisplayName(key, c.name || key, c.coords, max_p, c.id)
+
       indexed_record[key] = {
         area: c.area,
         colour: c.colour,
@@ -136,7 +175,7 @@ export const StadesterService = {
         max_pop: max_p,
         max_year: max_yr,
         min_year: min_yr,
-        name: c.name || key,
+        name: clean_display_name,
         original_names: c.original_names,
         other_names: c.other_names,
         population: pop_obj,
@@ -147,6 +186,13 @@ export const StadesterService = {
 
     StadesterService.datasets.set(dataset_name, indexed_record)
     console.log(`[StadesterService] Successfully indexed ${all_city_keys.length} cities for ${dataset_name}.`)
+
+    //Ensure lite cache exists on disk
+    try {
+      StadesterService.ensureLiteCache(dataset_name)
+    } catch (arg0_cache_err) {
+      console.warn('[StadesterService] Failed to ensure lite cache:', arg0_cache_err)
+    }
 
     //Return statement
     return indexed_record
@@ -464,8 +510,16 @@ export const StadesterService = {
     let limit = arg2_limit !== undefined ? arg2_limit : 20
     let year = arg1_year !== undefined ? arg1_year : 1950
 
+    //Declare local instance variables
+    let raw_cities = StadesterService.getCitiesAtYear(dataset_name, year, { max_cities: limit, min_pop: 0 })
+
+    //Function body
+    for (let i = 0; i < raw_cities.length; i++) {
+      raw_cities[i].name = getPrimaryCityName(raw_cities[i].name, raw_cities[i].population)
+    }
+
     //Return statement
-    return StadesterService.getCitiesAtYear(dataset_name, year, { max_cities: limit, min_pop: 0 })
+    return raw_cities
   },
 
   /**
@@ -501,7 +555,7 @@ export const StadesterService = {
     for (let i = 0; i < len; i++) {
       let c = cities[i]
       keys[i] = c.key
-      names[i] = c.name
+      names[i] = getPrimaryCityName(c.name, c.population)
       countries[i] = c.country
       coords[i * 2] = c.coords[0]
       coords[i * 2 + 1] = c.coords[1]
