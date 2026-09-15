@@ -12,6 +12,9 @@ import {
   CircleOverlayConfig,
   MapModeItem,
   MapModeId,
+  CityPoint,
+  CityFullRecord,
+  StadesterConfig,
 } from './lib/geopng/types'
 import {
   decodeRawGeoPngBufferAsync,
@@ -38,6 +41,7 @@ import { UserRole } from './components/controls/DataLayersTab'
 import { Icon } from './components/ui/icon'
 import { UfDate } from './lib/ufDate'
 import { toCanvas } from 'html-to-image'
+import { useStadesterCities } from './components/map/useStadesterCities'
 
 /**
  * Maps raw JSON5 colourscheme strings to the corresponding D3 ColorPalette enum name.
@@ -792,9 +796,11 @@ export const App: React.FC = function () {
   let displayed_year_ref: React.MutableRefObject<number | null>
   let handle_change_variable_selector: (arg0_key: string, arg1_option: string | string[]) => void
   let handle_clear_countries: () => void
+  let handle_close_city_details: () => void
   let handle_file_upload: (arg0_file: File, arg1_target: 'single' | 'diff_a' | 'diff_b') => Promise<void>
   let handle_force_refresh_analytics: () => void
   let handle_reorder_map_modes: (arg0_new_modes: MapModeItem[]) => void
+  let handle_select_city: (arg0_city: CityPoint | null) => void
   let handle_select_country: (arg0_c: CountryFeature | null) => void
   let handle_select_layer: (arg0_layer_id: string) => void
   let handle_start_timelapse_export: (arg0_options: StartTimelapseExportOptions) => Promise<void>
@@ -813,6 +819,7 @@ export const App: React.FC = function () {
   let is_hover_only: boolean
   let is_loading_layers: boolean
   let is_loading_raster: boolean
+  let is_loading_stadester: boolean
   let is_playing: boolean
   let is_timelapse_exporting: boolean
   let layers: Record<string, ParsedDataLayer>
@@ -836,6 +843,8 @@ export const App: React.FC = function () {
   let raw_bytes_a: Uint8Array | null
   let raw_bytes_b: Uint8Array | null
   let scale_type: ScaleType
+  let selected_city_key: string | null
+  let selected_city_record: CityFullRecord | null
   let selected_countries: CountryFeature[]
   let set_absolute_breaks: React.Dispatch<React.SetStateAction<string>>
   let set_active_file_name: React.Dispatch<React.SetStateAction<string>>
@@ -880,11 +889,13 @@ export const App: React.FC = function () {
   let set_raw_bytes_a: React.Dispatch<React.SetStateAction<Uint8Array | null>>
   let set_raw_bytes_b: React.Dispatch<React.SetStateAction<Uint8Array | null>>
   let set_scale_type: React.Dispatch<React.SetStateAction<ScaleType>>
+  let set_selected_city_key: React.Dispatch<React.SetStateAction<string | null>>
   let set_selected_countries: React.Dispatch<React.SetStateAction<CountryFeature[]>>
   let set_settings_drawer_open: React.Dispatch<React.SetStateAction<boolean>>
   let set_sidebar_bottom_clearance: React.Dispatch<React.SetStateAction<number | undefined>>
   let set_sidebar_width: React.Dispatch<React.SetStateAction<number>>
   let set_snap_to_keyframes: React.Dispatch<React.SetStateAction<boolean>>
+  let set_stadester_config: React.Dispatch<React.SetStateAction<StadesterConfig>>
   let set_timelapse_export_pct: React.Dispatch<React.SetStateAction<number>>
   let set_timelapse_export_result: React.Dispatch<React.SetStateAction<{ filename: string; path: string; sizeBytes: number } | null>>
   let set_timelapse_export_status: React.Dispatch<React.SetStateAction<string>>
@@ -896,6 +907,8 @@ export const App: React.FC = function () {
   let sidebar_bottom_clearance: number | undefined
   let sidebar_width: number
   let snap_to_keyframes: boolean
+  let stadester_cities: CityPoint[]
+  let stadester_config: StadesterConfig
   let timelapse_export_pct: number
   let timelapse_export_result: { filename: string; path: string; sizeBytes: number } | null
   let timelapse_export_status: string
@@ -906,6 +919,8 @@ export const App: React.FC = function () {
   let video_export_open: boolean
 
   //Function body
+  active_layer = null
+  ;[ui_visible, set_ui_visible] = useState<boolean>(true)
   ;[app_mode, set_app_mode] = useState<AppMode>('Single Image')
   ;[data_format, set_data_format] = useState<DataFormat>('float32')
   ;[projection, set_projection] = useState<ProjectionType>('Mercator')
@@ -981,6 +996,17 @@ export const App: React.FC = function () {
     percentileCutoff: 99,
     strokeWidth: 2,
   })
+  ;[stadester_config, set_stadester_config] = useState<StadesterConfig>({
+    bubbleSize: 1.0,
+    colorMode: 'growth',
+    dataset: 'stadester_1.1',
+    enabled: false,
+    labelCollision: true,
+    maxCities: 4000,
+    minPop: 0,
+    showLabels: true,
+  })
+  ;[selected_city_key, set_selected_city_key] = useState<string | null>(null)
 
   ;[map_modes, set_map_modes] = useState<MapModeItem[]>(() =>
     MAPMODES_CONFIG.modes.map((arg0_m) => ({
@@ -1027,7 +1053,6 @@ export const App: React.FC = function () {
   ;[playback_speed, set_playback_speed] = useState<number>(1)
   ;[snap_to_keyframes, set_snap_to_keyframes] = useState<boolean>(false)
   ;[video_export_open, set_video_export_open] = useState<boolean>(false)
-  ;[ui_visible, set_ui_visible] = useState<boolean>(true)
   abort_timelapse_export_ref = useRef<boolean>(false)
   active_export_job_id_ref = useRef<string | null>(null)
   active_layer_id_ref = useRef<string | null>(active_layer_id)
@@ -1036,6 +1061,29 @@ export const App: React.FC = function () {
   load_req_id_ref = useRef<number>(0)
   raster_cache_ref = useRef<Map<string, DecodedRaster>>(new Map())
   timeline_year_ref = useRef<number>(timeline_year)
+
+  let stadester_result = useStadesterCities({
+    config: stadester_config,
+    selectedCityKey: selected_city_key,
+    year: Math.round(timeline_year),
+  })
+  stadester_cities = stadester_result.cities
+  is_loading_stadester = stadester_result.isLoading
+  selected_city_record = stadester_result.selectedCity
+
+
+  handle_close_city_details = useCallback(() => {
+    set_selected_city_key(null)
+  }, [])
+
+  handle_select_city = useCallback((arg0_city: CityPoint | null) => {
+    let city = arg0_city
+    if (!city) {
+      set_selected_city_key(null)
+    } else {
+      set_selected_city_key(city.key)
+    }
+  }, [])
 
   let search_params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
   is_headless_export = search_params?.get('export_mode') === '1'
@@ -1052,7 +1100,7 @@ export const App: React.FC = function () {
   })
 
   useEffect(() => {
-    let url_proj = search_params?.get('projection') as ProjectionMode | null
+    let url_proj = search_params?.get('projection') as ProjectionType | null
     if (url_proj && ['EqualEarth', 'Mercator', 'Globe', 'Equirectangular'].includes(url_proj)) {
       set_projection(url_proj)
     }
@@ -1084,7 +1132,7 @@ export const App: React.FC = function () {
       set_active_variable_selectors(selectors)
       displayed_year_ref.current = yr
 
-      let target_layer = layers[layer_id] || (active_layer?.id === layer_id ? active_layer : null)
+      let target_layer: ParsedDataLayer | null = layers[layer_id] || (active_layer?.id === layer_id ? active_layer : null)
       if (!target_layer && layer_id.includes('.')) {
         let parent_id = layer_id.split('.')[0]
         let parent = layers[parent_id]
@@ -1659,13 +1707,13 @@ export const App: React.FC = function () {
   handle_reorder_map_modes = useCallback((arg0_new_modes: MapModeItem[]) => {
     let new_modes = arg0_new_modes
     set_map_modes(new_modes)
-  }, [])
+  }, [set_map_modes])
 
   handle_update_breaks = useCallback((arg0_new_breaks: number[]) => {
     let new_breaks = arg0_new_breaks
     set_bounds_mode('Absolute')
     set_absolute_breaks(new_breaks.map((arg0_n) => (Math.round(arg0_n*1000)/1000).toString()).join(', '))
-  }, [])
+  }, [set_absolute_breaks, set_bounds_mode])
 
   handle_start_timelapse_export = useCallback(
     async function (arg0_options: StartTimelapseExportOptions) {
@@ -1786,6 +1834,7 @@ export const App: React.FC = function () {
         set_is_timelapse_exporting(false)
       }
     },
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
     [active_layer, active_layer_id, active_variable_selectors, layers, projection]
   )
 
@@ -1799,7 +1848,7 @@ export const App: React.FC = function () {
         method: 'POST',
       }).catch(() => {})
     }
-  }, [])
+  }, [abort_timelapse_export_ref, active_export_job_id_ref, set_timelapse_export_status])
 
   active_countries = useMemo<CountryFeature[]>(() => {
     if (selected_countries.length > 0)
@@ -1996,8 +2045,16 @@ export const App: React.FC = function () {
           isTimelapseExporting={is_timelapse_exporting || is_headless_export}
           legendPosition={legend_position}
           onChangeLegendPosition={set_legend_position}
+          onCloseCityDetails={handle_close_city_details}
+          onSelectCity={handle_select_city}
           performantMode={performant_mode}
           onTogglePerformantMode={set_performant_mode}
+          selectedCity={selected_city_record}
+          selectedCityKey={selected_city_key}
+          setStadesterConfig={set_stadester_config}
+          stadesterCities={stadester_cities}
+          stadesterConfig={stadester_config}
+          timelineYear={Math.round(timeline_year)}
           userRole={user_role}
         />
 
@@ -2021,8 +2078,13 @@ export const App: React.FC = function () {
           onForceRefresh={handle_force_refresh_analytics}
           activeLayer={active_layer}
           activeVariableSelectors={active_variable_selectors}
+          citiesMode={stadester_config.enabled}
           currentYear={timeline_year}
           inspectData={inspect_data}
+          onSelectCity={(arg0_key) => {
+            set_selected_city_key(arg0_key)
+          }}
+          stadesterDataset={stadester_config.dataset}
         />
       </div>
 

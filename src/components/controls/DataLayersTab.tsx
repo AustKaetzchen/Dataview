@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useCallback } from 'react'
 import { ParsedDataLayer } from '@/server/layerParser'
 import { Icon } from '@/components/ui/icon'
-import { Label } from '@/components/ui/label'
+import { StadesterConfig } from '@/lib/geopng/types'
+import { StadesterSettings } from '@/components/map/mapmodes/StadesterSettings'
 
 export type UserRole = 'developer' | 'privileged' | 'default'
 
@@ -10,10 +11,13 @@ export interface DataLayersTabProps {
   activeVariableSelectors: Record<string, string | string[]>
   isLoadingLayers?: boolean
   layers: Record<string, ParsedDataLayer>
+  onChangeStadesterConfig?: React.Dispatch<React.SetStateAction<StadesterConfig>>
   onChangeUserRole?: (arg0_role: UserRole) => void
   onChangeVariableSelector: (arg0_key: string, arg1_option: string | string[]) => void
   onOpenVideoExport?: () => void
   onSelectLayer: (arg0_layer_id: string) => void
+  stadesterCityCount?: number
+  stadesterConfig?: StadesterConfig
   userRole?: UserRole
 }
 
@@ -32,10 +36,13 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
     activeVariableSelectors: active_variable_selectors,
     isLoadingLayers: is_loading_layers = false,
     layers,
+    onChangeStadesterConfig: on_change_stadester_config,
     onChangeUserRole: on_change_user_role,
     onChangeVariableSelector: on_change_variable_selector,
     onOpenVideoExport: on_open_video_export,
     onSelectLayer: on_select_layer,
+    stadesterCityCount: stadester_city_count = 0,
+    stadesterConfig: stadester_config,
     userRole: user_role = 'developer',
   } = props
 
@@ -247,19 +254,33 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
           let is_parent_of_active = Boolean(active_layer && active_layer.parent_id === arg0_layer.id)
           let is_highlighted = is_exact_active || is_parent_of_active
           let years_count = arg0_layer.available_years ? arg0_layer.available_years.length : 0
+          let is_vector_overlay = arg0_layer.type === 'vector.points' || arg0_layer.id.includes('stadester')
+          let is_stadester = arg0_layer.id.includes('stadester')
+          let is_overlay_active = is_stadester ? Boolean(stadester_config?.enabled) : false
 
           return (
             <div
               key={arg0_layer.id}
               className={`border transition-all overflow-hidden ${
-                is_highlighted
+                is_highlighted || (is_vector_overlay && is_overlay_active)
                   ? 'border-primary bg-primary/10 shadow-sm'
                   : 'border-border bg-card/40 hover:bg-muted/40'
               }`}
             >
               <button
                 type="button"
-                onClick={() => accessible && on_select_layer(arg0_layer.id)}
+                onClick={() => {
+                  if (accessible) {
+                    if (is_vector_overlay && is_stadester && on_change_stadester_config) {
+                      on_change_stadester_config((arg0_prev) => ({
+                        ...arg0_prev,
+                        enabled: !arg0_prev.enabled,
+                      }))
+                    } else {
+                      on_select_layer(arg0_layer.id)
+                    }
+                  }
+                }}
                 disabled={!accessible}
                 className={`w-full p-2.5 text-left flex items-start justify-between gap-2 cursor-pointer ${
                   !accessible ? 'opacity-50 cursor-not-allowed' : ''
@@ -268,7 +289,7 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
                 <div className="flex items-start gap-2 min-w-0">
                   <Icon
                     name={arg0_layer.icon || 'layers'}
-                    className={`mt-0.5 text-sm shrink-0 ${is_exact_active ? 'text-primary' : 'text-muted-foreground'}`}
+                    className={`mt-0.5 text-sm shrink-0 ${is_exact_active || (is_vector_overlay && is_overlay_active) ? 'text-primary' : 'text-muted-foreground'}`}
                   />
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
@@ -292,21 +313,58 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
                   </div>
                 </div>
 
-                {/* Status / Permission Lock Badge */}
-                <div className="shrink-0 flex items-center gap-1">
+                {/* Status / Permission Lock Badge / Overlay Checkbox */}
+                <div className="shrink-0 flex items-center gap-1.5">
                   {!accessible && (
                     <span className="text-[10px] px-1.5 py-0.5 bg-destructive/20 text-destructive border border-destructive/40 font-mono flex items-center gap-1">
                       <Icon name="lock" className="text-xs" />
                       <span>RESTRICTED</span>
                     </span>
                   )}
-                  {is_exact_active && (
-                    <span className="text-[10px] px-1.5 py-0.5 bg-primary text-primary-foreground font-bold shadow-xs">
-                      ACTIVE
-                    </span>
+                  {is_vector_overlay ? (
+                    <label
+                      className={`flex items-center gap-1.5 cursor-pointer select-none text-[10px] font-mono px-2 py-0.5 border transition-colors ${
+                        is_overlay_active
+                          ? 'border-primary bg-primary/20 text-primary font-bold'
+                          : 'border-border bg-card text-muted-foreground hover:text-foreground'
+                      }`}
+                      onClick={(arg0_e) => arg0_e.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={is_overlay_active}
+                        onChange={() => {
+                          if (is_stadester && on_change_stadester_config) {
+                            on_change_stadester_config((arg0_prev) => ({
+                              ...arg0_prev,
+                              enabled: !arg0_prev.enabled,
+                            }))
+                          }
+                        }}
+                        className="accent-primary cursor-pointer h-3.5 w-3.5"
+                      />
+                      <span>{is_overlay_active ? 'OVERLAY ON' : 'OVERLAY OFF'}</span>
+                    </label>
+                  ) : (
+                    is_exact_active && (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-primary text-primary-foreground font-bold shadow-xs">
+                        ACTIVE
+                      </span>
+                    )
                   )}
                 </div>
               </button>
+
+              {/* Stadestér Inline Configuration */}
+              {is_stadester && is_overlay_active && stadester_config && on_change_stadester_config && (
+                <div className="px-3 pb-3 pt-1 border-t border-border/40 bg-card/60">
+                  <StadesterSettings
+                    config={stadester_config}
+                    onChangeConfig={on_change_stadester_config}
+                    cityCount={stadester_city_count}
+                  />
+                </div>
+              )}
 
               {/* Sub-layers (e.g. female / male in labourforce) */}
               {arg0_layer.sub_layers && arg0_layer.sub_layers.length > 0 && (

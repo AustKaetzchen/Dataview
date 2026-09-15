@@ -1,9 +1,9 @@
 import { exec } from 'child_process'
 import fs from 'fs'
 import path from 'path'
-import puppeteer, { type Browser, type Page } from 'puppeteer-core'
+import puppeteer, { type Browser } from 'puppeteer-core'
 import ffmpegPath from 'ffmpeg-static'
-import { ParsedDataLayer, generateSelectorCombinations } from './layerParser.ts'
+import { type ParsedDataLayer, generateSelectorCombinations } from './layerParser.ts'
 
 export interface CyclingRenderItem {
   displayName: string
@@ -663,7 +663,7 @@ export const startTimelapseRenderJob = async function (
             })
 
             await page.waitForFunction(
-              () => Boolean(document.querySelector('#deckgl-overlay')) && typeof (window as any).__renderKeyframe === 'function' && (window as any).__layersLoaded === true,
+              "Boolean(document.querySelector('#deckgl-overlay')) && typeof window.__renderKeyframe === 'function' && window.__layersLoaded === true",
               { timeout: 30000 }
             )
 
@@ -685,9 +685,10 @@ export const startTimelapseRenderJob = async function (
 
               //Instruct headless client to render keyframe
               await page.evaluate(
-                async (arg0_layer, arg0_year, arg0_selectors) => {
-                  if (typeof (window as any).__renderKeyframe === 'function') {
-                    await (window as any).__renderKeyframe(arg0_layer, arg0_year, arg0_selectors)
+                (arg0_layer: string, arg0_year: number, arg0_selectors: any) => {
+                  let win = (globalThis as any)
+                  if (typeof win.__renderKeyframe === 'function') {
+                    return win.__renderKeyframe(arg0_layer, arg0_year, arg0_selectors)
                   }
                 },
                 target.layerId,
@@ -696,9 +697,9 @@ export const startTimelapseRenderJob = async function (
               )
 
               //Wait for deck.gl to complete raster drawing to the framebuffer
-              await page.evaluate(() => {
-                return new Promise((arg0_res) => requestAnimationFrame(() => requestAnimationFrame(arg0_res)))
-              })
+              await page.evaluate(
+                "new Promise((arg0_res) => requestAnimationFrame(() => requestAnimationFrame(arg0_res)))"
+              )
               await new Promise((arg0_res) => setTimeout(arg0_res, 30))
 
               //Capture full-screen native GPU screenshot
@@ -709,8 +710,8 @@ export const startTimelapseRenderJob = async function (
 
               completed_frames++
               job_status.currentFrame = completed_frames
-              job_status.progressPct = Math.round((completed_frames / total_steps)*85)
-              job_status.message = `Rendering frame ${completed_frames}/${total_steps}: ${target.displayName} (${yr} AD)...`
+              let yr_label = (yr < 0) ? `${Math.abs(yr)}BC` : `${yr}AD`
+              job_status.message = `Rendering frame ${completed_frames}/${total_steps}: ${target.displayName} (${yr_label})...`
             }
           } finally {
             if (browser_instance) {
@@ -777,7 +778,7 @@ export const startTimelapseRenderJob = async function (
       job_status.progressPct = 90
       job_status.message = 'Compiling stitched frames to H.264 MP4 video via ffmpeg...'
 
-      ffmpeg_bin = ffmpegPath as string
+      ffmpeg_bin = (ffmpegPath as unknown) as string
       if (!ffmpeg_bin || !fs.existsSync(ffmpeg_bin))
         throw new Error(`ffmpeg-static binary not found at: ${ffmpeg_bin}`)
 

@@ -10,6 +10,7 @@ import {
 } from '@/lib/geopng/polygonBinning'
 import {
   invertEqualEarth,
+  projectEqualEarth,
   transformGeometryToEqualEarth,
   generateEqualEarthGraticule,
 } from '@/lib/geopng/equalEarth'
@@ -21,10 +22,14 @@ import {
   CircleOverlayConfig,
   MapModeItem,
   MapModeId,
+  CityPoint,
+  CityFullRecord,
+  StadesterConfig,
 } from '@/lib/geopng/types'
 import { MAP_CONFIG, getPixelOffset } from '@config'
 import { UI_LAYOUT, getAnalyticsPanelRightOffset } from '@/lib/uiLayout'
 import { ClickInfoPanel } from './ClickInfoPanel'
+import { CityDetailsPanel } from './CityDetailsPanel'
 import { ColorBarLegend } from './ColorBarLegend'
 import { Button } from '../ui/button'
 import { Icon } from '../ui/icon'
@@ -59,7 +64,7 @@ export interface MapViewerProps {
   invertPalette?: boolean
   minVal: number
   maxVal: number
-  legendPosition?: 'top-left' | 'bottom-left' | 'bottom-center'
+  isTimelapseExporting?: boolean
   legendSubtitle?: string
   legendTitle: string
   scaleType: string
@@ -104,9 +109,18 @@ export interface MapViewerProps {
   onSelectLayer?: (arg0_layer_id: string) => void
   legendPosition?: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'top-centre' | 'bottom-centre'
   onChangeLegendPosition?: (pos: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right') => void
+  onCloseCityDetails?: () => void
+  onHoverCity?: (city: CityPoint | null, x?: number, y?: number) => void
+  onSelectCity?: (city: CityPoint) => void
   onTogglePerformantMode?: (enabled: boolean) => void
   onToggleUi?: () => void
   performantMode?: boolean
+  selectedCity?: CityFullRecord | null
+  selectedCityKey?: string | null
+  setStadesterConfig?: React.Dispatch<React.SetStateAction<StadesterConfig>>
+  stadesterCities?: CityPoint[]
+  stadesterConfig?: StadesterConfig
+  timelineYear?: number
   uiVisible?: boolean
   userRole?: UserRole
 }
@@ -121,11 +135,20 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
   //Convert from parameters
   let props = (arg0_props) ? arg0_props : ({} as MapViewerProps)
   let on_change_legend_position = props.onChangeLegendPosition
+  let on_close_city_details = props.onCloseCityDetails
+  let on_hover_city = props.onHoverCity
+  let on_select_city = props.onSelectCity
   let on_toggle_performant_mode = props.onTogglePerformantMode
   let on_toggle_ui = props.onToggleUi
   let performant_mode = props.performantMode ?? false
   let raw_legend_pos = (props.legendPosition || 'top-left') as string
   let legend_position = raw_legend_pos.replace('centre', 'center') as 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'
+  let selected_city = props.selectedCity
+  let selected_city_key = props.selectedCityKey
+  let set_stadester_config = props.setStadesterConfig
+  let stadester_cities = props.stadesterCities
+  let stadester_config = props.stadesterConfig
+  let timeline_year = props.timelineYear
   let ui_visible = props.uiVisible !== undefined ? props.uiVisible : true
 
   //Declare local instance variables
@@ -142,12 +165,14 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
   let equal_earth_land_geo_json: any
   let flyout_open: boolean
   let graticule_paths: { path: [number, number][] }[]
+  let handle_click: (info: any) => void
   let handle_container_pointer_move: (e: React.PointerEvent<HTMLDivElement>) => void
   let handle_double_click: () => void
   let handle_hover: (info: any) => void
-  let handle_click: (info: any) => void
   let handle_view_state_change: (e: any) => void
   let heightmap_config = props.heightmapConfig
+  let hovered_city: CityPoint | null
+  let hovered_city_pos: { x: number; y: number } | null
   let hovered_country = props.hoveredCountry
   let info_panel_open = props.infoPanelOpen ?? false
   let invert_palette = props.invertPalette
@@ -190,6 +215,8 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
   let set_circle_overlay_config = props.setCircleOverlayConfig
   let set_flyout_open: (open: boolean) => void
   let set_heightmap_config = props.setHeightmapConfig
+  let set_hovered_city: React.Dispatch<React.SetStateAction<CityPoint | null>>
+  let set_hovered_city_pos: React.Dispatch<React.SetStateAction<{ x: number; y: number } | null>>
   let set_mapmodes_bounds: React.Dispatch<React.SetStateAction<{ left: number; right: number; top: number } | null>>
   let set_mapmodes_taken_right: React.Dispatch<React.SetStateAction<number>>
   let set_projection = props.setProjection
@@ -202,16 +229,26 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
   let top_right_taken: number
   let views: any
 
+  let deck_ref = useRef<any>(null)
+
   //Function body
   let [internal_flyout_open, set_internal_flyout_open] = useState(false)
   flyout_open = (props.settingsDrawerOpen !== undefined) ? props.settingsDrawerOpen : internal_flyout_open
   set_flyout_open = on_toggle_settings_drawer || set_internal_flyout_open
 
+  ;[hovered_city, set_hovered_city] = useState<CityPoint | null>(null)
+  ;[hovered_city_pos, set_hovered_city_pos] = useState<{ x: number; y: number } | null>(null)
   ;[mapmodes_bounds, set_mapmodes_bounds] = useState<{ left: number; right: number; top: number } | null>(null)
   ;[mapmodes_taken_right, set_mapmodes_taken_right] = useState<number>(352)
   ;[timeline_bounds, set_timeline_bounds] = useState<{ left: number; right: number; top: number } | null>(null)
   ;[timeline_clearance, set_timeline_clearance] = useState<number>(128)
   ;[top_right_taken, set_top_right_taken] = useState<number>(0)
+
+  //Dismiss city hover tooltip when cities overlay is disabled or mode changes
+  useEffect(() => {
+    set_hovered_city(null)
+    set_hovered_city_pos(null)
+  }, [stadester_config?.enabled, props.activeLayerId, map_modes, projection])
 
   useEffect(() => {
     let updateClearance = () => {
@@ -285,6 +322,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
       clearInterval(interval)
       window.removeEventListener('resize', updateClearance)
     }
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [flyout_open, analytics_open, ui_visible, map_modes])
 
   let [proj_view_states, set_proj_view_states] = useState<Record<ProjectionType, any>>({
@@ -723,6 +761,17 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
     selectedCountry: selected_country,
     countriesMode: countries_mode,
     hoveredCountry: hovered_country,
+    onHoverCity: (arg0_city, arg1_x, arg2_y) => {
+      set_hovered_city(arg0_city)
+      if (arg1_x !== undefined && arg2_y !== undefined)
+        set_hovered_city_pos({ x: arg1_x, y: arg2_y })
+      if (on_hover_city)
+        on_hover_city(arg0_city, arg1_x, arg2_y)
+    },
+    onSelectCity: on_select_city,
+    selectedCityKey: selected_city_key,
+    stadesterCities: stadester_cities,
+    stadesterConfig: stadester_config,
   })
 
   if (props.activeLayerId && props.dataLayers) {
@@ -736,6 +785,32 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
     }
   }
 
+  //Compute screen anchor coordinates for selected city panel
+  let selected_city_anchor = useMemo(() => {
+    if (!selected_city || !selected_city.coords || !deck_ref.current)
+      return null
+    try {
+      let vp = deck_ref.current.deck?.getViewports?.()[0]
+      if (!vp)
+        return null
+      let c_lat = selected_city.coords[0]
+      let c_lon = selected_city.coords[1]
+      let px = c_lon
+      let py = c_lat
+      if (projection === 'EqualEarth') {
+        let proj = projectEqualEarth(c_lon, c_lat)
+        px = proj[0]
+        py = proj[1]
+      }
+      let projected = vp.project([px, py])
+      if (projected && projected.length >= 2)
+        return { x: projected[0], y: projected[1] }
+    } catch (e) {
+      // Ignore projection errors
+    }
+    return null
+  }, [selected_city, projection, proj_view_states[projection]])
+
   //Return statement
   return (
     <div
@@ -744,8 +819,13 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
       onDoubleClick={handle_double_click}
       onContextMenu={(e) => e.preventDefault()}
       onPointerMove={handle_container_pointer_move}
+      onPointerLeave={() => {
+        set_hovered_city(null)
+        set_hovered_city_pos(null)
+      }}
     >
       <DeckGL
+        ref={deck_ref}
         id="deckgl-overlay"
         views={views}
         viewState={proj_view_states[projection]}
@@ -769,6 +849,43 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
           pos={cursor_pos}
           activeLayer={active_layer}
           activeVariableSelectors={props.activeVariableSelectors}
+        />
+      )}
+
+      {/* Floating City Hover Tooltip */}
+      {ui_visible && stadester_config?.enabled && hovered_city && hovered_city_pos && !selected_city && (
+        <div
+          className="pointer-events-none fixed z-50 bg-card/95 border border-border shadow-2xl px-2.5 py-1.5 backdrop-blur-md text-xs font-sans rounded-none"
+          style={{
+            left: `${hovered_city_pos.x + 14}px`,
+            top: `${hovered_city_pos.y + 14}px`,
+          }}
+        >
+          <div className="font-semibold text-white flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-primary" />
+            <span>{hovered_city.name}</span>
+            {hovered_city.country && (
+              <span className="text-[10px] text-muted-foreground font-normal">({hovered_city.country})</span>
+            )}
+          </div>
+          <div className="flex items-center gap-3 text-[11px] text-muted-foreground font-mono mt-0.5">
+            <span>Pop: <strong className="text-white">{Math.round(hovered_city.population).toLocaleString('de-DE')}</strong></span>
+            {hovered_city.growthRate !== undefined && (
+              <span className="text-white">
+                {(hovered_city.growthRate >= 0) ? '+' : ''}{(hovered_city.growthRate*100).toFixed(2)}%/yr
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Stadestér City Details Panel */}
+      {ui_visible && selected_city && (
+        <CityDetailsPanel
+          anchorPos={selected_city_anchor}
+          city={selected_city}
+          currentYear={timeline_year || 2025}
+          onClose={on_close_city_details || (() => {})}
         />
       )}
 
@@ -1160,7 +1277,10 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
           selectedCountries={selected_countries || []}
           setCircleOverlayConfig={set_circle_overlay_config || (() => { })}
           setHeightmapConfig={set_heightmap_config || (() => { })}
+          setStadesterConfig={set_stadester_config}
           settingsOpen={flyout_open}
+          stadesterCityCount={stadester_cities?.length || 0}
+          stadesterConfig={stadester_config}
           userRole={props.userRole}
         />
       )}

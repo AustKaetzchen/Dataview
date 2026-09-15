@@ -11,6 +11,7 @@ import {
   cancelTimelapseJob,
   type TimelapseRenderOptions,
 } from './videoRenderer.ts'
+import { StadesterService } from './stadesterService.ts'
 
 export interface ApiMiddlewareOptions {
   configDir: string
@@ -565,6 +566,158 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
       res.setHeader('Content-Type', 'application/json')
       res.end(JSON.stringify({ folders: folders_list }))
       return
+    }
+
+    //Route 12: GET /api/stadester/lite (Static lightweight cache)
+    if (pathname === '/stadester/lite' || pathname === '/api/stadester/lite') {
+      let dataset = (query.dataset as string) || 'stadester_1.1'
+      let lite_path: string
+
+      try {
+        lite_path = StadesterService.ensureLiteCache(dataset)
+      } catch (arg0_err) {
+        console.error('[ApiMiddleware] Error generating lite cache:', arg0_err)
+        res.statusCode = 500
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ error: 'Failed to generate lightweight cache' }))
+        return
+      }
+
+      if (!fs.existsSync(lite_path)) {
+        res.statusCode = 404
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ error: 'Lite cache file not found' }))
+        return
+      }
+
+      let stats = fs.statSync(lite_path)
+      let etag = `"${dataset}-lite-${stats.mtimeMs}"`
+
+      if (req.headers['if-none-match'] === etag) {
+        res.statusCode = 304
+        res.end()
+        return
+      }
+
+      res.statusCode = 200
+      res.setHeader('Content-Type', 'application/json')
+      res.setHeader('Content-Length', stats.size)
+      res.setHeader('ETag', etag)
+      res.setHeader('Cache-Control', 'public, max-age=86400')
+
+      let stream = fs.createReadStream(lite_path)
+      stream.pipe(res)
+      return
+    }
+
+    //Route 13: GET /api/stadester/cities (Active cities at year, with streaming support)
+    if (pathname === '/stadester/cities' || pathname === '/api/stadester/cities') {
+      let color_mode = (query.colorMode as 'growth' | 'population' | 'continent') || 'growth'
+      let dataset = (query.dataset as string) || 'stadester_1.1'
+      let is_streaming = query.stream === '1' || query.stream === 'true'
+      let max_cities = query.maxCities !== undefined ? parseInt(query.maxCities as string, 10) : 4000
+      let min_pop = query.minPop !== undefined ? parseFloat(query.minPop as string) : 0
+      let raw_year = parseFloat(query.year as string)
+      let year = Number.isNaN(raw_year) ? 1950 : raw_year
+
+      try {
+        let cities = StadesterService.getCitiesAtYear(dataset, year, {
+          color_mode,
+          max_cities,
+          min_pop,
+        })
+
+        res.statusCode = 200
+        res.setHeader('Content-Type', 'application/json')
+
+        if (is_streaming) {
+          res.setHeader('Transfer-Encoding', 'chunked')
+          res.write('[\n')
+          for (let i = 0; i < cities.length; i++) {
+            let is_last = i === cities.length - 1
+            res.write(JSON.stringify(cities[i]) + (is_last ? '\n' : ',\n'))
+          }
+          res.write(']')
+          res.end()
+          return
+        }
+
+        res.end(JSON.stringify({
+          cities,
+          count: cities.length,
+          dataset,
+          year,
+        }))
+        return
+      } catch (arg0_err: any) {
+        console.error('[ApiMiddleware] Error querying stadester cities:', arg0_err)
+        res.statusCode = 500
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ error: arg0_err?.message || 'Error fetching cities' }))
+        return
+      }
+    }
+
+    //Route 14: GET /api/stadester/city (Full historical details for one city)
+    if (pathname === '/stadester/city' || pathname === '/api/stadester/city') {
+      let city_key = (query.key as string) || ''
+      let dataset = (query.dataset as string) || 'stadester_1.1'
+
+      if (!city_key) {
+        res.statusCode = 400
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ error: 'Missing city key parameter' }))
+        return
+      }
+
+      try {
+        let city = StadesterService.getCityByKey(dataset, city_key)
+        if (!city) {
+          res.statusCode = 404
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify({ error: `City not found: ${city_key}` }))
+          return
+        }
+
+        res.statusCode = 200
+        res.setHeader('Content-Type', 'application/json')
+        res.setHeader('Cache-Control', 'public, max-age=3600')
+        res.end(JSON.stringify(city))
+        return
+      } catch (arg0_err: any) {
+        console.error('[ApiMiddleware] Error retrieving city details:', arg0_err)
+        res.statusCode = 500
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ error: arg0_err?.message || 'Error fetching city details' }))
+        return
+      }
+    }
+
+    //Route 15: GET /api/stadester/largest (Ranked largest cities at year)
+    if (pathname === '/stadester/largest' || pathname === '/api/stadester/largest') {
+      let dataset = (query.dataset as string) || 'stadester_1.1'
+      let limit = query.limit !== undefined ? parseInt(query.limit as string, 10) : 20
+      let raw_year = parseFloat(query.year as string)
+      let year = Number.isNaN(raw_year) ? 1950 : raw_year
+
+      try {
+        let largest = StadesterService.getLargestCitiesAtYear(dataset, year, limit)
+        res.statusCode = 200
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({
+          cities: largest,
+          dataset,
+          limit,
+          year,
+        }))
+        return
+      } catch (arg0_err: any) {
+        console.error('[ApiMiddleware] Error fetching largest cities:', arg0_err)
+        res.statusCode = 500
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ error: arg0_err?.message || 'Error fetching largest cities' }))
+        return
+      }
     }
 
     //Continue to next middleware

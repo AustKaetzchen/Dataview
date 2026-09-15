@@ -4,6 +4,7 @@ import {
   MapModeId,
   HeightmapConfig,
   CircleOverlayConfig,
+  StadesterConfig,
 } from '@/lib/geopng/types'
 import { CountryFeature, CountryStats } from '@/lib/geopng/polygonBinning'
 import { Icon } from '@/components/ui/icon'
@@ -18,6 +19,7 @@ import {
   sliderPosToStrength,
 } from './mapmodes/SpikeMapSettings'
 import { CircleOverlaySettings } from './mapmodes/CircleOverlaySettings'
+import { StadesterSettings } from './mapmodes/StadesterSettings'
 import { ParsedDataLayer } from '@/server/layerParser'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select'
 
@@ -54,7 +56,10 @@ export interface MapmodesTrayProps {
   selectedCountries: CountryFeature[]
   setCircleOverlayConfig: React.Dispatch<React.SetStateAction<CircleOverlayConfig>>
   setHeightmapConfig: React.Dispatch<React.SetStateAction<HeightmapConfig>>
+  setStadesterConfig?: React.Dispatch<React.SetStateAction<StadesterConfig>>
   settingsOpen?: boolean
+  stadesterCityCount?: number
+  stadesterConfig?: StadesterConfig
   userRole?: UserRole
 }
 
@@ -94,7 +99,10 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
     selectedCountries: selected_countries,
     setCircleOverlayConfig: set_circle_overlay_config,
     setHeightmapConfig: set_heightmap_config,
+    setStadesterConfig: set_stadester_config,
     settingsOpen: settings_open = false,
+    stadesterCityCount: stadester_city_count = 0,
+    stadesterConfig: stadester_config,
     userRole: user_role = 'developer',
   } = props
 
@@ -428,10 +436,64 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
     let has_variable_selectors = Boolean(layer.variable_selectors && Object.keys(layer.variable_selectors).length > 0)
     let is_searching = Boolean(search_query.trim())
     let is_node_expanded = is_searching || (expanded_nodes[layer.id] ?? true)
+    let is_vector_overlay = layer.type === 'vector.points' || layer.id.includes('stadester')
+    let is_stadester = layer.id.includes('stadester')
+    let is_overlay_active = is_stadester ? Boolean(stadester_config?.enabled) : false
 
     return (
       <div key={layer.id} className="space-y-1" style={{ paddingLeft: `${depth*12}px` }}>
-        {has_sub_layers ? (
+        {is_vector_overlay ? (
+          <div className="border border-border/70 bg-card/40 mb-1">
+            <div
+              onClick={() => {
+                if (is_stadester && set_stadester_config) {
+                  set_stadester_config((arg0_prev) => ({
+                    ...arg0_prev,
+                    enabled: !arg0_prev.enabled,
+                  }))
+                }
+              }}
+              className={`flex items-center justify-between px-2 py-1.5 text-left cursor-pointer border transition-colors ${
+                is_overlay_active
+                  ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
+                  : 'hover:bg-muted/40 text-foreground border-transparent'
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span
+                  className={`w-3.5 h-3.5 rounded-none border flex items-center justify-center shrink-0 transition-colors ${
+                    is_overlay_active ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/60'
+                  }`}
+                >
+                  {is_overlay_active && <Icon name="check" className="text-[10px]" />}
+                </span>
+                <Icon name="location_city" className="text-primary text-xs shrink-0" />
+                <span className="text-xs truncate">{layer.name}</span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-[10px] text-muted-foreground font-mono">
+                  {is_overlay_active ? 'OVERLAY ON' : 'OVERLAY OFF'}
+                </span>
+                {is_stadester && (
+                  <Icon
+                    name={is_overlay_active ? 'expand_less' : 'expand_more'}
+                    className="text-xs text-muted-foreground"
+                  />
+                )}
+              </div>
+            </div>
+
+            {is_stadester && is_overlay_active && stadester_config && set_stadester_config && (
+              <div className="p-2 border-t border-border/60 bg-card/60 space-y-1 text-xs">
+                <StadesterSettings
+                  config={stadester_config}
+                  onChangeConfig={set_stadester_config}
+                  cityCount={stadester_city_count}
+                />
+              </div>
+            )}
+          </div>
+        ) : has_sub_layers ? (
           <div>
             <div
               onClick={() => toggle_node(layer.id)}
@@ -659,6 +721,86 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = function (arg0_props) {
                 })}
               </div>
             )}
+          </div>
+        ) : (layer.type === 'vector.points' || layer.id.includes('stadester')) ? (
+          <div>
+            {/* Vector / Cities Overlay Data Layer as Checkbox Toggle */}
+            {(() => {
+              let is_stadester = layer.id.includes('stadester')
+              let is_overlay_enabled = is_stadester ? Boolean(stadester_config?.enabled && (stadester_config.dataset === layer.id || !stadester_config.dataset)) : false
+              let is_settings_expanded = expanded_nodes[`overlay_${layer.id}`] ?? is_overlay_enabled
+
+              return (
+                <div className="space-y-1">
+                  <button
+                    type="button"
+                    disabled={!is_accessible}
+                    onClick={() => {
+                      if (is_accessible && is_stadester && set_stadester_config) {
+                        set_stadester_config((arg0_prev) => {
+                          let will_enable = !arg0_prev.enabled || arg0_prev.dataset !== layer.id
+                          return {
+                            ...arg0_prev,
+                            dataset: layer.id as 'stadester_1.1' | 'stadester_1.0',
+                            enabled: will_enable,
+                          }
+                        })
+                        if (!is_settings_expanded)
+                          toggle_node(`overlay_${layer.id}`)
+                      }
+                    }}
+                    className={`w-full flex items-center justify-between px-2 py-1 text-left cursor-pointer border transition-colors ${
+                      is_overlay_enabled
+                        ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
+                        : 'hover:bg-muted/40 text-foreground border-transparent'
+                    } ${!is_accessible ? 'opacity-40 cursor-not-allowed' : ''}`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className={`w-3.5 h-3.5 rounded-none border flex items-center justify-center shrink-0 transition-colors ${
+                          is_overlay_enabled
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-muted-foreground/60 bg-background/60'
+                        }`}
+                      >
+                        {is_overlay_enabled && <Icon name="check" className="text-[10px] stroke-[3]" />}
+                      </span>
+                      <span className="text-xs truncate">{layer.name}</span>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0 ml-1">
+                      <span className="text-[10px] text-muted-foreground uppercase font-mono">
+                        {is_overlay_enabled ? 'OVERLAY ON' : 'OVERLAY OFF'}
+                      </span>
+                      {is_overlay_enabled && (
+                        <div
+                          onClick={(arg0_e) => {
+                            arg0_e.stopPropagation()
+                            toggle_node(`overlay_${layer.id}`)
+                          }}
+                          className="p-0.5 text-muted-foreground hover:text-foreground cursor-pointer"
+                        >
+                          <Icon
+                            name={is_settings_expanded ? 'expand_less' : 'expand_more'}
+                            className="text-xs text-muted-foreground"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </button>
+
+                  {/* Inline Stadestér Settings when overlay is active */}
+                  {is_stadester && is_overlay_enabled && is_settings_expanded && stadester_config && set_stadester_config && (
+                    <div className="p-2 border border-border/60 bg-card/60 ml-2">
+                      <StadesterSettings
+                        cityCount={stadester_city_count}
+                        config={stadester_config}
+                        onChangeConfig={set_stadester_config}
+                      />
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
           </div>
         ) : (
           <div>

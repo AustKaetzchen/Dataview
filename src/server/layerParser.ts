@@ -381,6 +381,8 @@ export const getLayerIcon = function (arg0_layer_id: string): string {
     return 'grain'
   if (id.includes('rural'))
     return 'park'
+  if (id.includes('stadester') || id.includes('city') || id.includes('cities'))
+    return 'location_city'
   if (id.includes('urban'))
     return 'apartment'
   if (id.includes('population'))
@@ -549,19 +551,26 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
           }
         }
 
-        //Scan files and discover available years using scanLayerTemplate if template exists
-        let years = has_filepath ? scanLayerTemplate(resolved_template, k, file_cache, selectors) : []
-
         //Determine layer type
         let layer_type = 'raster'
-        if (k.includes('professions') || k.includes('profession')) {
+        if (item.type) {
+          layer_type = item.type
+        } else if (k.includes('professions') || k.includes('profession')) {
           layer_type = 'raster.category_profession'
         } else if (k.includes('age_sex') || item.type === 'raster.age_sex') {
           layer_type = 'raster.age_sex'
         } else if (k.includes('population') || k.includes('birth') || k.includes('death') || k.includes('migration')) {
           layer_type = 'raster.population'
-        } else if (item.type) {
-          layer_type = item.type
+        }
+
+        //Scan files and discover available years using scanLayerTemplate if template exists and is raster
+        let years: number[] = []
+        if (layer_type.startsWith('vector.')) {
+          years = [-3300, 2025]
+          if (has_filepath)
+            file_cache.set(k, resolved_template)
+        } else if (has_filepath) {
+          years = scanLayerTemplate(resolved_template, k, file_cache, selectors)
         }
 
         //Determine description

@@ -7,15 +7,22 @@ import {
   GeoJsonLayer,
   ScatterplotLayer,
   SolidPolygonLayer,
+  TextLayer,
 } from '@deck.gl/layers'
+import { CollisionFilterExtension } from '@deck.gl/extensions'
 import { TileLayer } from '@deck.gl/geo-layers'
 import { CountryFeature } from '@/lib/geopng/polygonBinning'
-import { transformGeometryToEqualEarth } from '@/lib/geopng/equalEarth'
+import {
+  transformGeometryToEqualEarth,
+  projectEqualEarth,
+} from '@/lib/geopng/equalEarth'
 import {
   DecodedRaster,
   ProjectionType,
   HeightmapConfig,
   CircleOverlayConfig,
+  CityPoint,
+  StadesterConfig,
 } from '@/lib/geopng/types'
 import { MAP_CONFIG } from '@config'
 import {
@@ -25,6 +32,84 @@ import {
 } from './deckLayers'
 import { ElevationSpikePoint } from './useElevationSpikes'
 import { CirclePixelPoint } from './useCircleOverlay'
+
+import * as d3Chromatic from 'd3-scale-chromatic'
+
+let REGION_COLOR_MAP: Record<string, string> = {
+  africa: '#f97316',
+  central_asia: '#a855f7',
+  eastasia: '#ef4444',
+  europe: '#6366f1',
+  latin_america: '#10b981',
+  middle_east: '#eab308',
+  northern_america: '#0ea5e9',
+  oceania: '#14b8a6',
+  south_asia: '#ec4899',
+  southeast_asia: '#8b5cf6',
+}
+
+function hexToRgb (arg0_hex: string): [number, number, number] {
+  let hex = arg0_hex.replace('#', '')
+  if (hex.length === 3)
+    hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2]
+  let num = parseInt(hex, 16)
+  return [(num >> 16) & 255, (num >> 8) & 255, num & 255]
+}
+
+function getShortCityLabel (arg0_name: string): string {
+  //Convert from parameters
+  let name = arg0_name
+
+  //Guard clauses
+  if (!name)
+    return ''
+
+  //Function body
+  let before_semi = name.split(';')[0].trim()
+  let first_word = before_semi.split(/[\s,]+/)[0].trim()
+
+  //Return statement
+  return first_word || before_semi
+}
+
+function getGrowthRgb (arg0_rate: number, arg1_palette?: string): [number, number, number] {
+  //Convert from parameters
+  let palette = arg1_palette || 'Rainbow'
+  let r = arg0_rate
+
+  //If Rainbow default, use calibrated heat/cool diverging stops matching Anita's cityhistory
+  if (palette === 'Rainbow' || !palette) {
+    if (r >= 0.08) return [232, 121, 249]
+    if (r >= 0.06) return [239, 68, 68]
+    if (r >= 0.03) return [251, 146, 60]
+    if (r >= 0.01) return [253, 224, 71]
+    if (r >= 0.00) return [198, 219, 85]
+    if (r >= -0.02) return [69, 207, 119]
+    if (r >= -0.04) return [72, 156, 240]
+    return [93, 96, 226]
+  }
+
+  //D3 continuous colour interpolation from -0.05 to +0.08
+  let interpolator = (d3Chromatic as any)[`interpolate${palette}`]
+  if (interpolator) {
+    let t = Math.max(0, Math.min(1, (r - (-0.05))/(0.08 - (-0.05))))
+    let color_str = interpolator(t)
+    let match = color_str.match(/\d+/g)
+    if (match && match.length >= 3)
+      return [parseInt(match[0], 10), parseInt(match[1], 10), parseInt(match[2], 10)]
+  }
+
+  return [232, 121, 249]
+}
+
+function getPopRgb (arg0_pop: number): [number, number, number] {
+  let p = Math.max(1, arg0_pop)
+  let t = Math.max(0, Math.min(1, (Math.log10(p) - 3.7)/3.6))
+  let r = Math.round(Math.min(255, 13 + t*240))
+  let g = Math.round(Math.min(255, 8 + t*210))
+  let b = Math.round(Math.max(0, 135 - t*100))
+  return [r, g, b]
+}
 
 //Basemaps driven by MAP_CONFIG (config/map.json5)
 let esri_basemap_urls_obj: Record<string, string> = {}
@@ -57,6 +142,11 @@ export interface UseDeckLayersParams {
   selectedCountry?: CountryFeature | null
   countriesMode?: boolean
   hoveredCountry?: CountryFeature | null
+  stadesterConfig?: StadesterConfig
+  stadesterCities?: CityPoint[]
+  selectedCityKey?: string | null
+  onSelectCity?: (city: CityPoint) => void
+  onHoverCity?: (city: CityPoint | null, x?: number, y?: number) => void
 }
 
 /**
@@ -69,6 +159,69 @@ export interface UseDeckLayersParams {
 export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
   //Convert from parameters
   let options = (arg0_options) ? arg0_options : ({} as UseDeckLayersParams)
+
+  //Memoize Stadestér points to prevent GPU buffer re-uploading on mouse moves
+  let b_scale = (options.stadesterConfig?.bubbleSize !== undefined) ? options.stadesterConfig.bubbleSize : 1
+  let color_mode = options.stadesterConfig?.colorMode || 'growth'
+  let growth_palette = options.stadesterConfig?.growthPalette || 'Rainbow'
+  let is_cities_enabled = Boolean(options.stadesterConfig?.enabled)
+  let projection = options.projection
+  let stadester_cities = options.stadesterCities
+
+  let stadester_points_data = useMemo(() => {
+    if (!is_cities_enabled || !stadester_cities || stadester_cities.length === 0)
+      return []
+
+    return stadester_cities.map((city) => {
+      let c_lat = (city.lat !== undefined) ? city.lat : city.coords[0]
+      let c_lon = (city.lon !== undefined) ? city.lon : city.coords[1]
+      let fill_color: [number, number, number, number] = [255, 255, 255, 220]
+      let px = c_lon
+      let py = c_lat
+
+      if (projection === 'EqualEarth') {
+        let projected = projectEqualEarth(c_lon, c_lat)
+        px = projected[0]
+        py = projected[1]
+      }
+
+      // Equal-area pixel radius scaled by sqrt(population):
+      // r = sqrt(pop) * 0.0115 * b_scale (1M city -> 11.5px, 10M city -> 36.4px, 100k -> 3.6px)
+      let pixel_radius = Math.max(2.0, Math.min(65.0, Math.sqrt(Math.max(100, city.population)) * 0.0115 * b_scale))
+
+      if (color_mode === 'growth') {
+        let growth_rate = (city.growthRate !== undefined) ? city.growthRate : 0
+        let growth_rgb = getGrowthRgb(growth_rate, growth_palette)
+        fill_color = [growth_rgb[0], growth_rgb[1], growth_rgb[2], 220]
+      } else if (color_mode === 'population') {
+        let pop_rgb = getPopRgb(city.population)
+        fill_color = [pop_rgb[0], pop_rgb[1], pop_rgb[2], 220]
+      } else if (color_mode === 'continent') {
+        let reg_key = city.region || ''
+        let reg_hex = REGION_COLOR_MAP[reg_key] || '#94a3b8'
+        let reg_rgb = hexToRgb(reg_hex)
+        fill_color = [reg_rgb[0], reg_rgb[1], reg_rgb[2], 220]
+      }
+
+      // Truncate name to the first word prior to semicolon
+      let short_name = getShortCityLabel(city.name)
+
+      return {
+        ...city,
+        color: fill_color,
+        pixelRadius: pixel_radius,
+        position: [px, py, 0] as [number, number, number],
+        shortName: short_name,
+      }
+    })
+  }, [
+    is_cities_enabled,
+    stadester_cities,
+    b_scale,
+    color_mode,
+    growth_palette,
+    projection,
+  ])
 
   //Return statement
   return useMemo(() => {
@@ -425,6 +578,99 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
       )
     }
 
+    //8. Stadestér Historical Cities
+    if (options.stadesterConfig?.enabled && stadester_points_data.length > 0) {
+      let is_collision_active = (options.stadesterConfig.labelCollision !== undefined) ? options.stadesterConfig.labelCollision : true
+      let is_halo = options.stadesterConfig.halo !== false && !options.stadesterConfig.filled
+      let is_labels_visible = (options.stadesterConfig.showLabels !== undefined) ? options.stadesterConfig.showLabels : true
+
+      // City circles layer (ScatterplotLayer rendered in screen pixels)
+      layers_array.push(
+        new ScatterplotLayer({
+          id: `stadester-cities-${projection}`,
+          data: stadester_points_data,
+          getPosition: (d: any) => d.position,
+          getRadius: (d: any) => d.pixelRadius,
+          getFillColor: (d: any) => d.color,
+          getLineColor: (d: any) => d.color,
+          getLineWidth: 1.5,
+          lineWidthUnits: 'pixels',
+          lineWidthMinPixels: 1.5,
+          stroked: is_halo,
+          filled: !is_halo,
+          radiusUnits: 'pixels',
+          radiusMinPixels: 2.0,
+          radiusMaxPixels: 65.0,
+          coordinateSystem: (is_cartesian) ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
+          pickable: true,
+          autoHighlight: true,
+          highlightColor: [255, 255, 255, 100],
+          onClick: (info: any) => {
+            if (info.object && options.onSelectCity)
+              options.onSelectCity(info.object)
+          },
+          onHover: (info: any) => {
+            if (options.onHoverCity)
+              options.onHoverCity(info.object || null, info.x, info.y)
+          },
+          parameters: { depthTest: false },
+        })
+      )
+
+      // City selection highlight ring
+      if (options.selectedCityKey) {
+        let selected_city_item = stadester_points_data.find((c: any) => c.key === options.selectedCityKey)
+        if (selected_city_item) {
+          layers_array.push(
+            new ScatterplotLayer({
+              id: `stadester-selected-ring-${projection}`,
+              data: [selected_city_item],
+              getPosition: (d: any) => d.position,
+              getRadius: (d: any) => d.pixelRadius + 4,
+              stroked: true,
+              filled: false,
+              getLineColor: [239, 68, 68, 255],
+              getLineWidth: 2.5,
+              lineWidthUnits: 'pixels',
+              radiusUnits: 'pixels',
+              coordinateSystem: (is_cartesian) ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
+              parameters: { depthTest: false },
+            })
+          )
+        }
+      }
+
+      // City text labels with dark backdrop and collision filter
+      if (is_labels_visible) {
+        layers_array.push(
+          new TextLayer({
+            id: `stadester-labels-${projection}`,
+            data: stadester_points_data,
+            getPosition: (d: any) => d.position,
+            getText: (d: any) => d.shortName,
+            getSize: (d: any) => Math.max(10, Math.min(14, 9 + Math.log10(Math.max(1000, d.population))*1.1)),
+            sizeUnits: 'pixels',
+            getColor: [255, 255, 255, 255],
+            getTextAnchor: 'start',
+            getAlignmentBaseline: 'center',
+            getPixelOffset: (d: any) => [d.pixelRadius + 4, 0],
+            background: true,
+            backgroundColor: [10, 15, 25, 220],
+            backgroundPadding: [4, 2],
+            borderRadius: 2,
+            fontFamily: 'Inter, system-ui, sans-serif',
+            fontWeight: 600,
+            pickable: false,
+            extensions: [new CollisionFilterExtension()],
+            collisionEnabled: is_collision_active,
+            collisionGroup: 'stadester-city-labels',
+            getCollisionPriority: (d: any) => Math.max(-1000, Math.min(1000, Math.log10(Math.max(1, d.population))*250 - 800)),
+            parameters: { depthTest: false },
+          })
+        )
+      }
+    }
+
     //Return statement
     return layers_array
   }, [
@@ -450,5 +696,10 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
     options.selectedCountries,
     options.countriesMode,
     options.hoveredCountry,
+    stadester_points_data,
+    options.stadesterConfig,
+    options.selectedCityKey,
+    options.onSelectCity,
+    options.onHoverCity,
   ])
 }

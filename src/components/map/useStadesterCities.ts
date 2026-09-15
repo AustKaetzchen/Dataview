@@ -1,0 +1,186 @@
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { CityPoint, CityFullRecord, StadesterConfig } from '@/lib/geopng/types'
+
+export interface UseStadesterCitiesParams {
+  colorMode?: 'growth' | 'population' | 'continent'
+  config?: StadesterConfig
+  dataset?: 'stadester_1.1' | 'stadester_1.0'
+  enabled?: boolean
+  maxCities?: number
+  minPop?: number
+  selectedCityKey?: string | null
+  year: number
+}
+
+export interface UseStadesterCitiesResult {
+  cities: CityPoint[]
+  error: string | null
+  fetchFullCityRecord: (arg0_key: string) => Promise<CityFullRecord | null>
+  isLoading: boolean
+  selectedCity: CityFullRecord | null
+  selectedCityKey: string | null
+  setSelectedCity: (arg0_city: CityFullRecord | null) => void
+  setSelectedCityKey: (arg0_key: string | null) => void
+}
+
+/**
+ * Hook to stream and manage Stadestér historical cities data with client-side caching.
+ *
+ * @param {UseStadesterCitiesParams} arg0_options
+ *
+ * @returns {UseStadesterCitiesResult}
+ */
+export const useStadesterCities = function (arg0_options: UseStadesterCitiesParams): UseStadesterCitiesResult {
+  //Convert from parameters
+  let options = (arg0_options) ? arg0_options : ({} as UseStadesterCitiesParams)
+  let cfg = options.config
+  let color_mode = cfg?.colorMode || options.colorMode || 'growth'
+  let dataset = cfg?.dataset || options.dataset || 'stadester_1.1'
+  let enabled = (cfg !== undefined) ? cfg.enabled : Boolean(options.enabled)
+  let max_cities = (cfg?.maxCities !== undefined) ? cfg.maxCities : ((options.maxCities !== undefined) ? options.maxCities : 4000)
+  let min_pop = (cfg?.minPop !== undefined) ? cfg.minPop : ((options.minPop !== undefined) ? options.minPop : 0)
+  let year = (options.year !== undefined) ? options.year : 1950
+
+  //Declare local instance variables
+  let abort_controller_ref: React.MutableRefObject<AbortController | null>
+  let cities: CityPoint[]
+  let client_cache_ref: React.MutableRefObject<Map<string, CityPoint[]>>
+  let error: string | null
+  let fetch_full_city_record: (arg0_key: string) => Promise<CityFullRecord | null>
+  let full_city_cache_ref: React.MutableRefObject<Map<string, CityFullRecord>>
+  let is_loading: boolean
+  let selected_city: CityFullRecord | null
+  let selected_city_key: string | null
+  let set_cities: React.Dispatch<React.SetStateAction<CityPoint[]>>
+  let set_error: React.Dispatch<React.SetStateAction<string | null>>
+  let set_is_loading: React.Dispatch<React.SetStateAction<boolean>>
+  let set_selected_city: React.Dispatch<React.SetStateAction<CityFullRecord | null>>
+  let set_selected_city_key: React.Dispatch<React.SetStateAction<string | null>>
+
+  //Function body
+  ;[cities, set_cities] = useState<CityPoint[]>([])
+  ;[is_loading, set_is_loading] = useState<boolean>(false)
+  ;[error, set_error] = useState<string | null>(null)
+  ;[selected_city, set_selected_city] = useState<CityFullRecord | null>(null)
+  ;[selected_city_key, set_selected_city_key] = useState<string | null>(null)
+
+  abort_controller_ref = useRef<AbortController | null>(null)
+  client_cache_ref = useRef<Map<string, CityPoint[]>>(new Map())
+  full_city_cache_ref = useRef<Map<string, CityFullRecord>>(new Map())
+
+  useEffect(() => {
+    if (options.selectedCityKey !== undefined) {
+      set_selected_city_key(options.selectedCityKey)
+    }
+  }, [options.selectedCityKey])
+
+  //Fetch cities for active year
+  useEffect(() => {
+    if (!enabled) {
+      set_cities([])
+      return
+    }
+
+    let rounded_year = Math.round(year)
+    let cache_key = `${dataset}:${rounded_year}:${min_pop}:${max_cities}:${color_mode}`
+
+    if (client_cache_ref.current.has(cache_key)) {
+      set_cities(client_cache_ref.current.get(cache_key)!)
+      set_error(null)
+      return
+    }
+
+    if (abort_controller_ref.current)
+      abort_controller_ref.current.abort()
+
+    let controller = new AbortController()
+    abort_controller_ref.current = controller
+
+    set_is_loading(true)
+    set_error(null)
+
+    let url_params = new URLSearchParams({
+      colorMode: color_mode,
+      dataset,
+      maxCities: String(max_cities),
+      minPop: String(min_pop),
+      year: String(rounded_year),
+    })
+
+    fetch(`/api/stadester/cities?${url_params.toString()}`, { signal: controller.signal })
+      .then((arg0_res) => {
+        if (!arg0_res.ok)
+          throw new Error(`Failed to load cities: HTTP ${arg0_res.status}`)
+        return arg0_res.json()
+      })
+      .then((arg0_data) => {
+        let city_list: CityPoint[] = Array.isArray(arg0_data.cities) ? arg0_data.cities : []
+        client_cache_ref.current.set(cache_key, city_list)
+        set_cities(city_list)
+        set_is_loading(false)
+      })
+      .catch((arg0_err) => {
+        if (arg0_err.name !== 'AbortError') {
+          console.error('[useStadesterCities] Error fetching cities:', arg0_err)
+          set_error(arg0_err.message || 'Error loading cities')
+          set_is_loading(false)
+        }
+      })
+
+    return () => {
+      controller.abort()
+    }
+  }, [enabled, dataset, Math.round(year), min_pop, max_cities, color_mode])
+
+  //Fetch full city details when selected
+  fetch_full_city_record = useCallback(async function (arg0_key: string) {
+    let key = arg0_key
+    if (!key)
+      return null
+
+    let full_cache_key = `${dataset}:${key}`
+    if (full_city_cache_ref.current.has(full_cache_key))
+      return full_city_cache_ref.current.get(full_cache_key)!
+
+    try {
+      let resp = await fetch(`/api/stadester/city?dataset=${encodeURIComponent(dataset)}&key=${encodeURIComponent(key)}`)
+      if (!resp.ok)
+        return null
+      let data: CityFullRecord = await resp.json()
+      full_city_cache_ref.current.set(full_cache_key, data)
+      return data
+    } catch (arg0_e) {
+      console.error('[useStadesterCities] Failed to fetch full city record:', arg0_e)
+      return null
+    }
+  }, [dataset])
+
+  useEffect(() => {
+    if (!selected_city_key) {
+      set_selected_city(null)
+      return
+    }
+
+    let is_cancelled = false
+    fetch_full_city_record(selected_city_key).then((arg0_data) => {
+      if (!is_cancelled && arg0_data)
+        set_selected_city(arg0_data)
+    })
+
+    return () => {
+      is_cancelled = true
+    }
+  }, [selected_city_key, fetch_full_city_record])
+
+  //Return statement
+  return {
+    cities,
+    error,
+    fetchFullCityRecord: fetch_full_city_record,
+    isLoading: is_loading,
+    selectedCity: selected_city,
+    selectedCityKey: selected_city_key,
+    setSelectedCity: set_selected_city,
+    setSelectedCityKey: set_selected_city_key,
+  }
+}

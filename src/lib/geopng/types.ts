@@ -79,6 +79,66 @@ export interface MapModeItem {
   active: boolean
 }
 
+export type StadesterColorMode = 'growth' | 'population' | 'continent'
+
+export interface StadesterConfig {
+  bubbleSize: number
+  colorMode: StadesterColorMode
+  dataset: 'stadester_1.1' | 'stadester_1.0'
+  enabled: boolean
+  filled?: boolean
+  growthPalette?: string
+  halo?: boolean
+  labelCollision: boolean
+  maxCities: number
+  minPop: number
+  showLabels: boolean
+}
+
+export interface CityPoint {
+  area?: number
+  colour?: [number, number, number]
+  coords: [number, number] // [lat, lng]
+  country?: string
+  density?: number
+  growthRate?: number
+  id: number | string
+  key: string
+  lat?: number
+  lon?: number
+  name: string
+  other_names?: string | string[]
+  pixelRadius?: number
+  population: number
+  region?: string
+}
+
+export interface CityFullRecord {
+  angel_region?: string
+  area?: Record<string, number>
+  centre_density?: Record<string, number>
+  clark_region?: string
+  colour?: [number, number, number]
+  coords: [number, number]
+  country?: string
+  density?: Record<string, number>
+  elevation?: number
+  id?: number | string
+  key: string
+  name: string
+  name_coords?: Record<string, [number, number]>
+  name_peaks?: Record<string, number>
+  original_names?: string | string[]
+  other_names?: string | string[]
+  pixel_coords?: [number, number]
+  population?: Record<string, number>
+  position?: string
+  'prov.'?: string
+  region?: string
+  rni?: Record<string, number>
+  type?: string
+}
+
 export interface CircleOverlayConfig {
   enabled: boolean
   percentileCutoff: number // e.g. 99 for P99

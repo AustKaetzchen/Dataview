@@ -452,6 +452,8 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
     return keys
   }, [indicator_folders])
 
+  ;[resolution, set_resolution] = useState<string>('1080p')
+
   get_default_zoom = useCallback((arg0_proj: string, arg1_w?: number, arg2_h?: number): number => {
     let h = arg2_h || (resolution === '1440p' ? 1440 : resolution === '720p' ? 720 : 1080)
     let p = arg0_proj.toLowerCase()
@@ -487,7 +489,6 @@ export const VideoExportModal: React.FC<VideoExportModalProps> = function (arg0_
       return get_default_zoom(props.currentProjection || 'EqualEarth')
     })
   preview_canvas_ref = useRef<HTMLCanvasElement | null>(null)
-    ;[resolution, set_resolution] = useState<string>('1080p')
     ;[export_filename, set_export_filename] = useState<string>(() => {
       return `dataview_timelapse_${Date.now()}.mp4`
     })
