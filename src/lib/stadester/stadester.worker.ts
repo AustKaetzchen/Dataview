@@ -211,39 +211,25 @@ function getShortCityLabel (arg0_name: string): string {
   return primary_name
 }
 
-self.onmessage = function (arg0_e: MessageEvent<WorkerInMessage>) {
+let latest_viewport_msg: (WorkerInMessage & { type: 'LAYOUT_VIEWPORT' }) | null = null
+
+function processViewportLayout (arg0_msg: WorkerInMessage & { type: 'LAYOUT_VIEWPORT' }) {
   //Convert from parameters
-  let e = arg0_e
-
-  //Declare local instance variables
-  let msg = e.data
-
-  //Guard clauses
-  if (!msg)
-    return
-
-  //Function body
-  if (msg.type === 'SET_DATA') {
-    current_cities = Array.isArray(msg.cities) ? msg.cities : []
-    current_year = msg.year
-    return
-  }
-
-  if (msg.type === 'LAYOUT_VIEWPORT') {
-    let {
-      bubbleSize: b_scale,
-      colorMode: color_mode,
-      displayOptions: display_options,
-      isHalo: is_halo,
-      labelCollision: is_collision_active,
-      largeCityContrast: large_city_contrast,
-      projection,
-      reqId: req_id,
-      showLabels: is_labels_visible,
-      viewState: view_state,
-      windowH: window_h,
-      windowW: window_w,
-    } = msg
+  let msg = arg0_msg
+  let {
+    bubbleSize: b_scale,
+    colorMode: color_mode,
+    displayOptions: display_options,
+    isHalo: is_halo,
+    labelCollision: is_collision_active,
+    largeCityContrast: large_city_contrast,
+    projection,
+    reqId: req_id,
+    showLabels: is_labels_visible,
+    viewState: view_state,
+    windowH: window_h,
+    windowW: window_w,
+  } = msg
 
     try {
       let is_cartesian = (projection === 'EqualEarth' || projection === 'Equirectangular')
@@ -448,5 +434,30 @@ self.onmessage = function (arg0_e: MessageEvent<WorkerInMessage>) {
         type: 'LAYOUT_ERROR',
       } as WorkerOutMessage)
     }
+}
+
+self.onmessage = function (arg0_e: MessageEvent<WorkerInMessage>) {
+  //Convert from parameters
+  let e = arg0_e
+
+  //Declare local instance variables
+  let msg = e.data
+
+  //Guard clauses
+  if (!msg)
+    return
+
+  //Function body
+  if (msg.type === 'SET_DATA') {
+    current_cities = Array.isArray(msg.cities) ? msg.cities : []
+    current_year = msg.year
+    if (latest_viewport_msg)
+      processViewportLayout(latest_viewport_msg)
+    return
+  }
+
+  if (msg.type === 'LAYOUT_VIEWPORT') {
+    latest_viewport_msg = msg
+    processViewportLayout(msg)
   }
 }
