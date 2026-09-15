@@ -165,6 +165,10 @@
         name: "Population (Total)",
         encoding: "int32",
         filepath: "${stad}/stadester_population_rasters/stadester_population_${year}.png",
+        /*pixel_offset: {
+            covariate: "population_urban",
+            y: 2
+        },*/
         unit: "Total",
         legend: {
             colourscheme: "viridis"
@@ -183,6 +187,7 @@
         name: "Population (Urban)",
         encoding: "int32",
         filepath: "${stad}/stadester_urban_rasters/stadester_urban_{year}.png",
+        pixel_offset: 2,
         unit: "Urban population, total",
         legend: {
             colourscheme: "blues"

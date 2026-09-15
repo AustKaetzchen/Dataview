@@ -251,6 +251,62 @@ const getSelectorCombinations = function (
 }
 
 /**
+ * Shifts a decoded raster vertically north by the specified number of pixels.
+ *
+ * @param {DecodedRaster} arg0_raster
+ * @param {number} arg1_pixels
+ *
+ * @returns {DecodedRaster}
+ */
+const shiftRasterNorth = function (
+  arg0_raster: DecodedRaster,
+  arg1_pixels: number
+): DecodedRaster {
+  //Convert from parameters
+  let pixels = Math.max(0, Math.round(arg1_pixels))
+  let raster = arg0_raster
+
+  //Guard clauses
+  if (pixels === 0)
+    return raster
+
+  console.log('[DEBUG shiftRasterNorth] shifting by', pixels, 'pixels north, raster dimensions:', raster.width, 'x', raster.height)
+
+  //Declare local instance variables
+  let dst_data: Float32Array
+  let h = raster.height
+  let src_data = raster.data
+  let w = raster.width
+
+  //Function body
+  dst_data = new Float32Array(w*h)
+  dst_data.fill(NaN)
+
+  for (let r = 0; r < h; r++) {
+    let src_r = r + pixels
+    if (src_r < h) {
+      let dst_offset = r*w
+      let src_offset = src_r*w
+      for (let c = 0; c < w; c++)
+        dst_data[dst_offset + c] = src_data[src_offset + c]
+    }
+  }
+
+  //Return statement
+  return buildDecodedRasterResult(
+    dst_data,
+    w,
+    h,
+    raster.min,
+    raster.max,
+    raster.mean,
+    raster.stdDev,
+    raster.validCount,
+    raster.totalCells
+  )
+}
+
+/**
  * Fetches and decodes a single GeoPNG raster from backend API.
  *
  * @param {string} arg0_layer_id
@@ -259,6 +315,11 @@ const getSelectorCombinations = function (
  * @param {DataFormat} arg3_format
  * @param {Map<string, DecodedRaster>} arg4_cache
  * @param {boolean} [arg5_has_selectors]
+ * @param {boolean} [arg6_can_be_uninhabited]
+ * @param {number | { covariate?: string; x?: number; y?: number }} [arg7_pixel_offset]
+ * @param {boolean} [arg8_performant_mode]
+ * @param {boolean} [arg9_is_headless_export]
+ * @param {boolean} [arg10_skip_mask]
  *
  * @returns {Promise<DecodedRaster | null>}
  */
@@ -269,27 +330,42 @@ const fetchSingleDecodedRasterAsync = async function (
   arg3_format: DataFormat,
   arg4_cache: Map<string, DecodedRaster>,
   arg5_has_selectors?: boolean,
-  arg6_can_be_uninhabited?: boolean
+  arg6_can_be_uninhabited?: boolean,
+  arg7_pixel_offset?: number | { covariate?: string; x?: number; y?: number },
+  arg8_performant_mode?: boolean,
+  arg9_is_headless_export?: boolean,
+  arg10_skip_mask?: boolean
 ): Promise<DecodedRaster | null> {
   //Convert from parameters
   let cache = arg4_cache
   let can_be_uninhabited = Boolean(arg6_can_be_uninhabited)
   let format = arg3_format
   let has_selectors = Boolean(arg5_has_selectors)
+  let is_headless_export = Boolean(arg9_is_headless_export)
   let layer_id = arg0_layer_id
+  let performant_mode = Boolean(arg8_performant_mode)
+  let pixel_offset = arg7_pixel_offset
   let selectors = arg2_selectors
+  let skip_mask = Boolean(arg10_skip_mask)
   let year = arg1_year
+
+  console.log('[DEBUG fetchSingleDecodedRasterAsync] start:', { layer_id, year, format, pixel_offset })
 
   //Declare local instance variables
   let cache_key: string
   let pending_promise: Promise<DecodedRaster | null>
+  let po_key = typeof pixel_offset === 'number'
+    ? `po${pixel_offset}`
+    : (pixel_offset && typeof pixel_offset === 'object' && pixel_offset.covariate
+      ? `po${pixel_offset.y || 0}_${pixel_offset.covariate}`
+      : 'po0')
   let sel_keys = has_selectors ? Object.keys(selectors).sort() : []
   let sel_part = sel_keys.map((arg0_k) => `${arg0_k}=${selectors[arg0_k]}`).join(':')
 
   //Construct cache_key
   cache_key = has_selectors && sel_part.length > 0
-    ? `${layer_id}:${sel_part}:${year}:${format}`
-    : `${layer_id}:${year}:${format}`
+    ? `${layer_id}:${sel_part}:${year}:${format}:${po_key}`
+    : `${layer_id}:${year}:${format}:${po_key}`
 
   //Return statement
   if (cache.has(cache_key))
@@ -320,8 +396,94 @@ const fetchSingleDecodedRasterAsync = async function (
       let uint8 = new Uint8Array(buf)
       let decoded = await decodeRawGeoPngBufferAsync(uint8, format)
 
-      //Mask uninhabited cells as NaN if layer requires human habitation
-      if (!can_be_uninhabited && layer_id !== 'population_total') {
+      //Cache raw unshifted version under raw: prefix for covariate lookups
+      cache.set(`raw:${layer_id}:${year}:${format}`, decoded)
+
+      //Apply pixel offset if configured
+      console.log('[DEBUG fetchSingleDecodedRasterAsync] about to apply pixel_offset:', pixel_offset, 'type:', typeof pixel_offset)
+      if (typeof pixel_offset === 'number' && pixel_offset !== 0) {
+        decoded = shiftRasterNorth(decoded, pixel_offset)
+      } else if (typeof pixel_offset === 'object' && pixel_offset !== null && pixel_offset.covariate) {
+        let covariate_id = pixel_offset.covariate
+        let raw_covariate: DecodedRaster | null = null
+        let raw_key = `raw:${covariate_id}:${year}:${format}`
+        let y_offset = pixel_offset.y ? Math.max(0, Math.round(pixel_offset.y)) : 0
+
+        if (cache.has(raw_key)) {
+          raw_covariate = cache.get(raw_key)!
+        } else {
+          try {
+            let cov_resp = await fetch(`/api/raster/file?layer=${covariate_id}&year=${year.toString()}`)
+            if (cov_resp.ok) {
+              let cov_buf = await cov_resp.arrayBuffer()
+              raw_covariate = await decodeRawGeoPngBufferAsync(new Uint8Array(cov_buf), format)
+              cache.set(raw_key, raw_covariate)
+            }
+          } catch (arg0_cov_err) {
+            console.error(`Failed to fetch raw covariate ${covariate_id}:`, arg0_cov_err)
+          }
+        }
+
+        if (raw_covariate && raw_covariate.data.length === decoded.data.length && y_offset > 0) {
+          let cov_data = raw_covariate.data
+          let h = decoded.height
+          let len = decoded.data.length
+          let new_total = new Float32Array(len)
+          let shifted_cov = shiftRasterNorth(raw_covariate, y_offset)
+          let shifted_cov_data = shifted_cov.data
+          let tot_data = decoded.data
+          let w = decoded.width
+
+          new_total.fill(NaN)
+
+          for (let r = 0; r < h; r++) {
+            let row_offset = r*w
+            for (let c = 0; c < w; c++) {
+              let i = row_offset + c
+              let t_val = tot_data[i]
+              let c_val = cov_data[i]
+              let sc_val = shifted_cov_data[i]
+
+              let rural = Math.max(0, (Number.isNaN(t_val) ? 0 : t_val) - (Number.isNaN(c_val) ? 0 : c_val))
+
+              //If vacated urban cell leaves an empty hole (rural is 0 or NaN where c_val was subtracted but sc_val is NaN),
+              //infill with surrounding background non-urban population density to eliminate pockmarked scarring
+              if ((rural <= 0 || Number.isNaN(rural)) && !Number.isNaN(c_val) && c_val > 0 && Number.isNaN(sc_val)) {
+                let count = 0
+                let sum = 0
+                for (let dr = -2; dr <= 2; dr++) {
+                  let nr = r + dr
+                  if (nr >= 0 && nr < h) {
+                    let n_row_offset = nr*w
+                    for (let dc = -2; dc <= 2; dc++) {
+                      let nc = c + dc
+                      if (nc >= 0 && nc < w) {
+                        let ni = n_row_offset + nc
+                        let nu = cov_data[ni]
+                        let nt = tot_data[ni]
+                        if (Number.isNaN(nu) && !Number.isNaN(nt) && nt > 0) {
+                          sum += nt
+                          count++
+                        }
+                      }
+                    }
+                  }
+                }
+                if (count > 0)
+                  rural = Math.round(sum/count)
+              }
+
+              let tot = rural + (Number.isNaN(sc_val) ? 0 : sc_val)
+              if (tot > 0)
+                new_total[i] = tot
+            }
+          }
+          decoded = buildDecodedRasterResult(new_total, decoded.width, decoded.height)
+        }
+      }
+
+      //Mask uninhabited cells as NaN if layer requires human habitation AND performant/export mode is active
+      if (!skip_mask && (is_headless_export || performant_mode) && !can_be_uninhabited && layer_id !== 'population_total') {
         let pop_raster = await fetchSingleDecodedRasterAsync(
           'population_total',
           year,
@@ -329,6 +491,10 @@ const fetchSingleDecodedRasterAsync = async function (
           'int32',
           cache,
           false,
+          true,
+          undefined,
+          performant_mode,
+          is_headless_export,
           true
         )
         let pop_data = pop_raster?.data
@@ -337,9 +503,8 @@ const fetchSingleDecodedRasterAsync = async function (
           let len = d.length
           for (let i = 0; i < len; i++) {
             let p = pop_data[i]
-            if (p <= 0 || Number.isNaN(p)) {
+            if (p <= 0 || Number.isNaN(p))
               d[i] = NaN
-            }
           }
           decoded = buildDecodedRasterResult(d, decoded.width, decoded.height)
         }
@@ -368,6 +533,10 @@ const fetchSingleDecodedRasterAsync = async function (
  * @param {DataFormat} arg3_format
  * @param {Map<string, DecodedRaster>} arg4_cache
  * @param {boolean} [arg5_has_selectors]
+ * @param {boolean} [arg6_can_be_uninhabited]
+ * @param {number | { covariate?: string; x?: number; y?: number }} [arg7_pixel_offset]
+ * @param {boolean} [arg8_performant_mode]
+ * @param {boolean} [arg9_is_headless_export]
  *
  * @returns {Promise<DecodedRaster | null>}
  */
@@ -378,14 +547,20 @@ const fetchRasterKeyframe = async function (
   arg3_format: DataFormat,
   arg4_cache: Map<string, DecodedRaster>,
   arg5_has_selectors?: boolean,
-  arg6_can_be_uninhabited?: boolean
+  arg6_can_be_uninhabited?: boolean,
+  arg7_pixel_offset?: number | { covariate?: string; x?: number; y?: number },
+  arg8_performant_mode?: boolean,
+  arg9_is_headless_export?: boolean
 ): Promise<DecodedRaster | null> {
   //Convert from parameters
   let cache = arg4_cache
   let can_be_uninhabited = Boolean(arg6_can_be_uninhabited)
   let format = arg3_format
   let has_selectors = Boolean(arg5_has_selectors)
+  let is_headless_export = Boolean(arg9_is_headless_export)
   let layer_id = arg0_layer_id
+  let performant_mode = Boolean(arg8_performant_mode)
+  let pixel_offset = arg7_pixel_offset
   let selectors = arg2_selectors
   let year = arg1_year
 
@@ -393,6 +568,11 @@ const fetchRasterKeyframe = async function (
   let combinations = has_selectors ? getSelectorCombinations(selectors) : [{}]
   let composite_cache_key: string
   let composite_promise: Promise<DecodedRaster | null>
+  let po_key = typeof pixel_offset === 'number'
+    ? `po${pixel_offset}`
+    : (pixel_offset && typeof pixel_offset === 'object' && pixel_offset.covariate
+      ? `po${pixel_offset.y || 0}_${pixel_offset.covariate}`
+      : 'po0')
   let sel_keys = has_selectors ? Object.keys(selectors).sort() : []
   let sel_part = sel_keys.map((arg0_k) => {
     let val = selectors[arg0_k]
@@ -402,8 +582,8 @@ const fetchRasterKeyframe = async function (
 
   //Construct composite_cache_key
   composite_cache_key = has_selectors && sel_part.length > 0
-    ? `${layer_id}:${sel_part}:${year}:${format}`
-    : `${layer_id}:${year}:${format}`
+    ? `${layer_id}:${sel_part}:${year}:${format}:${po_key}`
+    : `${layer_id}:${year}:${format}:${po_key}`
 
   //Fast path: already in cache
   if (cache.has(composite_cache_key))
@@ -415,14 +595,38 @@ const fetchRasterKeyframe = async function (
   //If only single combination, delegate directly
   if (combinations.length <= 1) {
     let single_sel = combinations[0] || {}
-    return fetchSingleDecodedRasterAsync(layer_id, year, single_sel, format, cache, has_selectors, can_be_uninhabited)
+    return fetchSingleDecodedRasterAsync(
+      layer_id,
+      year,
+      single_sel,
+      format,
+      cache,
+      has_selectors,
+      can_be_uninhabited,
+      pixel_offset,
+      performant_mode,
+      is_headless_export,
+      false
+    )
   }
 
   //Multi-select Cartesian composite
   composite_promise = (async () => {
     try {
       let raster_promises = combinations.map((arg0_comb) =>
-        fetchSingleDecodedRasterAsync(layer_id, year, arg0_comb, format, cache, has_selectors, can_be_uninhabited)
+        fetchSingleDecodedRasterAsync(
+          layer_id,
+          year,
+          arg0_comb,
+          format,
+          cache,
+          has_selectors,
+          can_be_uninhabited,
+          pixel_offset,
+          performant_mode,
+          is_headless_export,
+          true
+        )
       )
       let results = await Promise.all(raster_promises)
       let valid_rasters = results.filter((arg0_r): arg0_r is DecodedRaster => arg0_r !== null)
@@ -430,29 +634,58 @@ const fetchRasterKeyframe = async function (
       if (valid_rasters.length === 0)
         return null
 
+      let composite: DecodedRaster
       if (valid_rasters.length === 1) {
-        cache.set(composite_cache_key, valid_rasters[0])
-        return valid_rasters[0]
+        composite = valid_rasters[0]
+      } else {
+        //Sum pixel values across all selected cohorts / professions
+        let base = valid_rasters[0]
+        let len = base.width*base.height
+        let sum_data = new Float32Array(len)
+
+        for (let i = 0; i < valid_rasters.length; i++) {
+          let r_data = valid_rasters[i].data
+          for (let idx = 0; idx < len; idx++) {
+            let v = r_data[idx]
+            if (Number.isNaN(v)) {
+              sum_data[idx] = NaN
+            } else if (!Number.isNaN(sum_data[idx])) {
+              sum_data[idx] += v
+            }
+          }
+        }
+
+        composite = buildDecodedRasterResult(sum_data, base.width, base.height)
       }
 
-      //Sum pixel values across all selected cohorts / professions
-      let base = valid_rasters[0]
-      let len = base.width*base.height
-      let sum_data = new Float32Array(len)
-
-      for (let i = 0; i < valid_rasters.length; i++) {
-        let r_data = valid_rasters[i].data
-        for (let idx = 0; idx < len; idx++) {
-          let v = r_data[idx]
-          if (Number.isNaN(v)) {
-            sum_data[idx] = NaN
-          } else if (!Number.isNaN(sum_data[idx])) {
-            sum_data[idx] += v
+      //Mask uninhabited cells on composite ONCE if performant/export mode is active
+      if ((is_headless_export || performant_mode) && !can_be_uninhabited && layer_id !== 'population_total') {
+        let pop_raster = await fetchSingleDecodedRasterAsync(
+          'population_total',
+          year,
+          {},
+          'int32',
+          cache,
+          false,
+          true,
+          undefined,
+          performant_mode,
+          is_headless_export,
+          true
+        )
+        let pop_data = pop_raster?.data
+        if (pop_data && pop_data.length === composite.data.length) {
+          let d = composite.data
+          let len = d.length
+          for (let i = 0; i < len; i++) {
+            let p = pop_data[i]
+            if (p <= 0 || Number.isNaN(p))
+              d[i] = NaN
           }
+          composite = buildDecodedRasterResult(d, composite.width, composite.height)
         }
       }
 
-      let composite = buildDecodedRasterResult(sum_data, base.width, base.height)
       cache.set(composite_cache_key, composite)
       return composite
     } catch (arg0_err) {
@@ -535,6 +768,7 @@ export const App: React.FC = function () {
   let min_val_override: string
   let opacity: number
   let percentile_list: string
+  let performant_mode: boolean
   let playback_speed: number
   let projection: ProjectionType
   let raster_a: DecodedRaster | null
@@ -579,6 +813,7 @@ export const App: React.FC = function () {
   let set_min_val_override: React.Dispatch<React.SetStateAction<string>>
   let set_opacity: React.Dispatch<React.SetStateAction<number>>
   let set_percentile_list: React.Dispatch<React.SetStateAction<string>>
+  let set_performant_mode: React.Dispatch<React.SetStateAction<boolean>>
   let set_playback_speed: React.Dispatch<React.SetStateAction<number>>
   let set_projection: React.Dispatch<React.SetStateAction<ProjectionType>>
   let set_raster_a: React.Dispatch<React.SetStateAction<DecodedRaster | null>>
@@ -628,6 +863,11 @@ export const App: React.FC = function () {
   ;[legend_title, set_legend_title] = useState<string>('Value')
   ;[legend_subtitle, set_legend_subtitle] = useState<string>('')
   ;[opacity, set_opacity] = useState<number>(0.85)
+  ;[performant_mode, set_performant_mode] = useState<boolean>(false)
+
+  useEffect(() => {
+    raster_cache_ref.current.clear()
+  }, [performant_mode])
 
   ;[binning_config, set_binning_config] = useState<BinningConfig>({
     enabled: false,
@@ -782,6 +1022,7 @@ export const App: React.FC = function () {
 
       let has_selectors = Boolean(target_layer?.variable_selectors && Object.keys(target_layer.variable_selectors).length > 0)
       let can_be_uninhabited = Boolean(target_layer?.can_be_uninhabited)
+      let layer_pixel_offset = target_layer?.pixel_offset
 
       //Evict old entries from in-memory raster cache during headless export to prevent multi-gigabyte memory leaks
       if (is_headless_export && raster_cache_ref.current.size > 1) {
@@ -795,7 +1036,10 @@ export const App: React.FC = function () {
         data_format,
         raster_cache_ref.current,
         has_selectors,
-        can_be_uninhabited
+        can_be_uninhabited,
+        layer_pixel_offset,
+        performant_mode,
+        is_headless_export
       )
 
       if (decoded) {
@@ -818,7 +1062,7 @@ export const App: React.FC = function () {
       await new Promise((arg0_res) => setTimeout(arg0_res, 40))
       return true
     }
-  }, [active_layer, data_format, fetchRasterKeyframe, is_headless_export, layers])
+  }, [active_layer, data_format, fetchRasterKeyframe, is_headless_export, layers, performant_mode])
 
   active_layer_id_ref.current = active_layer_id
   timeline_year_ref.current = timeline_year
@@ -862,7 +1106,12 @@ export const App: React.FC = function () {
     if (layer_id === 'lfpr')
       layer_id = 'lfpr.lfpr_female'
     set_active_layer_id(layer_id)
-  }, [])
+    let target = layers[layer_id]
+    if (target?.encoding)
+      set_data_format(target.encoding)
+    set_max_val_override('')
+    set_min_val_override('')
+  }, [layers])
 
   //Apply colourscheme, inversion, scale type, and units from layer/variable selector config
   useEffect(() => {
@@ -1004,6 +1253,13 @@ export const App: React.FC = function () {
         }
       }
 
+      let effective_format = active_layer.encoding || data_format
+      let layer_pixel_offset = active_layer.pixel_offset
+      let po_key = typeof layer_pixel_offset === 'number'
+        ? `po${layer_pixel_offset}`
+        : (layer_pixel_offset && typeof layer_pixel_offset === 'object' && layer_pixel_offset.covariate
+          ? `po${layer_pixel_offset.y || 0}_${layer_pixel_offset.covariate}`
+          : 'po0')
       let sel_keys = has_selectors ? Object.keys(effective_selectors).sort() : []
       let sel_part = sel_keys.map((arg0_k) => {
         let val = effective_selectors[arg0_k]
@@ -1011,8 +1267,8 @@ export const App: React.FC = function () {
         return `${arg0_k}=${str_val}`
       }).join(':')
       let cache_key = has_selectors && sel_part.length > 0
-        ? `${requested_layer_id}:${sel_part}:${primary_year}:${data_format}`
-        : `${requested_layer_id}:${primary_year}:${data_format}`
+        ? `${requested_layer_id}:${sel_part}:${primary_year}:${effective_format}:${po_key}`
+        : `${requested_layer_id}:${primary_year}:${effective_format}:${po_key}`
       let is_cached = raster_cache_ref.current.has(cache_key)
 
       //Fast path: if already cached in memory, apply synchronously to avoid frame drops during playback/scrubbing
@@ -1027,8 +1283,8 @@ export const App: React.FC = function () {
         } else {
           let other_year = primary_year === prev_year ? next_year : prev_year
           let other_cache_key = has_selectors && sel_part.length > 0
-            ? `${requested_layer_id}:${sel_part}:${other_year}:${data_format}`
-            : `${requested_layer_id}:${other_year}:${data_format}`
+            ? `${requested_layer_id}:${sel_part}:${other_year}:${effective_format}:${po_key}`
+            : `${requested_layer_id}:${other_year}:${effective_format}:${po_key}`
           if (raster_cache_ref.current.has(other_cache_key)) {
             let other_raster = raster_cache_ref.current.get(other_cache_key)!
             let r_prev = primary_year === prev_year ? primary_raster : other_raster
@@ -1057,10 +1313,13 @@ export const App: React.FC = function () {
           requested_layer_id,
           primary_year,
           effective_selectors,
-          data_format,
+          effective_format,
           raster_cache_ref.current,
           has_selectors,
-          can_be_uninhabited
+          can_be_uninhabited,
+          layer_pixel_offset,
+          performant_mode,
+          is_headless_export
         ).then((arg0_primary) => {
           in_flight_fetches_count_ref.current = Math.max(0, in_flight_fetches_count_ref.current - 1)
           if (in_flight_fetches_count_ref.current === 0)
@@ -1095,10 +1354,13 @@ export const App: React.FC = function () {
               requested_layer_id,
               future_year,
               effective_selectors,
-              data_format,
+              effective_format,
               raster_cache_ref.current,
               has_selectors,
-              can_be_uninhabited
+              can_be_uninhabited,
+              layer_pixel_offset,
+              performant_mode,
+              is_headless_export
             ).catch(() => {})
           }
         }
@@ -1106,7 +1368,7 @@ export const App: React.FC = function () {
     }
 
     loadRasters()
-  }, [active_layer, active_variable_selectors, timeline_year, snap_to_keyframes, data_format, is_playing])
+  }, [active_layer, active_variable_selectors, data_format, is_headless_export, is_playing, performant_mode, snap_to_keyframes, timeline_year])
 
 
   useEffect(() => {
@@ -1638,6 +1900,8 @@ export const App: React.FC = function () {
           isTimelapseExporting={is_timelapse_exporting || is_headless_export}
           legendPosition={legend_position}
           onChangeLegendPosition={set_legend_position}
+          performantMode={performant_mode}
+          onTogglePerformantMode={set_performant_mode}
           userRole={user_role}
         />
 

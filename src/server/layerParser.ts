@@ -37,6 +37,7 @@ export interface ParsedDataLayer {
   name: string
   parent_id?: string
   permissions: string[]
+  pixel_offset?: number | { covariate?: string; x?: number; y?: number }
   sub_layers?: ParsedDataLayer[]
   type: string
   unit?: string
@@ -449,6 +450,7 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
       'legend',
       'name',
       'permissions',
+      'pixel_offset',
       'root_folders',
       'type',
       'unit',
@@ -600,6 +602,7 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
             name: sub_item.name || sub_k,
             parent_id: k,
             permissions: sub_item.permissions ? (Array.isArray(sub_item.permissions) ? sub_item.permissions : [sub_item.permissions]) : ['default'],
+            pixel_offset: sub_item.pixel_offset ?? item.pixel_offset,
             type: sub_item.type || layer_type,
             unit: sub_item.unit || item.unit,
           })
@@ -629,6 +632,7 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
           legend: item.legend,
           name: item.name || k,
           permissions: item.permissions ? (Array.isArray(item.permissions) ? item.permissions : [item.permissions]) : ['default'],
+          pixel_offset: item.pixel_offset,
           sub_layers: sub_layer_list.length > 0 ? sub_layer_list : undefined,
           type: layer_type,
           unit: item.unit,

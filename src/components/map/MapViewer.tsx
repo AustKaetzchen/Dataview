@@ -104,9 +104,10 @@ export interface MapViewerProps {
   onSelectLayer?: (arg0_layer_id: string) => void
   legendPosition?: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right' | 'top-centre' | 'bottom-centre'
   onChangeLegendPosition?: (pos: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right') => void
-  uiVisible?: boolean
-  isTimelapseExporting?: boolean
+  onTogglePerformantMode?: (enabled: boolean) => void
   onToggleUi?: () => void
+  performantMode?: boolean
+  uiVisible?: boolean
   userRole?: UserRole
 }
 
@@ -120,7 +121,9 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
   //Convert from parameters
   let props = (arg0_props) ? arg0_props : ({} as MapViewerProps)
   let on_change_legend_position = props.onChangeLegendPosition
+  let on_toggle_performant_mode = props.onTogglePerformantMode
   let on_toggle_ui = props.onToggleUi
+  let performant_mode = props.performantMode ?? false
   let raw_legend_pos = (props.legendPosition || 'top-left') as string
   let legend_position = raw_legend_pos.replace('centre', 'center') as 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'
   let ui_visible = props.uiVisible !== undefined ? props.uiVisible : true
@@ -272,7 +275,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
       clearInterval(interval)
       window.removeEventListener('resize', updateClearance)
     }
-  }, [flyout_open, analytics_open, ui_visible])
+  }, [flyout_open, analytics_open, ui_visible, map_modes])
 
   let [proj_view_states, set_proj_view_states] = useState<Record<ProjectionType, any>>({
     Mercator: MAP_CONFIG.mapDefines?.initialMercator || {
@@ -765,10 +768,12 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
           let has_canvas = Boolean(rendered_canvas)
           let is_country_relative = Boolean(
             countries_mode &&
+            ((selected_countries && selected_countries.length > 0) || Boolean(hovered_country)) &&
             country_stats &&
             country_stats.validCount > 0 &&
             Number.isFinite(country_stats.min) &&
-            Number.isFinite(country_stats.max)
+            Number.isFinite(country_stats.max) &&
+            country_stats.max > country_stats.min
           )
           let legend_min = (is_country_relative) ? country_stats!.min : min_val
           let legend_max = (is_country_relative) ? country_stats!.max : max_val
@@ -1088,6 +1093,27 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Performant Mode (Optimization Logic) */}
+            <div className="space-y-1.5 pt-1 border-t border-border">
+              <div className="flex items-center justify-between">
+                <span className="text-[var(--body-font-size)] font-bold text-foreground">Performant Mode</span>
+                <button
+                  type="button"
+                  onClick={() => on_toggle_performant_mode && on_toggle_performant_mode(!performant_mode)}
+                  className={`px-2 py-0.5 rounded-none text-[10px] font-mono font-bold cursor-pointer transition-colors ${
+                    performant_mode
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {performant_mode ? 'ENABLED' : 'DISABLED'}
+                </button>
+              </div>
+              <span className="text-[10px] text-muted-foreground block leading-normal">
+                Enables uninhabited land masking and bounded memory caching (active by default during video renders).
+              </span>
             </div>
           </div>
         )}

@@ -156,6 +156,8 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = function (arg0_prop
   let on_update_breaks = props.onUpdateBreaks
   let palette = props.palette
   let range: number
+  let safe_max: number
+  let safe_min: number
   let scale_type = props.scaleType
   let set_editing_index: React.Dispatch<React.SetStateAction<number | null>>
   let set_editing_value: React.Dispatch<React.SetStateAction<string>>
@@ -194,15 +196,28 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = function (arg0_prop
 
   gradient = getPaletteCssGradient(palette, invert_palette)
 
-  t_min = useMemo(() => transformValue(min_val, scale_type as ScaleType, log_sigma), [min_val, scale_type, log_sigma])
-  t_max = useMemo(() => transformValue(max_val, scale_type as ScaleType, log_sigma), [max_val, scale_type, log_sigma])
-  range = t_max - t_min
+  safe_min = Number.isFinite(min_val) ? min_val : 0
+  safe_max = Number.isFinite(max_val) ? max_val : 1
+  if (safe_max <= safe_min)
+    safe_max = safe_min + 1
+
+  t_min = useMemo(() => {
+    let t = transformValue(safe_min, scale_type as ScaleType, log_sigma)
+    return Number.isFinite(t) ? t : 0
+  }, [safe_min, scale_type, log_sigma])
+
+  t_max = useMemo(() => {
+    let t = transformValue(safe_max, scale_type as ScaleType, log_sigma)
+    return Number.isFinite(t) ? t : 1
+  }, [safe_max, scale_type, log_sigma])
+
+  range = Math.max(0.000001, t_max - t_min)
 
   indicator_pct = useMemo(() => {
     if (current_val === null || current_val === undefined || !Number.isFinite(current_val))
       return null
 
-    if (breaks && breaks.length >= 2) {
+    if (breaks && breaks.length >= 2 && breaks.every((arg0_b) => Number.isFinite(arg0_b))) {
       let n: number
       let seg = 0
       let seg_range: number
@@ -227,20 +242,13 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = function (arg0_prop
     }
 
     let t_val = transformValue(current_val, scale_type as ScaleType, log_sigma)
-    if (range <= 0) return 50
+    if (range <= 0 || !Number.isFinite(range)) return 50
     let normalised = (t_val - t_min)/range
     return Math.max(0, Math.min(100, normalised*100))
   }, [current_val, breaks, t_min, range, scale_type, log_sigma])
 
   break_points = useMemo(() => {
-    if (range <= 0) {
-      return [
-        { val: min_val, pct: 0, label: formatLegendValue(min_val) },
-        { val: max_val, pct: 100, label: formatLegendValue(max_val) },
-      ]
-    }
-
-    if (breaks && breaks.length >= 2) {
+    if (breaks && breaks.length >= 2 && breaks.every((arg0_b) => Number.isFinite(arg0_b))) {
       let sorted = [...breaks].sort((a, b) => a - b)
       return sorted.map((b, idx) => {
         let pct = (idx/(sorted.length - 1))*100
@@ -257,13 +265,15 @@ export const ColorBarLegend: React.FC<ColorBarLegendProps> = function (arg0_prop
       let real_val: number
       let t_val = t_min + s*range
       real_val = inverseTransform(t_val, scale_type as ScaleType, log_sigma)
+      if (!Number.isFinite(real_val))
+        real_val = safe_min + s*(safe_max - safe_min)
       return {
         val: real_val,
         pct: s*100,
         label: formatLegendValue(real_val),
       }
     })
-  }, [breaks, min_val, max_val, t_min, range, scale_type, log_sigma])
+  }, [breaks, safe_min, safe_max, t_min, range, scale_type, log_sigma])
 
   //Return statement
   return (

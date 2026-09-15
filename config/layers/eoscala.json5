@@ -158,7 +158,7 @@
     },
     professions_total: {
         name: "Professions (Total)",
-        filepath: "${prof_per}/${profession}_${gender}_${year}.png",
+        filepath: "${prof_tot}/${profession}_${gender}_${year}.png",
         unit: "Total workforce in the selected occupation(s)",
         variable_selectors: { //There should also be an option to enable all variable selectors
             gender: {
