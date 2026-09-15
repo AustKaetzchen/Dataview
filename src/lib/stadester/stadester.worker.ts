@@ -23,11 +23,13 @@ export interface WorkerCityInput {
 export interface WorkerProcessedPoint {
   color: [number, number, number, number]
   country?: string
+  growthRate?: number
   key: string
   name: string
   pixelRadius: number
   population: number
   position: [number, number, number]
+  region?: string
   shortName: string
 }
 
@@ -305,11 +307,13 @@ self.onmessage = function (arg0_e: MessageEvent<WorkerInMessage>) {
         let pt: WorkerProcessedPoint = {
           color: fill_color,
           country: c.country,
+          growthRate: c.growthRate,
           key: c.key,
           name: c.name,
           pixelRadius: pixel_radius,
           population: c.population,
           position: [px, py, 0],
+          region: c.region,
           shortName: pickBestCityDisplayName(c.name, c.other_names, display_options),
         }
 
@@ -345,7 +349,7 @@ self.onmessage = function (arg0_e: MessageEvent<WorkerInMessage>) {
 
             // Check if on visible hemisphere (dot product with camera viewing vector)
             let cos_c = Math.sin(center_lat) * Math.sin(lat) + Math.cos(center_lat) * Math.cos(lat) * Math.cos(d_lng)
-            if (cos_c < 0.1)
+            if (cos_c < 0.0)
               continue // Behind the horizon of the globe
 
             // Orthographic projection to screen coordinates

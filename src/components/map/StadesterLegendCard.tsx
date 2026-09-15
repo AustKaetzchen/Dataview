@@ -71,8 +71,15 @@ export const StadesterLegendCard: React.FC<StadesterLegendCardProps> = React.mem
   }
 
   if (hovered_city) {
-    if (colour_mode === 'growth' && hovered_city.growthRate !== undefined) {
-      let g = hovered_city.growthRate
+    let g = (hovered_city.growthRate !== undefined)
+      ? hovered_city.growthRate
+      : (hovered_city.growth_rate !== undefined)
+        ? hovered_city.growth_rate
+        : (typeof hovered_city.growth === 'number')
+          ? hovered_city.growth
+          : undefined
+
+    if (colour_mode === 'growth' && g !== undefined) {
       indicator_pct = Math.max(0, Math.min(100, ((g - (-0.05)) / (0.08 - (-0.05))) * 100))
     } else if (colour_mode === 'population' && hovered_city.population !== undefined) {
       let p = Math.max(5000, hovered_city.population)
@@ -119,15 +126,27 @@ export const StadesterLegendCard: React.FC<StadesterLegendCardProps> = React.mem
       <div className="space-y-1 mb-2">
         {colour_mode === 'region' || colour_mode === 'continent' ? (
           <div className="flex flex-wrap gap-1 pt-0.5">
-            {REGION_CHIPS.map((chip) => (
-              <span
-                key={chip.name}
-                className="flex items-center gap-1 text-[9px] px-1 py-0.5 bg-background border border-border text-white"
-              >
-                <span className="w-1.5 h-1.5 rounded-none shrink-0" style={{ backgroundColor: chip.colour }} />
-                {chip.name}
-              </span>
-            ))}
+            {REGION_CHIPS.map((chip) => {
+              let is_active = Boolean(
+                hovered_city?.region && (
+                  chip.name.toLowerCase().includes(hovered_city.region.toLowerCase()) ||
+                  hovered_city.region.toLowerCase().includes(chip.name.toLowerCase().split(' ')[0])
+                )
+              )
+              return (
+                <span
+                  key={chip.name}
+                  className={`flex items-center gap-1 text-[9px] px-1 py-0.5 border transition-all ${
+                    is_active
+                      ? 'bg-white/20 border-white font-bold text-white shadow-xs scale-105'
+                      : 'bg-background border-border text-white'
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-none shrink-0" style={{ backgroundColor: chip.colour }} />
+                  {chip.name}
+                </span>
+              )
+            })}
           </div>
         ) : (
           <div className="space-y-1">

@@ -722,6 +722,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
     selectedCountry: selected_country,
     countriesMode: countries_mode,
     hoveredCountry: hovered_country,
+    hoveredCity: hovered_city,
     onHoverCity: (arg0_city, arg1_x, arg2_y) => {
       set_hovered_city(arg0_city)
       if (arg1_x !== undefined && arg2_y !== undefined)

@@ -215,6 +215,7 @@ export interface UseDeckLayersParams {
   stadesterLabels?: any[]
   stadesterPoints?: any[]
   selectedCityKey?: string | null
+  hoveredCity?: CityPoint | null
   onSelectCity?: (city: CityPoint) => void
   onHoverCity?: (city: CityPoint | null, x?: number, y?: number) => void
   viewport?: any
@@ -671,8 +672,38 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
           data: effective_points,
           getPosition: (d: any) => d.position,
           getRadius: (d: any) => d.pixelRadius,
-          getFillColor: (d: any) => [d.color[0], d.color[1], d.color[2], fill_alpha],
-          getLineColor: (d: any) => [d.color[0], d.color[1], d.color[2], stroke_alpha],
+          getFillColor: (d: any) => {
+            let is_region_highlighted = Boolean(
+              options.hoveredCity?.region &&
+              d.region &&
+              (d.region === options.hoveredCity.region ||
+               d.region.toLowerCase().includes(options.hoveredCity.region.toLowerCase()) ||
+               options.hoveredCity.region.toLowerCase().includes(d.region.toLowerCase()))
+            )
+            if (is_region_highlighted) {
+              let r = Math.round(d.color[0] * 0.7 + 255 * 0.3)
+              let g = Math.round(d.color[1] * 0.7 + 255 * 0.3)
+              let b = Math.round(d.color[2] * 0.7 + 255 * 0.3)
+              return [r, g, b, Math.min(255, fill_alpha + 35)]
+            }
+            return [d.color[0], d.color[1], d.color[2], fill_alpha]
+          },
+          getLineColor: (d: any) => {
+            let is_region_highlighted = Boolean(
+              options.hoveredCity?.region &&
+              d.region &&
+              (d.region === options.hoveredCity.region ||
+               d.region.toLowerCase().includes(options.hoveredCity.region.toLowerCase()) ||
+               options.hoveredCity.region.toLowerCase().includes(d.region.toLowerCase()))
+            )
+            if (is_region_highlighted) {
+              let r = Math.round(d.color[0] * 0.7 + 255 * 0.3)
+              let g = Math.round(d.color[1] * 0.7 + 255 * 0.3)
+              let b = Math.round(d.color[2] * 0.7 + 255 * 0.3)
+              return [r, g, b, 255]
+            }
+            return [d.color[0], d.color[1], d.color[2], stroke_alpha]
+          },
           getLineWidth: 1.5,
           lineWidthUnits: 'pixels',
           lineWidthMinPixels: 1.5,
@@ -782,7 +813,7 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
             new TextLayer({
               id: `stadester-labels-${projection}`,
               data: visible_label_cities,
-              getPosition: (d: any) => (projection === 'Globe' ? [d.position[0], d.position[1], 30] : d.position),
+              getPosition: (d: any) => d.position,
               getText: (d: any) => d.shortName,
               getSize: (d: any) => Math.max(10, Math.min(15, 9 + Math.log10(Math.max(1000, d.population))*0.9)),
               sizeUnits: 'pixels',
