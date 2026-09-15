@@ -6,8 +6,10 @@ export interface UseStadesterCitiesParams {
   config?: StadesterConfig
   dataset?: 'stadester_1.1' | 'stadester_1.0'
   enabled?: boolean
+  isPlaying?: boolean
   maxCities?: number
   minPop?: number
+  performantMode?: boolean
   selectedCityKey?: string | null
   year: number
 }
@@ -34,6 +36,8 @@ let in_flight_city_fetches = new Map<string, Promise<CityPoint[]>>()
  * @param {number} [arg3_max_cities=4000]
  * @param {string} [arg4_color_mode='growth']
  * @param {Map<string, CityPoint[]>} [arg5_cache]
+ * @param {boolean} [arg6_is_playing]
+ * @param {boolean} [arg7_performant_mode]
  *
  * @returns {Promise<CityPoint[]>}
  */
@@ -43,15 +47,19 @@ export async function fetchStadesterCitiesAsync (
   arg2_min_pop?: number,
   arg3_max_cities?: number,
   arg4_color_mode?: string,
-  arg5_cache?: Map<string, CityPoint[]>
+  arg5_cache?: Map<string, CityPoint[]>,
+  arg6_is_playing?: boolean,
+  arg7_performant_mode?: boolean
 ): Promise<CityPoint[]> {
   //Convert from parameters
-  let cache = arg5_cache
-  let color_mode = arg4_color_mode || 'growth'
   let dataset = arg0_dataset || 'stadester_1.1'
-  let max_cities = (arg3_max_cities !== undefined) ? arg3_max_cities : 4000
-  let min_pop = (arg2_min_pop !== undefined) ? arg2_min_pop : 0
   let year = Math.round(arg1_year)
+  let min_pop = (arg2_min_pop !== undefined) ? arg2_min_pop : 0
+  let max_cities = (arg3_max_cities !== undefined) ? arg3_max_cities : 4000
+  let color_mode = arg4_color_mode || 'growth'
+  let cache = arg5_cache
+  let is_playing = Boolean(arg6_is_playing)
+  let performant_mode = Boolean(arg7_performant_mode)
 
   //Declare local instance variables
   let cache_key = `${dataset}:${year}:${min_pop}:${max_cities}:${color_mode}`
@@ -102,10 +110,13 @@ export async function fetchStadesterCitiesAsync (
       }
 
       if (cache) {
-        if (cache.size >= 60) {
+        let max_cache_size = (performant_mode || is_playing) ? 5 : 15
+        while (cache.size >= max_cache_size) {
           let first_key = cache.keys().next().value
           if (first_key)
             cache.delete(first_key)
+          else
+            break
         }
         cache.set(cache_key, city_list)
       }
@@ -139,8 +150,10 @@ export const useStadesterCities = function (arg0_options: UseStadesterCitiesPara
   let color_mode = cfg?.colorMode || options.colorMode || 'growth'
   let dataset = cfg?.dataset || options.dataset || 'stadester_1.1'
   let enabled = (cfg !== undefined) ? cfg.enabled : Boolean(options.enabled)
+  let is_playing = Boolean(options.isPlaying)
   let max_cities = (cfg?.maxCities !== undefined) ? cfg.maxCities : ((options.maxCities !== undefined) ? options.maxCities : 4000)
   let min_pop = (cfg?.minPop !== undefined) ? cfg.minPop : ((options.minPop !== undefined) ? options.minPop : 0)
+  let performant_mode = Boolean(options.performantMode)
   let year = (options.year !== undefined) ? options.year : 1950
 
   //Declare local instance variables
@@ -170,6 +183,13 @@ export const useStadesterCities = function (arg0_options: UseStadesterCitiesPara
   client_cache_ref = useRef<Map<string, CityPoint[]>>(new Map())
   full_city_cache_ref = useRef<Map<string, CityFullRecord>>(new Map())
 
+  //Clear cached city points when layer configuration changes or is disabled
+  useEffect(() => {
+    client_cache_ref.current.clear()
+    if (!enabled)
+      set_cities([])
+  }, [dataset, min_pop, max_cities, color_mode, enabled])
+
   useEffect(() => {
     if (options.selectedCityKey !== undefined) {
       set_selected_city_key(options.selectedCityKey)
@@ -192,8 +212,10 @@ export const useStadesterCities = function (arg0_options: UseStadesterCitiesPara
       set_error(null)
       set_is_loading(false)
 
-      fetchStadesterCitiesAsync(dataset, rounded_year + 1, min_pop, max_cities, color_mode, client_cache_ref.current).catch(() => {})
-      fetchStadesterCitiesAsync(dataset, rounded_year + 2, min_pop, max_cities, color_mode, client_cache_ref.current).catch(() => {})
+      if (!is_playing && !performant_mode) {
+        fetchStadesterCitiesAsync(dataset, rounded_year + 1, min_pop, max_cities, color_mode, client_cache_ref.current, is_playing, performant_mode).catch(() => {})
+        fetchStadesterCitiesAsync(dataset, rounded_year + 2, min_pop, max_cities, color_mode, client_cache_ref.current, is_playing, performant_mode).catch(() => {})
+      }
       return
     }
 
@@ -201,14 +223,16 @@ export const useStadesterCities = function (arg0_options: UseStadesterCitiesPara
     set_is_loading(true)
     set_error(null)
 
-    fetchStadesterCitiesAsync(dataset, rounded_year, min_pop, max_cities, color_mode, client_cache_ref.current)
+    fetchStadesterCitiesAsync(dataset, rounded_year, min_pop, max_cities, color_mode, client_cache_ref.current, is_playing, performant_mode)
       .then((arg0_list) => {
         if (!is_cancelled) {
           set_cities(arg0_list)
           set_is_loading(false)
 
-          fetchStadesterCitiesAsync(dataset, rounded_year + 1, min_pop, max_cities, color_mode, client_cache_ref.current).catch(() => {})
-          fetchStadesterCitiesAsync(dataset, rounded_year + 2, min_pop, max_cities, color_mode, client_cache_ref.current).catch(() => {})
+          if (!is_playing && !performant_mode) {
+            fetchStadesterCitiesAsync(dataset, rounded_year + 1, min_pop, max_cities, color_mode, client_cache_ref.current, is_playing, performant_mode).catch(() => {})
+            fetchStadesterCitiesAsync(dataset, rounded_year + 2, min_pop, max_cities, color_mode, client_cache_ref.current, is_playing, performant_mode).catch(() => {})
+          }
         }
       })
       .catch((arg0_err) => {
@@ -221,7 +245,7 @@ export const useStadesterCities = function (arg0_options: UseStadesterCitiesPara
     return () => {
       is_cancelled = true
     }
-  }, [enabled, dataset, Math.round(year), min_pop, max_cities, color_mode])
+  }, [enabled, dataset, Math.round(year), min_pop, max_cities, color_mode, is_playing, performant_mode])
 
   let effective_city_key = (options.selectedCityKey !== undefined) ? options.selectedCityKey : selected_city_key
 
@@ -240,6 +264,11 @@ export const useStadesterCities = function (arg0_options: UseStadesterCitiesPara
       if (!resp.ok)
         return null
       let data: CityFullRecord = await resp.json()
+      if (full_city_cache_ref.current.size >= 25) {
+        let first_key = full_city_cache_ref.current.keys().next().value
+        if (first_key)
+          full_city_cache_ref.current.delete(first_key)
+      }
       full_city_cache_ref.current.set(full_cache_key, data)
       return data
     } catch (arg0_e) {

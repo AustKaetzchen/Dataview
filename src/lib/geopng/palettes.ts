@@ -204,6 +204,7 @@ export function parseRgbString (arg0_str: string): RGB {
  * @param {number} arg1_src_width
  * @param {number} arg2_src_height
  * @param {RenderRasterOptions} arg3_options
+ * @param {HTMLCanvasElement} [arg4_target_canvas]
  *
  * @returns {{ canvas: HTMLCanvasElement; bounds: [number, number, number, number] }}
  */
@@ -211,23 +212,27 @@ export function renderRasterToCanvas (
   arg0_data: Float32Array,
   arg1_src_width: number,
   arg2_src_height: number,
-  arg3_options: RenderRasterOptions
+  arg3_options: RenderRasterOptions,
+  arg4_target_canvas?: HTMLCanvasElement
 ): { bounds: [number, number, number, number]; canvas: HTMLCanvasElement } {
   //Convert from parameters
   let data = arg0_data
   let options = arg3_options
   let src_height = arg2_src_height
   let src_width = arg1_src_width
+  let target_canvas = arg4_target_canvas
 
   //Declare local instance variables
-  let canvas = document.createElement('canvas')
+  let canvas = (target_canvas) ? target_canvas : document.createElement('canvas')
   let ctx: CanvasRenderingContext2D | null
   let out_height = src_height
   let out_width = src_width
 
   //Function body
-  canvas.width = out_width
-  canvas.height = out_height
+  if (canvas.width !== out_width)
+    canvas.width = out_width
+  if (canvas.height !== out_height)
+    canvas.height = out_height
   ctx = canvas.getContext('2d')
 
   //Guard clauses

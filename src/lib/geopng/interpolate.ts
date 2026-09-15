@@ -8,6 +8,7 @@ import { buildDecodedRasterResult } from './decoder'
  * @param {DecodedRaster} arg1_raster_b - Bounding keyframe B
  * @param {number} arg2_t - Fractional interpolation weight between 0.0 and 1.0
  * @param {boolean} [arg3_filter_uninhabited=false] - Whether to suppress uninhabited cells as NA
+ * @param {Float32Array} [arg4_target_buffer] - Optional pre-allocated destination buffer
  *
  * @returns {DecodedRaster}
  */
@@ -15,13 +16,15 @@ export const interpolateRasters = function (
   arg0_raster_a: DecodedRaster,
   arg1_raster_b: DecodedRaster,
   arg2_t: number,
-  arg3_filter_uninhabited?: boolean
+  arg3_filter_uninhabited?: boolean,
+  arg4_target_buffer?: Float32Array
 ): DecodedRaster {
   //Convert from parameters
   let filter_uninhabited = Boolean(arg3_filter_uninhabited)
   let r_a = arg0_raster_a
   let r_b = arg1_raster_b
   let t = Math.max(0, Math.min(1, arg2_t))
+  let target_buffer = arg4_target_buffer
 
   //Guard clauses
   if (t <= 0)
@@ -36,11 +39,11 @@ export const interpolateRasters = function (
   let max_val = -Infinity
   let mean: number
   let min_val = Infinity
-  let out_data = new Float32Array(r_a.data.length)
+  let total_len = r_a.data.length
+  let out_data = (target_buffer && target_buffer.length === total_len) ? target_buffer : new Float32Array(total_len)
   let std_dev: number
   let sum = 0
   let sum_sq = 0
-  let total_len = r_a.data.length
   let v_a: number
   let v_b: number
   let v_interp: number

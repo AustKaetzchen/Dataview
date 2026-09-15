@@ -738,6 +738,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
     stadesterConfig: stadester_config,
     stadesterLabels: worker_result.labels,
     stadesterPoints: worker_result.points,
+    viewState: proj_view_states[projection],
   })
 
   if (props.activeLayerId && props.dataLayers) {
@@ -819,7 +820,6 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
           if (typeof window !== 'undefined') {
             ;(window as any).__deckRendered = true
             ;(window as any).deck = deck_ref.current
-            ;(window as any).deckLayers = layers
           }
         }}
         getCursor={({ isHovering }) => ((isHovering) ? 'crosshair' : 'grab')}

@@ -92,8 +92,17 @@ export function useStadesterWorker (arg0_options: UseStadesterWorkerParams): Use
 
   //2. Update dataset on year/cities change
   useEffect(() => {
-    if (!worker_ref.current || !config?.enabled)
+    if (!worker_ref.current)
       return
+
+    if (!config?.enabled) {
+      worker_ref.current.postMessage({
+        cities: [],
+        type: 'SET_DATA',
+        year: 0,
+      } as WorkerInMessage)
+      return
+    }
 
     worker_ref.current.postMessage({
       cities: cities as any,

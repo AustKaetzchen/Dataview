@@ -398,8 +398,11 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
           new TileLayer({
             id: `esri-basemap-mercator-${basemap}`,
             data: esri_basemap_urls_obj[basemap],
-            minZoom: 0,
+            maxCacheByteSize: 32*1024*1024,
+            maxCacheSize: 60,
             maxZoom: 18,
+            minZoom: 0,
+            refinementStrategy: 'no-overlap',
             tileSize: 256,
             renderSubLayers: (props: any) => {
               let local_bounding_box = props.tile.boundingBox
@@ -421,8 +424,11 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
           new TileLayer({
             id: `esri-basemap-globe-${basemap}`,
             data: esri_basemap_urls_obj[basemap],
-            minZoom: 0,
+            maxCacheByteSize: 32*1024*1024,
+            maxCacheSize: 60,
             maxZoom: 18,
+            minZoom: 0,
+            refinementStrategy: 'no-overlap',
             tileSize: 256,
             renderSubLayers: (props: any) => {
               let local_bounding_box = props.tile.boundingBox
@@ -446,8 +452,11 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
             id: `esri-basemap-equirectangular-${basemap}`,
             data: esri_basemap_urls_obj[basemap],
             TilesetClass: EquirectangularTileset2D,
-            minZoom: 0,
+            maxCacheByteSize: 32*1024*1024,
+            maxCacheSize: 60,
             maxZoom: 18,
+            minZoom: 0,
+            refinementStrategy: 'no-overlap',
             tileSize: 256,
             renderSubLayers: (props: any) => {
               let local_bbox = props.tile.bbox

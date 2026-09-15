@@ -250,7 +250,7 @@ export const App: React.FC = function () {
 
   useEffect(() => {
     clear_raster_cache()
-  }, [performant_mode, clear_raster_cache])
+  }, [performant_mode, active_layer_id, clear_raster_cache])
 
   //Server-side timelapse export orchestrator hook
   let {
@@ -273,6 +273,8 @@ export const App: React.FC = function () {
 
   let stadester_result = useStadesterCities({
     config: stadester_config,
+    isPlaying: is_playing,
+    performantMode: performant_mode,
     selectedCityKey: selected_city_key,
     year: Math.round(timeline_year),
   })

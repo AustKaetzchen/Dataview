@@ -52,17 +52,39 @@ export function useRasterRenderer (arg0_params: UseRasterRendererParams): UseRas
   let scale_type = arg0_params.scaleType
 
   //Declare local instance variables
-  let prev_canvas_ref = useRef<HTMLCanvasElement | null>(null)
+  let buffer_flip_ref = useRef<boolean>(false)
+  let canvas_a_ref = useRef<HTMLCanvasElement | null>(null)
+  let canvas_b_ref = useRef<HTMLCanvasElement | null>(null)
+  let prev_bounds_ref = useRef<[number, number, number, number] | null>(null)
 
   //Function body
   let result = useMemo(() => {
+    //Declare local instance variables
+    let canvas: HTMLCanvasElement
+    let effective_max: number
+    let effective_min: number
+    let final_bounds: [number, number, number, number]
+    let is_country_isolated: boolean
+    let offset: number
+    let pixel_height: number
+    let pixel_offset: number
+    let prev_bounds: [number, number, number, number] | null
     let r = active_raster
+    let target_canvas: HTMLCanvasElement | null
+    let target_north: number
+    let target_south: number
+
+    //Guard clauses
     if (!r) {
-      //Release previous canvas
-      if (prev_canvas_ref.current) {
-        prev_canvas_ref.current.width = 0
-        prev_canvas_ref.current.height = 0
-        prev_canvas_ref.current = null
+      if (canvas_a_ref.current) {
+        canvas_a_ref.current.width = 0
+        canvas_a_ref.current.height = 0
+        canvas_a_ref.current = null
+      }
+      if (canvas_b_ref.current) {
+        canvas_b_ref.current.width = 0
+        canvas_b_ref.current.height = 0
+        canvas_b_ref.current = null
       }
       return {
         rasterBounds: [-180, -90, 180, 90] as [number, number, number, number],
@@ -70,7 +92,8 @@ export function useRasterRenderer (arg0_params: UseRasterRendererParams): UseRas
       }
     }
 
-    let is_country_isolated = Boolean(
+    //Function body
+    is_country_isolated = Boolean(
       countries_mode &&
         active_countries.length > 0 &&
         country_stats &&
@@ -79,10 +102,22 @@ export function useRasterRenderer (arg0_params: UseRasterRendererParams): UseRas
         Number.isFinite(country_stats.max)
     )
 
-    let effective_max = is_country_isolated ? country_stats!.max : max_val
-    let effective_min = is_country_isolated ? country_stats!.min : min_val
+    effective_max = is_country_isolated ? country_stats!.max : max_val
+    effective_min = is_country_isolated ? country_stats!.min : min_val
 
-    let { canvas } = renderRasterToCanvas(
+    //Select double-buffered canvas to notify Deck.gl of image updates without allocations
+    target_canvas = buffer_flip_ref.current ? canvas_b_ref.current : canvas_a_ref.current
+    if (!target_canvas) {
+      target_canvas = document.createElement('canvas')
+      if (buffer_flip_ref.current) {
+        canvas_b_ref.current = target_canvas
+      } else {
+        canvas_a_ref.current = target_canvas
+      }
+    }
+    buffer_flip_ref.current = !buffer_flip_ref.current
+
+    let render_res = renderRasterToCanvas(
       r.data,
       r.width,
       r.height,
@@ -96,20 +131,30 @@ export function useRasterRenderer (arg0_params: UseRasterRendererParams): UseRas
         palette: color_palette,
         projection,
         scaleType: scale_type,
-      }
+      },
+      target_canvas
     )
+    canvas = render_res.canvas
 
-    //Release previous canvas backing texture to actively cap GPU RAM
-    if (prev_canvas_ref.current && prev_canvas_ref.current !== canvas) {
-      prev_canvas_ref.current.width = 0
-      prev_canvas_ref.current.height = 0
+    pixel_height = 180/r.height
+    pixel_offset = getPixelOffset(projection)
+    offset = pixel_offset*pixel_height
+    target_south = -90 + offset
+    target_north = 90 + offset
+    prev_bounds = prev_bounds_ref.current
+
+    if (
+      prev_bounds &&
+      prev_bounds[0] === -180 &&
+      prev_bounds[1] === target_south &&
+      prev_bounds[2] === 180 &&
+      prev_bounds[3] === target_north
+    ) {
+      final_bounds = prev_bounds
+    } else {
+      final_bounds = [-180, target_south, 180, target_north]
+      prev_bounds_ref.current = final_bounds
     }
-    prev_canvas_ref.current = canvas
-
-    let pixel_height = 180/r.height
-    let pixel_offset = getPixelOffset(projection)
-    let offset = pixel_offset*pixel_height
-    let final_bounds: [number, number, number, number] = [-180, -90 + offset, 180, 90 + offset]
 
     return { rasterBounds: final_bounds, renderedCanvas: canvas }
   }, [
@@ -130,10 +175,15 @@ export function useRasterRenderer (arg0_params: UseRasterRendererParams): UseRas
   //Clean up canvas when component unmounts
   useEffect(() => {
     return () => {
-      if (prev_canvas_ref.current) {
-        prev_canvas_ref.current.width = 0
-        prev_canvas_ref.current.height = 0
-        prev_canvas_ref.current = null
+      if (canvas_a_ref.current) {
+        canvas_a_ref.current.width = 0
+        canvas_a_ref.current.height = 0
+        canvas_a_ref.current = null
+      }
+      if (canvas_b_ref.current) {
+        canvas_b_ref.current.width = 0
+        canvas_b_ref.current.height = 0
+        canvas_b_ref.current = null
       }
     }
   }, [])

@@ -19,20 +19,23 @@ export interface TesselatedBitmapLayerProps {
  */
 export class TesselatedBitmapLayer extends BitmapLayer<TesselatedBitmapLayerProps> {
   static layerName = 'TesselatedBitmapLayer'
+  static meshCache = new Map<string, any>()
 
   /**
-   * Constructs the 3D surface mesh vertex buffers.
+   * Constructs the 3D surface mesh vertex buffers with static caching.
    * @returns {Object}
    */
   _createMesh (): any {
     //Declare local instance variables
     let altitude_offset: number
     let bounds = (this.props as any).bounds
-    let heightmap_enabled = (this.props as any).heightmapEnabled
+    let cached_mesh: any
+    let heightmap_enabled = Boolean((this.props as any).heightmapEnabled)
     let index: number = 0
     let indices: Uint32Array
     let max_x: number = 180
     let max_y: number = 90
+    let mesh_key: string
     let min_x: number = -180
     let min_y: number = -90
     let positions: Float64Array
@@ -54,7 +57,14 @@ export class TesselatedBitmapLayer extends BitmapLayer<TesselatedBitmapLayerProp
       max_y = bounds[3]
     }
 
+    // On Globe, 0.4 degree grid ensures maximum chord sag is < 38m, preventing basemap puncture
     step_deg = (projection === 'Globe') ? 0.4 : ((heightmap_enabled) ? 1.5 : 2.0)
+    mesh_key = `${projection}:${step_deg}:${min_x.toFixed(3)}:${min_y.toFixed(3)}:${max_x.toFixed(3)}:${max_y.toFixed(3)}:${heightmap_enabled}`
+
+    cached_mesh = TesselatedBitmapLayer.meshCache.get(mesh_key)
+    if (cached_mesh)
+      return cached_mesh
+
     x_span = max_x - min_x
     y_span = max_y - min_y
     u_count = Math.max(16, Math.ceil(x_span/step_deg) + 1)
@@ -102,7 +112,10 @@ export class TesselatedBitmapLayer extends BitmapLayer<TesselatedBitmapLayerProp
       }
     }
 
+    let mesh_result = { vertexCount: vertex_count, positions, indices, texCoords: tex_coords }
+    TesselatedBitmapLayer.meshCache.set(mesh_key, mesh_result)
+
     //Return statement
-    return { vertexCount: vertex_count, positions, indices, texCoords: tex_coords }
+    return mesh_result
   }
 }

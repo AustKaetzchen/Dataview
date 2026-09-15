@@ -131,10 +131,12 @@ export function shiftRasterNorth (
 export function cullRasterCache (
   arg0_cache: Map<string, DecodedRaster>,
   arg1_performant_mode?: boolean,
-  arg2_preserve_keys?: string | string[]
+  arg2_preserve_keys?: string | string[],
+  arg3_is_playing?: boolean
 ): void {
   //Convert from parameters
   let cache = arg0_cache
+  let is_playing = Boolean(arg3_is_playing)
   let performant_mode = Boolean(arg1_performant_mode)
   let preserve_keys_raw = arg2_preserve_keys
 
@@ -160,7 +162,9 @@ export function cullRasterCache (
   }
 
   min_required = Math.max(1, preserve_set.size)
-  max_allowed_entries = performant_mode ? min_required : (is_memory_pressured ? Math.max(2, min_required) : Math.max(3, min_required))
+  max_allowed_entries = (performant_mode || is_playing)
+    ? min_required
+    : (is_memory_pressured ? Math.max(2, min_required) : Math.max(3, min_required))
 
   if (cache.size > max_allowed_entries) {
     let all_keys = Array.from(cache.keys())
@@ -268,9 +272,6 @@ export async function fetchSingleDecodedRasterAsync (
       let buf = await resp.arrayBuffer()
       let uint8 = new Uint8Array(buf)
       let decoded = await decodeRawGeoPngBufferAsync(uint8, format)
-
-      if (!performant_mode)
-        cache.set(`raw:${layer_id}:${year}:${format}`, decoded)
 
       //Apply pixel offset if configured
       if (typeof pixel_offset === 'number' && pixel_offset !== 0) {
@@ -655,7 +656,10 @@ export function useRasterPipeline (arg0_params: UseRasterPipelineParams): UseRas
   let display_raster: DecodedRaster | null
   let displayed_year_ref = useRef<number | null>(null)
   let in_flight_fetches_count_ref = useRef<number>(0)
+  let interp_buffer_ref = useRef<Float32Array | null>(null)
   let is_loading_raster: boolean
+  let last_interp_pair_ref = useRef<{ a: DecodedRaster | null; b: DecodedRaster | null; t: number } | null>(null)
+  let last_interp_raster_ref = useRef<DecodedRaster | null>(null)
   let load_req_id_ref = useRef<number>(0)
   let raster_a: DecodedRaster | null
   let raster_b: DecodedRaster | null
@@ -689,7 +693,25 @@ export function useRasterPipeline (arg0_params: UseRasterPipelineParams): UseRas
   //Clear cache when performant mode is toggled
   useEffect(() => {
     raster_cache_ref.current.clear()
+    last_interp_pair_ref.current = null
+    last_interp_raster_ref.current = null
   }, [performant_mode])
+
+  //Prune stale layer entries when active layer changes
+  useEffect(() => {
+    let current_layer = active_layer_id
+    if (current_layer) {
+      let cache = raster_cache_ref.current
+      let all_keys = Array.from(cache.keys())
+      for (let i = 0; i < all_keys.length; i++) {
+        let k = all_keys[i]
+        if (!k.startsWith(`${current_layer}:`))
+          cache.delete(k)
+      }
+    }
+    last_interp_pair_ref.current = null
+    last_interp_raster_ref.current = null
+  }, [active_layer_id])
 
   //Fetch raster keyframes on year/layer/selector update
   useEffect(() => {
@@ -769,7 +791,7 @@ export function useRasterPipeline (arg0_params: UseRasterPipelineParams): UseRas
         set_active_file_name(`${requested_layer_id}_${timeline_year}.png`)
         set_raster_version((arg0_v) => arg0_v + 1)
         set_is_loading_raster(false)
-        cullRasterCache(raster_cache_ref.current, performant_mode, [cache_key_a, cache_key_b])
+        cullRasterCache(raster_cache_ref.current, performant_mode, [cache_key_a, cache_key_b], is_playing)
       } else {
         set_is_loading_raster(true)
         in_flight_fetches_count_ref.current++
@@ -793,7 +815,7 @@ export function useRasterPipeline (arg0_params: UseRasterPipelineParams): UseRas
                 set_raster_b(arg0_secondary)
               set_active_file_name(`${requested_layer_id}_${timeline_year}.png`)
               set_raster_version((arg0_v) => arg0_v + 1)
-              cullRasterCache(raster_cache_ref.current, performant_mode, [cache_key_a, cache_key_b])
+              cullRasterCache(raster_cache_ref.current, performant_mode, [cache_key_a, cache_key_b], is_playing)
             }
           })
           .catch((arg0_err) => {
@@ -842,7 +864,7 @@ export function useRasterPipeline (arg0_params: UseRasterPipelineParams): UseRas
               set_raster_b(null)
               set_active_file_name(`${requested_layer_id}_${primary_year}.png`)
               set_raster_version((arg0_v) => arg0_v + 1)
-              cullRasterCache(raster_cache_ref.current, performant_mode, cache_key_a)
+              cullRasterCache(raster_cache_ref.current, performant_mode, cache_key_a, is_playing)
             }
           })
           .catch((arg0_err) => {
@@ -855,8 +877,8 @@ export function useRasterPipeline (arg0_params: UseRasterPipelineParams): UseRas
       }
     }
 
-    //Prefetch upcoming keyframe only when performant mode is OFF to conserve RAM
-    if (!performant_mode && !is_headless_export) {
+    //Prefetch upcoming keyframe only when performant mode is OFF and not playing to conserve RAM
+    if (!performant_mode && !is_headless_export && !is_playing) {
       let curr_idx = years.indexOf(next_year)
       if (curr_idx !== -1 && curr_idx + 1 < years.length) {
         let future_year = years[curr_idx + 1]
@@ -890,6 +912,7 @@ export function useRasterPipeline (arg0_params: UseRasterPipelineParams): UseRas
     active_variable_selectors,
     data_format,
     is_headless_export,
+    is_playing,
     performant_mode,
     snap_to_keyframes,
     timeline_year,
@@ -916,7 +939,26 @@ export function useRasterPipeline (arg0_params: UseRasterPipelineParams): UseRas
       }
       if (p_yr !== n_yr && timeline_year > p_yr && timeline_year < n_yr) {
         let t = (timeline_year - p_yr)/(n_yr - p_yr)
-        display_raster = interpolateRasters(raster_a, raster_b, t)
+        let last_interp = last_interp_pair_ref.current
+
+        if (
+          is_playing &&
+          last_interp &&
+          last_interp.a === raster_a &&
+          last_interp.b === raster_b &&
+          Math.abs(last_interp.t - t) < 0.015 &&
+          last_interp_raster_ref.current
+        ) {
+          display_raster = last_interp_raster_ref.current
+        } else {
+          let req_len = raster_a.width*raster_a.height
+          if (!interp_buffer_ref.current || interp_buffer_ref.current.length !== req_len)
+            interp_buffer_ref.current = new Float32Array(req_len)
+
+          display_raster = interpolateRasters(raster_a, raster_b, t, undefined, interp_buffer_ref.current)
+          last_interp_pair_ref.current = { a: raster_a, b: raster_b, t }
+          last_interp_raster_ref.current = display_raster
+        }
       } else {
         display_raster = raster_a
       }
