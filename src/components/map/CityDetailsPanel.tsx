@@ -414,7 +414,7 @@ export const CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_
     <div
       id="dataview-city-details-panel"
       style={panel_style}
-      className={`z-40 w-96 max-w-[calc(100vw-32px)] bg-card/95 backdrop-blur-md border border-border shadow-2xl p-3 text-foreground select-none font-sans ${
+      className={`z-15 w-96 max-w-[calc(100vw-32px)] bg-card/95 backdrop-blur-md border border-border shadow-2xl p-3 text-foreground select-none font-sans ${
         !anchor_pos ? 'absolute bottom-20 left-4' : ''
       }`}
     >

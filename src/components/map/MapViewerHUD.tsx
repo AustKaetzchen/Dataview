@@ -189,7 +189,7 @@ export const MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
   return (
     <>
       {/* Floating Legend Container */}
-      {!is_timelapse_exporting && ui_visible && (
+      {!is_timelapse_exporting && ui_visible && (Boolean(raster) || Boolean(has_canvas) || Boolean(stadester_config?.enabled) || Boolean(info_panel_open)) && (
         <div
           id="dataview-legend-card-container"
           style={container_style}

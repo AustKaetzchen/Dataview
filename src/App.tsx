@@ -990,6 +990,7 @@ export const App: React.FC = function () {
           diffNameA={diff_name_a}
           diffNameB={diff_name_b}
           heightmapConfig={heightmap_config}
+          historicalBordersConfig={historical_borders_config}
           infoPanelOpen={info_panel_open}
           invertPalette={invert_palette}
           isLoadingLayers={is_loading_layers || is_loading_raster}
@@ -1028,6 +1029,7 @@ export const App: React.FC = function () {
           setOpacity={set_opacity}
           setPercentileList={set_percentile_list}
           setScaleType={set_scale_type}
+          stadesterConfig={stadester_config}
           userRole={user_role}
           width={sidebar_width}
         />

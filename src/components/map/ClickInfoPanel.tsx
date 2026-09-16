@@ -235,7 +235,7 @@ export const ClickInfoPanel: React.FC<ClickInfoPanelProps> = React.memo(function
   return (
     <div
       ref={panel_ref}
-      className="absolute top-0 left-0 pointer-events-none z-50 rounded-none border border-border bg-popover/95 p-[var(--padding)] shadow-md font-sans text-[var(--body-font-size)] text-popover-foreground will-change-transform whitespace-nowrap"
+      className="absolute top-0 left-0 pointer-events-none z-10 rounded-none border border-border bg-popover/95 p-[var(--padding)] shadow-md font-sans text-[var(--body-font-size)] text-popover-foreground will-change-transform whitespace-nowrap"
       style={{
         transform: `translate3d(${pos.x + 14}px, ${pos.y + offset_y}px, 0)`,
         minWidth: '200px',

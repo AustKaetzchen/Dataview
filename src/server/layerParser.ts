@@ -649,10 +649,20 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
           let sub_full_id = `${k}.${sub_k}`
           let sub_years = scanLayerTemplate(sub_template, sub_full_id, file_cache, sub_item.variable_selectors || selectors)
 
+          let sub_desc_text: string | undefined = undefined
+          if (Array.isArray(sub_item.description)) {
+            sub_desc_text = sub_item.description.join('\n\n')
+          } else if (typeof sub_item.description === 'string') {
+            sub_desc_text = sub_item.description
+          } else {
+            sub_desc_text = desc_text
+          }
+
           sub_layer_list.push({
             available_years: sub_years,
             can_be_uninhabited: Boolean(sub_item.can_be_uninhabited ?? item.can_be_uninhabited ?? parsed_json.can_be_uninhabited),
             category: dataset_name,
+            description: sub_desc_text,
             encoding: sub_item.encoding || 'float32',
             filepath_template: sub_template,
             icon: getLayerIcon(sub_k),

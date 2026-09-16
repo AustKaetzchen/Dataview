@@ -995,9 +995,8 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
         />
       )}
 
-      {/* Top Left: Value Colourbar & Information Flyout Container */}
-      {(ui_visible || is_timelapse_exporting) && (Boolean(rendered_canvas) || Boolean(raster) || is_timelapse_exporting || info_panel_open || stadester_config?.enabled) &&
-        (() => {
+      {/* Top Left: Value Colourbar & Information Flyout Container, Top Right Tools */}
+      {(() => {
           let has_canvas = Boolean(rendered_canvas)
           let is_country_relative = Boolean(
             countries_mode &&

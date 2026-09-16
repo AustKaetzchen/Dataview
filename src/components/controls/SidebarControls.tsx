@@ -11,6 +11,8 @@ import {
   MapModeId,
   HeightmapConfig,
   CircleOverlayConfig,
+  HistoricalBordersConfig,
+  StadesterConfig,
 } from '@/lib/geopng/types'
 import { CountryFeature } from '@/lib/geopng/polygonBinning'
 import { D3_COLOR_SCHEMES, getPaletteCssGradient } from '@/lib/geopng/palettes'
@@ -23,6 +25,7 @@ import { Icon } from '../ui/icon'
 import { LOCALISATION_CONFIG, UserRole } from '@config'
 import { ParsedDataLayer } from '@/server/layerParser'
 import { D3ColorPaletteSelector } from './D3ColorPaletteSelector'
+import { MarkdownRenderer } from '../ui/MarkdownRenderer'
 
 export interface SidebarControlsProps {
   activeFileName?: string
@@ -38,6 +41,7 @@ export interface SidebarControlsProps {
   diffNameA?: string
   diffNameB?: string
   heightmapConfig?: HeightmapConfig
+  historicalBordersConfig?: HistoricalBordersConfig
   infoPanelOpen?: boolean
   invertPalette: boolean
   isLoadingLayers?: boolean
@@ -76,6 +80,7 @@ export interface SidebarControlsProps {
   setOpacity: (o: number) => void
   setPercentileList: (p: string) => void
   setScaleType: (st: ScaleType) => void
+  stadesterConfig?: StadesterConfig
   userRole?: UserRole
   width?: number
 }
@@ -93,6 +98,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_pr
   let {
     absoluteBreaks: absolute_breaks,
     activeFileName: active_file_name,
+    activeLayerId: active_layer_id = null,
     appMode: app_mode,
     binningConfig: binning_config,
     bottomClearance: bottom_clearance,
@@ -101,11 +107,14 @@ export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_pr
     dataFormat: data_format,
     diffNameA: diff_name_a,
     diffNameB: diff_name_b,
+    historicalBordersConfig: historical_borders_config,
     infoPanelOpen: info_panel_open,
     invertPalette: invert_palette,
+    layers = {},
     legendSubtitle: legend_subtitle = '',
     legendTitle: legend_title,
     logSigma: log_sigma,
+    mapModes: map_modes = [],
     maxValOverride: max_val_override,
     minValOverride: min_val_override,
     onChangeUserRole: on_change_user_role,
@@ -131,11 +140,14 @@ export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_pr
     setOpacity: set_opacity,
     setPercentileList: set_percentile_list,
     setScaleType: set_scale_type,
+    stadesterConfig: stadester_config,
     userRole: user_role = 'developer',
     width,
   } = props
 
   //Declare local instance variables
+  let active_description: string | null
+  let active_layer: ParsedDataLayer | null
   let binning_presets = [
     { h: 2160, label: 'Native (4320×2160)', w: 4320 },
     { h: 1080, label: '2× (2160×1080)', w: 2160 },
@@ -149,12 +161,45 @@ export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_pr
   let set_open_folders: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
   let toggle_folder: (arg0_folder_key: string) => void
 
-  //Function body
-  ;[open_folders, set_open_folders] = useState<Record<string, boolean>>({
-    binning: false,
-    manual: false,
-    visual: true,
-  })
+    //Function body
+    ;[open_folders, set_open_folders] = useState<Record<string, boolean>>({
+      binning: false,
+      description: true,
+      manual: false,
+      visual: true,
+    })
+
+  active_layer = useMemo(() => {
+    if (!active_layer_id || !layers)
+      return null
+    if (layers[active_layer_id])
+      return layers[active_layer_id]
+    if (active_layer_id.includes('.')) {
+      let parent_id = active_layer_id.split('.')[0]
+      let parent = layers[parent_id]
+      if (parent && parent.sub_layers) {
+        let sub = parent.sub_layers.find((arg0_sub) => arg0_sub.id === active_layer_id)
+        if (sub)
+          return sub
+      }
+    }
+    return null
+  }, [active_layer_id, layers])
+
+  active_description = useMemo(() => {
+    if (active_layer?.description)
+      return active_layer.description
+    if (stadester_config?.enabled && layers?.['stadester']?.description)
+      return layers['stadester'].description
+    if (historical_borders_config?.enabled && layers?.['statistical_borders']?.description)
+      return layers['statistical_borders'].description
+    if (map_modes && map_modes.length > 0) {
+      let active_mode = map_modes.find((arg0_m) => arg0_m.active && arg0_m.id !== 'default' && (arg0_m as any).description)
+      if (active_mode && (active_mode as any).description)
+        return (active_mode as any).description
+    }
+    return null
+  }, [active_layer, historical_borders_config?.enabled, layers, map_modes, stadester_config?.enabled])
 
   toggle_folder = function (arg0_folder_key: string) {
     let folder_key = arg0_folder_key
@@ -224,11 +269,10 @@ export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_pr
           <button
             type="button"
             onClick={on_toggle_info_panel}
-            className={`px-2 py-1 text-xs font-medium rounded-none border transition-colors cursor-pointer inline-flex items-center gap-1.5 ${
-              info_panel_open
-                ? 'bg-primary text-primary-foreground border-primary font-bold shadow-xs'
-                : 'bg-background hover:bg-muted text-foreground border-border'
-            }`}
+            className={`px-2 py-1 text-xs font-medium rounded-none border transition-colors cursor-pointer inline-flex items-center gap-1.5 ${info_panel_open
+              ? 'bg-primary text-primary-foreground border-primary font-bold shadow-xs'
+              : 'bg-background hover:bg-muted text-foreground border-border'
+              }`}
             title="Toggle Information & Controls flyout"
           >
             <Icon name="info" className={info_panel_open ? 'text-primary-foreground' : 'text-foreground'} />
@@ -270,6 +314,33 @@ export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_pr
       {/* Main Scrollable Controls */}
       <div className="flex-1 p-[var(--padding)] space-y-[var(--padding)] overflow-y-auto">
         {/* ========================================================================= */}
+        {/* SECTION 0: MAPMODE DESCRIPTION */}
+        {/* ========================================================================= */}
+        {active_description && (
+          <div className="border border-border bg-card/50">
+            <button
+              type="button"
+              onClick={() => toggle_folder('description')}
+              className="w-full h-8 px-[var(--padding)] flex items-center justify-between text-[var(--body-font-size)] font-bold text-foreground bg-muted/40 hover:bg-muted/70 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <Icon name="description" />
+                <span>Description</span>
+              </div>
+              <Icon
+                name={open_folders.description ? 'expand_less' : 'expand_more'}
+              />
+            </button>
+
+            {open_folders.description && (
+              <div className="p-[var(--padding)] text-[var(--body-font-size)] border-t border-border overflow-x-hidden">
+                <MarkdownRenderer content={active_description} />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ========================================================================= */}
         {/* SECTION 1: VISUALISATION SETTINGS */}
         {/* ========================================================================= */}
         <div className="border border-border bg-card/50">
@@ -283,9 +354,6 @@ export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_pr
               <span>Visualisation Settings</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="text-[var(--body-font-size)] text-muted-foreground truncate max-w-[80px]">
-                {color_palette}
-              </span>
               <Icon
                 name={open_folders.visual ? 'expand_less' : 'expand_more'}
               />
@@ -331,7 +399,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_pr
                   <Slider
                     value={[log_sigma]}
                     min={0.01}
-                    max={Math.max(1000, Math.ceil(log_sigma*1.5))}
+                    max={Math.max(1000, Math.ceil(log_sigma * 1.5))}
                     step={log_sigma >= 100 ? 5 : log_sigma >= 10 ? 1 : log_sigma >= 1 ? 0.1 : 0.01}
                     onValueChange={(arg0_vals) => set_log_sigma(arg0_vals[0])}
                   />
@@ -343,11 +411,10 @@ export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_pr
                         key={arg0_preset}
                         type="button"
                         onClick={() => set_log_sigma(arg0_preset)}
-                        className={`px-1.5 py-0.5 text-[var(--body-font-size)] rounded-none border transition-colors ${
-                          Math.abs(log_sigma - arg0_preset) < 0.001
-                            ? 'bg-primary text-primary-foreground border-primary font-bold'
-                            : 'bg-background hover:bg-muted text-muted-foreground border-border'
-                        }`}
+                        className={`px-1.5 py-0.5 text-[var(--body-font-size)] rounded-none border transition-colors ${Math.abs(log_sigma - arg0_preset) < 0.001
+                          ? 'bg-primary text-primary-foreground border-primary font-bold'
+                          : 'bg-background hover:bg-muted text-muted-foreground border-border'
+                          }`}
                       >
                         {arg0_preset}
                       </button>
@@ -447,15 +514,15 @@ export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_pr
                 <div className="flex justify-between items-center text-[var(--body-font-size)]">
                   <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">Layer Opacity</Label>
                   <span className="text-foreground font-bold text-[var(--body-font-size)]">
-                    {Math.round(opacity*100)}%
+                    {Math.round(opacity * 100)}%
                   </span>
                 </div>
                 <Slider
-                  value={[opacity*100]}
+                  value={[opacity * 100]}
                   min={10}
                   max={100}
                   step={1}
-                  onValueChange={(arg0_vals) => set_opacity(arg0_vals[0]/100)}
+                  onValueChange={(arg0_vals) => set_opacity(arg0_vals[0] / 100)}
                 />
               </div>
 
@@ -538,9 +605,8 @@ export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_pr
                     className="w-3.5 h-3.5 rounded-none accent-emerald-500 cursor-pointer"
                   />
                   <span
-                    className={`text-xs font-bold uppercase ${
-                      binning_config.enabled ? 'text-emerald-400 font-bold' : 'text-muted-foreground'
-                    }`}
+                    className={`text-xs font-bold uppercase ${binning_config.enabled ? 'text-emerald-400 font-bold' : 'text-muted-foreground'
+                      }`}
                   >
                     {binning_config.enabled ? 'ON' : 'OFF'}
                   </span>
@@ -597,11 +663,10 @@ export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_pr
                               width: arg0_preset.w,
                             }))
                           }
-                          className={`px-1.5 py-1 text-[var(--body-font-size)] border rounded-none text-center truncate transition-colors cursor-pointer ${
-                            binning_config.width === arg0_preset.w && binning_config.height === arg0_preset.h
-                              ? 'bg-primary text-primary-foreground border-primary font-bold'
-                              : 'bg-background hover:bg-muted text-muted-foreground border-border'
-                          }`}
+                          className={`px-1.5 py-1 text-[var(--body-font-size)] border rounded-none text-center truncate transition-colors cursor-pointer ${binning_config.width === arg0_preset.w && binning_config.height === arg0_preset.h
+                            ? 'bg-primary text-primary-foreground border-primary font-bold'
+                            : 'bg-background hover:bg-muted text-muted-foreground border-border'
+                            }`}
                         >
                           {arg0_preset.w}×{arg0_preset.h}
                         </button>
@@ -665,11 +730,10 @@ export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_pr
                   <button
                     type="button"
                     onClick={() => set_app_mode('Single Image')}
-                    className={`h-7 text-xs font-medium transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
-                      app_mode === 'Single Image'
-                        ? 'bg-primary text-primary-foreground font-bold shadow-xs'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
+                    className={`h-7 text-xs font-medium transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${app_mode === 'Single Image'
+                      ? 'bg-primary text-primary-foreground font-bold shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                      }`}
                   >
                     <Icon name="image" className="text-xs" />
                     <span>Single GeoPNG</span>
@@ -677,11 +741,10 @@ export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_pr
                   <button
                     type="button"
                     onClick={() => set_app_mode('Image Difference')}
-                    className={`h-7 text-xs font-medium transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
-                      app_mode === 'Image Difference'
-                        ? 'bg-primary text-primary-foreground font-bold shadow-xs'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
+                    className={`h-7 text-xs font-medium transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${app_mode === 'Image Difference'
+                      ? 'bg-primary text-primary-foreground font-bold shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                      }`}
                   >
                     <Icon name="compare_arrows" className="text-xs" />
                     <span>Difference</span>
@@ -699,7 +762,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_pr
                     id="single-file-upload"
                     className="hidden"
                     onClick={(arg0_e) => {
-                      ;(arg0_e.target as HTMLInputElement).value = ''
+                      ; (arg0_e.target as HTMLInputElement).value = ''
                     }}
                     onChange={(arg0_e) => {
                       let file = arg0_e.target.files?.[0]
@@ -728,7 +791,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_pr
                       id="diff-file-a"
                       className="hidden"
                       onClick={(arg0_e) => {
-                        ;(arg0_e.target as HTMLInputElement).value = ''
+                        ; (arg0_e.target as HTMLInputElement).value = ''
                       }}
                       onChange={(arg0_e) => {
                         let file = arg0_e.target.files?.[0]
@@ -754,7 +817,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_pr
                       id="diff-file-b"
                       className="hidden"
                       onClick={(arg0_e) => {
-                        ;(arg0_e.target as HTMLInputElement).value = ''
+                        ; (arg0_e.target as HTMLInputElement).value = ''
                       }}
                       onChange={(arg0_e) => {
                         let file = arg0_e.target.files?.[0]

@@ -5,6 +5,7 @@
     },
     "statistical_borders": {
         name: "Statistical Borders",
+        description: "Temporally sliced statistical and historical borders from CShapes-2.0 and Svea atlas.naissance.",
         filepaths: [
             {
                 path: "${l_atlas}/CShapes-2.0.geojson",

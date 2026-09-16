@@ -3,6 +3,7 @@ import { ParsedDataLayer } from '@/server/layerParser'
 import { HistoricalBordersConfig, StadesterConfig } from '@/lib/geopng/types'
 import { Icon } from '@/components/ui/icon'
 import { HistoricalBordersSettings } from './HistoricalBordersSettings'
+import { MapmodeTooltip } from './MapmodeTooltip'
 import { StadesterSettings } from './StadesterSettings'
 
 export interface DataLayerNodeProps {
@@ -70,58 +71,64 @@ export const DataLayerNode: React.FC<DataLayerNodeProps> = function (arg0_props)
     <div key={layer.id} className="space-y-1" style={{ paddingLeft: `${depth * 12}px` }}>
       {is_vector_overlay ? (
         <div className="border border-border/70 bg-card/40 mb-1">
-          <div
-            onClick={() => {
-              if (is_borders && set_historical_borders_config) {
-                set_historical_borders_config((arg0_prev) => ({
-                  ...arg0_prev,
-                  enabled: !arg0_prev.enabled,
-                }))
-              } else if (is_stadester && set_stadester_config) {
-                set_stadester_config((arg0_prev) => {
-                  let is_currently_active = arg0_prev.enabled && (layer.id === 'stadester' || arg0_prev.dataset === layer.id || (!arg0_prev.dataset && layer.id === 'stadester_1.1'))
-                  if (is_currently_active) {
+          <MapmodeTooltip name={layer.name} unit={layer.unit}>
+            <div
+              onClick={() => {
+                if (is_borders) {
+                  if (set_historical_borders_config) {
+                    set_historical_borders_config((arg0_prev) => ({
+                      ...arg0_prev,
+                      enabled: !arg0_prev.enabled,
+                    }))
+                  } else if (on_select_layer) {
+                    on_select_layer(layer.id)
+                  }
+                } else if (is_stadester && set_stadester_config) {
+                  set_stadester_config((arg0_prev) => {
+                    let is_currently_active = arg0_prev.enabled && (layer.id === 'stadester' || arg0_prev.dataset === layer.id || (!arg0_prev.dataset && layer.id === 'stadester_1.1'))
+                    if (is_currently_active) {
+                      return {
+                        ...arg0_prev,
+                        enabled: false,
+                      }
+                    }
                     return {
                       ...arg0_prev,
-                      enabled: false,
+                      dataset: (layer.id === 'stadester') ? (arg0_prev.dataset || 'stadester_1.1') : (layer.id as 'stadester_1.1' | 'stadester_1.0'),
+                      display_options: layer.display_options || arg0_prev.display_options,
+                      enabled: true,
                     }
-                  }
-                  return {
-                    ...arg0_prev,
-                    dataset: (layer.id === 'stadester') ? (arg0_prev.dataset || 'stadester_1.1') : (layer.id as 'stadester_1.1' | 'stadester_1.0'),
-                    display_options: layer.display_options || arg0_prev.display_options,
-                    enabled: true,
-                  }
-                })
-              }
-            }}
-            className={`flex items-center justify-between px-2 py-1.5 text-left cursor-pointer border transition-colors ${is_overlay_active
-                ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
-                : 'hover:bg-muted/40 text-foreground border-transparent'
-              }`}
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <span
-                className={`w-3.5 h-3.5 rounded-none border flex items-center justify-center shrink-0 transition-colors ${is_overlay_active ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/60'
-                  }`}
-              >
-                {is_overlay_active && <Icon name="check" className="text-[10px]" />}
-              </span>
-              <Icon name={is_borders ? 'flag' : 'location_city'} className="text-primary text-xs shrink-0" />
-              <span className="text-xs truncate">{layer.name}</span>
+                  })
+                }
+              }}
+              className={`flex items-center justify-between px-2 py-1.5 text-left cursor-pointer border transition-colors ${is_overlay_active
+                  ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
+                  : 'hover:bg-muted/40 text-foreground border-transparent'
+                }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span
+                  className={`w-3.5 h-3.5 rounded-none border flex items-center justify-center shrink-0 transition-colors ${is_overlay_active ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/60'
+                    }`}
+                >
+                  {is_overlay_active && <Icon name="check" className="text-[10px]" />}
+                </span>
+                <Icon name={is_borders ? 'flag' : 'location_city'} className="text-primary text-xs shrink-0" />
+                <span className="text-xs truncate">{layer.name}</span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-[10px] text-muted-foreground font-mono">
+                  {is_overlay_active ? 'OVERLAY ON' : 'OVERLAY OFF'}
+                </span>
+                {(is_stadester || is_borders) && (
+                  <Icon
+                    name={is_overlay_active ? 'expand_less' : 'expand_more'}
+                    className="text-xs text-muted-foreground"
+                  />
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              <span className="text-[10px] text-muted-foreground font-mono">
-                {is_overlay_active ? 'OVERLAY ON' : 'OVERLAY OFF'}
-              </span>
-              {(is_stadester || is_borders) && (
-                <Icon
-                  name={is_overlay_active ? 'expand_less' : 'expand_more'}
-                  className="text-xs text-muted-foreground"
-                />
-              )}
-            </div>
-          </div>
+          </MapmodeTooltip>
 
           {is_borders && is_overlay_active && historical_borders_config && set_historical_borders_config && (
             <div className="p-2 border-t border-border/60 bg-card/60 space-y-1 text-xs">
@@ -169,11 +176,13 @@ export const DataLayerNode: React.FC<DataLayerNodeProps> = function (arg0_props)
                   activeVariableSelectors={active_variable_selectors}
                   depth={0}
                   expandedNodes={expanded_nodes}
+                  historicalBordersConfig={historical_borders_config}
                   isLayerAccessible={is_layer_accessible}
                   layer={arg0_sub}
                   onChangeVariableSelector={on_change_variable_selector}
                   onSelectLayer={on_select_layer}
                   searchQuery={search_query}
+                  setHistoricalBordersConfig={set_historical_borders_config}
                   setStadesterConfig={set_stadester_config}
                   stadesterCityCount={stadester_city_count}
                   stadesterConfig={stadester_config}
@@ -185,68 +194,67 @@ export const DataLayerNode: React.FC<DataLayerNodeProps> = function (arg0_props)
         </div>
       ) : has_variable_selectors ? (
         <div>
-          <div
-            className={`flex items-center justify-between px-2 py-1 cursor-pointer border transition-colors ${is_active
-                ? 'bg-primary/20 border-primary text-primary font-bold shadow-xs'
-                : 'bg-muted/30 hover:bg-muted/60 border-border/60 text-foreground'
-              }`}
-          >
-            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-              <button
-                type="button"
+          <MapmodeTooltip name={layer.name} unit={layer.unit}>
+            <div
+              className={`flex items-center justify-between px-2 py-1 cursor-pointer border transition-colors ${is_active
+                  ? 'bg-primary/20 border-primary text-primary font-bold shadow-xs'
+                  : 'bg-muted/30 hover:bg-muted/60 border-border/60 text-foreground'
+                }`}
+            >
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <button
+                  type="button"
+                  onClick={(arg0_e) => {
+                    arg0_e.stopPropagation()
+                    if (on_select_layer)
+                      on_select_layer(layer.id)
+                    if (!is_node_expanded)
+                      toggle_node(layer.id)
+                  }}
+                  className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 cursor-pointer transition-colors ${is_active ? 'border-primary bg-primary' : 'border-muted-foreground/60 hover:border-primary'
+                    }`}
+                  title={`Select ${layer.name}`}
+                >
+                  {is_active && <span className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
+                </button>
+                <div
+                  onClick={() => {
+                    if (on_select_layer)
+                      on_select_layer(layer.id)
+                    if (!is_node_expanded)
+                      toggle_node(layer.id)
+                  }}
+                  className="flex items-center gap-1.5 min-w-0 flex-1"
+                >
+                  <Icon
+                    name={is_node_expanded ? 'folder_open' : 'folder'}
+                    className="text-primary text-xs shrink-0"
+                  />
+                  <span className="text-xs font-bold truncate">{layer.name}</span>
+                </div>
+              </div>
+              <div
                 onClick={(arg0_e) => {
                   arg0_e.stopPropagation()
-                  if (on_select_layer)
-                    on_select_layer(layer.id)
-                  if (!is_node_expanded)
-                    toggle_node(layer.id)
+                  toggle_node(layer.id)
                 }}
-                className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 cursor-pointer transition-colors ${is_active ? 'border-primary bg-primary' : 'border-muted-foreground/60 hover:border-primary'
-                  }`}
-                title={`Select ${layer.name}`}
+                className="flex items-center gap-1 shrink-0 ml-1 cursor-pointer p-0.5"
               >
-                {is_active && <span className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
-              </button>
-              <div
-                onClick={() => {
-                  if (on_select_layer)
-                    on_select_layer(layer.id)
-                  if (!is_node_expanded)
-                    toggle_node(layer.id)
-                }}
-                className="flex items-center gap-1.5 min-w-0 flex-1"
-              >
+                {layer.unit && (
+                  <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[110px] shrink ml-1">
+                    {layer.unit}
+                  </span>
+                )}
+                <span className="text-[9px] px-1 py-0.2 bg-muted text-muted-foreground font-mono">
+                  {Object.keys(layer.variable_selectors!).length} vars
+                </span>
                 <Icon
-                  name={is_node_expanded ? 'folder_open' : 'folder'}
-                  className="text-primary text-xs shrink-0"
+                  name={is_node_expanded ? 'expand_less' : 'expand_more'}
+                  className="text-xs text-muted-foreground shrink-0"
                 />
-                <span className="text-xs font-bold truncate">{layer.name}</span>
               </div>
             </div>
-            <div
-              onClick={(arg0_e) => {
-                arg0_e.stopPropagation()
-                toggle_node(layer.id)
-              }}
-              className="flex items-center gap-1 shrink-0 ml-1 cursor-pointer p-0.5"
-            >
-              {layer.unit && (
-                <span
-                  className="text-[10px] text-muted-foreground font-mono truncate max-w-[110px] shrink ml-1"
-                  title={layer.unit}
-                >
-                  {layer.unit}
-                </span>
-              )}
-              <span className="text-[9px] px-1 py-0.2 bg-muted text-muted-foreground font-mono">
-                {Object.keys(layer.variable_selectors!).length} vars
-              </span>
-              <Icon
-                name={is_node_expanded ? 'expand_less' : 'expand_more'}
-                className="text-xs text-muted-foreground shrink-0"
-              />
-            </div>
-          </div>
+          </MapmodeTooltip>
 
           {is_node_expanded && (
             <div className="mt-1 space-y-1.5 border-l-2 border-primary/40 pl-1.5 ml-2">
@@ -365,33 +373,32 @@ export const DataLayerNode: React.FC<DataLayerNodeProps> = function (arg0_props)
         </div>
       ) : (
         <div>
-          <button
-            type="button"
-            disabled={!is_accessible}
-            onClick={() => on_select_layer && on_select_layer(layer.id)}
-            className={`w-full flex items-center justify-between px-2 py-1 text-left cursor-pointer border transition-colors ${is_active
-                ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
-                : 'hover:bg-muted/40 text-foreground border-transparent'
-              } ${!is_accessible ? 'opacity-40 cursor-not-allowed' : ''}`}
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <span
-                className={`w-3 h-3 rounded-full border flex items-center justify-center shrink-0 ${is_active ? 'border-primary bg-primary' : 'border-muted-foreground/60'
-                  }`}
-              >
-                {is_active && <span className="w-1 h-1 rounded-full bg-primary-foreground" />}
-              </span>
-              <span className="text-xs truncate">{layer.name}</span>
-            </div>
-            {layer.unit && (
-              <span
-                className="text-[10px] text-muted-foreground font-mono truncate max-w-[110px] shrink ml-1"
-                title={layer.unit}
-              >
-                {layer.unit}
-              </span>
-            )}
-          </button>
+          <MapmodeTooltip name={layer.name} unit={layer.unit}>
+            <button
+              type="button"
+              disabled={!is_accessible}
+              onClick={() => on_select_layer && on_select_layer(layer.id)}
+              className={`w-full flex items-center justify-between px-2 py-1 text-left cursor-pointer border transition-colors ${is_active
+                  ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
+                  : 'hover:bg-muted/40 text-foreground border-transparent'
+                } ${!is_accessible ? 'opacity-40 cursor-not-allowed' : ''}`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span
+                  className={`w-3 h-3 rounded-full border flex items-center justify-center shrink-0 ${is_active ? 'border-primary bg-primary' : 'border-muted-foreground/60'
+                    }`}
+                >
+                  {is_active && <span className="w-1 h-1 rounded-full bg-primary-foreground" />}
+                </span>
+                <span className="text-xs truncate">{layer.name}</span>
+              </div>
+              {layer.unit && (
+                <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[110px] shrink ml-1">
+                  {layer.unit}
+                </span>
+              )}
+            </button>
+          </MapmodeTooltip>
         </div>
       )}
     </div>

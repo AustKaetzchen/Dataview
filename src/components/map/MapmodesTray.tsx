@@ -22,6 +22,7 @@ import {
 import { CircleOverlaySettings } from './mapmodes/CircleOverlaySettings'
 import { DatasetFolderNode } from './mapmodes/DatasetFolderNode'
 import { HistoricalBordersSettings } from './mapmodes/HistoricalBordersSettings'
+import { MapmodeTooltip } from './mapmodes/MapmodeTooltip'
 import { ParsedDataLayer } from '@/server/layerParser'
 
 export {
@@ -476,25 +477,27 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (ar
 
                         return (
                           <div key={arg0_mode.id} className="space-y-1">
-                            <button
-                              type="button"
-                              onClick={() => on_toggle_map_mode(arg0_mode.id)}
-                              className={`w-full flex items-center justify-between px-2 py-1 text-left cursor-pointer border transition-colors ${is_active
-                                  ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
-                                  : 'hover:bg-muted/40 text-foreground border-transparent'
-                                }`}
-                            >
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className={`w-3.5 h-3.5 rounded-none border flex items-center justify-center shrink-0 ${is_active ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/60'
-                                  }`}>
-                                  {is_active && <Icon name="check" className="text-[10px]" />}
+                            <MapmodeTooltip name={arg0_mode.label}>
+                              <button
+                                type="button"
+                                onClick={() => on_toggle_map_mode(arg0_mode.id)}
+                                className={`w-full flex items-center justify-between px-2 py-1 text-left cursor-pointer border transition-colors ${is_active
+                                    ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
+                                    : 'hover:bg-muted/40 text-foreground border-transparent'
+                                  }`}
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className={`w-3.5 h-3.5 rounded-none border flex items-center justify-center shrink-0 ${is_active ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/60'
+                                    }`}>
+                                    {is_active && <Icon name="check" className="text-[10px]" />}
+                                  </span>
+                                  <span className="text-xs truncate">{arg0_mode.label}</span>
+                                </div>
+                                <span className="text-[10px] text-muted-foreground uppercase font-mono">
+                                  {is_active ? 'ON' : 'OFF'}
                                 </span>
-                                <span className="text-xs truncate">{arg0_mode.label}</span>
-                              </div>
-                              <span className="text-[10px] text-muted-foreground uppercase font-mono">
-                                {is_active ? 'ON' : 'OFF'}
-                              </span>
-                            </button>
+                              </button>
+                            </MapmodeTooltip>
 
                             {/* Nested Overlay Settings */}
                             {is_active && arg0_mode.id === 'country_analysis' && (

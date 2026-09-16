@@ -143,7 +143,7 @@ export const HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanel
     <div
       id="dataview-historical-border-panel"
       style={panel_style}
-      className="z-40 w-96 max-w-[calc(100vw-32px)] bg-card/95 backdrop-blur-md border border-border shadow-2xl p-3 text-foreground select-none font-sans animate-in fade-in-0 zoom-in-95 duration-150"
+      className="z-15 w-96 max-w-[calc(100vw-32px)] bg-card/95 backdrop-blur-md border border-border shadow-2xl p-3 text-foreground select-none font-sans animate-in fade-in-0 zoom-in-95 duration-150"
     >
       {/* Header */}
       <div className="flex items-start justify-between border-b border-border/70 pb-2 mb-2.5">
