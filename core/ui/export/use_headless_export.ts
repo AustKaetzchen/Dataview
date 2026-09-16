@@ -103,6 +103,7 @@ export function useHeadlessExport (arg0_params: UseHeadlessExportParams): void {
         )
       }
 
+      let can_be_uninhabited = Boolean(target_layer?.can_be_uninhabited)
       let has_selectors = Boolean(target_layer?.variable_selectors && Object.keys(target_layer.variable_selectors).length > 0)
       let layer_pixel_offset = target_layer?.pixel_offset
 
@@ -123,7 +124,9 @@ export function useHeadlessExport (arg0_params: UseHeadlessExportParams): void {
           has_selectors,
           layer_pixel_offset,
           performant_mode,
-          snap_to_keyframes
+          snap_to_keyframes,
+          undefined,
+          can_be_uninhabited
         )
       } else {
         decoded = await fetchRasterKeyframe(
@@ -134,7 +137,9 @@ export function useHeadlessExport (arg0_params: UseHeadlessExportParams): void {
           raster_cache_ref.current,
           has_selectors,
           layer_pixel_offset,
-          performant_mode
+          performant_mode,
+          undefined,
+          can_be_uninhabited
         )
       }
 

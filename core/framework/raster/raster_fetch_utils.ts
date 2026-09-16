@@ -199,6 +199,7 @@ let in_flight_fetches = new Map<string, Promise<DecodedRaster | null>>()
  * @param {number | { covariate?: string; x?: number; y?: number }} [arg6_pixel_offset]
  * @param {boolean} [arg7_performant_mode]
  * @param {AbortSignal} [arg8_signal]
+ * @param {boolean} [arg9_can_be_uninhabited]
  *
  * @returns {Promise<DecodedRaster | null>}
  */
@@ -211,10 +212,12 @@ export async function fetchSingleDecodedRasterAsync (
   arg5_has_selectors?: boolean,
   arg6_pixel_offset?: number | { covariate?: string; x?: number; y?: number },
   arg7_performant_mode?: boolean,
-  arg8_signal?: AbortSignal
+  arg8_signal?: AbortSignal,
+  arg9_can_be_uninhabited?: boolean
 ): Promise<DecodedRaster | null> {
   //Convert from parameters
   let cache = arg4_cache
+  let can_be_uninhabited = Boolean(arg9_can_be_uninhabited)
   let format = arg3_format
   let has_selectors = Boolean(arg5_has_selectors)
   let layer_id = arg0_layer_id
@@ -350,6 +353,33 @@ export async function fetchSingleDecodedRasterAsync (
         }
       }
 
+      //Mask uninhabited cells as NaN if layer requires human habitation
+      if (!can_be_uninhabited && layer_id !== 'population_total' && !layer_id.endsWith('.population_total')) {
+        let pop_raster = await fetchSingleDecodedRasterAsync(
+          'population_total',
+          year,
+          {},
+          'int32',
+          cache,
+          false,
+          undefined,
+          performant_mode,
+          signal,
+          true
+        )
+        let pop_data = pop_raster?.data
+        if (pop_data && pop_data.length === decoded.data.length) {
+          let d = decoded.data
+          let len = d.length
+          for (let i = 0; i < len; i++) {
+            let p = pop_data[i]
+            if (p <= 0 || Number.isNaN(p))
+              d[i] = NaN
+          }
+          decoded = buildDecodedRasterResult(d, decoded.width, decoded.height)
+        }
+      }
+
       cache.set(cache_key, decoded)
       cullRasterCache(cache, performant_mode, cache_key)
       return decoded
@@ -378,6 +408,7 @@ export async function fetchSingleDecodedRasterAsync (
  * @param {number | { covariate?: string; x?: number; y?: number }} [arg6_pixel_offset]
  * @param {boolean} [arg7_performant_mode]
  * @param {AbortSignal} [arg8_signal]
+ * @param {boolean} [arg9_can_be_uninhabited]
  *
  * @returns {Promise<DecodedRaster | null>}
  */
@@ -390,10 +421,12 @@ export async function fetchRasterKeyframe (
   arg5_has_selectors?: boolean,
   arg6_pixel_offset?: number | { covariate?: string; x?: number; y?: number },
   arg7_performant_mode?: boolean,
-  arg8_signal?: AbortSignal
+  arg8_signal?: AbortSignal,
+  arg9_can_be_uninhabited?: boolean
 ): Promise<DecodedRaster | null> {
   //Convert from parameters
   let cache = arg4_cache
+  let can_be_uninhabited = Boolean(arg9_can_be_uninhabited)
   let format = arg3_format
   let has_selectors = Boolean(arg5_has_selectors)
   let layer_id = arg0_layer_id
@@ -442,7 +475,8 @@ export async function fetchRasterKeyframe (
       has_selectors,
       pixel_offset,
       performant_mode,
-      signal
+      signal,
+      can_be_uninhabited
     )
   }
 
@@ -459,7 +493,8 @@ export async function fetchRasterKeyframe (
           has_selectors,
           pixel_offset,
           performant_mode,
-          signal
+          signal,
+          can_be_uninhabited
         )
       )
       let results = await Promise.all(raster_promises)
@@ -521,6 +556,7 @@ export async function fetchRasterKeyframe (
  * @param {boolean} [arg8_performant_mode]
  * @param {boolean} [arg9_snap_to_keyframes]
  * @param {AbortSignal} [arg10_signal]
+ * @param {boolean} [arg11_can_be_uninhabited]
  *
  * @returns {Promise<DecodedRaster | null>}
  */
@@ -535,10 +571,12 @@ export async function fetchInterpolatedRasterAsync (
   arg7_pixel_offset?: number | { covariate?: string; x?: number; y?: number },
   arg8_performant_mode?: boolean,
   arg9_snap_to_keyframes?: boolean,
-  arg10_signal?: AbortSignal
+  arg10_signal?: AbortSignal,
+  arg11_can_be_uninhabited?: boolean
 ): Promise<DecodedRaster | null> {
   //Convert from parameters
   let cache = arg5_cache
+  let can_be_uninhabited = Boolean(arg11_can_be_uninhabited)
   let format = arg4_format
   let has_selectors = Boolean(arg6_has_selectors)
   let layer_id = arg0_layer_id
@@ -552,7 +590,7 @@ export async function fetchInterpolatedRasterAsync (
 
   //Guard clauses
   if (!years || years.length === 0)
-    return fetchRasterKeyframe(layer_id, timeline_year, selectors, format, cache, has_selectors, pixel_offset, performant_mode, signal)
+    return fetchRasterKeyframe(layer_id, timeline_year, selectors, format, cache, has_selectors, pixel_offset, performant_mode, signal, can_be_uninhabited)
 
   //Declare local instance variables
   let next_year = years[years.length - 1]
@@ -573,17 +611,17 @@ export async function fetchInterpolatedRasterAsync (
     primary_year = snap_to_keyframes
       ? (Math.abs(timeline_year - prev_year) <= Math.abs(timeline_year - next_year) ? prev_year : next_year)
       : prev_year
-    return fetchRasterKeyframe(layer_id, primary_year, selectors, format, cache, has_selectors, pixel_offset, performant_mode, signal)
+    return fetchRasterKeyframe(layer_id, primary_year, selectors, format, cache, has_selectors, pixel_offset, performant_mode, signal, can_be_uninhabited)
   }
 
   let [r_a, r_b] = await Promise.all([
-    fetchRasterKeyframe(layer_id, prev_year, selectors, format, cache, has_selectors, pixel_offset, performant_mode, signal),
-    fetchRasterKeyframe(layer_id, next_year, selectors, format, cache, has_selectors, pixel_offset, performant_mode, signal),
+    fetchRasterKeyframe(layer_id, prev_year, selectors, format, cache, has_selectors, pixel_offset, performant_mode, signal, can_be_uninhabited),
+    fetchRasterKeyframe(layer_id, next_year, selectors, format, cache, has_selectors, pixel_offset, performant_mode, signal, can_be_uninhabited),
   ])
 
   if (r_a && r_b) {
     let t = (timeline_year - prev_year)/(next_year - prev_year)
-    return interpolateRasters(r_a, r_b, t)
+    return interpolateRasters(r_a, r_b, t, !can_be_uninhabited)
   }
 
   //Return statement

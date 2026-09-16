@@ -167,6 +167,7 @@ export function useRasterPipeline (arg0_params: UseRasterPipelineParams): UseRas
     let controller = new AbortController()
     abort_controller_ref.current = controller
 
+    let can_be_uninhabited = Boolean(active_layer.can_be_uninhabited)
     let current_req_id = ++load_req_id_ref.current
     let layer_pixel_offset = active_layer.pixel_offset
 
@@ -231,8 +232,8 @@ export function useRasterPipeline (arg0_params: UseRasterPipelineParams): UseRas
         in_flight_fetches_count_ref.current++
 
         Promise.all([
-          fetchRasterKeyframe(requested_layer_id, prev_year, effective_selectors, effective_format, raster_cache_ref.current, has_selectors, layer_pixel_offset, performant_mode, controller.signal),
-          fetchRasterKeyframe(requested_layer_id, next_year, effective_selectors, effective_format, raster_cache_ref.current, has_selectors, layer_pixel_offset, performant_mode, controller.signal),
+          fetchRasterKeyframe(requested_layer_id, prev_year, effective_selectors, effective_format, raster_cache_ref.current, has_selectors, layer_pixel_offset, performant_mode, controller.signal, can_be_uninhabited),
+          fetchRasterKeyframe(requested_layer_id, next_year, effective_selectors, effective_format, raster_cache_ref.current, has_selectors, layer_pixel_offset, performant_mode, controller.signal, can_be_uninhabited),
         ])
           .then(([arg0_primary, arg0_secondary]) => {
             in_flight_fetches_count_ref.current = Math.max(0, in_flight_fetches_count_ref.current - 1)
@@ -282,7 +283,8 @@ export function useRasterPipeline (arg0_params: UseRasterPipelineParams): UseRas
           has_selectors,
           layer_pixel_offset,
           performant_mode,
-          controller.signal
+          controller.signal,
+          can_be_uninhabited
         )
           .then((arg0_primary) => {
             in_flight_fetches_count_ref.current = Math.max(0, in_flight_fetches_count_ref.current - 1)
@@ -331,7 +333,9 @@ export function useRasterPipeline (arg0_params: UseRasterPipelineParams): UseRas
             raster_cache_ref.current,
             has_selectors,
             layer_pixel_offset,
-            performant_mode
+            performant_mode,
+            undefined,
+            can_be_uninhabited
           ).catch(() => {})
         })
       }
@@ -389,7 +393,8 @@ export function useRasterPipeline (arg0_params: UseRasterPipelineParams): UseRas
           if (!interp_buffer_ref.current || interp_buffer_ref.current.length !== req_len)
             interp_buffer_ref.current = new Float32Array(req_len)
 
-          display_raster = interpolateRasters(raster_a, raster_b, t, undefined, interp_buffer_ref.current)
+          let filter_uninhabited = !active_layer?.can_be_uninhabited
+          display_raster = interpolateRasters(raster_a, raster_b, t, filter_uninhabited, interp_buffer_ref.current)
           last_interp_pair_ref.current = { a: raster_a, b: raster_b, t }
           last_interp_raster_ref.current = display_raster
         }
