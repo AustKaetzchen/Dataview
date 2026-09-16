@@ -321,7 +321,7 @@ export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_pr
             <button
               type="button"
               onClick={() => toggle_folder('description')}
-              className="w-full h-8 px-[var(--padding)] flex items-center justify-between text-[var(--body-font-size)] font-bold text-foreground bg-muted/40 hover:bg-muted/70 transition-colors cursor-pointer"
+              className="w-full h-8 px-[var(--padding)] flex items-center justify-between text-[var(--body-font-size)] font-bold text-foreground bg-muted/40 hover:bg-muted/70 transition-colors cursor-pointer overflow-y-auto"
             >
               <div className="flex items-center gap-2">
                 <Icon name="description" />
