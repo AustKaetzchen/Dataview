@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { DecodedRaster } from '@/lib/geopng/types'
-import { CountryFeature, CountryStats } from '@/lib/geopng/polygonBinning'
+import { CountryFeature, CountryStats, getFeatureEntityName } from '@/lib/geopng/polygonBinning'
 import { Icon } from '@/components/ui/icon'
 import { formatLegendValue } from '@/components/map/ColorBarLegend'
 import { computeSyntheticDemographicPyramid } from '@/lib/raster/syntheticDemographics'
@@ -32,7 +32,7 @@ export interface AgeCohortItem {
   label: string
 }
 
-export const AGE_COHORTS: AgeCohortItem[] = [
+export let AGE_COHORTS: AgeCohortItem[] = [
   { compactLabel: '0-1', id: '00', label: '0-1yo, Infants' },
   { compactLabel: '1-5', id: '01', label: '1-5yo' },
   { compactLabel: '5-10', id: '05', label: '5-10yo' },
@@ -54,37 +54,6 @@ export const AGE_COHORTS: AgeCohortItem[] = [
 ]
 
 /**
- * Resolves a reliable entity display name across modern countries, CShapes polities, and Naissance territories.
- *
- * @param {any} arg0_feat
- *
- * @returns {string}
- */
-export function getFeatureEntityName (arg0_feat: any): string {
-  //Guard clauses
-  if (!arg0_feat)
-    return 'Global'
-
-  //Declare local instance variables
-  let p = arg0_feat.properties || {}
-
-  //Return statement
-  return (
-    p.name ||
-    p.cntry_name ||
-    p.CNTRY_NAME ||
-    p.NAME ||
-    p.Country ||
-    p.country ||
-    p.adm0_a3 ||
-    p.id ||
-    arg0_feat.name ||
-    arg0_feat.id ||
-    'Historical Territory'
-  )
-}
-
-/**
  * PopulationPyramidChart renders bidirectional population pyramids with support for
  * individual country analysis and country switching.
  *
@@ -92,7 +61,7 @@ export function getFeatureEntityName (arg0_feat: any): string {
  *
  * @returns {React.ReactElement}
  */
-export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = function (arg0_props) {
+export let PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = function (arg0_props) {
   //Convert from parameters
   let props = arg0_props
   let {

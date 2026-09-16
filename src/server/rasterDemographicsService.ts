@@ -1,8 +1,29 @@
 import fs from 'fs'
 import path from 'path'
-import { spawnSync } from 'child_process'
-import { decode as decodePng } from 'fast-png'
 import { AtlasBordersService } from './atlasBordersService.ts'
+import {
+  AGE_COHORTS,
+  SECTOR_KEYS,
+  COHORTS_DIR,
+  PROFESSIONS_DIR,
+  BMP_CACHE_DIR,
+  RASTER_HEIGHT,
+  RASTER_WIDTH,
+  ensureDemographicBmpCache,
+  ensureSectorBmpCache,
+  isFileCacheStale,
+  loadGeoPngAsFloat32,
+  runNativeRasterReader,
+} from './rasterBmpCache.ts'
+import {
+  computeScanlineSpans,
+  sumGlobalRaster,
+  sumRasterSpans,
+  type ScanlineSpan,
+} from './rasterScanline.ts'
+
+export type { ScanlineSpan }
+export { computeScanlineSpans, isFileCacheStale }
 
 export interface DemographicCohortResult {
   country: string
@@ -21,33 +42,9 @@ export interface SectorBreakdownResult {
   lastModified?: number
 }
 
-export interface ScanlineSpan {
-  c_end: number
-  c_start: number
-  row: number
-}
-
-let AGE_COHORTS = [
-  '00', '01', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55', '60', '65', '70', '75', '80'
-]
-
-let SECTOR_KEYS = [
-  'agriculture', 'informal_labour', 'manufacturing', 'services', 'not_in_work'
-]
-
-let COHORTS_DIR = 'D:/Project 1509 - SVEA/histmap/3.data_transform/age_sex/4.composite_cohorts'
-let PROFESSIONS_DIR = 'D:/Project 1509 - SVEA/histmap/3.data_transform/professions/4.aggregates'
 let NATURAL_EARTH_PATH = path.join(process.cwd(), 'public/data/ne_50m_admin_0_countries.geojson')
-let BMP_CACHE_DIR = path.resolve(process.cwd(), 'data/raster_cache')
-let NATIVE_READER_BIN = path.resolve(process.cwd(), 'bin/raster_reader.exe')
 let BAKED_DEMOGRAPHICS_PATH = path.resolve(process.cwd(), 'data/baked_global_demographics.json')
 let BAKED_SECTORS_PATH = path.resolve(process.cwd(), 'data/baked_global_sectors.json')
-
-if (!fs.existsSync(BMP_CACHE_DIR))
-  fs.mkdirSync(BMP_CACHE_DIR, { recursive: true })
-
-let RASTER_WIDTH = 4320
-let RASTER_HEIGHT = 2160
 
 let baked_global_demographics: Record<string, DemographicCohortResult> = {}
 let baked_global_sectors: Record<string, Record<string, number>> = {}
@@ -129,42 +126,6 @@ export function getSectorSourceMaxMtime (arg0_year: number): number {
 
   //Return statement
   return max_mtime
-}
-
-/**
- * Helper to determine if a cached file is missing or older than its source file.
- *
- * @param {string} arg0_source_path
- * @param {string} arg1_cache_path
- *
- * @returns {boolean}
- */
-export function isFileCacheStale (arg0_source_path: string, arg1_cache_path: string): boolean {
-  //Convert from parameters
-  let cache_path = arg1_cache_path
-  let source_path = arg0_source_path
-
-  //Guard clauses
-  if (!fs.existsSync(cache_path))
-    return true
-  if (!fs.existsSync(source_path))
-    return false
-
-  //Declare local instance variables
-  let cache_stat: fs.Stats
-  let source_stat: fs.Stats
-
-  //Function body
-  try {
-    cache_stat = fs.statSync(cache_path)
-    source_stat = fs.statSync(source_path)
-
-    //Return statement
-    return source_stat.mtimeMs > cache_stat.mtimeMs
-  } catch {
-    //Return statement
-    return true
-  }
 }
 
 /**
@@ -404,298 +365,6 @@ function findClosestYear (arg0_year: number, arg1_years: number[]): number {
 }
 
 /**
- * Reads a 32-bit Float32Array raster from an uncompressed .bmp cache file.
- * Returns null if file is missing, corrupt, or not 64-byte aligned.
- *
- * @param {string} arg0_filepath
- * @param {number} [arg1_w=RASTER_WIDTH]
- * @param {number} [arg2_h=RASTER_HEIGHT]
- *
- * @returns {Float32Array | null}
- */
-function readFloat32FromBmp (
-  arg0_filepath: string,
-  arg1_w = RASTER_WIDTH,
-  arg2_h = RASTER_HEIGHT
-): Float32Array | null {
-  //Convert from parameters
-  let filepath = arg0_filepath
-  let h = arg2_h
-  let w = arg1_w
-
-  //Guard clauses
-  if (!fs.existsSync(filepath))
-    return null
-
-  //Declare local instance variables
-  let buf: Buffer
-  let off: number
-
-  //Function body
-  try {
-    buf = fs.readFileSync(filepath)
-    if (buf.length < 64 || buf.readUInt16LE(0) !== 0x4D42)
-      return null
-
-    off = buf.readUInt32LE(10)
-    if (off % 4 !== 0 || buf.length < off + w*h*4)
-      return null
-
-    //Return statement
-    return new Float32Array(buf.buffer, buf.byteOffset + off, w*h)
-  } catch (arg0_err) {
-    console.error(`[RasterDemographicsService] Error reading BMP cache ${filepath}:`, arg0_err)
-    return null
-  }
-}
-
-/**
- * Writes a Float32Array raster to disk as an uncompressed 32-bit .bmp file with 64-byte aligned header.
- *
- * @param {string} arg0_filepath
- * @param {Float32Array} arg1_data
- * @param {number} [arg2_w=RASTER_WIDTH]
- * @param {number} [arg3_h=RASTER_HEIGHT]
- *
- * @returns {boolean}
- */
-function writeFloat32AsBmp (
-  arg0_filepath: string,
-  arg1_data: Float32Array,
-  arg2_w = RASTER_WIDTH,
-  arg3_h = RASTER_HEIGHT
-): boolean {
-  //Convert from parameters
-  let data = arg1_data
-  let filepath = arg0_filepath
-  let h = arg3_h
-  let w = arg2_w
-
-  //Declare local instance variables
-  let fd: number
-  let hdr = Buffer.alloc(64)
-  let img_bytes = w*h*4
-  let pixel_buf: Buffer
-  let total_bytes = 64 + img_bytes
-
-  //Function body
-  try {
-    hdr.writeUInt16LE(0x4D42, 0)
-    hdr.writeUInt32LE(total_bytes, 2)
-    hdr.writeUInt32LE(0, 6)
-    hdr.writeUInt32LE(64, 10)
-    hdr.writeUInt32LE(40, 14)
-    hdr.writeInt32LE(w, 18)
-    hdr.writeInt32LE(-h, 22)
-    hdr.writeUInt16LE(1, 26)
-    hdr.writeUInt16LE(32, 28)
-    hdr.writeUInt32LE(0, 30)
-    hdr.writeUInt32LE(img_bytes, 34)
-    hdr.writeInt32LE(2835, 38)
-    hdr.writeInt32LE(2835, 42)
-    hdr.writeUInt32LE(0, 46)
-    hdr.writeUInt32LE(0, 50)
-
-    pixel_buf = Buffer.from(data.buffer, data.byteOffset, data.byteLength)
-    fd = fs.openSync(filepath, 'w')
-    fs.writeSync(fd, hdr, 0, 64)
-    fs.writeSync(fd, pixel_buf, 0, pixel_buf.length)
-    fs.closeSync(fd)
-
-    //Return statement
-    return true
-  } catch (arg0_err) {
-    console.error(`[RasterDemographicsService] Error writing BMP cache ${filepath}:`, arg0_err)
-    return false
-  }
-}
-
-/**
- * Reads a big-endian float32 GeoPNG from disk and converts it to a native Float32Array, caching as 32-bit BMP.
- *
- * @param {string} arg0_filepath
- *
- * @returns {Float32Array | null}
- */
-function loadGeoPngAsFloat32 (arg0_filepath: string): Float32Array | null {
-  //Convert from parameters
-  let filepath = arg0_filepath
-
-  //Guard clauses
-  if (!filepath)
-    return null
-
-  //Declare local instance variables
-  let base_name = path.basename(filepath, path.extname(filepath))
-  let bmp_path = path.join(BMP_CACHE_DIR, `${base_name}.bmp`)
-  let buf: Buffer
-  let cached_bmp: Float32Array | null
-  let img: any
-  let is_stale: boolean
-  let out_buf: ArrayBuffer
-  let out_f32: Float32Array
-  let out_u32: Uint32Array
-  let src_u32: Uint32Array
-
-  //Check BMP cache first if fresh
-  is_stale = isFileCacheStale(filepath, bmp_path)
-  if (!is_stale) {
-    cached_bmp = readFloat32FromBmp(bmp_path)
-    if (cached_bmp)
-      return cached_bmp
-  }
-
-  //Guard clause: check if source GeoPNG exists
-  if (!fs.existsSync(filepath))
-    return null
-
-  //Function body
-  try {
-    buf = fs.readFileSync(filepath)
-    img = decodePng(buf)
-    src_u32 = new Uint32Array(img.data.buffer, img.data.byteOffset, img.data.byteLength/4)
-    out_buf = new ArrayBuffer(src_u32.length*4)
-    out_u32 = new Uint32Array(out_buf)
-    out_f32 = new Float32Array(out_buf)
-
-    for (let i = 0; i < src_u32.length; i++) {
-      let raw = src_u32[i]
-      out_u32[i] = ((raw & 0xff) << 24) | ((raw & 0xff00) << 8) | ((raw >>> 8) & 0xff00) | (raw >>> 24)
-    }
-
-    //Write to BMP cache so all subsequent lookups are instantaneous
-    writeFloat32AsBmp(bmp_path, out_f32)
-
-    //Return statement
-    return out_f32
-  } catch (arg0_err) {
-    console.error(`[RasterDemographicsService] Error decoding ${filepath}:`, arg0_err)
-    return null
-  }
-}
-
-/**
- * Ensures that all 36 demographic cohort rasters for a keyframe year exist in BMP cache and are up-to-date.
- *
- * @param {number} arg0_year
- */
-function ensureDemographicBmpCache (arg0_year: number): void {
-  //Convert from parameters
-  let year = arg0_year
-
-  //Function body
-  for (let i = 0; i < AGE_COHORTS.length; i++) {
-    let cid = AGE_COHORTS[i]
-    let f_bmp = path.join(BMP_CACHE_DIR, `f_${cid}_${year}.bmp`)
-    let f_png = path.join(COHORTS_DIR, `f_${cid}_${year}.png`)
-    let m_bmp = path.join(BMP_CACHE_DIR, `m_${cid}_${year}.bmp`)
-    let m_png = path.join(COHORTS_DIR, `m_${cid}_${year}.png`)
-
-    if (isFileCacheStale(f_png, f_bmp))
-      loadGeoPngAsFloat32(f_png)
-    if (isFileCacheStale(m_png, m_bmp))
-      loadGeoPngAsFloat32(m_png)
-  }
-}
-
-/**
- * Ensures that all 5 sector rasters for a keyframe year exist in BMP cache and are up-to-date.
- *
- * @param {number} arg0_year
- */
-function ensureSectorBmpCache (arg0_year: number): void {
-  //Convert from parameters
-  let year = arg0_year
-
-  //Function body
-  for (let i = 0; i < SECTOR_KEYS.length; i++) {
-    let s = SECTOR_KEYS[i]
-    let s_bmp = path.join(BMP_CACHE_DIR, `${s}_t_${year}.bmp`)
-    let s_png = path.join(PROFESSIONS_DIR, `${s}_t_${year}.png`)
-
-    if (isFileCacheStale(s_png, s_bmp))
-      loadGeoPngAsFloat32(s_png)
-  }
-}
-
-/**
- * Executes native C multi-threaded raster reader to process 32-bit BMP rasters in parallel.
- *
- * @param {object} arg0_options
- * @param {string} [arg0_options.country="Global"]
- * @param {boolean} [arg0_options.isGlobal=false]
- * @param {"demographics" | "sectors"} arg0_options.mode
- * @param {ScanlineSpan[]} [arg0_options.spans=[]]
- * @param {number} arg0_options.year
- *
- * @returns {any | null}
- */
-function runNativeRasterReader (arg0_options: {
-  country?: string
-  isGlobal?: boolean
-  mode: 'demographics' | 'sectors'
-  spans?: ScanlineSpan[]
-  year: number
-}): any | null {
-  //Convert from parameters
-  let country = arg0_options.country || 'Global'
-  let is_global = arg0_options.isGlobal || false
-  let mode = arg0_options.mode
-  let spans = arg0_options.spans || []
-  let year = arg0_options.year
-
-  //Guard clauses
-  if (!fs.existsSync(NATIVE_READER_BIN))
-    return null
-
-  //Declare local instance variables
-  let args: string[]
-  let buf: Buffer | undefined
-  let parsed: any
-  let proc_res: any
-
-  //Function body
-  args = [
-    '--mode', mode,
-    '--year', String(year),
-    '--country', country,
-    '--cache-dir', BMP_CACHE_DIR,
-  ]
-  if (is_global || spans.length === 0)
-    args.push('--global')
-
-  if (!is_global && spans.length > 0) {
-    buf = Buffer.alloc(4 + 4 + spans.length * 12)
-    buf.write('BINS', 0, 4, 'ascii')
-    buf.writeUInt32LE(spans.length, 4)
-    for (let i = 0; i < spans.length; i++) {
-      buf.writeInt32LE(spans[i].row, 8 + i * 12)
-      buf.writeInt32LE(spans[i].c_start, 12 + i * 12)
-      buf.writeInt32LE(spans[i].c_end, 16 + i * 12)
-    }
-  }
-
-  try {
-    proc_res = spawnSync(NATIVE_READER_BIN, args, {
-      encoding: 'utf8',
-      input: buf,
-      maxBuffer: 10 * 1024 * 1024,
-      windowsHide: true,
-    })
-
-    if (proc_res.status === 0 && proc_res.stdout) {
-      parsed = JSON.parse(proc_res.stdout)
-      return parsed
-    }
-  } catch (arg0_err) {
-    console.warn('[RasterDemographicsService] Native C reader failed, falling back to JS:', arg0_err)
-  }
-
-  //Return statement
-  return null
-}
-
-/**
  * Loads all 36 demographic cohort rasters for a keyframe year into memory cache.
  *
  * @param {number} arg0_year
@@ -814,154 +483,6 @@ function getSectorYearRasters (arg0_year: number): Record<string, Float32Array> 
 
   //Return statement
   return sector_map
-}
-
-/**
- * Computes scanline bounding spans for a GeoJSON Polygon or MultiPolygon.
- * Uses the Jordan curve even-odd rule across all exterior and hole rings.
- *
- * @param {any} arg0_geometry
- * @param {number} [arg1_w=RASTER_WIDTH]
- * @param {number} [arg2_h=RASTER_HEIGHT]
- *
- * @returns {ScanlineSpan[]}
- */
-export function computeScanlineSpans (
-  arg0_geometry: any,
-  arg1_w = RASTER_WIDTH,
-  arg2_h = RASTER_HEIGHT
-): ScanlineSpan[] {
-  //Convert from parameters
-  let geometry = arg0_geometry
-  let h = arg2_h
-  let w = arg1_w
-
-  //Guard clauses
-  if (!geometry || !geometry.coordinates)
-    return []
-
-  //Declare local instance variables
-  let polygons: number[][][][] =
-    geometry.type === 'Polygon'
-      ? [geometry.coordinates as number[][][]]
-      : (geometry.coordinates as number[][][][])
-  let spans: ScanlineSpan[] = []
-
-  //Function body
-  for (let p_idx = 0; p_idx < polygons.length; p_idx++) {
-    let poly_rings = polygons[p_idx]
-    if (!poly_rings || poly_rings.length === 0)
-      continue
-
-    let ext_ring = poly_rings[0]
-    let max_y = -Infinity
-    let min_y = Infinity
-
-    for (let pt_idx = 0; pt_idx < ext_ring.length; pt_idx++) {
-      let y = ext_ring[pt_idx][1]
-      if (y < min_y)
-        min_y = y
-      if (y > max_y)
-        max_y = y
-    }
-
-    let max_r = Math.min(h - 1, Math.ceil(((90 - min_y)/180)*h))
-    let min_r = Math.max(0, Math.floor(((90 - max_y)/180)*h))
-
-    for (let r = min_r; r <= max_r; r++) {
-      let lat = 90 - ((r + 0.5)/h)*180
-      let intersections: number[] = []
-
-      for (let ring_idx = 0; ring_idx < poly_rings.length; ring_idx++) {
-        let ring = poly_rings[ring_idx]
-        for (let x = 0, y_idx = ring.length - 1; x < ring.length; y_idx = x++) {
-          let p1 = ring[x]
-          let p2 = ring[y_idx]
-          if ((p1[1] <= lat && p2[1] > lat) || (p2[1] <= lat && p1[1] > lat)) {
-            let t = (lat - p1[1])/(p2[1] - p1[1])
-            let lng = p1[0] + t*(p2[0] - p1[0])
-            intersections.push(lng)
-          }
-        }
-      }
-
-      if (intersections.length < 2)
-        continue
-      intersections.sort((arg0_a, arg0_b) => arg0_a - arg0_b)
-
-      for (let k = 0; k < intersections.length - 1; k += 2) {
-        let c_end = Math.min(w - 1, Math.ceil(((intersections[k + 1] + 180)/360)*w))
-        let c_start = Math.max(0, Math.floor(((intersections[k] + 180)/360)*w))
-        if (c_start <= c_end)
-          spans.push({ c_end, c_start, row: r })
-      }
-    }
-  }
-
-  //Return statement
-  return spans
-}
-
-/**
- * Sums all valid positive cell values across precomputed scanline spans.
- *
- * @param {ScanlineSpan[]} arg0_spans
- * @param {Float32Array} arg1_data
- * @param {number} [arg2_w=RASTER_WIDTH]
- *
- * @returns {number}
- */
-function sumRasterSpans (
-  arg0_spans: ScanlineSpan[],
-  arg1_data: Float32Array,
-  arg2_w = RASTER_WIDTH
-): number {
-  //Convert from parameters
-  let data = arg1_data
-  let spans = arg0_spans
-  let w = arg2_w
-
-  //Declare local instance variables
-  let sum = 0
-
-  //Function body
-  for (let i = 0; i < spans.length; i++) {
-    let span = spans[i]
-    let row_offset = span.row*w
-    for (let c = span.c_start; c <= span.c_end; c++) {
-      let v = data[row_offset + c]
-      if (v > 0 && v < 1e12)
-        sum += v
-    }
-  }
-
-  //Return statement
-  return sum
-}
-
-/**
- * Sums all valid positive cell values over the entire raster grid.
- *
- * @param {Float32Array} arg0_data
- *
- * @returns {number}
- */
-function sumGlobalRaster (arg0_data: Float32Array): number {
-  //Convert from parameters
-  let data = arg0_data
-
-  //Declare local instance variables
-  let sum = 0
-
-  //Function body
-  for (let i = 0; i < data.length; i++) {
-    let v = data[i]
-    if (v > 0 && v < 1e12)
-      sum += v
-  }
-
-  //Return statement
-  return sum
 }
 
 /**

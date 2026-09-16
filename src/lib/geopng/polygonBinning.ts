@@ -506,9 +506,12 @@ export function getFeatureEntityName (arg0_feat: any, arg1_fallback?: string): s
     properties_obj.country ||
     properties_obj.adm0_a3 ||
     properties_obj.id ||
+    feat.name ||
+    feat.id ||
     properties_obj.ADMIN ||
     properties_obj.name_long ||
-    fallback
+    fallback ||
+    'Historical Territory'
   )
 }
 

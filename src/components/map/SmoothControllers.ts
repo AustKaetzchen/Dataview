@@ -6,3 +6,4 @@ export { SmoothGlobeViewport, zoomAdjust } from './controllers/SmoothGlobeViewpo
 export { SmoothGlobeView } from './controllers/SmoothGlobeView'
 export { SmoothGlobeState } from './controllers/SmoothGlobeState'
 export { SmoothGlobeController } from './controllers/SmoothGlobeController'
+export { isFunctionKeyPressed } from './controllers/SmoothControllerUtils'

@@ -1,5 +1,6 @@
 import { _GlobeController } from '@deck.gl/core'
 import { SmoothGlobeState } from './SmoothGlobeState'
+import { isFunctionKeyPressed } from './SmoothControllerUtils'
 
 /**
  * SmoothGlobeController for Globe projection with Google Earth style navigation.
@@ -20,11 +21,8 @@ export class SmoothGlobeController extends _GlobeController {
     //Convert from parameters
     let event = arg0_event
 
-    //Declare local instance variables
-    let src = event.srcEvent
-
     //Return statement
-    return Boolean(src?.ctrlKey || src?.metaKey)
+    return isFunctionKeyPressed(event)
   }
 
   /**

@@ -1,5 +1,6 @@
 import { OrbitController } from '@deck.gl/core'
 import { SmoothOrbitState } from './SmoothOrbitState'
+import { isFunctionKeyPressed } from './SmoothControllerUtils'
 
 /**
  * SmoothOrbitController enables normal Left Drag panning and Ctrl + Left Drag pitching on Cartesian projections.
@@ -20,11 +21,8 @@ export class SmoothOrbitController extends OrbitController {
     //Convert from parameters
     let event = arg0_event
 
-    //Declare local instance variables
-    let src = event.srcEvent
-
     //Return statement
-    return Boolean(src?.ctrlKey || src?.metaKey)
+    return isFunctionKeyPressed(event)
   }
 }
 

@@ -31,14 +31,6 @@ let DEFAULT_KEY_YEARS = [
  *
  * @returns {boolean}
  */
-/**
- * Converts a float32 GeoPNG into a 32-bit BMP cache file.
- *
- * @param {string} arg0_png_path
- * @param {string} arg1_bmp_path
- *
- * @returns {boolean}
- */
 function convertPngToBmp (arg0_png_path: string, arg1_bmp_path: string): boolean {
   //Convert from parameters
   let bmp_path = arg1_bmp_path

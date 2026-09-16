@@ -1,5 +1,6 @@
 import { MapController } from '@deck.gl/core'
 import { SmoothMapState } from './SmoothMapState'
+import { isFunctionKeyPressed } from './SmoothControllerUtils'
 
 /**
  * SmoothMapController ensures Ctrl + Left Drag rotates/pitches while Left Drag pans.
@@ -20,11 +21,8 @@ export class SmoothMapController extends MapController {
     //Convert from parameters
     let event = arg0_event
 
-    //Declare local instance variables
-    let src = event.srcEvent
-
     //Return statement
-    return Boolean(src?.ctrlKey || src?.metaKey)
+    return isFunctionKeyPressed(event)
   }
 }
 

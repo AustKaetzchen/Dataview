@@ -1,34 +1,11 @@
 import React from 'react'
 import { DecodedRaster } from '@/lib/geopng/types'
 import { CountryStats } from '@/lib/geopng/polygonBinning'
+import { formatLocalizedNumber, formatNumber } from '@/lib/utils'
 
 export interface StatsSummaryProps {
   raster: DecodedRaster | null
   countryStats?: CountryStats | null
-}
-
-/**
- * Formats a localized number to fixed decimal places.
- *
- * @param {number | undefined | null} arg0_val
- * @param {number} [arg1_fraction_digits=4]
- *
- * @returns {string}
- */
-export function formatLocalizedNumber (arg0_val: number | undefined | null, arg1_fraction_digits?: number): string {
-  //Convert from parameters
-  let fraction_digits = (arg1_fraction_digits !== undefined) ? arg1_fraction_digits : 4
-  let val = arg0_val
-
-  //Guard clauses
-  if (val === undefined || val === null || !Number.isFinite(val))
-    return 'N/A'
-
-  //Return statement
-  return val.toLocaleString(undefined, {
-    maximumFractionDigits: fraction_digits,
-    minimumFractionDigits: fraction_digits,
-  })
 }
 
 /**
@@ -38,7 +15,7 @@ export function formatLocalizedNumber (arg0_val: number | undefined | null, arg1
  *
  * @returns {React.ReactElement | null}
  */
-export const StatsSummary: React.FC<StatsSummaryProps> = function (arg0_props) {
+export let StatsSummary: React.FC<StatsSummaryProps> = function (arg0_props) {
   //Convert from parameters
   let props = arg0_props
   let {

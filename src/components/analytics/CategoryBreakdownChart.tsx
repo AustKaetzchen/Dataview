@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { DecodedRaster } from '@/lib/geopng/types'
-import { CountryFeature, CountryStats } from '@/lib/geopng/polygonBinning'
+import { CountryFeature, CountryStats, getFeatureEntityName } from '@/lib/geopng/polygonBinning'
 import { Icon } from '@/components/ui/icon'
 import { computeSyntheticSectorBreakdown } from '@/lib/raster/syntheticDemographics'
 
@@ -32,36 +32,12 @@ export interface SectorItem {
   label: string
 }
 
-export const PROFESSION_SECTORS: SectorItem[] = [
+export let PROFESSION_SECTORS: SectorItem[] = [
   { color: '#8c510a', id: 'agriculture', label: 'Agriculture' },
   { color: '#457b9d', id: 'informal_labour', label: 'Informal Labour' },
   { color: '#2a9d8f', id: 'manufacturing', label: 'Manufacturing' },
   { color: '#e76f51', id: 'services', label: 'Services' },
 ]
-
-/**
- * Resolves the primary human-readable entity or country name from a geographic feature.
- * Handles Natural Earth (.name), C-Shapes (.cntry_name, .CNTRY_NAME), and Naissance (.adm0_a3, .name, .id).
- *
- * @param {any} arg0_feat
- *
- * @returns {string}
- */
-function getFeatureEntityName(arg0_feat: any): string {
-  if (!arg0_feat) return ''
-  let p = arg0_feat.properties || {}
-  return (
-    p.name ||
-    p.cntry_name ||
-    p.CNTRY_NAME ||
-    p.NAME ||
-    p.Country ||
-    p.country ||
-    p.adm0_a3 ||
-    p.id ||
-    (typeof arg0_feat.id === 'string' ? arg0_feat.id : '')
-  )
-}
 
 /**
  * CategoryBreakdownChart renders a split bar share per country when countries are selected,
@@ -71,7 +47,7 @@ function getFeatureEntityName(arg0_feat: any): string {
  *
  * @returns {React.ReactElement}
  */
-export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = function (arg0_props) {
+export let CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = function (arg0_props) {
   //Convert from parameters
   let props = arg0_props
   let {
