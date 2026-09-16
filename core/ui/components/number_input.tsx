@@ -1,0 +1,114 @@
+import * as React from 'react'
+import { ChevronUp, ChevronDown } from 'lucide-react'
+import { cn } from '@framework/utils/utils.ts'
+
+export interface NumberInputProps
+  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
+  containerClassName?: string
+  max?: number
+  min?: number
+  onChange: (value: string) => void
+  precision?: number
+  step?: number | string
+  value: number | string
+}
+
+/**
+ * NumberInput provides numeric input with integrated increment/decrement stepper controls.
+ */
+export let NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
+  function (arg0_props, arg1_ref) {
+    //Convert from parameters
+    let props = arg0_props
+    let ref = arg1_ref
+    let {
+      className,
+      containerClassName: container_class_name,
+      disabled,
+      max,
+      min,
+      onChange: on_change,
+      precision,
+      step = 1,
+      value,
+      ...rest_props
+    } = props
+
+    //Declare local instance variables
+    let handle_step: (arg0_delta: number) => void
+    let num_step = typeof step === 'string' ? (step === 'any' ? 1 : parseFloat(step) || 1) : step
+
+    //Function body
+    handle_step = function (arg0_delta: number) {
+      let delta = arg0_delta
+      if (disabled)
+        return
+
+      let current = typeof value === 'number' ? value : parseFloat(value) || 0
+      let next = current + delta*num_step
+
+      if (min !== undefined && next < min)
+        next = min
+      if (max !== undefined && next > max)
+        next = max
+
+      let p = precision !== undefined ? precision : num_step < 1 ? Math.min(6, (num_step.toString().split('.')[1] || '').length + 1) : 2
+      let formatted = parseFloat(next.toFixed(p)).toString()
+      on_change(formatted)
+    }
+
+    //Return statement
+    return (
+      <div
+        className={cn(
+          'relative flex items-center h-8 w-full rounded-none border border-input bg-background shadow-sm transition-colors focus-within:ring-1 focus-within:ring-ring overflow-hidden',
+          disabled && 'opacity-50 cursor-not-allowed',
+          container_class_name
+        )}
+      >
+        <input
+          type="number"
+          value={value}
+          onChange={(arg0_e) => on_change(arg0_e.target.value)}
+          min={min}
+          max={max}
+          step={step}
+          disabled={disabled}
+          ref={ref}
+          className={cn(
+            'flex-1 h-full w-full bg-transparent px-2.5 py-1 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none',
+            className
+          )}
+          {...rest_props}
+        />
+
+        {/* Custom Stepper Buttons */}
+        <div className="flex flex-col h-full border-l border-input/60 bg-muted/30 shrink-0 w-5">
+          <button
+            type="button"
+            tabIndex={-1}
+            disabled={disabled || (max !== undefined && parseFloat(String(value)) >= max)}
+            onClick={() => handle_step(1)}
+            aria-label="Increase value"
+            className="flex-1 flex items-center justify-center hover:bg-muted/80 text-foreground transition-colors cursor-pointer border-b border-input/40 select-none"
+          >
+            <ChevronUp className="w-2.5 h-2.5 text-white" />
+          </button>
+          <button
+            type="button"
+            tabIndex={-1}
+            disabled={disabled || (min !== undefined && parseFloat(String(value)) <= min)}
+            onClick={() => handle_step(-1)}
+            aria-label="Decrease value"
+            className="flex-1 flex items-center justify-center hover:bg-muted/80 text-foreground transition-colors cursor-pointer select-none"
+          >
+            <ChevronDown className="w-2.5 h-2.5 text-white" />
+          </button>
+        </div>
+      </div>
+    )
+  }
+)
+NumberInput.displayName = 'NumberInput'
+
+export default NumberInput

@@ -1,0 +1,59 @@
+{
+  // =========================================================================
+  // Confoederatio Dataview Localisation: Français (fr)
+  // =========================================================================
+  app: {
+    title: "Confoederatio Dataview",
+    subtitle: "Outils internes pour les statistiques historiques",
+    badge: "BÊTA",
+  },
+  mapmodes: {
+    title: "Modes de carte",
+    activeSuffix: "Actif",
+    searchPlaceholder: "Rechercher des modes...",
+    noResults: "Aucun mode correspondant trouvé",
+    hintConfigure: "Cliquer pour configurer le mode",
+    hintReorder: "Glisser/Flèche pour réorganiser",
+    haloThicknessLabel: "Épaisseur du halo noir",
+    haloThicknessUnit: "px",
+    haloDescription: "• Cercles évidés avec contour coloré et bordure noire ajustable. Surface proportionnelle à la valeur (A ∝ Valeur).",
+  },
+  sidebar: {
+    folders: {
+      image: "Paramètres de l'image",
+      palette: "Couleur et visualisation",
+      display: "Affichage de la carte",
+    },
+    fileInputMode: "Mode d'entrée de fichier",
+    singleImage: "Image unique",
+    imageDifference: "Différence d'images (A - B)",
+    selectRaster: "Sélectionner l'image raster (GeoPNG/PNG)",
+    selectRasterB: "Sélectionner l'image de soustraction (Image B)",
+    binning: "Regroupement/Sous-échantillonnage",
+    colorPalette: "Palette de couleurs (D3)",
+    invertPalette: "Inverser",
+    valueColorScale: "Échelle de couleurs des valeurs",
+    manualRange: "Plage manuelle",
+    basemapLayer: "Couche de fond de carte",
+    projection: "Projection cartographique",
+    cameraTilt: "Inclinaison 3D de la caméra",
+    opacity: "Opacité du raster",
+    resetCamera: "Réinitialiser la caméra",
+  },
+  analytics: {
+    title: "Calculateur raster",
+    steepness: "Pente",
+    totalCells: "Cellules totales",
+    validCells: "Cellules valides %",
+    resolution: "Résolution",
+    minValue: "Valeur minimale",
+    maxValue: "Valeur maximale",
+    mean: "Moyenne",
+    stdDev: "Écart-type",
+    median: "Médiane",
+  },
+  hud: {
+    coordinate: "Coordonnées",
+    value: "Valeur",
+  },
+}

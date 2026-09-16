@@ -18,12 +18,19 @@
 
     /* Path alias */
     "paths": {
-      "@/*": ["./src/*"],
-      "@config": ["./config/index.ts"],
-      "@config/*": ["./config/*"],
-      "config/*": ["./config/*"],
-      "config": ["./config/index.ts"]
+      "@/*": ["./core/*"],
+      "@common": ["./common/index.ts"],
+      "@common/*": ["./common/*"],
+      "@config": ["./common/index.ts"],
+      "@config/*": ["./common/*"],
+      "config/*": ["./common/*"],
+      "config": ["./common/index.ts"],
+      "@core/*": ["./core/*"],
+      "@framework/*": ["./core/framework/*"],
+      "@server/*": ["./core/server/*"],
+      "@ui/*": ["./core/ui/*"],
+      "@localisation/*": ["./localisation/*"]
     }
   },
-  "include": ["src", "config"]
+  "include": ["core", "common", "localisation"]
 }

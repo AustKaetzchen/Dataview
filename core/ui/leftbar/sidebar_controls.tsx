@@ -1,0 +1,864 @@
+import React, { useState, useEffect, useMemo, useRef } from 'react'
+import {
+  AppMode,
+  DataFormat,
+  ScaleType,
+  ColorPalette,
+  BoundsMode,
+  BinningConfig,
+  DownsampleMethod,
+  MapModeItem,
+  MapModeId,
+  HeightmapConfig,
+  CircleOverlayConfig,
+  HistoricalBordersConfig,
+  StadesterConfig,
+} from '@framework/geopng/types.ts'
+import { CountryFeature } from '@framework/geopng/polygon_binning'
+import { D3_COLOR_SCHEMES, getPaletteCssGradient } from '@framework/geopng/palettes.ts'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@ui/components/select'
+import { Slider } from '@ui/components/slider'
+import { Input } from '@ui/components/input'
+import { NumberInput } from '@ui/components/number_input'
+import { Label } from '@ui/components/label'
+import { Icon } from '@ui/components/icon'
+import { LOCALISATION_CONFIG, UserRole } from '@common'
+import { ParsedDataLayer } from '@server/layer_parser'
+import { D3ColorPaletteSelector } from './d3_color_palette_selector'
+import { MarkdownRenderer } from '@ui/components/markdown_renderer'
+
+export interface SidebarControlsProps {
+  activeFileName?: string
+  activeLayerId?: string | null
+  activeVariableSelectors?: Record<string, string | string[]>
+  appMode: AppMode
+  binningConfig: BinningConfig
+  bottomClearance?: number
+  boundsMode: BoundsMode
+  circleOverlayConfig?: CircleOverlayConfig
+  colorPalette: ColorPalette
+  dataFormat: DataFormat
+  diffNameA?: string
+  diffNameB?: string
+  heightmapConfig?: HeightmapConfig
+  historicalBordersConfig?: HistoricalBordersConfig
+  infoPanelOpen?: boolean
+  invertPalette: boolean
+  isLoadingLayers?: boolean
+  layers?: Record<string, ParsedDataLayer>
+  legendSubtitle?: string
+  legendTitle: string
+  logSigma: number
+  mapModes?: MapModeItem[]
+  maxValOverride: string
+  minValOverride: string
+  onChangeUserRole?: (role: UserRole) => void
+  onChangeVariableSelector?: (key: string, option: string | string[]) => void
+  onFileUpload: (file: File, target: 'single' | 'diff_a' | 'diff_b') => void
+  onOpenVideoExport?: () => void
+  onSelectLayer?: (layerId: string) => void
+  onToggleInfoPanel?: () => void
+  onToggleMapMode?: (id: MapModeId) => void
+  onWidthChange?: (newWidth: number) => void
+  opacity: number
+  percentileList: string
+  absoluteBreaks: string
+  scaleType: ScaleType
+  selectedCountries?: CountryFeature[]
+  setAbsoluteBreaks: (p: string) => void
+  setAppMode: (mode: AppMode) => void
+  setBinningConfig: React.Dispatch<React.SetStateAction<BinningConfig>>
+  setBoundsMode: (b: BoundsMode) => void
+  setColorPalette: (p: ColorPalette) => void
+  setDataFormat: (fmt: DataFormat) => void
+  setInvertPalette: (inv: boolean) => void
+  setLegendSubtitle?: (s: string) => void
+  setLegendTitle: (t: string) => void
+  setLogSigma: (s: number) => void
+  setMaxValOverride: (v: string) => void
+  setMinValOverride: (v: string) => void
+  setOpacity: (o: number) => void
+  setPercentileList: (p: string) => void
+  setScaleType: (st: ScaleType) => void
+  stadesterConfig?: StadesterConfig
+  userRole?: UserRole
+  width?: number
+}
+
+/**
+ * SidebarControls primary control panel component for styling, downsampling, and manual file preview.
+ *
+ * @param {SidebarControlsProps} arg0_props
+ *
+ * @returns {React.ReactElement}
+ */
+export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_props) {
+  //Convert from parameters
+  let props = arg0_props
+  let {
+    absoluteBreaks: absolute_breaks,
+    activeFileName: active_file_name,
+    activeLayerId: active_layer_id = null,
+    appMode: app_mode,
+    binningConfig: binning_config,
+    bottomClearance: bottom_clearance,
+    boundsMode: bounds_mode,
+    colorPalette: color_palette,
+    dataFormat: data_format,
+    diffNameA: diff_name_a,
+    diffNameB: diff_name_b,
+    historicalBordersConfig: historical_borders_config,
+    infoPanelOpen: info_panel_open,
+    invertPalette: invert_palette,
+    layers = {},
+    legendSubtitle: legend_subtitle = '',
+    legendTitle: legend_title,
+    logSigma: log_sigma,
+    mapModes: map_modes = [],
+    maxValOverride: max_val_override,
+    minValOverride: min_val_override,
+    onChangeUserRole: on_change_user_role,
+    onFileUpload: on_file_upload,
+    onOpenVideoExport: on_open_video_export,
+    onToggleInfoPanel: on_toggle_info_panel,
+    onWidthChange: on_width_change,
+    opacity,
+    percentileList: percentile_list,
+    scaleType: scale_type,
+    setAbsoluteBreaks: set_absolute_breaks,
+    setAppMode: set_app_mode,
+    setBinningConfig: set_binning_config,
+    setBoundsMode: set_bounds_mode,
+    setColorPalette: set_color_palette,
+    setDataFormat: set_data_format,
+    setInvertPalette: set_invert_palette,
+    setLegendSubtitle: set_legend_subtitle,
+    setLegendTitle: set_legend_title,
+    setLogSigma: set_log_sigma,
+    setMaxValOverride: set_max_val_override,
+    setMinValOverride: set_min_val_override,
+    setOpacity: set_opacity,
+    setPercentileList: set_percentile_list,
+    setScaleType: set_scale_type,
+    stadesterConfig: stadester_config,
+    userRole: user_role = 'developer',
+    width,
+  } = props
+
+  //Declare local instance variables
+  let active_description: string | null
+  let active_layer: ParsedDataLayer | null
+  let binning_presets = [
+    { h: 2160, label: 'Native (4320×2160)', w: 4320 },
+    { h: 1080, label: '2× (2160×1080)', w: 2160 },
+    { h: 540, label: '4× (1080×540)', w: 1080 },
+    { h: 360, label: '6× (720×360)', w: 720 },
+    { h: 180, label: '12× (360×180)', w: 360 },
+  ]
+  let current_width = (width !== undefined) ? width : 336
+  let handle_resize_mouse_down: (arg0_e: React.MouseEvent) => void
+  let open_folders: Record<string, boolean>
+  let set_open_folders: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
+  let toggle_folder: (arg0_folder_key: string) => void
+
+    //Function body
+    ;[open_folders, set_open_folders] = useState<Record<string, boolean>>({
+      binning: false,
+      description: true,
+      manual: false,
+      visual: true,
+    })
+
+  active_layer = useMemo(() => {
+    if (!active_layer_id || !layers)
+      return null
+    if (layers[active_layer_id])
+      return layers[active_layer_id]
+    if (active_layer_id.includes('.')) {
+      let parent_id = active_layer_id.split('.')[0]
+      let parent = layers[parent_id]
+      if (parent && parent.sub_layers) {
+        let sub = parent.sub_layers.find((arg0_sub: any) => arg0_sub.id === active_layer_id)
+        if (sub)
+          return sub
+      }
+    }
+    return null
+  }, [active_layer_id, layers])
+
+  active_description = useMemo(() => {
+    if (active_layer?.description)
+      return active_layer.description
+    if (stadester_config?.enabled && layers?.['stadester']?.description)
+      return layers['stadester'].description
+    if (historical_borders_config?.enabled) {
+      let border_dataset = historical_borders_config.dataset || 'statistical_borders'
+      if (layers?.[border_dataset]?.description)
+        return layers[border_dataset].description
+    }
+    if (map_modes && map_modes.length > 0) {
+      let active_mode = map_modes.find((arg0_m) => arg0_m.active && arg0_m.id !== 'default' && (arg0_m as any).description)
+      if (active_mode && (active_mode as any).description)
+        return (active_mode as any).description
+    }
+    return null
+  }, [active_layer, historical_borders_config?.dataset, historical_borders_config?.enabled, layers, map_modes, stadester_config?.enabled])
+
+  toggle_folder = function (arg0_folder_key: string) {
+    let folder_key = arg0_folder_key
+    set_open_folders((arg0_prev) => ({ ...arg0_prev, [folder_key]: !arg0_prev[folder_key] }))
+  }
+
+  //Right-border resize handler to adjust shared width
+  handle_resize_mouse_down = function (arg0_e: React.MouseEvent) {
+    let e = arg0_e
+    e.preventDefault()
+    e.stopPropagation()
+
+    let start_w = current_width
+    let start_x = e.clientX
+
+    let on_mouse_move = function (arg0_move_event: MouseEvent) {
+      let delta = arg0_move_event.clientX - start_x
+      let next_w = Math.max(260, Math.min(650, start_w + delta))
+      if (on_width_change)
+        on_width_change(next_w)
+    }
+
+    let on_mouse_up = function () {
+      window.removeEventListener('mousemove', on_mouse_move)
+      window.removeEventListener('mouseup', on_mouse_up)
+    }
+
+    window.addEventListener('mousemove', on_mouse_move)
+    window.addEventListener('mouseup', on_mouse_up)
+  }
+
+  //Return statement
+  return (
+    <div
+      style={{
+        bottom: (bottom_clearance !== undefined) ? `${bottom_clearance}px` : '12px',
+        width: `${current_width}px`,
+      }}
+      className="absolute top-3 left-3 z-20 flex flex-col bg-card/95 backdrop-blur-md border border-border text-card-foreground overflow-hidden select-none font-sans shadow-2xl transition-all duration-150 ease-out"
+    >
+      {/* Draggable Right Border Resize Handle */}
+      <div
+        onMouseDown={handle_resize_mouse_down}
+        className="absolute top-0 right-0 bottom-0 w-2 cursor-col-resize hover:bg-primary/50 active:bg-primary transition-colors z-30 group"
+        title="Drag right border to resize sidebar"
+      >
+        <div className="w-[2px] h-8 bg-border group-hover:bg-primary absolute top-1/2 -translate-y-1/2 right-0.5" />
+      </div>
+
+      {/* App Header */}
+      <div className="p-[var(--padding)] border-b border-border bg-card/60 shrink-0">
+        <div className="flex items-center justify-between">
+          <h1 className="text-[var(--header-font-size)] font-bold tracking-tight text-foreground flex items-center gap-2">
+            <Icon name="layers" />
+            <span>{LOCALISATION_CONFIG.app.title}</span>
+          </h1>
+          <span className="text-[var(--body-font-size)] px-2 py-0.5 rounded-none bg-muted text-muted-foreground border border-border font-medium tracking-wider">
+            {LOCALISATION_CONFIG.app.badge}
+          </span>
+        </div>
+        <p className="text-[var(--body-font-size)] text-muted-foreground font-light mt-1">
+          {LOCALISATION_CONFIG.app.subtitle}
+        </p>
+
+        {/* Toolbar: Information toggle, Role switcher, Video export */}
+        <div className="mt-2.5 flex items-center justify-between gap-1.5 flex-wrap">
+          <button
+            type="button"
+            onClick={on_toggle_info_panel}
+            className={`px-2 py-1 text-xs font-medium rounded-none border transition-colors cursor-pointer inline-flex items-center gap-1.5 ${info_panel_open
+              ? 'bg-primary text-primary-foreground border-primary font-bold shadow-xs'
+              : 'bg-background hover:bg-muted text-foreground border-border'
+              }`}
+            title="Toggle Information & Controls flyout"
+          >
+            <Icon name="info" className={info_panel_open ? 'text-primary-foreground' : 'text-foreground'} />
+            <span>Info</span>
+          </button>
+
+          <div className="flex items-center gap-1">
+            {/* Role Switcher */}
+            <Select
+              value={user_role}
+              onValueChange={(arg0_v) => on_change_user_role && on_change_user_role(arg0_v as UserRole)}
+            >
+              <SelectTrigger className="h-6 text-[11px] rounded-none bg-muted/40 border-border px-1.5">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="rounded-none">
+                <SelectItem value="guest" className="rounded-none text-xs">Role: Guest</SelectItem>
+                <SelectItem value="privileged" className="rounded-none text-xs">Role: Privileged</SelectItem>
+                <SelectItem value="developer" className="rounded-none text-xs">Role: Developer</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Developer Video Export Button */}
+            {user_role === 'developer' && on_open_video_export && (
+              <button
+                type="button"
+                onClick={on_open_video_export}
+                className="h-6 px-1.5 bg-primary/20 text-primary hover:bg-primary hover:text-primary-foreground border border-primary/40 text-[11px] font-medium transition-colors cursor-pointer inline-flex items-center gap-1"
+                title="Open Timelapse Video Export Modal"
+              >
+                <Icon name="videocam" className="text-xs" />
+                <span>Video</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Main Scrollable Controls */}
+      <div className="flex-1 p-[var(--padding)] space-y-[var(--padding)] overflow-y-auto">
+        {/* ========================================================================= */}
+        {/* SECTION 0: MAPMODE DESCRIPTION */}
+        {/* ========================================================================= */}
+        {active_description && (
+          <div className="border border-border bg-card/50">
+            <button
+              type="button"
+              onClick={() => toggle_folder('description')}
+              className="w-full h-8 px-[var(--padding)] flex items-center justify-between text-[var(--body-font-size)] font-bold text-foreground bg-muted/40 hover:bg-muted/70 transition-colors cursor-pointer overflow-y-auto"
+            >
+              <div className="flex items-center gap-2">
+                <Icon name="description" />
+                <span>Description</span>
+              </div>
+              <Icon
+                name={open_folders.description ? 'expand_less' : 'expand_more'}
+              />
+            </button>
+
+            {open_folders.description && (
+              <div className="p-[var(--padding)] text-[var(--body-font-size)] border-t border-border overflow-x-hidden">
+                <MarkdownRenderer content={active_description} />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* SECTION 1: VISUALISATION SETTINGS */}
+        {/* ========================================================================= */}
+        <div className="border border-border bg-card/50">
+          <button
+            type="button"
+            onClick={() => toggle_folder('visual')}
+            className="w-full h-8 px-[var(--padding)] flex items-center justify-between text-[var(--body-font-size)] font-bold text-foreground bg-muted/40 hover:bg-muted/70 transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-2">
+              <Icon name="palette" />
+              <span>Visualisation Settings</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Icon
+                name={open_folders.visual ? 'expand_less' : 'expand_more'}
+              />
+            </div>
+          </button>
+
+          {open_folders.visual && (
+            <div className="p-[var(--padding)] space-y-[var(--padding)] text-[var(--body-font-size)] border-t border-border">
+              {/* Scale Transformation */}
+              <div className="space-y-1">
+                <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">Scale Transformation</Label>
+                <Select value={scale_type} onValueChange={(arg0_v) => set_scale_type(arg0_v as ScaleType)}>
+                  <SelectTrigger className="rounded-none h-7 text-[var(--body-font-size)]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-none">
+                    <SelectItem value="pseudo-log" className="rounded-none text-[var(--body-font-size)]">pseudo-log</SelectItem>
+                    <SelectItem value="linear" className="rounded-none text-[var(--body-font-size)]">linear</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Steepness (Sigma) */}
+              {scale_type === 'pseudo-log' && (
+                <div className="space-y-2 rounded-none border border-border p-[var(--padding)] bg-muted/20">
+                  <div className="flex justify-between items-center text-[var(--body-font-size)]">
+                    <Label className="text-muted-foreground text-[var(--body-font-size)] font-normal">
+                      Steepness (Sigma)
+                    </Label>
+                    <NumberInput
+                      value={log_sigma}
+                      min={0.0001}
+                      step={log_sigma >= 100 ? 5 : log_sigma >= 10 ? 1 : log_sigma >= 1 ? 0.1 : 0.01}
+                      onChange={(arg0_val: any) => {
+                        let parsed = parseFloat(arg0_val)
+                        if (!Number.isNaN(parsed) && parsed > 0)
+                          set_log_sigma(parsed)
+                      }}
+                      containerClassName="h-7 w-20 rounded-none text-[var(--body-font-size)]"
+                    />
+                  </div>
+
+                  <Slider
+                    value={[log_sigma]}
+                    min={0.01}
+                    max={Math.max(1000, Math.ceil(log_sigma * 1.5))}
+                    step={log_sigma >= 100 ? 5 : log_sigma >= 10 ? 1 : log_sigma >= 1 ? 0.1 : 0.01}
+                    onValueChange={(arg0_vals: number[]) => set_log_sigma(arg0_vals[0])}
+                  />
+
+                  {/* Preset buttons */}
+                  <div className="flex items-center justify-between gap-1 pt-0.5">
+                    {[0.1, 1, 10, 100, 1000].map((arg0_preset) => (
+                      <button
+                        key={arg0_preset}
+                        type="button"
+                        onClick={() => set_log_sigma(arg0_preset)}
+                        className={`px-1.5 py-0.5 text-[var(--body-font-size)] rounded-none border transition-colors ${Math.abs(log_sigma - arg0_preset) < 0.001
+                          ? 'bg-primary text-primary-foreground border-primary font-bold'
+                          : 'bg-background hover:bg-muted text-muted-foreground border-border'
+                          }`}
+                      >
+                        {arg0_preset}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Colour Palette (D3) */}
+              <D3ColorPaletteSelector
+                value={color_palette}
+                onChange={set_color_palette}
+                invert={invert_palette}
+                onInvertChange={set_invert_palette}
+                showInvert={true}
+              />
+
+              {/* Visual Bounds Mode */}
+              <div className="space-y-2">
+                <Label className="text-[var(--body-font-size)] font-bold text-foreground">Visual Bounds</Label>
+                <Select value={bounds_mode} onValueChange={(arg0_v) => set_bounds_mode(arg0_v as BoundsMode)}>
+                  <SelectTrigger className="rounded-none h-7 text-[var(--body-font-size)]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-none">
+                    <SelectItem value="Manual" className="rounded-none text-[var(--body-font-size)]">Manual (Min / Max)</SelectItem>
+                    <SelectItem value="Percentile" className="rounded-none text-[var(--body-font-size)]">Percentile Breaks</SelectItem>
+                    <SelectItem value="Absolute" className="rounded-none text-[var(--body-font-size)]">Absolute Number Ramps</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {bounds_mode === 'Manual' && (
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <div className="space-y-1">
+                      <span className="text-[var(--body-font-size)] text-muted-foreground">Min Override</span>
+                      <NumberInput
+                        placeholder="Auto"
+                        value={min_val_override}
+                        step="any"
+                        onChange={(arg0_val: any) => set_min_val_override(arg0_val)}
+                        containerClassName="rounded-none h-7 text-[var(--body-font-size)]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[var(--body-font-size)] text-muted-foreground">Max Override</span>
+                      <NumberInput
+                        placeholder="Auto"
+                        value={max_val_override}
+                        step="any"
+                        onChange={(arg0_val: any) => set_max_val_override(arg0_val)}
+                        containerClassName="rounded-none h-7 text-[var(--body-font-size)]"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {bounds_mode === 'Percentile' && (
+                  <div className="space-y-1 pt-1">
+                    <span className="text-[var(--body-font-size)] text-muted-foreground">Percentile Breaks (0-100)</span>
+                    <Input
+                      type="text"
+                      value={percentile_list}
+                      onChange={(arg0_e) => set_percentile_list(arg0_e.target.value)}
+                      className="rounded-none h-7 text-[var(--body-font-size)]"
+                    />
+                  </div>
+                )}
+
+                {bounds_mode === 'Absolute' && (
+                  <div className="space-y-1 pt-1">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[var(--body-font-size)] text-muted-foreground">Absolute Numeric Breaks</span>
+                      <button
+                        type="button"
+                        onClick={() => set_absolute_breaks('0, 10, 50, 100, 500, 1000')}
+                        className="text-[var(--body-font-size)] text-primary hover:underline cursor-pointer"
+                      >
+                        Reset Defaults
+                      </button>
+                    </div>
+                    <Input
+                      type="text"
+                      placeholder="e.g. 0, 10, 50, 100, 500, 1000"
+                      value={absolute_breaks}
+                      onChange={(arg0_e) => set_absolute_breaks(arg0_e.target.value)}
+                      className="rounded-none h-7 text-[var(--body-font-size)]"
+                    />
+                    <span className="text-[var(--body-font-size)] text-muted-foreground leading-tight block">
+                      Colour ramp stretches across these discrete absolute values.
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Layer Opacity */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center text-[var(--body-font-size)]">
+                  <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">Layer Opacity</Label>
+                  <span className="text-foreground font-bold text-[var(--body-font-size)]">
+                    {Math.round(opacity * 100)}%
+                  </span>
+                </div>
+                <Slider
+                  value={[opacity * 100]}
+                  min={10}
+                  max={100}
+                  step={1}
+                  onValueChange={(arg0_vals: number[]) => set_opacity(arg0_vals[0] / 100)}
+                />
+              </div>
+
+              {/* Legend Title (Supports line breaks) */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">
+                    Legend Label
+                  </Label>
+                  <span className="text-[10px] text-muted-foreground/70 font-light">Supports Enter</span>
+                </div>
+                <textarea
+                  value={legend_title}
+                  onChange={(arg0_e) => set_legend_title(arg0_e.target.value)}
+                  rows={2}
+                  placeholder="e.g. Population Density&#10;(people per km²)"
+                  className="w-full rounded-none border border-input bg-transparent px-2.5 py-1 text-[var(--body-font-size)] text-foreground shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y font-sans leading-tight"
+                />
+              </div>
+
+              {/* Legend Subtitle */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">
+                    Legend Subtitle
+                  </Label>
+                  <span className="text-[10px] text-muted-foreground/70 font-light">Optional</span>
+                </div>
+                <textarea
+                  value={legend_subtitle}
+                  onChange={(arg0_e) => {
+                    if (set_legend_subtitle)
+                      set_legend_subtitle(arg0_e.target.value)
+                  }}
+                  rows={1}
+                  placeholder="Optional subtitle or data source..."
+                  className="w-full rounded-none border border-input bg-transparent px-2.5 py-1 text-[var(--body-font-size)] text-foreground shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y font-sans leading-tight"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ========================================================================= */}
+        {/* SECTION 2: RESOLUTION & BINNING */}
+        {/* ========================================================================= */}
+        <div className="border border-border bg-card/50">
+          <button
+            type="button"
+            onClick={() => toggle_folder('binning')}
+            className="w-full h-8 px-[var(--padding)] flex items-center justify-between text-[var(--body-font-size)] font-bold text-foreground bg-muted/40 hover:bg-muted/70 transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-2">
+              <Icon name="grid_view" />
+              <span>Resolution & Binning</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {binning_config.enabled && (
+                <span className="text-[10px] px-1.5 py-0.5 bg-primary/20 text-primary border border-primary/40 font-medium">
+                  {binning_config.width}×{binning_config.height}
+                </span>
+              )}
+              <Icon
+                name={open_folders.binning ? 'expand_less' : 'expand_more'}
+              />
+            </div>
+          </button>
+
+          {open_folders.binning && (
+            <div className="p-[var(--padding)] space-y-[var(--padding)] text-[var(--body-font-size)] border-t border-border">
+              <div className="flex items-center justify-between">
+                <span className="text-[var(--body-font-size)] text-muted-foreground">Downsample Grid</span>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={binning_config.enabled}
+                    onChange={(arg0_e) =>
+                      set_binning_config((arg0_prev) => ({ ...arg0_prev, enabled: arg0_e.target.checked }))
+                    }
+                    className="w-3.5 h-3.5 rounded-none accent-emerald-500 cursor-pointer"
+                  />
+                  <span
+                    className={`text-xs font-bold uppercase ${binning_config.enabled ? 'text-emerald-400 font-bold' : 'text-muted-foreground'
+                      }`}
+                  >
+                    {binning_config.enabled ? 'ON' : 'OFF'}
+                  </span>
+                </label>
+              </div>
+
+              {binning_config.enabled && (
+                <div className="space-y-2 pt-1 border-t border-border/60">
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div className="space-y-1">
+                      <span className="text-[var(--body-font-size)] text-muted-foreground">Width</span>
+                      <NumberInput
+                        value={binning_config.width}
+                        min={60}
+                        max={4320}
+                        step={60}
+                        onChange={(arg0_val: any) => {
+                          let parsed = parseInt(arg0_val, 10)
+                          if (parsed > 0)
+                            set_binning_config((arg0_prev) => ({ ...arg0_prev, width: parsed }))
+                        }}
+                        containerClassName="h-7 rounded-none text-[var(--body-font-size)]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[var(--body-font-size)] text-muted-foreground">Height</span>
+                      <NumberInput
+                        value={binning_config.height}
+                        min={30}
+                        max={2160}
+                        step={30}
+                        onChange={(arg0_val: any) => {
+                          let parsed = parseInt(arg0_val, 10)
+                          if (parsed > 0)
+                            set_binning_config((arg0_prev) => ({ ...arg0_prev, height: parsed }))
+                        }}
+                        containerClassName="h-7 rounded-none text-[var(--body-font-size)]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Presets */}
+                  <div className="space-y-1">
+                    <span className="text-[var(--body-font-size)] text-muted-foreground">Presets</span>
+                    <div className="grid grid-cols-3 gap-1">
+                      {binning_presets.slice(1).map((arg0_preset) => (
+                        <button
+                          key={arg0_preset.label}
+                          type="button"
+                          onClick={() =>
+                            set_binning_config((arg0_prev) => ({
+                              ...arg0_prev,
+                              height: arg0_preset.h,
+                              width: arg0_preset.w,
+                            }))
+                          }
+                          className={`px-1.5 py-1 text-[var(--body-font-size)] border rounded-none text-center truncate transition-colors cursor-pointer ${binning_config.width === arg0_preset.w && binning_config.height === arg0_preset.h
+                            ? 'bg-primary text-primary-foreground border-primary font-bold'
+                            : 'bg-background hover:bg-muted text-muted-foreground border-border'
+                            }`}
+                        >
+                          {arg0_preset.w}×{arg0_preset.h}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Method */}
+                  <div className="space-y-1">
+                    <span className="text-[var(--body-font-size)] text-muted-foreground">Downsample Method</span>
+                    <Select
+                      value={binning_config.method}
+                      onValueChange={(arg0_v) =>
+                        set_binning_config((arg0_prev) => ({
+                          ...arg0_prev,
+                          method: arg0_v as DownsampleMethod,
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="rounded-none h-7 text-[var(--body-font-size)]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-none">
+                        <SelectItem value="average" className="rounded-none text-[var(--body-font-size)]">Average (Mean)</SelectItem>
+                        <SelectItem value="minimum" className="rounded-none text-[var(--body-font-size)]">Minimum</SelectItem>
+                        <SelectItem value="maximum" className="rounded-none text-[var(--body-font-size)]">Maximum</SelectItem>
+                        <SelectItem value="near" className="rounded-none text-[var(--body-font-size)]">Near (Nearest Neighbour)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ========================================================================= */}
+        {/* SECTION 3: MANUAL FILE PREVIEW */}
+        {/* ========================================================================= */}
+        <div className="border border-border bg-card/50">
+          <button
+            type="button"
+            onClick={() => toggle_folder('manual')}
+            className="w-full h-8 px-[var(--padding)] flex items-center justify-between text-[var(--body-font-size)] font-bold text-foreground bg-muted/40 hover:bg-muted/70 transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-2">
+              <Icon name="upload_file" />
+              <span>Manual File Upload</span>
+            </div>
+            <Icon
+              name={open_folders.manual ? 'expand_less' : 'expand_more'}
+            />
+          </button>
+
+          {open_folders.manual && (
+            <div className="p-[var(--padding)] space-y-[var(--padding)] text-[var(--body-font-size)] border-t border-border">
+              {/* Mode Selector */}
+              <div className="space-y-1">
+                <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">Upload Mode</Label>
+                <div className="grid grid-cols-2 gap-1 bg-muted/50 p-0.5 border border-border">
+                  <button
+                    type="button"
+                    onClick={() => set_app_mode('Single Image')}
+                    className={`h-7 text-xs font-medium transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${app_mode === 'Single Image'
+                      ? 'bg-primary text-primary-foreground font-bold shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                  >
+                    <Icon name="image" className="text-xs" />
+                    <span>Single GeoPNG</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => set_app_mode('Image Difference')}
+                    className={`h-7 text-xs font-medium transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${app_mode === 'Image Difference'
+                      ? 'bg-primary text-primary-foreground font-bold shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                  >
+                    <Icon name="compare_arrows" className="text-xs" />
+                    <span>Difference</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* File Inputs */}
+              {app_mode === 'Single Image' ? (
+                <div className="space-y-1">
+                  <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">Select GeoPNG File (.png)</Label>
+                  <input
+                    type="file"
+                    accept=".png"
+                    id="single-file-upload"
+                    className="hidden"
+                    onClick={(arg0_e) => {
+                      ; (arg0_e.target as HTMLInputElement).value = ''
+                    }}
+                    onChange={(arg0_e) => {
+                      let file = arg0_e.target.files?.[0]
+                      if (file)
+                        on_file_upload(file, 'single')
+                      arg0_e.target.value = ''
+                    }}
+                  />
+                  <label
+                    htmlFor="single-file-upload"
+                    className="flex items-center justify-between w-full h-8 px-2 border border-input rounded-none bg-background text-foreground hover:bg-muted/40 cursor-pointer transition-colors"
+                  >
+                    <span className="truncate text-[var(--body-font-size)]">
+                      {active_file_name || 'Upload GeoPNG (.png)...'}
+                    </span>
+                    <Icon name="folder_open" className="text-muted-foreground shrink-0 ml-1" />
+                  </label>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="space-y-1">
+                    <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">First GeoPNG (A)</Label>
+                    <input
+                      type="file"
+                      accept=".png"
+                      id="diff-file-a"
+                      className="hidden"
+                      onClick={(arg0_e) => {
+                        ; (arg0_e.target as HTMLInputElement).value = ''
+                      }}
+                      onChange={(arg0_e) => {
+                        let file = arg0_e.target.files?.[0]
+                        if (file)
+                          on_file_upload(file, 'diff_a')
+                        arg0_e.target.value = ''
+                      }}
+                    />
+                    <label
+                      htmlFor="diff-file-a"
+                      className="flex items-center justify-between w-full h-8 px-2 border border-input rounded-none bg-background text-foreground hover:bg-muted/40 cursor-pointer transition-colors"
+                    >
+                      <span className="truncate text-[var(--body-font-size)]">{diff_name_a || 'Choose Image A...'}</span>
+                      <Icon name="file_upload" className="text-muted-foreground shrink-0 ml-1" />
+                    </label>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">Second GeoPNG (B)</Label>
+                    <input
+                      type="file"
+                      accept=".png"
+                      id="diff-file-b"
+                      className="hidden"
+                      onClick={(arg0_e) => {
+                        ; (arg0_e.target as HTMLInputElement).value = ''
+                      }}
+                      onChange={(arg0_e) => {
+                        let file = arg0_e.target.files?.[0]
+                        if (file)
+                          on_file_upload(file, 'diff_b')
+                        arg0_e.target.value = ''
+                      }}
+                    />
+                    <label
+                      htmlFor="diff-file-b"
+                      className="flex items-center justify-between w-full h-8 px-2 border border-input rounded-none bg-background text-foreground hover:bg-muted/40 cursor-pointer transition-colors"
+                    >
+                      <span className="truncate text-[var(--body-font-size)]">{diff_name_b || 'Choose Image B...'}</span>
+                      <Icon name="file_upload" className="text-muted-foreground shrink-0 ml-1" />
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {/* Encoding Format */}
+              <div className="space-y-1">
+                <Label className="text-[var(--body-font-size)] text-muted-foreground font-normal">Encoding Format</Label>
+                <Select value={data_format} onValueChange={(arg0_v) => set_data_format(arg0_v as DataFormat)}>
+                  <SelectTrigger className="rounded-none h-7 text-[var(--body-font-size)]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-none">
+                    <SelectItem value="float32" className="rounded-none text-[var(--body-font-size)]">float32 (IEEE 754)</SelectItem>
+                    <SelectItem value="int32" className="rounded-none text-[var(--body-font-size)]">int32 (Signed Integer)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default SidebarControls

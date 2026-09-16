@@ -1,0 +1,506 @@
+import React from 'react'
+import { Icon } from './icon'
+import { ALERT_CONFIGS, AlertStyle } from '@config'
+
+export interface MarkdownRendererProps {
+  content?: string | string[]
+  className?: string
+  isNested?: boolean
+}
+
+export type { AlertStyle }
+
+/**
+ * Parses inline markdown tokens (links, images, bold, italic, inline code, strikethrough).
+ *
+ * @param {string} arg0_text
+ * @returns {Array<React.ReactNode>}
+ */
+let parseInline = function (arg0_text: string): React.ReactNode[] {
+  //Convert from parameters
+  let text = (arg0_text) ? String(arg0_text) : ''
+
+  //Declare local instance variables
+  let all_matches_array: RegExpExecArray[]
+  let last_index: number = 0
+  let parts_array: React.ReactNode[] = []
+  let token_regex: RegExp
+
+  //Guard clauses
+  if (!text)
+    return []
+
+  //Function body
+  token_regex = /(\[!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\]\(([^)]+)\)|!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)|\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*|__([^_]+)__|`([^`]+)`|\*([^*]+)\*|_([^_]+)_|~~([^~]+)~~)/g
+  all_matches_array = Array.from(text.matchAll(token_regex))
+
+  for (let i = 0; i < all_matches_array.length; i++) {
+    let local_match = all_matches_array[i]
+    let local_match_index = local_match.index ?? 0
+
+    if (local_match_index > last_index)
+      parts_array.push(text.slice(last_index, local_match_index))
+
+    let local_full_match = local_match[1]
+
+    if (local_full_match.startsWith('[![')) {
+      let local_alt = local_match[2] || ''
+      let local_img_title = local_match[4] || local_alt
+      let local_img_url = local_match[3]
+      let local_link_url = local_match[5]
+
+      parts_array.push(
+        <a
+          key={`clickimg-${local_match_index}`}
+          href={local_link_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block hover:opacity-85 transition-opacity align-middle my-0.5"
+        >
+          <img
+            src={local_img_url}
+            alt={local_alt}
+            title={local_img_title}
+            className="inline-block max-h-8 align-middle border border-border bg-background/50 object-contain rounded-none"
+            loading="lazy"
+          />
+        </a>
+      )
+    } else if (local_full_match.startsWith('![')) {
+      let local_alt = local_match[6] || ''
+      let local_img_title = local_match[8] || local_alt
+      let local_img_url = local_match[7]
+
+      parts_array.push(
+        <img
+          key={`img-${local_match_index}`}
+          src={local_img_url}
+          alt={local_alt}
+          title={local_img_title}
+          className="inline-block max-h-8 align-middle mx-1 border border-border bg-background/50 object-contain rounded-none"
+          loading="lazy"
+        />
+      )
+    } else if (local_match[9] && local_match[10]) {
+      parts_array.push(
+        <a
+          key={`link-${local_match_index}`}
+          href={local_match[10]}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary hover:underline font-medium"
+        >
+          {local_match[9]}
+        </a>
+      )
+    } else if (local_match[11] || local_match[12]) {
+      parts_array.push(
+        <strong key={`bold-${local_match_index}`} className="font-semibold text-foreground">
+          {local_match[11] || local_match[12]}
+        </strong>
+      )
+    } else if (local_match[13]) {
+      parts_array.push(
+        <code
+          key={`code-${local_match_index}`}
+          className="px-1 py-0.5 bg-muted text-foreground border border-border text-[var(--body-font-size)] font-mono"
+        >
+          {local_match[13]}
+        </code>
+      )
+    } else if (local_match[14] || local_match[15]) {
+      parts_array.push(
+        <em key={`em-${local_match_index}`} className="italic">
+          {local_match[14] || local_match[15]}
+        </em>
+      )
+    } else if (local_match[16]) {
+      parts_array.push(
+        <del key={`del-${local_match_index}`} className="line-through text-muted-foreground">
+          {local_match[16]}
+        </del>
+      )
+    }
+
+    last_index = local_match_index + local_match[0].length
+  }
+
+  if (last_index < text.length)
+    parts_array.push(text.slice(last_index))
+
+  //Return statement
+  return parts_array
+}
+
+/**
+ * High-performance lightweight Markdown and Callout renderer.
+ *
+ * @param {MarkdownRendererProps} arg0_props
+ * @returns {React.ReactElement|null}
+ */
+export let MarkdownRenderer: React.FC<MarkdownRendererProps> = function (arg0_props: MarkdownRendererProps) {
+  //Convert from parameters
+  let props = (arg0_props) ? arg0_props : ({} as MarkdownRendererProps)
+
+  //Declare local instance variables
+  let block_key: number = 0
+  let class_name = props.className || ''
+  let code_block_lines_array: string[] = []
+  let content = props.content
+  let elements_array: React.ReactNode[] = []
+  let flush_code_block: () => void
+  let flush_list: () => void
+  let in_code_block: boolean = false
+  let is_nested = props.isNested ?? false
+  let lines_array: string[]
+  let list_items_array: string[] = []
+  let raw_text: string
+
+  //Guard clauses
+  if (!content)
+    return null
+
+  //Function body
+  raw_text = (Array.isArray(content)) ? content.join('\n') : content
+  lines_array = raw_text.split('\n')
+
+  flush_list = function () {
+    if (list_items_array.length > 0) {
+      elements_array.push(
+        <ul
+          key={`ul-${block_key++}`}
+          className="space-y-1 my-2 list-disc list-inside text-muted-foreground text-[var(--body-font-size)] font-light leading-relaxed"
+        >
+          {list_items_array.map((item, idx) => (
+            <li key={idx} className="leading-snug">
+              {parseInline(item)}
+            </li>
+          ))}
+        </ul>
+      )
+      list_items_array = []
+    }
+  }
+
+  flush_code_block = function () {
+    if (code_block_lines_array.length > 0) {
+      elements_array.push(
+        <pre
+          key={`pre-${block_key++}`}
+          className="bg-background/80 border border-border p-2.5 my-2 overflow-x-auto text-[var(--body-font-size)] font-mono text-foreground leading-relaxed rounded-none"
+        >
+          <code>{code_block_lines_array.join('\n')}</code>
+        </pre>
+      )
+      code_block_lines_array = []
+    }
+  }
+
+  for (let i = 0; i < lines_array.length; i++) {
+    let local_line = lines_array[i]
+    let local_trimmed = local_line.trim()
+
+    //1. Code blocks
+    if (local_trimmed.startsWith('```')) {
+      flush_list()
+      if (in_code_block) {
+        in_code_block = false
+        flush_code_block()
+      } else {
+        in_code_block = true
+      }
+      continue
+    }
+
+    if (in_code_block) {
+      code_block_lines_array.push(local_line)
+      continue
+    }
+
+    //2. Blank line
+    if (local_trimmed === '') {
+      flush_list()
+      continue
+    }
+
+    //3. Alert callout: > [!NOTE], > [!WARNING], etc.
+    let local_alert_match = local_trimmed.match(
+      /^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|INFO|HINT|DANGER|ERROR|SUCCESS|QUESTION|FAQ|EXAMPLE|QUOTE)\](?:\s+(.*))?$/i
+    )
+    if (local_alert_match) {
+      flush_list()
+      let local_alert_key = local_alert_match[1].toUpperCase()
+      let local_custom_title = local_alert_match[2]?.trim() || undefined
+      let local_cfg = ALERT_CONFIGS[local_alert_key] || ALERT_CONFIGS.NOTE
+      let local_alert_body_lines: string[] = []
+
+      for (let x = i + 1; x < lines_array.length; x++) {
+        let local_next_trimmed = lines_array[x].trim()
+
+        if (local_next_trimmed === '') {
+          if (x + 1 < lines_array.length && lines_array[x + 1].trim().startsWith('>')) {
+            local_alert_body_lines.push('')
+            i = x
+            continue
+          } else {
+            break
+          }
+        }
+
+        if (local_next_trimmed.match(/^>\s*\[!/i))
+          break
+
+        if (local_next_trimmed.startsWith('>')) {
+          local_alert_body_lines.push(local_next_trimmed.replace(/^>\s?/, ''))
+          i = x
+        } else {
+          if (
+            local_next_trimmed.startsWith('- ') ||
+            local_next_trimmed.startsWith('* ') ||
+            local_next_trimmed.startsWith('# ') ||
+            local_next_trimmed.startsWith('## ') ||
+            local_next_trimmed.startsWith('### ') ||
+            local_next_trimmed.startsWith('---') ||
+            local_next_trimmed.startsWith('***') ||
+            local_next_trimmed.startsWith('|')
+          ) {
+            break
+          }
+          local_alert_body_lines.push(local_next_trimmed)
+          i = x
+        }
+      }
+
+      elements_array.push(
+        <div
+          key={`alert-${block_key++}`}
+          className={`my-2.5 p-2.5 border-l-4 border ${local_cfg.borderColour} ${local_cfg.bgColour} rounded-none select-text`}
+        >
+          <div
+            className={`flex items-center gap-1.5 font-bold text-[var(--body-font-size)] mb-1 ${local_cfg.titleColour}`}
+          >
+            <Icon name={local_cfg.icon} size={15} className={local_cfg.iconColour} />
+            <span className="uppercase tracking-wider text-xs">
+              {local_custom_title || local_cfg.title}
+            </span>
+          </div>
+          {local_alert_body_lines.length > 0 && (
+            <div className="text-foreground/90 font-light leading-relaxed pl-0.5">
+              <MarkdownRenderer content={local_alert_body_lines.join('\n')} isNested />
+            </div>
+          )}
+        </div>
+      )
+      continue
+    }
+
+    //4. Standard Blockquote
+    if (local_trimmed.startsWith('>')) {
+      flush_list()
+      let local_quote_body_lines: string[] = [local_trimmed.replace(/^>\s?/, '')]
+
+      for (let x = i + 1; x < lines_array.length; x++) {
+        let local_next_trimmed = lines_array[x].trim()
+        if (local_next_trimmed.startsWith('>') && !local_next_trimmed.match(/^>\s*\[!/i)) {
+          local_quote_body_lines.push(local_next_trimmed.replace(/^>\s?/, ''))
+          i = x
+        } else {
+          break
+        }
+      }
+
+      elements_array.push(
+        <blockquote
+          key={`quote-${block_key++}`}
+          className="border-l-2 border-primary/70 bg-muted/20 pl-3 py-1.5 my-2 text-muted-foreground italic text-[var(--body-font-size)] font-light leading-relaxed select-text"
+        >
+          <MarkdownRenderer content={local_quote_body_lines.join('\n')} isNested />
+        </blockquote>
+      )
+      continue
+    }
+
+    //5. Block Images: ![Alt text](url "title")
+    let local_block_img_match = local_trimmed.match(/^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)$/)
+    if (local_block_img_match) {
+      flush_list()
+      let local_alt = local_block_img_match[1] || ''
+      let local_title = local_block_img_match[3] || local_alt
+      let local_url = local_block_img_match[2]
+
+      elements_array.push(
+        <figure
+          key={`blockimg-${block_key++}`}
+          className="my-3 flex flex-col items-center select-none"
+        >
+          <img
+            src={local_url}
+            alt={local_alt}
+            title={local_title}
+            className="max-w-full h-auto max-h-72 border border-border bg-background/50 object-contain shadow-sm rounded-none"
+            loading="lazy"
+            onError={(e) => {
+              let local_target = e.currentTarget
+              local_target.style.display = 'none'
+              let local_parent = local_target.parentElement
+              if (local_parent && !local_parent.querySelector('.img-error-badge')) {
+                let local_badge = document.createElement('div')
+                local_badge.className =
+                  'img-error-badge p-2 text-xs text-muted-foreground border border-dashed border-border flex items-center gap-1.5 bg-muted/20'
+                local_badge.innerHTML = `<span class="material-icons text-sm text-destructive">broken_image</span> Image unavailable: ${local_alt || local_url}`
+                local_parent.appendChild(local_badge)
+              }
+            }}
+          />
+          {local_alt && (
+            <figcaption className="text-[11px] text-muted-foreground/80 italic mt-1 text-center">
+              {local_alt}
+            </figcaption>
+          )}
+        </figure>
+      )
+      continue
+    }
+
+    //6. GFM Tables
+    if (local_trimmed.startsWith('|') && local_trimmed.endsWith('|') && i + 1 < lines_array.length) {
+      let local_next_trimmed = lines_array[i + 1].trim()
+      let local_is_separator = /^\|(?:\s*:?-+:?\s*\|)+$/.test(local_next_trimmed)
+
+      if (local_is_separator) {
+        flush_list()
+        let parse_row_func = function (arg0_row_str: string) {
+          let row_str = arg0_row_str
+          return row_str
+            .replace(/^\|/, '')
+            .replace(/\|$/, '')
+            .split('|')
+            .map((c) => c.trim())
+        }
+
+        let local_headers = parse_row_func(local_trimmed)
+        i += 2 //Skip header and delimiter
+
+        let local_table_rows_array: string[][] = []
+        for (let x = i; x < lines_array.length; x++) {
+          let local_r_trimmed = lines_array[x].trim()
+          if (local_r_trimmed.startsWith('|') && local_r_trimmed.endsWith('|')) {
+            local_table_rows_array.push(parse_row_func(local_r_trimmed))
+            i = x
+          } else {
+            break
+          }
+        }
+
+        elements_array.push(
+          <div key={`table-${block_key++}`} className="my-2.5 overflow-x-auto">
+            <table className="w-full border-collapse border border-border text-[var(--body-font-size)] font-sans">
+              <thead>
+                <tr className="bg-muted/60 border-b border-border">
+                  {local_headers.map((h, h_idx) => (
+                    <th
+                      key={h_idx}
+                      className="p-1.5 px-2 text-left font-bold text-foreground border-r border-border last:border-0"
+                    >
+                      {parseInline(h)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {local_table_rows_array.map((row, r_idx) => (
+                  <tr
+                    key={r_idx}
+                    className="border-b border-border/50 hover:bg-muted/30 transition-colors"
+                  >
+                    {row.map((cell, c_idx) => (
+                      <td
+                        key={c_idx}
+                        className="p-1.5 px-2 text-muted-foreground border-r border-border/50 last:border-0"
+                      >
+                        {parseInline(cell)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+        continue
+      }
+    }
+
+    //7. Bullet list item (- or *)
+    if (local_trimmed.startsWith('- ') || local_trimmed.startsWith('* ')) {
+      list_items_array.push(local_trimmed.slice(2).trim())
+      continue
+    } else {
+      flush_list()
+    }
+
+    //8. Headings
+    if (local_trimmed.startsWith('# ')) {
+      elements_array.push(
+        <h1
+          key={`h1-${block_key++}`}
+          className="font-bold text-foreground text-[var(--header-font-size)] mt-3 mb-1.5 first:mt-0"
+        >
+          {parseInline(local_trimmed.slice(2))}
+        </h1>
+      )
+    } else if (local_trimmed.startsWith('## ')) {
+      elements_array.push(
+        <h2
+          key={`h2-${block_key++}`}
+          className="font-bold text-foreground text-[var(--body-font-size)] uppercase tracking-wider mt-3 mb-1 first:mt-0"
+        >
+          {parseInline(local_trimmed.slice(3))}
+        </h2>
+      )
+    } else if (local_trimmed.startsWith('### ')) {
+      elements_array.push(
+        <h3
+          key={`h3-${block_key++}`}
+          className="font-bold text-foreground text-[var(--body-font-size)] mt-2.5 mb-1 first:mt-0"
+        >
+          {parseInline(local_trimmed.slice(4))}
+        </h3>
+      )
+    } else if (local_trimmed.startsWith('#### ')) {
+      elements_array.push(
+        <h4
+          key={`h4-${block_key++}`}
+          className="font-semibold text-foreground text-[var(--body-font-size)] mt-2 mb-1 first:mt-0"
+        >
+          {parseInline(local_trimmed.slice(5))}
+        </h4>
+      )
+    } else if (local_trimmed === '---' || local_trimmed === '***' || local_trimmed === '___') {
+      elements_array.push(<hr key={`hr-${block_key++}`} className="border-border my-2.5" />)
+    } else {
+      elements_array.push(
+        <p
+          key={`p-${block_key++}`}
+          className="text-muted-foreground font-light leading-relaxed my-1.5 text-[var(--body-font-size)]"
+        >
+          {parseInline(local_trimmed)}
+        </p>
+      )
+    }
+  }
+
+  flush_list()
+  flush_code_block()
+
+  //Return statement
+  return (
+    <div
+      className={`space-y-0.5 text-[var(--body-font-size)] ${(is_nested) ? '' : class_name}`}
+    >
+      {elements_array}
+    </div>
+  )
+}
+
+export default MarkdownRenderer

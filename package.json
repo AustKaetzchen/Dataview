@@ -7,7 +7,7 @@
     "dev": "node --max-old-space-size=8192 ./node_modules/vite/bin/vite.js",
     "build": "node --max-old-space-size=8192 ./node_modules/typescript/bin/tsc -b && node --max-old-space-size=8192 ./node_modules/vite/bin/vite.js build",
     "lint": "oxlint",
-    "docs": "typedoc --out docs src",
+    "docs": "typedoc --out docs core --entryPointStrategy expand --exclude \"**/*.worker.ts\" --tsconfig tsconfig.app.json",
     "preview": "node --max-old-space-size=8192 ./node_modules/vite/bin/vite.js preview"
   },
   "dependencies": {

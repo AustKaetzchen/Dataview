@@ -1,0 +1,394 @@
+import React from 'react'
+import { StadesterConfig, StadesterColorMode } from '@framework/geopng/types.ts'
+import { Icon } from '@ui/components/icon'
+import { Slider } from '@ui/components/slider'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@ui/components/select'
+import { D3ColorPaletteSelector } from '@ui/leftbar/d3_color_palette_selector'
+
+export interface StadesterSettingsProps {
+  cityCount?: number
+  config: StadesterConfig
+  onChangeConfig: React.Dispatch<React.SetStateAction<StadesterConfig>>
+}
+
+let MIN_POP_PRESETS = [
+  { label: 'All', value: 0 },
+  { label: '5k+', value: 5000 },
+  { label: '10k+', value: 10000 },
+  { label: '50k+', value: 50000 },
+  { label: '100k+', value: 100000 },
+  { label: '500k+', value: 500000 },
+  { label: '1M+', value: 1000000 },
+]
+
+let MAX_CITIES_PRESETS = [
+  { label: '500', value: 500 },
+  { label: '1,000', value: 1000 },
+  { label: '2,000', value: 2000 },
+  { label: '4,000', value: 4000 },
+  { label: '8,000', value: 8000 },
+  { label: 'All', value: 50000 },
+]
+
+/**
+ * Settings panel for the Stadestér Historical Cities mapmode.
+ *
+ * @param {StadesterSettingsProps} arg0_props
+ *
+ * @returns {React.ReactElement}
+ */
+export let StadesterSettings: React.FC<StadesterSettingsProps> = function (arg0_props) {
+  //Convert from parameters
+  let props = arg0_props
+  let city_count = props.cityCount
+  let config = props.config
+  let on_change_config = props.onChangeConfig
+
+  //Declare local instance variables
+  let bubble_size = config.bubbleSize
+  let color_mode = config.colorMode
+  let dataset = config.dataset || 'stadester_1.1'
+  let large_city_contrast = (config.largeCityContrast !== undefined) ? config.largeCityContrast : 1.0
+  let max_cities = config.maxCities
+  let min_pop = config.minPop
+  let show_labels = config.showLabels
+
+  //Function body
+  //Return statement
+  return (
+    <div className="space-y-2.5 pt-1 text-xs">
+      {/* City count & status header */}
+      <div className="flex items-center justify-between pb-1 border-b border-border/40">
+        <div className="flex items-center gap-1.5">
+          <Icon name="location_city" className="text-primary text-xs" />
+          <span className="font-semibold text-foreground">Stadestér Settlements</span>
+        </div>
+        {city_count !== undefined && (
+          <span className="text-[10px] px-1.5 py-0.2 bg-primary/20 text-primary border border-primary/40 font-mono">
+            {city_count.toLocaleString('de-DE')} rendered
+          </span>
+        )}
+      </div>
+
+      {/* Dataset Version Selector */}
+      <div className="space-y-1">
+        <label className="text-muted-foreground block text-[11px]">Dataset Version</label>
+        <Select
+          value={dataset}
+          onValueChange={(arg0_val: any) =>
+            on_change_config((arg0_prev) => ({
+              ...arg0_prev,
+              dataset: arg0_val as 'stadester_1.1' | 'stadester_1.0',
+            }))
+          }
+        >
+          <SelectTrigger className="h-7 w-full text-xs">
+            <SelectValue placeholder="Select dataset" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="stadester_1.1">Stadestér 1.1 (Recommended, 34,400+ cities)</SelectItem>
+            <SelectItem value="stadester_1.0">Stadestér 1.0 (41,000+ settlements)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Circle Rendering Style: Outline vs Fill */}
+      <div className="space-y-1">
+        <label className="text-muted-foreground block text-[11px]">Circle Style</label>
+        <div className="grid grid-cols-2 gap-1">
+          <button
+            type="button"
+            onClick={() =>
+              on_change_config((arg0_prev) => ({
+                ...arg0_prev,
+                filled: true,
+                halo: false,
+              }))
+            }
+            className={`px-1.5 py-1 text-[11px] rounded-none border text-center transition-colors cursor-pointer ${
+              config.filled !== false && !config.halo
+                ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
+                : 'bg-background hover:bg-muted text-muted-foreground border-border'
+            }`}
+          >
+            Fill
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              on_change_config((arg0_prev) => ({
+                ...arg0_prev,
+                filled: false,
+                halo: true,
+              }))
+            }
+            className={`px-1.5 py-1 text-[11px] rounded-none border text-center transition-colors cursor-pointer ${
+              config.halo || config.filled === false
+                ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
+                : 'bg-background hover:bg-muted text-muted-foreground border-border'
+            }`}
+          >
+            Outline
+          </button>
+        </div>
+      </div>
+
+      {/* Circle Transparency / Opacity Slider */}
+      <div className="space-y-1.5">
+        <div className="flex justify-between items-center text-[11px]">
+          <span className="text-muted-foreground">Circle Opacity</span>
+          <span className="font-mono text-[10px] text-foreground">
+            {Math.round(((config.opacity !== undefined) ? config.opacity : 0.7) * 100)}%
+          </span>
+        </div>
+        <Slider
+          value={[((config.opacity !== undefined) ? config.opacity : 0.7) * 100]}
+          min={10}
+          max={100}
+          step={5}
+          onValueChange={(arg0_val: any) =>
+            on_change_config((arg0_prev) => ({
+              ...arg0_prev,
+              opacity: arg0_val[0] / 100,
+            }))
+          }
+          className="py-1 cursor-pointer"
+        />
+      </div>
+
+      {/* Colour Mode Selector */}
+      <div className="space-y-1">
+        <label className="text-muted-foreground block text-[11px]">Colour By</label>
+        <div className="grid grid-cols-3 gap-1">
+          <button
+            type="button"
+            onClick={() =>
+              on_change_config((arg0_prev) => ({
+                ...arg0_prev,
+                colorMode: 'growth',
+              }))
+            }
+            className={`px-1.5 py-1 text-[11px] rounded-none border text-center transition-colors cursor-pointer ${
+              color_mode === 'growth'
+                ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
+                : 'bg-background hover:bg-muted text-muted-foreground border-border'
+            }`}
+          >
+            Growth Rate
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              on_change_config((arg0_prev) => ({
+                ...arg0_prev,
+                colorMode: 'population',
+              }))
+            }
+            className={`px-1.5 py-1 text-[11px] rounded-none border text-center transition-colors cursor-pointer ${
+              color_mode === 'population'
+                ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
+                : 'bg-background hover:bg-muted text-muted-foreground border-border'
+            }`}
+          >
+            Population
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              on_change_config((arg0_prev) => ({
+                ...arg0_prev,
+                colorMode: 'region',
+              }))
+            }
+            className={`px-1.5 py-1 text-[11px] rounded-none border text-center transition-colors cursor-pointer ${
+              color_mode === 'region' || color_mode === 'continent'
+                ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
+                : 'bg-background hover:bg-muted text-muted-foreground border-border'
+            }`}
+          >
+            Region
+          </button>
+        </div>
+      </div>
+
+      {/* D3 Growth Colour Palette Selector (active when Growth Rate is selected) */}
+      {color_mode === 'growth' && (
+        <D3ColorPaletteSelector
+          label="Growth D3 Palette"
+          value={config.growthPalette || 'Rainbow'}
+          onChange={(arg0_pal: any) =>
+            on_change_config((arg0_prev) => ({
+              ...arg0_prev,
+              growthPalette: arg0_pal,
+            }))
+          }
+        />
+      )}
+
+      {/* Population Threshold (minPop) Slider & Number Input */}
+      <div className="space-y-1.5">
+        <div className="flex justify-between items-center text-[11px]">
+          <span className="text-muted-foreground">Min Population Threshold</span>
+          <div className="flex items-center gap-1 font-mono">
+            <input
+              type="number"
+              min={0}
+              max={10000000}
+              step={1000}
+              value={min_pop}
+              onChange={(arg0_e) => {
+                let v = Math.max(0, parseInt(arg0_e.target.value, 10) || 0)
+                on_change_config((arg0_prev) => ({ ...arg0_prev, minPop: v }))
+              }}
+              className="w-16 h-5 px-1 bg-background border border-input rounded-none text-right text-xs font-mono text-foreground"
+            />
+          </div>
+        </div>
+        <Slider
+          value={[Math.min(1000000, min_pop)]}
+          min={0}
+          max={500000}
+          step={5000}
+          onValueChange={(arg0_vals: number[]) => {
+            on_change_config((arg0_prev) => ({ ...arg0_prev, minPop: arg0_vals[0] }))
+          }}
+        />
+        {/* Preset chips for Min Pop */}
+        <div className="flex items-center gap-1 flex-wrap pt-0.5">
+          {MIN_POP_PRESETS.map((arg0_preset) => {
+            let is_sel = min_pop === arg0_preset.value
+            return (
+              <button
+                key={arg0_preset.value}
+                type="button"
+                onClick={() =>
+                  on_change_config((arg0_prev) => ({ ...arg0_prev, minPop: arg0_preset.value }))
+                }
+                className={`px-1.5 py-0.5 text-[10px] rounded-none border transition-colors cursor-pointer ${
+                  is_sel
+                    ? 'bg-primary text-primary-foreground border-primary font-bold shadow-xs'
+                    : 'bg-background hover:bg-muted text-muted-foreground border-border'
+                }`}
+              >
+                {arg0_preset.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Max Cities Limit Slider & Number Input */}
+      <div className="space-y-1.5">
+        <div className="flex justify-between items-center text-[11px]">
+          <span className="text-muted-foreground">Max Settlements Displayed</span>
+          <div className="flex items-center gap-1 font-mono">
+            <input
+              type="number"
+              min={100}
+              max={50000}
+              step={100}
+              value={max_cities >= 50000 ? 50000 : max_cities}
+              onChange={(arg0_e) => {
+                let v = Math.max(10, parseInt(arg0_e.target.value, 10) || 100)
+                on_change_config((arg0_prev) => ({ ...arg0_prev, maxCities: v }))
+              }}
+              className="w-16 h-5 px-1 bg-background border border-input rounded-none text-right text-xs font-mono text-foreground"
+            />
+          </div>
+        </div>
+        <Slider
+          value={[Math.min(10000, max_cities)]}
+          min={100}
+          max={10000}
+          step={100}
+          onValueChange={(arg0_vals: number[]) => {
+            on_change_config((arg0_prev) => ({ ...arg0_prev, maxCities: arg0_vals[0] }))
+          }}
+        />
+        {/* Preset chips for Max Cities */}
+        <div className="flex items-center gap-1 flex-wrap pt-0.5">
+          {MAX_CITIES_PRESETS.map((arg0_preset) => {
+            let is_sel = max_cities === arg0_preset.value
+            return (
+              <button
+                key={arg0_preset.value}
+                type="button"
+                onClick={() =>
+                  on_change_config((arg0_prev) => ({ ...arg0_prev, maxCities: arg0_preset.value }))
+                }
+                className={`px-1.5 py-0.5 text-[10px] rounded-none border transition-colors cursor-pointer ${
+                  is_sel
+                    ? 'bg-primary text-primary-foreground border-primary font-bold shadow-xs'
+                    : 'bg-background hover:bg-muted text-muted-foreground border-border'
+                }`}
+              >
+                {arg0_preset.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Bubble Size Multiplier */}
+      <div className="space-y-1.5">
+        <div className="flex justify-between items-center text-[11px]">
+          <span className="text-muted-foreground">Circle Bubble Size</span>
+          <span className="text-foreground font-mono font-bold">{bubble_size.toFixed(2)}x</span>
+        </div>
+        <Slider
+          value={[bubble_size]}
+          min={0.4}
+          max={2.5}
+          step={0.05}
+          onValueChange={(arg0_vals: number[]) => {
+            on_change_config((arg0_prev) => ({ ...arg0_prev, bubbleSize: arg0_vals[0] }))
+          }}
+        />
+      </div>
+
+      {/* Large-City Contrast Slider */}
+      <div className="space-y-1.5">
+        <div className="flex justify-between items-center text-[11px]">
+          <span className="text-muted-foreground">Large-City Contrast</span>
+          <span className="text-foreground font-mono font-bold">{large_city_contrast.toFixed(2)}x</span>
+        </div>
+        <Slider
+          value={[large_city_contrast]}
+          min={0.2}
+          max={2.5}
+          step={0.05}
+          onValueChange={(arg0_vals: number[]) => {
+            on_change_config((arg0_prev) => ({ ...arg0_prev, largeCityContrast: arg0_vals[0] }))
+          }}
+        />
+      </div>
+
+      {/* Labels & Collision Filter Toggle */}
+      <div className="flex items-center justify-between pt-1 border-t border-border/40">
+        <div className="flex flex-col">
+          <span className="text-foreground text-[11px] font-medium">City Labels</span>
+          <span className="text-[9px] text-muted-foreground flex items-center gap-1">
+            <Icon name="check_circle" className="text-[10px] text-emerald-400" />
+            Collision-free (no label occlusion)
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() =>
+            on_change_config((arg0_prev) => ({
+              ...arg0_prev,
+              showLabels: !arg0_prev.showLabels,
+            }))
+          }
+          className={`px-2 py-0.5 text-[10px] rounded-none border transition-colors cursor-pointer font-bold ${
+            show_labels
+              ? 'bg-primary text-primary-foreground border-primary'
+              : 'bg-background hover:bg-muted text-muted-foreground border-border'
+          }`}
+        >
+          {show_labels ? 'ON' : 'OFF'}
+        </button>
+      </div>
+    </div>
+  )
+}

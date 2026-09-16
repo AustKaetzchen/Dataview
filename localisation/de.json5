@@ -1,0 +1,59 @@
+{
+  // =========================================================================
+  // Confoederatio Dataview Localisation: Deutsch (de)
+  // =========================================================================
+  app: {
+    title: "Confoederatio Dataview",
+    subtitle: "Interne Werkzeuge für historische Statistiken",
+    badge: "BETA",
+  },
+  mapmodes: {
+    title: "Kartenmodi",
+    activeSuffix: "Aktiv",
+    searchPlaceholder: "Kartenmodi suchen...",
+    noResults: "Keine passenden Kartenmodi gefunden",
+    hintConfigure: "Klicken zum Konfigurieren des Modus",
+    hintReorder: "Ziehen/Pfeil zum Neuanordnen",
+    haloThicknessLabel: "Schwarze Halo-Dicke",
+    haloThicknessUnit: "px",
+    haloDescription: "• Hohle Kreise mit farbigem Rand und verstellbarem schwarzen Halo. Fläche skaliert linear mit Wert (A ∝ Wert).",
+  },
+  sidebar: {
+    folders: {
+      image: "Bildeinstellungen",
+      palette: "Farbe & Visualisierung",
+      display: "Kartenanzeige-Einstellungen",
+    },
+    fileInputMode: "Dateieingabemodus",
+    singleImage: "Einzelbild",
+    imageDifference: "Bilddifferenz (A - B)",
+    selectRaster: "Rasterbild auswählen (GeoPNG/PNG)",
+    selectRasterB: "Subtrahend-Bild auswählen (Bild B)",
+    binning: "Binning/Downsampling",
+    colorPalette: "Farbpalette (D3)",
+    invertPalette: "Invertieren",
+    valueColorScale: "Werte-Farbskala",
+    manualRange: "Manueller Bereich",
+    basemapLayer: "Basiskarten-Ebene",
+    projection: "Kartenprojektion",
+    cameraTilt: "3D-Kameraneigung",
+    opacity: "Raster-Deckkraft",
+    resetCamera: "Kamera zurücksetzen",
+  },
+  analytics: {
+    title: "Raster-Rechner",
+    steepness: "Steilheit",
+    totalCells: "Gesamtzellen",
+    validCells: "Gültige Zellen %",
+    resolution: "Auflösung",
+    minValue: "Min-Wert",
+    maxValue: "Max-Wert",
+    mean: "Mittelwert",
+    stdDev: "Std-Abweichung",
+    median: "Median",
+  },
+  hud: {
+    coordinate: "Koordinaten",
+    value: "Wert",
+  },
+}

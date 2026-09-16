@@ -1,0 +1,548 @@
+import React, { useState, useMemo, useCallback } from 'react'
+import { ParsedDataLayer } from '@server/layer_parser'
+import { Icon } from '@ui/components/icon'
+import { HistoricalBordersConfig, StadesterConfig } from '@framework/geopng/types.ts'
+import { HistoricalBordersSettings } from '@ui/rightbar/mapmodes/historical_borders_settings'
+import { StadesterSettings } from '@ui/rightbar/mapmodes/stadester_settings'
+
+export type UserRole = 'developer' | 'privileged' | 'default'
+
+export interface DataLayersTabProps {
+  activeLayerId: string | null
+  activeVariableSelectors: Record<string, string | string[]>
+  historicalBordersConfig?: HistoricalBordersConfig
+  isLoadingLayers?: boolean
+  layers: Record<string, ParsedDataLayer>
+  onChangeHistoricalBordersConfig?: React.Dispatch<React.SetStateAction<HistoricalBordersConfig>>
+  onChangeStadesterConfig?: React.Dispatch<React.SetStateAction<StadesterConfig>>
+  onChangeUserRole?: (arg0_role: UserRole) => void
+  onChangeVariableSelector: (arg0_key: string, arg1_option: string | string[]) => void
+  onOpenVideoExport?: () => void
+  onSelectLayer: (arg0_layer_id: string) => void
+  stadesterCityCount?: number
+  stadesterConfig?: StadesterConfig
+  userRole?: UserRole
+}
+
+/**
+ * DataLayersTab component providing full layer directory, category grouping, variable selectors, and permissions.
+ *
+ * @param {DataLayersTabProps} arg0_props
+ *
+ * @returns {React.ReactElement}
+ */
+export let DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props) {
+  //Convert from parameters
+  let props = arg0_props
+  let {
+    activeLayerId: active_layer_id,
+    activeVariableSelectors: active_variable_selectors,
+    historicalBordersConfig: historical_borders_config,
+    isLoadingLayers: is_loading_layers = false,
+    layers,
+    onChangeHistoricalBordersConfig: on_change_historical_borders_config,
+    onChangeStadesterConfig: on_change_stadester_config,
+    onChangeUserRole: on_change_user_role,
+    onChangeVariableSelector: on_change_variable_selector,
+    onOpenVideoExport: on_open_video_export,
+    onSelectLayer: on_select_layer,
+    stadesterCityCount: stadester_city_count = 0,
+    stadesterConfig: stadester_config,
+    userRole: user_role = 'developer',
+  } = props
+
+  //Declare local instance variables
+  let active_layer: ParsedDataLayer | null
+  let enable_all_selectors: boolean
+  let filtered_layers: ParsedDataLayer[]
+  let grouped_categories: Record<string, ParsedDataLayer[]>
+  let handle_role_change: (arg0_role: UserRole) => void
+  let is_layer_accessible: (arg0_layer: ParsedDataLayer) => boolean
+  let layer_search: string
+  let roles_list: { description: string; id: UserRole; name: string }[] = [
+    { description: 'Open access to default data layers', id: 'default', name: 'Default' },
+    { description: 'Access to privileged research layers', id: 'privileged', name: 'Privileged' },
+    { description: 'Full access + Video Export tools', id: 'developer', name: 'Developer' },
+  ]
+  let selected_category: string
+  let set_enable_all_selectors: React.Dispatch<React.SetStateAction<boolean>>
+  let set_layer_search: React.Dispatch<React.SetStateAction<string>>
+  let set_selected_category: React.Dispatch<React.SetStateAction<string>>
+
+    //Function body
+    ;[layer_search, set_layer_search] = useState('')
+    ;[selected_category, set_selected_category] = useState('all')
+    ;[enable_all_selectors, set_enable_all_selectors] = useState(false)
+
+  handle_role_change = useCallback(
+    function (arg0_role: UserRole) {
+      let r = arg0_role
+      if (on_change_user_role)
+        on_change_user_role(r)
+    },
+    [on_change_user_role]
+  )
+
+  is_layer_accessible = useCallback(
+    function (arg0_layer: ParsedDataLayer) {
+      let layer = arg0_layer
+      if (user_role === 'developer')
+        return true
+      if (user_role === 'privileged')
+        return !layer.permissions.includes('developer')
+      //Default role only accesses default layers
+      return layer.permissions.includes('default') || layer.permissions.length === 0
+    },
+    [user_role]
+  )
+
+  active_layer = useMemo(() => {
+    if (!active_layer_id)
+      return null
+    if (layers[active_layer_id])
+      return layers[active_layer_id]
+    //Check sublayers
+    let keys = Object.keys(layers)
+    for (let i = 0; i < keys.length; i++) {
+      let l = layers[keys[i]]
+      if (l.sub_layers) {
+        let found = l.sub_layers.find((arg0_sub: any) => arg0_sub.id === active_layer_id)
+        if (found)
+          return found
+      }
+    }
+    return null
+  }, [active_layer_id, layers])
+
+  //Group layers by category
+  grouped_categories = useMemo(() => {
+    let result: Record<string, ParsedDataLayer[]> = {}
+    let all_keys = Object.keys(layers)
+
+    for (let i = 0; i < all_keys.length; i++) {
+      let l = layers[all_keys[i]]
+      let cat = l.category || 'General Rasters'
+      if (!result[cat])
+        result[cat] = []
+      result[cat].push(l)
+    }
+    return result
+  }, [layers])
+
+  //Filter layers by search query and category
+  filtered_layers = useMemo(() => {
+    let q = layer_search.toLowerCase().trim()
+    let all_keys = Object.keys(layers)
+    let list: ParsedDataLayer[] = []
+
+    for (let i = 0; i < all_keys.length; i++) {
+      let l = layers[all_keys[i]]
+      let matches_cat = selected_category === 'all' || l.category === selected_category
+      let matches_q =
+        !q ||
+        l.name.toLowerCase().includes(q) ||
+        l.id.toLowerCase().includes(q) ||
+        (l.description && l.description.toLowerCase().includes(q))
+
+      if (matches_cat && matches_q)
+        list.push(l)
+    }
+
+    return list
+  }, [layers, layer_search, selected_category])
+
+  //Return statement
+  return (
+    <div className="space-y-[var(--padding)] text-[var(--body-font-size)] font-sans">
+      {/* Role & Permissions Banner */}
+      <div className="border border-border bg-card/60 p-2.5 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+            <Icon name="verified_user" className="text-primary text-xs" />
+            <span>Active Permissions Role</span>
+          </span>
+          {user_role === 'developer' && on_open_video_export && (
+            <button
+              type="button"
+              onClick={on_open_video_export}
+              className="px-2 py-0.5 bg-primary text-primary-foreground text-[10px] font-bold shadow-xs hover:bg-primary/90 transition-colors cursor-pointer flex items-center gap-1"
+              title="Open Developer Video Timelapse Export Tool"
+            >
+              <Icon name="movie" className="text-xs" />
+              <span>Video Export</span>
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-3 gap-1 bg-muted/40 p-0.5 border border-border">
+          {roles_list.map((arg0_r) => {
+            let active = user_role === arg0_r.id
+            return (
+              <button
+                key={arg0_r.id}
+                type="button"
+                onClick={() => handle_role_change(arg0_r.id)}
+                className={`py-1 px-1.5 text-center text-[11px] font-medium transition-colors cursor-pointer ${active
+                    ? 'bg-primary text-primary-foreground font-bold shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                title={arg0_r.description}
+              >
+                {arg0_r.name}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Layer Search & Category Filter */}
+      <div className="space-y-1.5">
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Search data layers..."
+            value={layer_search}
+            onChange={(arg0_e) => set_layer_search(arg0_e.target.value)}
+            className="w-full h-8 pl-8 pr-2.5 text-[var(--body-font-size)] bg-background border border-border text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary"
+          />
+          <Icon name="search" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm" />
+        </div>
+
+        {/* Category Pills */}
+        <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[11px] font-mono">
+          <button
+            type="button"
+            onClick={() => set_selected_category('all')}
+            className={`px-2 py-0.5 border whitespace-nowrap cursor-pointer ${selected_category === 'all'
+                ? 'bg-primary text-primary-foreground border-primary font-bold'
+                : 'bg-muted/30 border-border text-muted-foreground hover:text-foreground'
+              }`}
+          >
+            All Categories
+          </button>
+          {Object.keys(grouped_categories).map((arg0_cat) => (
+            <button
+              key={arg0_cat}
+              type="button"
+              onClick={() => set_selected_category(arg0_cat)}
+              className={`px-2 py-0.5 border whitespace-nowrap cursor-pointer ${selected_category === arg0_cat
+                  ? 'bg-primary text-primary-foreground border-primary font-bold'
+                  : 'bg-muted/30 border-border text-muted-foreground hover:text-foreground'
+                }`}
+            >
+              {arg0_cat}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Layer List Directory */}
+      <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
+        {is_loading_layers && (
+          <div className="p-4 text-center text-muted-foreground text-xs font-mono animate-pulse">
+            Streaming data layers from backend registry...
+          </div>
+        )}
+
+        {!is_loading_layers && filtered_layers.length === 0 && (
+          <div className="p-4 text-center text-muted-foreground text-xs border border-dashed border-border">
+            No matching data layers found.
+          </div>
+        )}
+
+        {filtered_layers.map((arg0_layer) => {
+          let accessible = is_layer_accessible(arg0_layer)
+          let is_exact_active = active_layer_id === arg0_layer.id
+          let is_parent_of_active = Boolean(active_layer && active_layer.parent_id === arg0_layer.id)
+          let is_highlighted = is_exact_active || is_parent_of_active
+          let years_count = arg0_layer.available_years ? arg0_layer.available_years.length : 0
+          let is_borders = arg0_layer.id === 'statistical_borders' || arg0_layer.id === 'detailed_borders' || arg0_layer.type === 'vector.polygon' || arg0_layer.id.includes('borders')
+          let is_border_dataset_match = is_borders
+            ? (historical_borders_config?.dataset === arg0_layer.id || (!historical_borders_config?.dataset && arg0_layer.id === 'statistical_borders'))
+            : false
+          let is_stadester = arg0_layer.id.includes('stadester')
+          let is_stadester_dataset_match = is_stadester
+            ? (arg0_layer.id === 'stadester' || stadester_config?.dataset === arg0_layer.id || (!stadester_config?.dataset && arg0_layer.id === 'stadester_1.1'))
+            : false
+          let is_vector_overlay = arg0_layer.type === 'vector.points' || is_stadester || is_borders
+          let is_overlay_active = is_borders
+            ? (Boolean(historical_borders_config?.enabled) && is_border_dataset_match)
+            : is_stadester
+              ? (Boolean(stadester_config?.enabled) && is_stadester_dataset_match)
+              : false
+
+          return (
+            <div
+              key={arg0_layer.id}
+              className={`border transition-all overflow-hidden ${is_highlighted || (is_vector_overlay && is_overlay_active)
+                  ? 'border-primary bg-primary/10 shadow-sm'
+                  : 'border-border bg-card/40 hover:bg-muted/40'
+                }`}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  if (accessible) {
+                    if (is_borders && on_change_historical_borders_config) {
+                      on_change_historical_borders_config((arg0_prev) => {
+                        let is_currently_active = arg0_prev.enabled && (
+                          arg0_prev.dataset === arg0_layer.id ||
+                          (!arg0_prev.dataset && arg0_layer.id === 'statistical_borders')
+                        )
+                        if (is_currently_active) {
+                          return {
+                            ...arg0_prev,
+                            enabled: false,
+                          }
+                        }
+                        return {
+                          ...arg0_prev,
+                          dataset: arg0_layer.id,
+                          enabled: true,
+                        }
+                      })
+                    } else if (is_vector_overlay && is_stadester && on_change_stadester_config) {
+                      on_change_stadester_config((arg0_prev) => ({
+                        ...arg0_prev,
+                        enabled: !arg0_prev.enabled,
+                      }))
+                    } else {
+                      on_select_layer(arg0_layer.id)
+                    }
+                  }
+                }}
+                disabled={!accessible}
+                className={`w-full p-2.5 text-left flex items-start justify-between gap-2 cursor-pointer ${!accessible ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+              >
+                <div className="flex items-start gap-2 min-w-0">
+                  <Icon
+                    name={arg0_layer.icon || (is_borders ? 'flag' : 'layers')}
+                    className={`mt-0.5 text-sm shrink-0 ${is_exact_active || (is_vector_overlay && is_overlay_active) ? 'text-primary' : 'text-muted-foreground'}`}
+                  />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-bold text-xs text-foreground truncate">{arg0_layer.name}</span>
+                      {arg0_layer.unit && (
+                        <span
+                          className="text-[10px] px-1 bg-muted text-muted-foreground border border-border font-mono truncate max-w-[130px]"
+                          title={arg0_layer.unit}
+                        >
+                          {arg0_layer.unit}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-mono mt-0.5">
+                      <span className="capitalize">{arg0_layer.type}</span>
+                      <span>•</span>
+                      <span>{years_count} keyframes</span>
+                      <span>•</span>
+                      <span>{arg0_layer.encoding}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status / Permission Lock Badge / Overlay Checkbox */}
+                <div className="shrink-0 flex items-center gap-1.5">
+                  {!accessible && (
+                    <span className="text-[10px] px-1.5 py-0.5 bg-destructive/20 text-destructive border border-destructive/40 font-mono flex items-center gap-1">
+                      <Icon name="lock" className="text-xs" />
+                      <span>RESTRICTED</span>
+                    </span>
+                  )}
+                  {is_vector_overlay ? (
+                    <label
+                      className={`flex items-center gap-1.5 cursor-pointer select-none text-[10px] font-mono px-2 py-0.5 border transition-colors ${is_overlay_active
+                          ? 'border-primary bg-primary/20 text-primary font-bold'
+                          : 'border-border bg-card text-muted-foreground hover:text-foreground'
+                        }`}
+                      onClick={(arg0_e) => arg0_e.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={is_overlay_active}
+                        onChange={() => {
+                          if (is_borders && on_change_historical_borders_config) {
+                            on_change_historical_borders_config((arg0_prev) => ({
+                              ...arg0_prev,
+                              enabled: !arg0_prev.enabled,
+                            }))
+                          } else if (is_stadester && on_change_stadester_config) {
+                            on_change_stadester_config((arg0_prev) => ({
+                              ...arg0_prev,
+                              enabled: !arg0_prev.enabled,
+                            }))
+                          }
+                        }}
+                        className="accent-primary cursor-pointer h-3.5 w-3.5"
+                      />
+                      <span>{is_overlay_active ? 'OVERLAY ON' : 'OVERLAY OFF'}</span>
+                    </label>
+                  ) : (
+                    is_exact_active && (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-primary text-primary-foreground font-bold shadow-xs">
+                        ACTIVE
+                      </span>
+                    )
+                  )}
+                </div>
+              </button>
+
+              {/* Historical Borders Inline Configuration */}
+              {is_borders && is_overlay_active && historical_borders_config && on_change_historical_borders_config && (
+                <div className="px-3 pb-3 pt-1 border-t border-border/40 bg-card/60">
+                  <HistoricalBordersSettings
+                    config={historical_borders_config}
+                    onChangeConfig={on_change_historical_borders_config}
+                  />
+                </div>
+              )}
+
+              {/* Stadestér Inline Configuration */}
+              {is_stadester && is_overlay_active && stadester_config && on_change_stadester_config && (
+                <div className="px-3 pb-3 pt-1 border-t border-border/40 bg-card/60">
+                  <StadesterSettings
+                    config={stadester_config}
+                    onChangeConfig={on_change_stadester_config}
+                    cityCount={stadester_city_count}
+                  />
+                </div>
+              )}
+
+              {/* Sub-layers (e.g. female / male in labourforce) */}
+              {arg0_layer.sub_layers && arg0_layer.sub_layers.length > 0 && (
+                <div className="px-2.5 pb-2 pt-1 border-t border-border/40 bg-card/30 flex items-center gap-1 flex-wrap">
+                  <span className="text-[10px] text-muted-foreground font-mono mr-1">Sub-indicators:</span>
+                  {arg0_layer.sub_layers.map((arg0_sub: any) => {
+                    let sub_active = active_layer_id === arg0_sub.id
+                    return (
+                      <button
+                        key={arg0_sub.id}
+                        type="button"
+                        onClick={() => on_select_layer(arg0_sub.id)}
+                        className={`text-[10px] px-1.5 py-0.5 border cursor-pointer transition-colors ${sub_active
+                            ? 'bg-primary text-primary-foreground border-primary font-bold'
+                            : 'bg-background hover:bg-muted text-foreground border-border'
+                          }`}
+                      >
+                        {arg0_sub.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Active Layer Detail & Variable Selectors */}
+      {active_layer && (
+        <div className="border border-border bg-card/50 p-2.5 space-y-2.5">
+          <div className="flex items-center justify-between border-b border-border pb-1.5">
+            <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+              <Icon name="tune" className="text-primary text-xs" />
+              <span>Layer Configuration</span>
+            </span>
+            <span className="text-[10px] text-muted-foreground font-mono">
+              ID: {active_layer.id}
+            </span>
+          </div>
+
+          {/* Description Preview */}
+          {active_layer.description && (
+            <p className="text-[11px] text-muted-foreground leading-relaxed italic bg-muted/20 p-1.5 border border-border">
+              {active_layer.description}
+            </p>
+          )}
+
+          {/* Variable Selectors (e.g. gender and profession in professions) */}
+          {active_layer.variable_selectors && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-foreground">Variable Selectors</span>
+                <button
+                  type="button"
+                  onClick={() => set_enable_all_selectors((arg0_prev) => !arg0_prev)}
+                  className={`text-[10px] px-1.5 py-0.5 border transition-colors cursor-pointer ${enable_all_selectors
+                      ? 'bg-primary text-primary-foreground border-primary font-bold'
+                      : 'bg-muted/40 text-muted-foreground border-border hover:text-foreground'
+                    }`}
+                  title="Toggle all variable selectors"
+                >
+                  Enable All Selectors
+                </button>
+              </div>
+
+              {Object.keys(active_layer.variable_selectors).map((arg0_sel_key) => {
+                let sel = active_layer.variable_selectors![arg0_sel_key]
+                let raw_val = active_variable_selectors[arg0_sel_key]
+                let selected_vals: string[] = []
+                if (Array.isArray(raw_val)) {
+                  selected_vals = raw_val
+                } else if (typeof raw_val === 'string' && raw_val.length > 0) {
+                  selected_vals = [raw_val]
+                } else if (Object.keys(sel.options)[0]) {
+                  selected_vals = [Object.keys(sel.options)[0]]
+                }
+
+                let display_label = selected_vals.map((arg0_k) => sel.options[arg0_k]?.name || arg0_k).join(', ')
+
+                return (
+                  <div key={arg0_sel_key} className="space-y-1 bg-muted/20 p-1.5 border border-border">
+                    <div className="flex justify-between text-[11px]">
+                      <span className="font-medium text-foreground">{sel.name}</span>
+                      <span className="text-primary font-mono font-bold truncate max-w-[150px]">{display_label}</span>
+                    </div>
+
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {Object.keys(sel.options).map((arg0_opt_key) => {
+                        let opt = sel.options[arg0_opt_key]
+                        let is_opt_active = selected_vals.includes(arg0_opt_key)
+
+                        return (
+                          <button
+                            key={arg0_opt_key}
+                            type="button"
+                            onClick={(arg0_e) => {
+                              let is_modifier = Boolean(arg0_e.ctrlKey || arg0_e.metaKey || arg0_e.shiftKey)
+                              let next_vals: string[]
+                              if (is_modifier) {
+                                if (is_opt_active) {
+                                  next_vals = selected_vals.filter((arg0_v) => arg0_v !== arg0_opt_key)
+                                  if (next_vals.length === 0)
+                                    next_vals = [arg0_opt_key]
+                                } else {
+                                  next_vals = [...selected_vals, arg0_opt_key]
+                                }
+                              } else {
+                                //Single-select: switch directly to clicked category
+                                next_vals = [arg0_opt_key]
+                              }
+                              on_change_variable_selector(arg0_sel_key, next_vals)
+                            }}
+                            className={`px-2 py-0.5 text-[10px] border transition-colors cursor-pointer flex items-center gap-1 ${is_opt_active
+                                ? 'bg-primary text-primary-foreground border-primary font-bold shadow-xs'
+                                : 'bg-background text-muted-foreground hover:text-foreground border-border'
+                              }`}
+                          >
+                            <span className={`w-2.5 h-2.5 border rounded-none flex items-center justify-center shrink-0 ${is_opt_active ? 'bg-primary-foreground/20 border-primary-foreground' : 'border-muted-foreground/60'
+                              }`}>
+                              {is_opt_active && <Icon name="check" className="text-[8px] text-white" />}
+                            </span>
+                            <span>{opt.name}</span>
+                            {opt.discounted && <span className="ml-0.5 opacity-60 text-[9px]">*</span>}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}

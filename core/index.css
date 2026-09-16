@@ -1,0 +1,253 @@
+@import "tailwindcss";
+@import "maplibre-gl/dist/maplibre-gl.css";
+
+/* -- Vercengen themes & shadcn adaptation -- */
+:root {
+  --navbar-height: 2rem;
+  
+  --accent-primary-colour: rgba(200, 40, 40);
+  --accent-secondary-colour: rgba(240, 60, 60);
+  --accent-tertiary-colour: rgba(255, 255, 255, 0.15);
+  --bg-primary-colour: rgba(0, 0, 0, 0.85);
+  --bg-secondary-colour: rgba(35, 35, 35);
+  --hover-colour: rgba(255, 255, 255, 0.3);
+
+  --header-colour: white;
+  --header-font-family: "Karla";
+  --header-font-size: 1rem;
+  --header-font-weight: 700;
+  --image-filter: brightness(100);
+  --monospace-font-family: "Fira Code";
+
+  --body-colour: white;
+  --body-font-family: "Karla";
+  --body-font-size: 0.85rem;
+  --body-font-weight: 300;
+
+  --cell-padding: 0.25rem;
+  --default-width: 12rem;
+  --padding: 0.5rem;
+  --ui-margin: 0.75rem;
+
+  /* -- shadcn-ui mappings -- */
+  --background: var(--bg-primary-colour);
+  --foreground: var(--body-colour);
+  --card: var(--bg-secondary-colour);
+  --card-foreground: var(--body-colour);
+  --popover: var(--bg-secondary-colour);
+  --popover-foreground: var(--body-colour);
+  --primary: var(--accent-primary-colour);
+  --primary-foreground: #ffffff;
+  --secondary: var(--accent-tertiary-colour);
+  --secondary-foreground: #ffffff;
+  --muted: rgba(255, 255, 255, 0.08);
+  --muted-foreground: rgba(255, 255, 255, 0.65);
+  --accent: var(--accent-secondary-colour);
+  --accent-foreground: #ffffff;
+  --destructive: var(--accent-primary-colour);
+  --destructive-foreground: #ffffff;
+  --border: var(--accent-tertiary-colour);
+  --input: var(--accent-tertiary-colour);
+  --ring: var(--accent-secondary-colour);
+  --toggled-on-colour: rgb(60, 150, 60);
+  --radius: 0px;
+}
+
+@theme inline {
+  --font-sans: 'Karla', sans-serif;
+  --font-mono: 'Fira Code', monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-toggled: var(--toggled-on-colour);
+}
+
+html, head, body {
+  height: 100%;
+  margin: 0px;
+  width: 100%;
+}
+
+*, ::before, ::after {
+  font-family: var(--body-font-family), sans-serif;
+  border-color: var(--border);
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--body-font-family), sans-serif;
+  font-size: var(--body-font-size);
+  font-weight: var(--body-font-weight);
+  color: var(--body-colour);
+  background-color: var(--bg-primary-colour);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--header-font-family), sans-serif;
+  font-size: var(--header-font-size);
+  font-weight: var(--header-font-weight);
+  color: var(--header-colour);
+}
+
+b, strong {
+  font-weight: 700;
+}
+
+button, input, select, textarea {
+  font-size: inherit;
+} /* -- Rem fix -- */
+
+canvas, iframe {
+  user-select: none;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  margin-left: var(--cell-padding);
+}
+
+input[type="checkbox"] {
+  width: var(--body-font-size);
+  height: var(--body-font-size);
+  min-width: var(--body-font-size);
+  min-height: var(--body-font-size);
+  margin: 0;
+  vertical-align: middle;
+}
+
+code, pre {
+  font-family: var(--monospace-font-family), monospace !important;
+}
+
+.tippy-box {
+  max-width: fit-content !important;
+}
+
+.ve.overlay {
+  pointer-events: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 100dvh;
+  width: 100dvw;
+  > div {
+    pointer-events: auto;
+  }
+}
+
+.ve.scene {
+  position: fixed;
+  height: 100dvh;
+  width: 100dvw;
+}
+
+/* -- Vercengen atomics -- */
+.ve-display-none { display: none !important; }
+[ve-searchbar="true"] {
+  align-items: center;
+  background-color: var(--bg-secondary-colour);
+  border: 1px solid var(--bg-primary-colour);
+  border-radius: 3px;
+  display: flex;
+  overflow: hidden;
+  margin-bottom: calc(var(--cell-padding) * 1.25);
+  padding: 0 var(--padding) 0 0;
+  width: 20rem;
+  
+  [component="ve-datalist"] { input { margin-left: 0 } }
+}
+
+/* Material Icons inline styling */
+icon, .material-icons, .ve-icon, [class*="material-icons"] {
+  font-family: 'Material Icons', sans-serif !important;
+  font-weight: normal;
+  font-style: normal;
+  font-size: 1rem;
+  width: 1rem;
+  height: 1rem;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  vertical-align: middle;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 0px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+/* Explicit custom scrollbar for flyout panels */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.35) rgba(0, 0, 0, 0.25);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.25);
+  border-left: 1px solid var(--border);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 0px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-secondary-colour);
+}
+
+/* Crisp pixel rendering without antialiasing / smoothing */
+canvas {
+  image-rendering: -moz-crisp-edges;
+  image-rendering: -webkit-crisp-edges;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
