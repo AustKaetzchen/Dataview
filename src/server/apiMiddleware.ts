@@ -4,7 +4,6 @@ import url from 'url'
 import type { IncomingMessage, ServerResponse } from 'http'
 import JSON5 from 'json5'
 import { loadAndParseLayers, type LayerRegistryCache, type ParsedDataLayer } from './layerParser.ts'
-import { getCountryDemographicPyramid, getCountrySectorBreakdown } from './countryBreakdown.ts'
 import {
   calculateDemographicPyramid,
   calculateSectorBreakdown,

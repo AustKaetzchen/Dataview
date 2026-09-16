@@ -477,6 +477,42 @@ export function findCountryAtLngLat (
 }
 
 /**
+ * Resolves a reliable entity display name across modern countries, CShapes polities, and Naissance territories.
+ *
+ * @param {any} arg0_feat
+ * @param {string} [arg1_fallback='']
+ *
+ * @returns {string}
+ */
+export function getFeatureEntityName (arg0_feat: any, arg1_fallback?: string): string {
+  //Convert from parameters
+  let fallback = (arg1_fallback !== undefined) ? arg1_fallback : ''
+  let feat = arg0_feat
+
+  //Guard clauses
+  if (!feat)
+    return fallback
+
+  //Declare local instance variables
+  let properties_obj = feat.properties || {}
+
+  //Return statement
+  return (
+    properties_obj.name ||
+    properties_obj.cntry_name ||
+    properties_obj.CNTRY_NAME ||
+    properties_obj.NAME ||
+    properties_obj.Country ||
+    properties_obj.country ||
+    properties_obj.adm0_a3 ||
+    properties_obj.id ||
+    properties_obj.ADMIN ||
+    properties_obj.name_long ||
+    fallback
+  )
+}
+
+/**
  * Tests whether a point [lng, lat] is inside a GeoJSON geometry.
  *
  * @param {number} arg0_lng
