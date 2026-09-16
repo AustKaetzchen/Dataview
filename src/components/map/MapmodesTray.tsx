@@ -133,21 +133,21 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (ar
   let tray_height: number
   let tray_width: number
 
-  //Function body
-  ;[is_tray_collapsed, set_is_tray_collapsed] = useState<boolean>(false)
-  ;[search_query, set_search_query] = useState<string>('')
-  ;[expanded_nodes, set_expanded_nodes] = useState<Record<string, boolean>>({
-    data_layers: true,
-    overlays: true,
-  })
-  ;[tray_width, set_tray_width] = useState<number>(() => {
-    let saved = typeof localStorage !== 'undefined' ? localStorage.getItem('dataview_mapmodes_width') : null
-    return saved ? parseInt(saved, 10) : 340
-  })
-  ;[tray_height, set_tray_height] = useState<number>(() => {
-    let saved = typeof localStorage !== 'undefined' ? localStorage.getItem('dataview_mapmodes_height') : null
-    return saved ? parseInt(saved, 10) : 520
-  })
+    //Function body
+    ;[is_tray_collapsed, set_is_tray_collapsed] = useState<boolean>(false)
+    ;[search_query, set_search_query] = useState<string>('')
+    ;[expanded_nodes, set_expanded_nodes] = useState<Record<string, boolean>>({
+      'dataset_Atlas (Historical Borders)': true,
+      overlays: true,
+    })
+    ;[tray_width, set_tray_width] = useState<number>(() => {
+      let saved = typeof localStorage !== 'undefined' ? localStorage.getItem('dataview_mapmodes_width') : null
+      return saved ? parseInt(saved, 10) : 340
+    })
+    ;[tray_height, set_tray_height] = useState<number>(() => {
+      let saved = typeof localStorage !== 'undefined' ? localStorage.getItem('dataview_mapmodes_height') : null
+      return saved ? parseInt(saved, 10) : 520
+    })
 
   handle_resize_left = function (e: React.MouseEvent) {
     e.preventDefault()
@@ -312,10 +312,10 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (ar
     return folders
   }, [filtered_layers])
 
-  //Filter overlays by search
+  //Filter overlays by search (historical_borders is already integrated into Atlas Historical Borders folder)
   filtered_overlays = useMemo(() => {
     let q = search_query.toLowerCase().trim()
-    let list = map_modes.filter((arg0_m) => arg0_m.id !== 'default')
+    let list = map_modes.filter((arg0_m) => arg0_m.id !== 'default' && arg0_m.id !== 'historical_borders')
     if (!q)
       return list
     return list.filter((arg0_m) => arg0_m.label.toLowerCase().includes(q))
@@ -371,7 +371,7 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (ar
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] px-1.5 py-0.5 bg-primary/20 text-primary border border-primary/40 font-mono font-medium">
-              {filtered_layers.length} Layers
+              {filtered_layers.length + filtered_overlays.length} Layers
             </span>
             <button
               type="button"
@@ -410,169 +410,134 @@ export const MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (ar
               )}
             </div>
 
-            {/* Nested Tree List */}
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-              {/* Branch 1: Data Layers (Base Mapmodes) */}
-              <div className="border border-border/80 bg-card/40">
-                <div
-                  onClick={() => toggle_node('data_layers')}
-                  className="flex items-center justify-between p-1.5 bg-muted/40 hover:bg-muted/70 cursor-pointer transition-colors"
-                >
-                  <div className="flex items-center gap-1.5">
-                    <Icon name="folder_open" className="text-primary text-xs" />
-                    <span className="font-bold text-xs text-foreground uppercase tracking-wide">
-                      Data Layers
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-[10px] text-muted-foreground font-mono">
-                      {filtered_layers.length}
-                    </span>
-                    <Icon
-                      name={expanded_nodes.data_layers ? 'expand_less' : 'expand_more'}
-                      className="text-xs text-muted-foreground"
-                    />
-                  </div>
+            {/* Unified Flat Tree List */}
+            <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
+              {is_loading_layers && (
+                <div className="p-2 text-center text-xs text-muted-foreground animate-pulse">
+                  Loading raster layers...
                 </div>
+              )}
+              {Object.keys(dataset_folders).length === 0 && !is_loading_layers && filtered_overlays.length === 0 && (
+                <div className="p-2 text-center text-xs text-muted-foreground">
+                  No matching layers found.
+                </div>
+              )}
 
-                {expanded_nodes.data_layers && (
-                  <div className="p-1 space-y-1">
-                    {is_loading_layers && (
-                      <div className="p-2 text-center text-xs text-muted-foreground animate-pulse">
-                        Loading raster layers...
-                      </div>
-                    )}
-                    {Object.keys(dataset_folders).length === 0 && !is_loading_layers && (
-                      <div className="p-2 text-center text-xs text-muted-foreground">
-                        No matching layers found.
-                      </div>
-                    )}
-                    {Object.entries(dataset_folders).map(([arg0_folder_name, arg0_folder_layers]) => (
-                      <DatasetFolderNode
-                        key={`dataset_${arg0_folder_name}`}
-                        activeLayerId={active_layer_id}
-                        activeVariableSelectors={active_variable_selectors}
-                        expandedNodes={expanded_nodes}
-                        folderLayers={arg0_folder_layers}
-                        folderName={arg0_folder_name}
-                        isLayerAccessible={is_layer_accessible}
-                        historicalBordersConfig={historical_borders_config}
-                        onChangeVariableSelector={on_change_variable_selector}
-                        onSelectLayer={on_select_layer}
-                        searchQuery={search_query}
-                        setHistoricalBordersConfig={set_historical_borders_config}
-                        setStadesterConfig={set_stadester_config}
-                        stadesterCityCount={stadester_city_count}
-                        stadesterConfig={stadester_config}
-                        toggleNode={toggle_node}
+              {/* Data Layer Dataset Folders (including Atlas Historical Borders) */}
+              {Object.entries(dataset_folders).map(([arg0_folder_name, arg0_folder_layers]) => (
+                <DatasetFolderNode
+                  key={`dataset_${arg0_folder_name}`}
+                  activeLayerId={active_layer_id}
+                  activeVariableSelectors={active_variable_selectors}
+                  expandedNodes={expanded_nodes}
+                  folderLayers={arg0_folder_layers}
+                  folderName={arg0_folder_name}
+                  isLayerAccessible={is_layer_accessible}
+                  historicalBordersConfig={historical_borders_config}
+                  onChangeVariableSelector={on_change_variable_selector}
+                  onSelectLayer={on_select_layer}
+                  searchQuery={search_query}
+                  setHistoricalBordersConfig={set_historical_borders_config}
+                  setStadesterConfig={set_stadester_config}
+                  stadesterCityCount={stadester_city_count}
+                  stadesterConfig={stadester_config}
+                  toggleNode={toggle_node}
+                />
+              ))}
+
+              {/* Analytical Tools (Squished directly into the main list without historical borders redundancy) */}
+              {filtered_overlays.length > 0 && (
+                <div className="border border-border/80 bg-card/40">
+                  <div
+                    onClick={() => toggle_node('overlays')}
+                    className="flex items-center justify-between p-1.5 bg-muted/40 hover:bg-muted/70 cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Icon name="build" className="text-primary text-xs" />
+                      <span className="font-bold text-xs text-foreground uppercase tracking-wide">
+                        Analytical Tools
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        {filtered_overlays.length}
+                      </span>
+                      <Icon
+                        name={expanded_nodes.overlays ? 'expand_less' : 'expand_more'}
+                        className="text-xs text-muted-foreground"
                       />
-                    ))}
+                    </div>
                   </div>
-                )}
-              </div>
 
-              {/* Branch 2: Analytical Overlays */}
-              <div className="border border-border/80 bg-card/40">
-                <div
-                  onClick={() => toggle_node('overlays')}
-                  className="flex items-center justify-between p-1.5 bg-muted/40 hover:bg-muted/70 cursor-pointer transition-colors"
-                >
-                  <div className="flex items-center gap-1.5">
-                    <Icon name="folder_open" className="text-primary text-xs" />
-                    <span className="font-bold text-xs text-foreground uppercase tracking-wide">
-                      Analytical Overlays
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-[10px] text-muted-foreground font-mono">
-                      {filtered_overlays.length}
-                    </span>
-                    <Icon
-                      name={expanded_nodes.overlays ? 'expand_less' : 'expand_more'}
-                      className="text-xs text-muted-foreground"
-                    />
-                  </div>
-                </div>
+                  {expanded_nodes.overlays && (
+                    <div className="p-1 space-y-1.5">
+                      {filtered_overlays.map((arg0_mode) => {
+                        let is_active = arg0_mode.active
 
-                {expanded_nodes.overlays && (
-                  <div className="p-1 space-y-1.5">
-                    {filtered_overlays.map((arg0_mode) => {
-                      let is_active = arg0_mode.active
-
-                      return (
-                        <div key={arg0_mode.id} className="space-y-1">
-                          <button
-                            type="button"
-                            onClick={() => on_toggle_map_mode(arg0_mode.id)}
-                            className={`w-full flex items-center justify-between px-2 py-1 text-left cursor-pointer border transition-colors ${
-                              is_active
-                                ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
-                                : 'hover:bg-muted/40 text-foreground border-transparent'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className={`w-3.5 h-3.5 rounded-none border flex items-center justify-center shrink-0 ${
-                                is_active ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/60'
-                              }`}>
-                                {is_active && <Icon name="check" className="text-[10px]" />}
+                        return (
+                          <div key={arg0_mode.id} className="space-y-1">
+                            <button
+                              type="button"
+                              onClick={() => on_toggle_map_mode(arg0_mode.id)}
+                              className={`w-full flex items-center justify-between px-2 py-1 text-left cursor-pointer border transition-colors ${is_active
+                                  ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
+                                  : 'hover:bg-muted/40 text-foreground border-transparent'
+                                }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className={`w-3.5 h-3.5 rounded-none border flex items-center justify-center shrink-0 ${is_active ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/60'
+                                  }`}>
+                                  {is_active && <Icon name="check" className="text-[10px]" />}
+                                </span>
+                                <span className="text-xs truncate">{arg0_mode.label}</span>
+                              </div>
+                              <span className="text-[10px] text-muted-foreground uppercase font-mono">
+                                {is_active ? 'ON' : 'OFF'}
                               </span>
-                              <span className="text-xs truncate">{arg0_mode.label}</span>
-                            </div>
-                            <span className="text-[10px] text-muted-foreground uppercase font-mono">
-                              {is_active ? 'ON' : 'OFF'}
-                            </span>
-                          </button>
+                            </button>
 
-                          {/* Nested Overlay Settings */}
-                          {is_active && arg0_mode.id === 'country_analysis' && (
-                            <div className="mt-0.5 p-1 border-t border-border/60 bg-card/40 space-y-1 text-xs">
-                              <CountryModeSettings
-                                allCountries={all_countries}
-                                countriesMode={countries_mode}
-                                countryStats={country_stats}
-                                isCalculatingStats={is_calculating_stats}
-                                onClearCountries={on_clear_countries}
-                                onToggleCountriesMode={on_toggle_countries_mode}
-                                onToggleCountry={on_toggle_country}
-                                selectedCountries={selected_countries}
-                              />
-                            </div>
-                          )}
+                            {/* Nested Overlay Settings */}
+                            {is_active && arg0_mode.id === 'country_analysis' && (
+                              <div className="mt-0.5 p-1 border-t border-border/60 bg-card/40 space-y-1 text-xs">
+                                <CountryModeSettings
+                                  allCountries={all_countries}
+                                  countriesMode={countries_mode}
+                                  countryStats={country_stats}
+                                  isCalculatingStats={is_calculating_stats}
+                                  onClearCountries={on_clear_countries}
+                                  onToggleCountriesMode={on_toggle_countries_mode}
+                                  onToggleCountry={on_toggle_country}
+                                  selectedCountries={selected_countries}
+                                />
+                              </div>
+                            )}
 
-                          {is_active && arg0_mode.id === 'spike_map' && (
-                            <div className="mt-0.5 p-1 border-t border-border/60 bg-card/40 space-y-1 text-xs">
-                              <SpikeMapSettings
-                                cameraTilt={camera_tilt}
-                                heightmapConfig={heightmap_config}
-                                onSetCameraTilt={on_set_camera_tilt}
-                                setHeightmapConfig={set_heightmap_config}
-                              />
-                            </div>
-                          )}
+                            {is_active && arg0_mode.id === 'spike_map' && (
+                              <div className="mt-0.5 p-1 border-t border-border/60 bg-card/40 space-y-1 text-xs">
+                                <SpikeMapSettings
+                                  cameraTilt={camera_tilt}
+                                  heightmapConfig={heightmap_config}
+                                  onSetCameraTilt={on_set_camera_tilt}
+                                  setHeightmapConfig={set_heightmap_config}
+                                />
+                              </div>
+                            )}
 
-                          {is_active && arg0_mode.id === 'circle_sizing' && (
-                            <div className="mt-0.5 p-1 border-t border-border/60 bg-card/40 space-y-1 text-xs">
-                              <CircleOverlaySettings
-                                circleOverlayConfig={circle_overlay_config}
-                                setCircleOverlayConfig={set_circle_overlay_config}
-                              />
-                            </div>
-                          )}
-
-                          {is_active && arg0_mode.id === 'historical_borders' && historical_borders_config && set_historical_borders_config && (
-                            <div className="mt-0.5 p-1 border-t border-border/60 bg-card/40 space-y-1 text-xs">
-                              <HistoricalBordersSettings
-                                config={historical_borders_config}
-                                onChangeConfig={set_historical_borders_config}
-                              />
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
+                            {is_active && arg0_mode.id === 'circle_sizing' && (
+                              <div className="mt-0.5 p-1 border-t border-border/60 bg-card/40 space-y-1 text-xs">
+                                <CircleOverlaySettings
+                                  circleOverlayConfig={circle_overlay_config}
+                                  setCircleOverlayConfig={set_circle_overlay_config}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}

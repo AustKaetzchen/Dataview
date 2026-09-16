@@ -158,8 +158,8 @@ export interface HistoricalBordersConfig {
 
 export const DEFAULT_HISTORICAL_BORDERS_CONFIG: HistoricalBordersConfig = {
   enabled: false,
-  fillOpacity: 0.0,
-  strokeColor: '#d4af37',
+  fillOpacity: 0.25,
+  strokeColor: '#ffffff',
   strokeWidth: 1.25,
 }
 

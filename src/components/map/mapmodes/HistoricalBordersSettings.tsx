@@ -9,14 +9,14 @@ export interface HistoricalBordersSettingsProps {
 }
 
 const PRESET_COLOURS = [
+  { colour: '#ffffff', label: 'White' },
+  { colour: '#000000', label: 'Black' },
   { colour: '#d4af37', label: 'Antique Gold' },
   { colour: '#f59e0b', label: 'Amber' },
   { colour: '#ef4444', label: 'Vermilion' },
   { colour: '#06b6d4', label: 'Cyan' },
   { colour: '#a855f7', label: 'Purple' },
-  { colour: '#3b82f6', label: 'Royal Blue' },
   { colour: '#10b981', label: 'Emerald' },
-  { colour: '#f8fafc', label: 'Pure White' },
 ]
 
 /**
@@ -129,7 +129,7 @@ export const HistoricalBordersSettings: React.FC<HistoricalBordersSettingsProps>
       {/* Fill Opacity Slider */}
       <div className="space-y-1">
         <div className="flex justify-between items-center text-[11px]">
-          <span className="text-muted-foreground">Territory Fill Opacity</span>
+          <span className="text-muted-foreground">Territory Fill Opacity (Polity Symbol)</span>
           <span className="font-mono text-foreground font-semibold">{Math.round(fill_opacity * 100)}%</span>
         </div>
         <Slider

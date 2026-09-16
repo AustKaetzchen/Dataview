@@ -1,6 +1,7 @@
 import { COORDINATE_SYSTEM } from '@deck.gl/core'
 import { GeoJsonLayer } from '@deck.gl/layers'
 import { transformGeometryToEqualEarth } from '@/lib/geopng/equalEarth'
+import { GlobeAntipodeCullExtension } from './layers/GlobeAntipodeCullExtension'
 import type { HistoricalBorderFeature } from '@/server/atlasBordersService'
 import type { HistoricalBordersConfig, ProjectionType } from '@/lib/geopng/types'
 
@@ -137,7 +138,14 @@ export function createHistoricalBordersDeckLayer (
         return [250, 204, 21, Math.max(fill_alpha, 55)]
       if (is_hovered)
         return [255, 255, 255, Math.max(fill_alpha, 30)]
-      return [base_rgba[0], base_rgba[1], base_rgba[2], fill_alpha]
+
+      //Use polity symbol polygonFill if defined in entity metadata
+      let polity_color = arg0_d.properties?.symbol?.polygonFill || arg0_d.properties?.symbol?.fillColor || arg0_d.properties?.fillColor || arg0_d.properties?.color
+      if (polity_color && fill_alpha > 0)
+        return parseHexToRgba(polity_color, fill_alpha)
+
+      //Default: clean black/white stroke, no random fill
+      return [0, 0, 0, 0]
     },
     updateTriggers: {
       getFillColor: [selected_id, hovered_id, stroke_color, fill_opacity],
@@ -158,6 +166,7 @@ export function createHistoricalBordersDeckLayer (
       if (on_hover)
         on_hover(arg0_info.object || null, arg0_info.x, arg0_info.y)
     },
+    extensions: [new GlobeAntipodeCullExtension()],
     parameters: {
       depthTest: false,
     },

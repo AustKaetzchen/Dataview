@@ -10,8 +10,6 @@ import { LargestCitiesChart } from './LargestCitiesChart'
 import { ParsedDataLayer } from '@/server/layerParser'
 import { Button } from '../ui/button'
 import { Icon } from '../ui/icon'
-import { HistoricalKeyframesTimeline } from './HistoricalKeyframesTimeline'
-import type { HistoricalBorderKeyframe } from '@/server/atlasBordersService'
 
 export interface AnalyticsDrawerProps {
   activeLayer?: ParsedDataLayer | null
@@ -85,7 +83,6 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_pr
   } = props
 
   //Declare local instance variables
-  let active_keyframes: HistoricalBorderKeyframe[] = []
   let active_tab: 'cities' | 'pyramid' | 'breakdown' | 'histogram' | 'stats'
   let effective_countries: CountryFeature[]
   let handle_clear: () => void
@@ -151,8 +148,6 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_pr
       : selected_country
         ? [selected_country]
         : []
-
-  active_keyframes = (effective_countries[0]?.properties?.keyframes || []) as HistoricalBorderKeyframe[]
 
   handle_clear = function () {
     if (on_clear_countries) {
@@ -314,15 +309,6 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_pr
             Clear Filter
           </button>
         </div>
-      )}
-
-      {/* Dedicated Historical Keyframes Timeline Row */}
-      {active_keyframes.length > 0 && (
-        <HistoricalKeyframesTimeline
-          currentYear={current_year}
-          keyframes={active_keyframes}
-          onJumpToYear={on_change_year}
-        />
       )}
 
       {/* Panel Body */}

@@ -67,7 +67,7 @@ export const DataLayerNode: React.FC<DataLayerNodeProps> = function (arg0_props)
 
   //Return statement
   return (
-    <div key={layer.id} className="space-y-1" style={{ paddingLeft: `${depth*12}px` }}>
+    <div key={layer.id} className="space-y-1" style={{ paddingLeft: `${depth * 12}px` }}>
       {is_vector_overlay ? (
         <div className="border border-border/70 bg-card/40 mb-1">
           <div
@@ -95,17 +95,15 @@ export const DataLayerNode: React.FC<DataLayerNodeProps> = function (arg0_props)
                 })
               }
             }}
-            className={`flex items-center justify-between px-2 py-1.5 text-left cursor-pointer border transition-colors ${
-              is_overlay_active
+            className={`flex items-center justify-between px-2 py-1.5 text-left cursor-pointer border transition-colors ${is_overlay_active
                 ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
                 : 'hover:bg-muted/40 text-foreground border-transparent'
-            }`}
+              }`}
           >
             <div className="flex items-center gap-2 min-w-0">
               <span
-                className={`w-3.5 h-3.5 rounded-none border flex items-center justify-center shrink-0 transition-colors ${
-                  is_overlay_active ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/60'
-                }`}
+                className={`w-3.5 h-3.5 rounded-none border flex items-center justify-center shrink-0 transition-colors ${is_overlay_active ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/60'
+                  }`}
               >
                 {is_overlay_active && <Icon name="check" className="text-[10px]" />}
               </span>
@@ -188,11 +186,10 @@ export const DataLayerNode: React.FC<DataLayerNodeProps> = function (arg0_props)
       ) : has_variable_selectors ? (
         <div>
           <div
-            className={`flex items-center justify-between px-2 py-1 cursor-pointer border transition-colors ${
-              is_active
+            className={`flex items-center justify-between px-2 py-1 cursor-pointer border transition-colors ${is_active
                 ? 'bg-primary/20 border-primary text-primary font-bold shadow-xs'
                 : 'bg-muted/30 hover:bg-muted/60 border-border/60 text-foreground'
-            }`}
+              }`}
           >
             <div className="flex items-center gap-1.5 min-w-0 flex-1">
               <button
@@ -204,9 +201,8 @@ export const DataLayerNode: React.FC<DataLayerNodeProps> = function (arg0_props)
                   if (!is_node_expanded)
                     toggle_node(layer.id)
                 }}
-                className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 cursor-pointer transition-colors ${
-                  is_active ? 'border-primary bg-primary' : 'border-muted-foreground/60 hover:border-primary'
-                }`}
+                className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 cursor-pointer transition-colors ${is_active ? 'border-primary bg-primary' : 'border-muted-foreground/60 hover:border-primary'
+                  }`}
                 title={`Select ${layer.name}`}
               >
                 {is_active && <span className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
@@ -340,19 +336,17 @@ export const DataLayerNode: React.FC<DataLayerNodeProps> = function (arg0_props)
                                   on_change_variable_selector(arg0_var_key, next)
                                 }
                               }}
-                              className={`flex items-center justify-between px-2 py-0.5 cursor-pointer text-xs transition-colors rounded-none ${
-                                is_opt_selected
+                              className={`flex items-center justify-between px-2 py-0.5 cursor-pointer text-xs transition-colors rounded-none ${is_opt_selected
                                   ? 'bg-primary/20 text-primary font-bold'
                                   : 'hover:bg-muted/40 text-muted-foreground hover:text-foreground'
-                              }`}
+                                }`}
                             >
                               <div className="flex items-center gap-1.5 min-w-0">
                                 <span
-                                  className={`w-3 h-3 rounded-none border flex items-center justify-center shrink-0 transition-colors ${
-                                    is_opt_selected
+                                  className={`w-3 h-3 rounded-none border flex items-center justify-center shrink-0 transition-colors ${is_opt_selected
                                       ? 'border-primary bg-primary text-primary-foreground'
                                       : 'border-muted-foreground/60'
-                                  }`}
+                                    }`}
                                 >
                                   {is_opt_selected && <Icon name="check" className="text-[9px]" />}
                                 </span>
@@ -375,17 +369,15 @@ export const DataLayerNode: React.FC<DataLayerNodeProps> = function (arg0_props)
             type="button"
             disabled={!is_accessible}
             onClick={() => on_select_layer && on_select_layer(layer.id)}
-            className={`w-full flex items-center justify-between px-2 py-1 text-left cursor-pointer border transition-colors ${
-              is_active
+            className={`w-full flex items-center justify-between px-2 py-1 text-left cursor-pointer border transition-colors ${is_active
                 ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
                 : 'hover:bg-muted/40 text-foreground border-transparent'
-            } ${!is_accessible ? 'opacity-40 cursor-not-allowed' : ''}`}
+              } ${!is_accessible ? 'opacity-40 cursor-not-allowed' : ''}`}
           >
             <div className="flex items-center gap-2 min-w-0">
               <span
-                className={`w-3 h-3 rounded-full border flex items-center justify-center shrink-0 ${
-                  is_active ? 'border-primary bg-primary' : 'border-muted-foreground/60'
-                }`}
+                className={`w-3 h-3 rounded-full border flex items-center justify-center shrink-0 ${is_active ? 'border-primary bg-primary' : 'border-muted-foreground/60'
+                  }`}
               >
                 {is_active && <span className="w-1 h-1 rounded-full bg-primary-foreground" />}
               </span>

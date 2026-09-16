@@ -148,13 +148,13 @@ export const InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = function (arg0_pr
                               (heightmap_config.heightScaleMode === 'percentile')
                                 ? ' • % height'
                                 : (heightmap_config.heightScaleMode === 'blend')
-                                  ? ` • blend (${Math.round((heightmap_config.blendWeight ?? 0.5)*100)}%)`
+                                  ? ` • blend (${Math.round((heightmap_config.blendWeight ?? 0.5) * 100)}%)`
                                   : ' • linear height'
                             let pct_str = (heightmap_config.opacityByPercentile) ? ' (pct opacity)' : ''
                             let res_str = (heightmap_config.resolutionArcmin) ? ` • ${heightmap_config.resolutionArcmin}' res` : ''
                             desc = `${Math.round(
-                              (heightmap_config.elevationScale ?? 800000)/1000
-                            )}km peak • ${Math.round((heightmap_config.opacity ?? 0.9)*100)}% opacity${pct_str}${mode_str}${res_str}`
+                              (heightmap_config.elevationScale ?? 800000) / 1000
+                            )}km peak • ${Math.round((heightmap_config.opacity ?? 0.9) * 100)}% opacity${pct_str}${mode_str}${res_str}`
                           } else if (m.id === 'circle_sizing') {
                             desc = `≥P${circle_overlay_config.percentileCutoff ?? 99} cutoff • ${(
                               circle_overlay_config.baseRadius ?? 1.0

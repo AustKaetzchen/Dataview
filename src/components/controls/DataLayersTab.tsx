@@ -69,10 +69,10 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
   let set_layer_search: React.Dispatch<React.SetStateAction<string>>
   let set_selected_category: React.Dispatch<React.SetStateAction<string>>
 
-  //Function body
-  ;[layer_search, set_layer_search] = useState('')
-  ;[selected_category, set_selected_category] = useState('all')
-  ;[enable_all_selectors, set_enable_all_selectors] = useState(false)
+    //Function body
+    ;[layer_search, set_layer_search] = useState('')
+    ;[selected_category, set_selected_category] = useState('all')
+    ;[enable_all_selectors, set_enable_all_selectors] = useState(false)
 
   handle_role_change = useCallback(
     function (arg0_role: UserRole) {
@@ -182,11 +182,10 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
                 key={arg0_r.id}
                 type="button"
                 onClick={() => handle_role_change(arg0_r.id)}
-                className={`py-1 px-1.5 text-center text-[11px] font-medium transition-colors cursor-pointer ${
-                  active
+                className={`py-1 px-1.5 text-center text-[11px] font-medium transition-colors cursor-pointer ${active
                     ? 'bg-primary text-primary-foreground font-bold shadow-xs'
                     : 'text-muted-foreground hover:text-foreground'
-                }`}
+                  }`}
                 title={arg0_r.description}
               >
                 {arg0_r.name}
@@ -214,11 +213,10 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
           <button
             type="button"
             onClick={() => set_selected_category('all')}
-            className={`px-2 py-0.5 border whitespace-nowrap cursor-pointer ${
-              selected_category === 'all'
+            className={`px-2 py-0.5 border whitespace-nowrap cursor-pointer ${selected_category === 'all'
                 ? 'bg-primary text-primary-foreground border-primary font-bold'
                 : 'bg-muted/30 border-border text-muted-foreground hover:text-foreground'
-            }`}
+              }`}
           >
             All Categories
           </button>
@@ -227,11 +225,10 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
               key={arg0_cat}
               type="button"
               onClick={() => set_selected_category(arg0_cat)}
-              className={`px-2 py-0.5 border whitespace-nowrap cursor-pointer ${
-                selected_category === arg0_cat
+              className={`px-2 py-0.5 border whitespace-nowrap cursor-pointer ${selected_category === arg0_cat
                   ? 'bg-primary text-primary-foreground border-primary font-bold'
                   : 'bg-muted/30 border-border text-muted-foreground hover:text-foreground'
-              }`}
+                }`}
             >
               {arg0_cat}
             </button>
@@ -271,11 +268,10 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
           return (
             <div
               key={arg0_layer.id}
-              className={`border transition-all overflow-hidden ${
-                is_highlighted || (is_vector_overlay && is_overlay_active)
+              className={`border transition-all overflow-hidden ${is_highlighted || (is_vector_overlay && is_overlay_active)
                   ? 'border-primary bg-primary/10 shadow-sm'
                   : 'border-border bg-card/40 hover:bg-muted/40'
-              }`}
+                }`}
             >
               <button
                 type="button"
@@ -297,9 +293,8 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
                   }
                 }}
                 disabled={!accessible}
-                className={`w-full p-2.5 text-left flex items-start justify-between gap-2 cursor-pointer ${
-                  !accessible ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
+                className={`w-full p-2.5 text-left flex items-start justify-between gap-2 cursor-pointer ${!accessible ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
               >
                 <div className="flex items-start gap-2 min-w-0">
                   <Icon
@@ -338,11 +333,10 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
                   )}
                   {is_vector_overlay ? (
                     <label
-                      className={`flex items-center gap-1.5 cursor-pointer select-none text-[10px] font-mono px-2 py-0.5 border transition-colors ${
-                        is_overlay_active
+                      className={`flex items-center gap-1.5 cursor-pointer select-none text-[10px] font-mono px-2 py-0.5 border transition-colors ${is_overlay_active
                           ? 'border-primary bg-primary/20 text-primary font-bold'
                           : 'border-border bg-card text-muted-foreground hover:text-foreground'
-                      }`}
+                        }`}
                       onClick={(arg0_e) => arg0_e.stopPropagation()}
                     >
                       <input
@@ -407,11 +401,10 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
                         key={arg0_sub.id}
                         type="button"
                         onClick={() => on_select_layer(arg0_sub.id)}
-                        className={`text-[10px] px-1.5 py-0.5 border cursor-pointer transition-colors ${
-                          sub_active
+                        className={`text-[10px] px-1.5 py-0.5 border cursor-pointer transition-colors ${sub_active
                             ? 'bg-primary text-primary-foreground border-primary font-bold'
                             : 'bg-background hover:bg-muted text-foreground border-border'
-                        }`}
+                          }`}
                       >
                         {arg0_sub.name}
                       </button>
@@ -452,11 +445,10 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
                 <button
                   type="button"
                   onClick={() => set_enable_all_selectors((arg0_prev) => !arg0_prev)}
-                  className={`text-[10px] px-1.5 py-0.5 border transition-colors cursor-pointer ${
-                    enable_all_selectors
+                  className={`text-[10px] px-1.5 py-0.5 border transition-colors cursor-pointer ${enable_all_selectors
                       ? 'bg-primary text-primary-foreground border-primary font-bold'
                       : 'bg-muted/40 text-muted-foreground border-border hover:text-foreground'
-                  }`}
+                    }`}
                   title="Toggle all variable selectors"
                 >
                   Enable All Selectors
@@ -510,15 +502,13 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
                               }
                               on_change_variable_selector(arg0_sel_key, next_vals)
                             }}
-                            className={`px-2 py-0.5 text-[10px] border transition-colors cursor-pointer flex items-center gap-1 ${
-                              is_opt_active
+                            className={`px-2 py-0.5 text-[10px] border transition-colors cursor-pointer flex items-center gap-1 ${is_opt_active
                                 ? 'bg-primary text-primary-foreground border-primary font-bold shadow-xs'
                                 : 'bg-background text-muted-foreground hover:text-foreground border-border'
-                            }`}
+                              }`}
                           >
-                            <span className={`w-2.5 h-2.5 border rounded-none flex items-center justify-center shrink-0 ${
-                              is_opt_active ? 'bg-primary-foreground/20 border-primary-foreground' : 'border-muted-foreground/60'
-                            }`}>
+                            <span className={`w-2.5 h-2.5 border rounded-none flex items-center justify-center shrink-0 ${is_opt_active ? 'bg-primary-foreground/20 border-primary-foreground' : 'border-muted-foreground/60'
+                              }`}>
                               {is_opt_active && <Icon name="check" className="text-[8px] text-white" />}
                             </span>
                             <span>{opt.name}</span>

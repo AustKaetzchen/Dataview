@@ -51,7 +51,7 @@ import { useHistoricalBorders } from './useHistoricalBorders'
 import { HistoricalBorderDetailsPanel } from './HistoricalBorderDetailsPanel'
 import type { HistoricalBorderFeature } from '@/server/atlasBordersService'
 
-let EMPTY_ARRAY: any[] = [], NOOP_FN = () => {}
+let EMPTY_ARRAY: any[] = [], NOOP_FN = () => { }
 
 export interface MapViewerProps {
   raster: DecodedRaster | null
@@ -387,7 +387,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
     EqualEarth: {
       target: [0, 0, 0],
       zoom: typeof window !== 'undefined'
-        ? Math.max(1.5, parseFloat(Math.log2((window.innerHeight*0.96) / 180).toFixed(2)))
+        ? Math.max(1.5, parseFloat(Math.log2((window.innerHeight * 0.96) / 180).toFixed(2)))
         : 2.80,
       minZoom: 0.2,
       maxZoom: 10,
@@ -422,7 +422,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
         },
       }))
     }
-    ;(window as any).__setMapZoom = (newZoom: number) => {
+    ; (window as any).__setMapZoom = (newZoom: number) => {
       set_proj_view_states((prev) => ({
         ...prev,
         [projection]: {
@@ -620,7 +620,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
 
   handle_double_click = useCallback(() => {
     let equal_earth_zoom = typeof window !== 'undefined'
-      ? Math.max(1.5, parseFloat(Math.log2((window.innerHeight*0.96) / 180).toFixed(2)))
+      ? Math.max(1.5, parseFloat(Math.log2((window.innerHeight * 0.96) / 180).toFixed(2)))
       : 2.80
     let equirect_zoom = typeof window !== 'undefined'
       ? Math.max(1.5, parseFloat(Math.log2(window.innerWidth / 360).toFixed(2)))
@@ -648,7 +648,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
       if (projection === 'Globe') {
         let bearing = next_view_state.bearing ?? 0
         let clamped_lat = Math.max(-85, Math.min(85, next_view_state.latitude ?? 0))
-        bearing = ((bearing + 180)%360 + 360)%360 - 180
+        bearing = ((bearing + 180) % 360 + 360) % 360 - 180
 
         next_view_state = {
           ...next_view_state,
@@ -935,8 +935,8 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
         onHover={handle_hover}
         onAfterRender={() => {
           if (typeof window !== 'undefined') {
-            ;(window as any).__deckRendered = true
-            ;(window as any).deck = deck_ref.current
+            ; (window as any).__deckRendered = true
+              ; (window as any).deck = deck_ref.current
           }
         }}
         getCursor={({ isHovering }) => ((isHovering) ? 'crosshair' : 'grab')}
@@ -961,7 +961,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
           anchorPos={selected_city_anchor}
           city={selected_city}
           currentYear={timeline_year || 2025}
-          onClose={on_close_city_details || (() => {})}
+          onClose={on_close_city_details || (() => { })}
         />
       )}
 
