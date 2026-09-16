@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { DecodedRaster, ScaleType } from '@/lib/geopng/types'
 import { CountryFeature, CountryStats } from '@/lib/geopng/polygonBinning'
 import { getAnalyticsPanelRightOffset, UI_LAYOUT } from '@/lib/uiLayout'
@@ -101,6 +101,12 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_pr
   )
   let right_offset = getAnalyticsPanelRightOffset(is_settings_drawer_open)
   let set_active_tab: React.Dispatch<React.SetStateAction<'cities' | 'pyramid' | 'breakdown' | 'histogram' | 'stats'>>
+  let set_stats_progress_pct: React.Dispatch<React.SetStateAction<number>>
+  let set_stats_time_remaining: React.Dispatch<React.SetStateAction<number>>
+  let stats_duration_estimate_ref = useRef<number>(1.5)
+  let stats_progress_pct: number
+  let stats_start_time_ref = useRef<number>(0)
+  let stats_time_remaining: number
 
   //Function body
   let initial_tab: 'cities' | 'pyramid' | 'breakdown' | 'histogram' | 'stats' = has_cities_chart
@@ -112,6 +118,42 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_pr
         : 'histogram'
 
   ;[active_tab, set_active_tab] = useState<'cities' | 'pyramid' | 'breakdown' | 'histogram' | 'stats'>(initial_tab)
+  ;[stats_progress_pct, set_stats_progress_pct] = useState<number>(0)
+  ;[stats_time_remaining, set_stats_time_remaining] = useState<number>(1.5)
+
+  //Track stats calculation progress and time remaining
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null
+
+    if (is_calculating_stats) {
+      stats_start_time_ref.current = performance.now()
+      set_stats_progress_pct(15)
+      set_stats_time_remaining(Math.max(0.2, Math.round(stats_duration_estimate_ref.current*10)/10))
+
+      interval = setInterval(() => {
+        let elapsed_sec = (performance.now() - stats_start_time_ref.current)/1000
+        let est = Math.max(0.6, stats_duration_estimate_ref.current)
+        let pct = Math.min(96, Math.round((1 - Math.exp(-elapsed_sec/(est*0.6)))*100))
+        let rem = Math.max(0.1, Math.round((est - elapsed_sec)*10)/10)
+
+        set_stats_progress_pct(Math.max(15, pct))
+        set_stats_time_remaining(rem)
+      }, 80)
+    } else if (stats_start_time_ref.current > 0) {
+      let actual_sec = (performance.now() - stats_start_time_ref.current)/1000
+      if (actual_sec > 0.2)
+        stats_duration_estimate_ref.current = Math.min(5.0, Math.max(0.5, stats_duration_estimate_ref.current*0.7 + actual_sec*0.3))
+
+      set_stats_progress_pct(100)
+      set_stats_time_remaining(0)
+      stats_start_time_ref.current = 0
+    }
+
+    return () => {
+      if (interval)
+        clearInterval(interval)
+    }
+  }, [is_calculating_stats])
 
   //Update active tab automatically when layer type transitions
   useEffect(() => {
@@ -295,8 +337,9 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_pr
                 : `${effective_countries[0].properties.name} (+${effective_countries.length - 1} other${effective_countries.length > 2 ? 's' : ''})`}
             </span>
             {is_calculating_stats && (
-              <span className="text-[10px] text-amber-400 font-normal ml-1 animate-pulse shrink-0">
-                (calculating stats...)
+              <span className="text-[10px] text-amber-400 font-mono ml-1.5 flex items-center gap-1.5 bg-amber-500/10 px-1.5 py-0.5 border border-amber-500/30">
+                <Icon name="sync" className="text-[10px] animate-spin" />
+                <span>Refining Calculations: {stats_progress_pct}% (~{stats_time_remaining.toFixed(1)}s)</span>
               </span>
             )}
           </div>
@@ -330,9 +373,9 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_pr
           </div>
         ) : is_calculating_stats && !country_stats ? (
           <div className="h-full flex flex-col items-center justify-center text-muted-foreground text-[var(--body-font-size)] space-y-2">
-            <div className="flex items-center gap-2 text-primary font-medium">
-              <span className="w-2 h-2 rounded-full bg-primary animate-ping" />
-              <span>Calculating country statistics...</span>
+            <div className="flex items-center gap-2 text-amber-400 font-medium font-mono text-xs">
+              <Icon name="sync" className="text-amber-400 text-sm animate-spin" />
+              <span>Refining Calculations: {stats_progress_pct}% (~{stats_time_remaining.toFixed(1)}s)</span>
             </div>
             <span className="text-[var(--body-font-size)] text-muted-foreground/70">
               Processing raster cells in background worker.

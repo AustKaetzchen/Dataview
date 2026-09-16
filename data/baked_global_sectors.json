@@ -1,0 +1,51 @@
+{
+  "700": {
+    "agriculture": 30.1,
+    "informal_labour": 5.3,
+    "manufacturing": 22.7,
+    "services": 41.9,
+    "not_in_work": 69.5
+  },
+  "1850": {
+    "agriculture": 31.3,
+    "informal_labour": 2.6,
+    "manufacturing": 24.8,
+    "services": 41.3,
+    "not_in_work": 71.8
+  },
+  "1890": {
+    "agriculture": 26.4,
+    "informal_labour": 2,
+    "manufacturing": 26.9,
+    "services": 44.8,
+    "not_in_work": 66.5
+  },
+  "1900": {
+    "agriculture": 26.3,
+    "informal_labour": 1.8,
+    "manufacturing": 26.1,
+    "services": 45.9,
+    "not_in_work": 64.6
+  },
+  "1950": {
+    "agriculture": 25.5,
+    "informal_labour": 1.5,
+    "manufacturing": 26.4,
+    "services": 46.6,
+    "not_in_work": 60.4
+  },
+  "2025": {
+    "agriculture": 17.1,
+    "informal_labour": 0.5,
+    "manufacturing": 24.5,
+    "services": 57.9,
+    "not_in_work": 45.2
+  },
+  "-6000": {
+    "agriculture": 29.6,
+    "informal_labour": 9.4,
+    "manufacturing": 23.5,
+    "services": 37.5,
+    "not_in_work": 77.3
+  }
+}

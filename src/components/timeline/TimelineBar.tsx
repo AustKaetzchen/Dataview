@@ -66,12 +66,20 @@ export const TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
   let keyframes_ref = useRef<number[]>(available_keyframes)
   let last_snap_time_ref = useRef<number>(0)
   let last_tick_ref = useRef<number>(performance.now())
+  let load_duration_estimate_ref = useRef<number>(1.8)
+  let load_start_time_ref = useRef<number>(0)
+  let loading_pct: number
+  let loading_time_remaining: number
+  let loading_visible: boolean
   let on_change_year_ref = useRef(on_change_year)
   let on_toggle_play_ref = useRef(on_toggle_play)
   let set_is_collapsed: React.Dispatch<React.SetStateAction<boolean>>
   let set_is_date_picker_open: React.Dispatch<React.SetStateAction<boolean>>
   let set_is_looping: React.Dispatch<React.SetStateAction<boolean>>
   let set_is_settings_open: React.Dispatch<React.SetStateAction<boolean>>
+  let set_loading_pct: React.Dispatch<React.SetStateAction<number>>
+  let set_loading_time_remaining: React.Dispatch<React.SetStateAction<number>>
+  let set_loading_visible: React.Dispatch<React.SetStateAction<boolean>>
   let settings_popover_ref = useRef<HTMLDivElement | null>(null)
   let slider_normalised_val: number
   let snap_ref = useRef<boolean>(snap_to_keyframes)
@@ -82,6 +90,9 @@ export const TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
   ;[is_date_picker_open, set_is_date_picker_open] = useState(false)
   ;[is_looping, set_is_looping] = useState(false)
   ;[is_settings_open, set_is_settings_open] = useState(false)
+  ;[loading_pct, set_loading_pct] = useState(0)
+  ;[loading_time_remaining, set_loading_time_remaining] = useState(1.8)
+  ;[loading_visible, set_loading_visible] = useState(false)
 
   current_year_ref.current = current_year
   is_loading_ref.current = is_loading
@@ -90,6 +101,48 @@ export const TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
   on_change_year_ref.current = on_change_year
   on_toggle_play_ref.current = on_toggle_play
   snap_ref.current = snap_to_keyframes
+
+  //Dynamic loading progress tracking and estimation
+  useEffect(() => {
+    let fade_timeout: NodeJS.Timeout | null = null
+    let interval: NodeJS.Timeout | null = null
+
+    if (is_loading) {
+      set_loading_visible(true)
+      load_start_time_ref.current = performance.now()
+      set_loading_pct(12)
+      set_loading_time_remaining(Math.max(0.2, Math.round(load_duration_estimate_ref.current*10)/10))
+
+      interval = setInterval(() => {
+        let elapsed_sec = (performance.now() - load_start_time_ref.current)/1000
+        let est_total = Math.max(0.8, load_duration_estimate_ref.current)
+        let pct = Math.min(96, Math.round((1 - Math.exp(-elapsed_sec/(est_total*0.7)))*100))
+        let rem = Math.max(0.1, Math.round((est_total - elapsed_sec)*10)/10)
+
+        set_loading_pct(Math.max(12, pct))
+        set_loading_time_remaining(rem)
+      }, 80)
+    } else if (load_start_time_ref.current > 0) {
+      let actual_sec = (performance.now() - load_start_time_ref.current)/1000
+      if (actual_sec > 0.2)
+        load_duration_estimate_ref.current = Math.min(6.0, Math.max(0.8, load_duration_estimate_ref.current*0.7 + actual_sec*0.3))
+
+      set_loading_pct(100)
+      set_loading_time_remaining(0)
+
+      fade_timeout = setTimeout(() => {
+        set_loading_visible(false)
+        load_start_time_ref.current = 0
+      }, 250)
+    }
+
+    return () => {
+      if (interval)
+        clearInterval(interval)
+      if (fade_timeout)
+        clearTimeout(fade_timeout)
+    }
+  }, [is_loading])
 
   //Close settings pop-out on click outside
   useEffect(() => {
@@ -411,11 +464,19 @@ export const TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
               )}
             </div>
 
-            {/* Loading Indicator Spinner in top left of bottombar */}
-            {is_loading && (
-              <div className="flex items-center gap-1.5 px-2 py-0.5 bg-primary/10 border border-primary/30 text-primary text-[11px] font-mono animate-pulse">
-                <Icon name="sync" className="text-xs animate-spin" />
-                <span>Loading...</span>
+            {/* Loading Indicator with Percentage and Estimated Remaining Time */}
+            {loading_visible && (
+              <div className="flex items-center gap-2 px-2.5 py-0.5 bg-primary/15 border border-primary/40 text-primary text-[11px] font-mono shadow-xs transition-opacity duration-200">
+                <Icon name="sync" className={`text-xs ${is_loading ? 'animate-spin' : ''}`} />
+                <span>
+                  {loading_pct >= 100 ? 'Raster Ready' : `Loading Raster: ${loading_pct}% (~${loading_time_remaining.toFixed(1)}s)`}
+                </span>
+                <div className="w-14 h-1.5 bg-primary/20 border border-primary/30 overflow-hidden shrink-0">
+                  <div
+                    className="h-full bg-primary transition-all duration-100 ease-out"
+                    style={{ width: `${loading_pct}%` }}
+                  />
+                </div>
               </div>
             )}
           </div>

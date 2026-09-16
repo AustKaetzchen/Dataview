@@ -323,8 +323,11 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
           let target_countries: string[] = []
 
           if (countries_str) {
-            target_countries = countries_str.split(',').map((arg0_c) => arg0_c.trim()).filter(Boolean)
-          } else if (country) {
+            target_countries = countries_str
+              .split(',')
+              .map((arg0_c) => arg0_c.trim())
+              .filter((arg0_c) => arg0_c && arg0_c.toLowerCase() !== 'global')
+          } else if (country && country.toLowerCase() !== 'global') {
             target_countries = [country]
           }
 

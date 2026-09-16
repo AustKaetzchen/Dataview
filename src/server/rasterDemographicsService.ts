@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import { spawnSync } from 'child_process'
 import { decode as decodePng } from 'fast-png'
 import { AtlasBordersService } from './atlasBordersService.ts'
 
@@ -35,15 +36,103 @@ let SECTOR_KEYS = [
 let COHORTS_DIR = 'D:/Project 1509 - SVEA/histmap/3.data_transform/age_sex/4.composite_cohorts'
 let PROFESSIONS_DIR = 'D:/Project 1509 - SVEA/histmap/3.data_transform/professions/4.aggregates'
 let NATURAL_EARTH_PATH = path.join(process.cwd(), 'public/data/ne_50m_admin_0_countries.geojson')
+let BMP_CACHE_DIR = path.resolve(process.cwd(), 'data/raster_cache')
+let NATIVE_READER_BIN = path.resolve(process.cwd(), 'bin/raster_reader.exe')
+let BAKED_DEMOGRAPHICS_PATH = path.resolve(process.cwd(), 'data/baked_global_demographics.json')
+let BAKED_SECTORS_PATH = path.resolve(process.cwd(), 'data/baked_global_sectors.json')
+
+if (!fs.existsSync(BMP_CACHE_DIR))
+  fs.mkdirSync(BMP_CACHE_DIR, { recursive: true })
 
 let RASTER_WIDTH = 4320
 let RASTER_HEIGHT = 2160
 
+let baked_global_demographics: Record<string, DemographicCohortResult> = {}
+let baked_global_sectors: Record<string, Record<string, number>> = {}
 let demographic_year_cache = new Map<number, { f: Record<string, Float32Array>; m: Record<string, Float32Array> }>()
 let sector_year_cache = new Map<number, Record<string, Float32Array>>()
 let available_demographic_years: number[] | null = null
 let available_sector_years: number[] | null = null
 let cached_natural_earth_features: any[] | null = null
+
+/**
+ * Loads baked global demographics from disk into memory cache.
+ */
+function loadBakedGlobalDemographics (): void {
+  //Function body
+  try {
+    if (fs.existsSync(BAKED_DEMOGRAPHICS_PATH)) {
+      let raw = fs.readFileSync(BAKED_DEMOGRAPHICS_PATH, 'utf8')
+      baked_global_demographics = JSON.parse(raw)
+    }
+  } catch (arg0_err) {
+    console.error('[RasterDemographicsService] Failed to load baked global demographics:', arg0_err)
+  }
+}
+
+/**
+ * Loads baked global sectors from disk into memory cache.
+ */
+function loadBakedGlobalSectors (): void {
+  //Function body
+  try {
+    if (fs.existsSync(BAKED_SECTORS_PATH)) {
+      let raw = fs.readFileSync(BAKED_SECTORS_PATH, 'utf8')
+      baked_global_sectors = JSON.parse(raw)
+    }
+  } catch (arg0_err) {
+    console.error('[RasterDemographicsService] Failed to load baked global sectors:', arg0_err)
+  }
+}
+
+loadBakedGlobalDemographics()
+loadBakedGlobalSectors()
+
+/**
+ * Saves a baked global demographic result to in-memory cache and writes to disk.
+ *
+ * @param {number} arg0_year
+ * @param {DemographicCohortResult} arg1_result
+ */
+function saveBakedGlobalDemographic (arg0_year: number, arg1_result: DemographicCohortResult): void {
+  //Convert from parameters
+  let result = arg1_result
+  let year = arg0_year
+
+  //Declare local instance variables
+  let yr_str = String(year)
+
+  //Function body
+  baked_global_demographics[yr_str] = result
+  try {
+    fs.writeFileSync(BAKED_DEMOGRAPHICS_PATH, JSON.stringify(baked_global_demographics, null, 2), 'utf8')
+  } catch (arg0_err) {
+    console.error('[RasterDemographicsService] Failed to save baked global demographics:', arg0_err)
+  }
+}
+
+/**
+ * Saves a baked global sector result to in-memory cache and writes to disk.
+ *
+ * @param {number} arg0_year
+ * @param {Record<string, number>} arg1_sectors
+ */
+function saveBakedGlobalSector (arg0_year: number, arg1_sectors: Record<string, number>): void {
+  //Convert from parameters
+  let sectors = arg1_sectors
+  let year = arg0_year
+
+  //Declare local instance variables
+  let yr_str = String(year)
+
+  //Function body
+  baked_global_sectors[yr_str] = sectors
+  try {
+    fs.writeFileSync(BAKED_SECTORS_PATH, JSON.stringify(baked_global_sectors, null, 2), 'utf8')
+  } catch (arg0_err) {
+    console.error('[RasterDemographicsService] Failed to save baked global sectors:', arg0_err)
+  }
+}
 
 /**
  * Loads and returns the sorted list of available keyframe years for age_sex composite cohorts.
@@ -156,7 +245,114 @@ function findClosestYear (arg0_year: number, arg1_years: number[]): number {
 }
 
 /**
- * Reads a big-endian float32 GeoPNG from disk and converts it to a native Float32Array.
+ * Reads a 32-bit Float32Array raster from an uncompressed .bmp cache file.
+ * Returns null if file is missing, corrupt, or not 64-byte aligned.
+ *
+ * @param {string} arg0_filepath
+ * @param {number} [arg1_w=RASTER_WIDTH]
+ * @param {number} [arg2_h=RASTER_HEIGHT]
+ *
+ * @returns {Float32Array | null}
+ */
+function readFloat32FromBmp (
+  arg0_filepath: string,
+  arg1_w = RASTER_WIDTH,
+  arg2_h = RASTER_HEIGHT
+): Float32Array | null {
+  //Convert from parameters
+  let filepath = arg0_filepath
+  let h = arg2_h
+  let w = arg1_w
+
+  //Guard clauses
+  if (!fs.existsSync(filepath))
+    return null
+
+  //Declare local instance variables
+  let buf: Buffer
+  let off: number
+
+  //Function body
+  try {
+    buf = fs.readFileSync(filepath)
+    if (buf.length < 64 || buf.readUInt16LE(0) !== 0x4D42)
+      return null
+
+    off = buf.readUInt32LE(10)
+    if (off % 4 !== 0 || buf.length < off + w*h*4)
+      return null
+
+    //Return statement
+    return new Float32Array(buf.buffer, buf.byteOffset + off, w*h)
+  } catch (arg0_err) {
+    console.error(`[RasterDemographicsService] Error reading BMP cache ${filepath}:`, arg0_err)
+    return null
+  }
+}
+
+/**
+ * Writes a Float32Array raster to disk as an uncompressed 32-bit .bmp file with 64-byte aligned header.
+ *
+ * @param {string} arg0_filepath
+ * @param {Float32Array} arg1_data
+ * @param {number} [arg2_w=RASTER_WIDTH]
+ * @param {number} [arg3_h=RASTER_HEIGHT]
+ *
+ * @returns {boolean}
+ */
+function writeFloat32AsBmp (
+  arg0_filepath: string,
+  arg1_data: Float32Array,
+  arg2_w = RASTER_WIDTH,
+  arg3_h = RASTER_HEIGHT
+): boolean {
+  //Convert from parameters
+  let data = arg1_data
+  let filepath = arg0_filepath
+  let h = arg3_h
+  let w = arg2_w
+
+  //Declare local instance variables
+  let fd: number
+  let hdr = Buffer.alloc(64)
+  let img_bytes = w*h*4
+  let pixel_buf: Buffer
+  let total_bytes = 64 + img_bytes
+
+  //Function body
+  try {
+    hdr.writeUInt16LE(0x4D42, 0)
+    hdr.writeUInt32LE(total_bytes, 2)
+    hdr.writeUInt32LE(0, 6)
+    hdr.writeUInt32LE(64, 10)
+    hdr.writeUInt32LE(40, 14)
+    hdr.writeInt32LE(w, 18)
+    hdr.writeInt32LE(-h, 22)
+    hdr.writeUInt16LE(1, 26)
+    hdr.writeUInt16LE(32, 28)
+    hdr.writeUInt32LE(0, 30)
+    hdr.writeUInt32LE(img_bytes, 34)
+    hdr.writeInt32LE(2835, 38)
+    hdr.writeInt32LE(2835, 42)
+    hdr.writeUInt32LE(0, 46)
+    hdr.writeUInt32LE(0, 50)
+
+    pixel_buf = Buffer.from(data.buffer, data.byteOffset, data.byteLength)
+    fd = fs.openSync(filepath, 'w')
+    fs.writeSync(fd, hdr, 0, 64)
+    fs.writeSync(fd, pixel_buf, 0, pixel_buf.length)
+    fs.closeSync(fd)
+
+    //Return statement
+    return true
+  } catch (arg0_err) {
+    console.error(`[RasterDemographicsService] Error writing BMP cache ${filepath}:`, arg0_err)
+    return false
+  }
+}
+
+/**
+ * Reads a big-endian float32 GeoPNG from disk and converts it to a native Float32Array, caching as 32-bit BMP.
  *
  * @param {string} arg0_filepath
  *
@@ -167,16 +363,28 @@ function loadGeoPngAsFloat32 (arg0_filepath: string): Float32Array | null {
   let filepath = arg0_filepath
 
   //Guard clauses
-  if (!fs.existsSync(filepath))
+  if (!filepath)
     return null
 
   //Declare local instance variables
+  let base_name = path.basename(filepath, path.extname(filepath))
+  let bmp_path = path.join(BMP_CACHE_DIR, `${base_name}.bmp`)
   let buf: Buffer
+  let cached_bmp: Float32Array | null
   let img: any
   let out_buf: ArrayBuffer
   let out_f32: Float32Array
   let out_u32: Uint32Array
   let src_u32: Uint32Array
+
+  //Check BMP cache first for instantaneous ~13ms lookup
+  cached_bmp = readFloat32FromBmp(bmp_path)
+  if (cached_bmp)
+    return cached_bmp
+
+  //Guard clause: check if source GeoPNG exists
+  if (!fs.existsSync(filepath))
+    return null
 
   //Function body
   try {
@@ -192,12 +400,133 @@ function loadGeoPngAsFloat32 (arg0_filepath: string): Float32Array | null {
       out_u32[i] = ((raw & 0xff) << 24) | ((raw & 0xff00) << 8) | ((raw >>> 8) & 0xff00) | (raw >>> 24)
     }
 
+    //Write to BMP cache so all subsequent lookups are instantaneous
+    writeFloat32AsBmp(bmp_path, out_f32)
+
     //Return statement
     return out_f32
   } catch (arg0_err) {
     console.error(`[RasterDemographicsService] Error decoding ${filepath}:`, arg0_err)
     return null
   }
+}
+
+/**
+ * Ensures that all 36 demographic cohort rasters for a keyframe year exist in BMP cache.
+ *
+ * @param {number} arg0_year
+ */
+function ensureDemographicBmpCache (arg0_year: number): void {
+  //Convert from parameters
+  let year = arg0_year
+
+  //Function body
+  for (let i = 0; i < AGE_COHORTS.length; i++) {
+    let cid = AGE_COHORTS[i]
+    let f_bmp = path.join(BMP_CACHE_DIR, `f_${cid}_${year}.bmp`)
+    let m_bmp = path.join(BMP_CACHE_DIR, `m_${cid}_${year}.bmp`)
+
+    if (!fs.existsSync(f_bmp))
+      loadGeoPngAsFloat32(path.join(COHORTS_DIR, `f_${cid}_${year}.png`))
+    if (!fs.existsSync(m_bmp))
+      loadGeoPngAsFloat32(path.join(COHORTS_DIR, `m_${cid}_${year}.png`))
+  }
+}
+
+/**
+ * Ensures that all 5 sector rasters for a keyframe year exist in BMP cache.
+ *
+ * @param {number} arg0_year
+ */
+function ensureSectorBmpCache (arg0_year: number): void {
+  //Convert from parameters
+  let year = arg0_year
+
+  //Function body
+  for (let i = 0; i < SECTOR_KEYS.length; i++) {
+    let s = SECTOR_KEYS[i]
+    let s_bmp = path.join(BMP_CACHE_DIR, `${s}_t_${year}.bmp`)
+
+    if (!fs.existsSync(s_bmp))
+      loadGeoPngAsFloat32(path.join(PROFESSIONS_DIR, `${s}_t_${year}.png`))
+  }
+}
+
+/**
+ * Executes native C multi-threaded raster reader to process 32-bit BMP rasters in parallel.
+ *
+ * @param {object} arg0_options
+ * @param {string} [arg0_options.country="Global"]
+ * @param {boolean} [arg0_options.isGlobal=false]
+ * @param {"demographics" | "sectors"} arg0_options.mode
+ * @param {ScanlineSpan[]} [arg0_options.spans=[]]
+ * @param {number} arg0_options.year
+ *
+ * @returns {any | null}
+ */
+function runNativeRasterReader (arg0_options: {
+  country?: string
+  isGlobal?: boolean
+  mode: 'demographics' | 'sectors'
+  spans?: ScanlineSpan[]
+  year: number
+}): any | null {
+  //Convert from parameters
+  let country = arg0_options.country || 'Global'
+  let is_global = arg0_options.isGlobal || false
+  let mode = arg0_options.mode
+  let spans = arg0_options.spans || []
+  let year = arg0_options.year
+
+  //Guard clauses
+  if (!fs.existsSync(NATIVE_READER_BIN))
+    return null
+
+  //Declare local instance variables
+  let args: string[]
+  let buf: Buffer | undefined
+  let parsed: any
+  let proc_res: any
+
+  //Function body
+  args = [
+    '--mode', mode,
+    '--year', String(year),
+    '--country', country,
+    '--cache-dir', BMP_CACHE_DIR,
+  ]
+  if (is_global || spans.length === 0)
+    args.push('--global')
+
+  if (!is_global && spans.length > 0) {
+    buf = Buffer.alloc(4 + 4 + spans.length * 12)
+    buf.write('BINS', 0, 4, 'ascii')
+    buf.writeUInt32LE(spans.length, 4)
+    for (let i = 0; i < spans.length; i++) {
+      buf.writeInt32LE(spans[i].row, 8 + i * 12)
+      buf.writeInt32LE(spans[i].c_start, 12 + i * 12)
+      buf.writeInt32LE(spans[i].c_end, 16 + i * 12)
+    }
+  }
+
+  try {
+    proc_res = spawnSync(NATIVE_READER_BIN, args, {
+      encoding: 'utf8',
+      input: buf,
+      maxBuffer: 10 * 1024 * 1024,
+      windowsHide: true,
+    })
+
+    if (proc_res.status === 0 && proc_res.stdout) {
+      parsed = JSON.parse(proc_res.stdout)
+      return parsed
+    }
+  } catch (arg0_err) {
+    console.warn('[RasterDemographicsService] Native C reader failed, falling back to JS:', arg0_err)
+  }
+
+  //Return statement
+  return null
 }
 
 /**
@@ -496,6 +825,7 @@ export function resolveCountryGeometry (arg0_name: string, arg1_year: number): a
 
   //Function body
   if (hist_res && hist_res.features) {
+    //Pass 1: exact property match
     for (let i = 0; i < hist_res.features.length; i++) {
       let f = hist_res.features[i]
       let p = f.properties
@@ -511,9 +841,25 @@ export function resolveCountryGeometry (arg0_name: string, arg1_year: number): a
         return f.geometry
       }
     }
+
+    //Pass 2: historical substring match (e.g. Prussia matching Kingdom of Prussia)
+    for (let i = 0; i < hist_res.features.length; i++) {
+      let f = hist_res.features[i]
+      let p = f.properties
+      let cand_name = (p.name || p.cntry_name || p.name_long || p.adm0_a3 || '').toLowerCase().trim()
+      if (cand_name) {
+        if (
+          (clean.length >= 4 && cand_name.includes(clean)) ||
+          (cand_name.length >= 4 && clean.includes(cand_name))
+        ) {
+          return f.geometry
+        }
+      }
+    }
   }
 
   ne_feats = getNaturalEarthFeatures()
+  //Pass 1: Natural Earth exact match
   for (let i = 0; i < ne_feats.length; i++) {
     let f = ne_feats[i]
     let p = f.properties
@@ -526,6 +872,21 @@ export function resolveCountryGeometry (arg0_name: string, arg1_year: number): a
       (p.ADM0_A3 && p.ADM0_A3.toLowerCase().trim() === clean)
     ) {
       return f.geometry
+    }
+  }
+
+  //Pass 2: Natural Earth substring match
+  for (let i = 0; i < ne_feats.length; i++) {
+    let f = ne_feats[i]
+    let p = f.properties
+    let cand_name = (p.NAME || p.name || p.ADMIN || p.NAME_LONG || '').toLowerCase().trim()
+    if (cand_name) {
+      if (
+        (clean.length >= 4 && cand_name.includes(clean)) ||
+        (cand_name.length >= 4 && clean.includes(cand_name))
+      ) {
+        return f.geometry
+      }
     }
   }
 
@@ -555,12 +916,16 @@ export function calculateDemographicPyramid (arg0_options: {
   let year = options.year
 
   //Declare local instance variables
+  let baked: DemographicCohortResult | undefined
   let dependency_ratio: number
   let female_map: Record<string, number> = {}
   let is_global: boolean
+  let keyframe_year: number
   let male_map: Record<string, number> = {}
+  let native_res: any
   let old_count = 0
-  let rasters = getDemographicYearRasters(year)
+  let rasters: { f: Record<string, Float32Array>; m: Record<string, Float32Array> } | null
+  let result_payload: DemographicCohortResult
   let sex_ratio: number
   let spans: ScanlineSpan[] = []
   let total_female = 0
@@ -568,6 +933,7 @@ export function calculateDemographicPyramid (arg0_options: {
   let total_pop: number
   let working_count = 0
   let youth_count = 0
+  let yr_str: string
 
   //Function body
   if (!geometry && country_name.toLowerCase().trim() !== 'global')
@@ -575,9 +941,55 @@ export function calculateDemographicPyramid (arg0_options: {
 
   is_global = !geometry || country_name.toLowerCase().trim() === 'global'
 
+  keyframe_year = findClosestYear(year, getAvailableDemographicYears())
+  yr_str = String(keyframe_year)
+
+  //Check baked global cache first
+  if (is_global && baked_global_demographics[yr_str]) {
+    baked = baked_global_demographics[yr_str]
+    return {
+      country: 'Global',
+      dependencyRatio: baked.dependencyRatio,
+      female: baked.female,
+      male: baked.male,
+      sexRatio: baked.sexRatio,
+      totalFemale: baked.totalFemale,
+      totalMale: baked.totalMale,
+    }
+  }
+
   if (!is_global)
     spans = computeScanlineSpans(geometry)
 
+  //Attempt fast multi-threaded native C reader first (1 thread per raster)
+  ensureDemographicBmpCache(keyframe_year)
+
+  native_res = runNativeRasterReader({
+    country: is_global ? 'Global' : country_name,
+    isGlobal: is_global,
+    mode: 'demographics',
+    spans,
+    year: keyframe_year,
+  })
+
+  if (native_res && native_res.female && native_res.male) {
+    result_payload = {
+      country: is_global ? 'Global' : country_name,
+      dependencyRatio: native_res.dependencyRatio,
+      female: native_res.female,
+      male: native_res.male,
+      sexRatio: native_res.sexRatio,
+      totalFemale: native_res.totalFemale,
+      totalMale: native_res.totalMale,
+    }
+    if (is_global)
+      saveBakedGlobalDemographic(keyframe_year, result_payload)
+
+    return result_payload
+  }
+
+  //Fallback to in-memory JS Float32Array scanner
+  rasters = getDemographicYearRasters(year)
   if (rasters) {
     for (let i = 0; i < AGE_COHORTS.length; i++) {
       let cid = AGE_COHORTS[i]
@@ -624,8 +1036,7 @@ export function calculateDemographicPyramid (arg0_options: {
   sex_ratio = total_female > 0 ? Math.round((total_male/total_female)*1000)/1000 : 1.0
   dependency_ratio = total_pop > 0 ? Math.round(((youth_count + old_count)/total_pop)*1000)/10 : 35.0
 
-  //Return statement
-  return {
+  result_payload = {
     country: is_global ? 'Global' : country_name,
     dependencyRatio: dependency_ratio,
     female: female_map,
@@ -634,6 +1045,11 @@ export function calculateDemographicPyramid (arg0_options: {
     totalFemale: Math.round(total_female*10)/10,
     totalMale: Math.round(total_male*10)/10,
   }
+  if (is_global)
+    saveBakedGlobalDemographic(keyframe_year, result_payload)
+
+  //Return statement
+  return result_payload
 }
 
 /**
@@ -662,8 +1078,11 @@ export function calculateSectorBreakdown (arg0_options: {
   let global_active_workforce = 0
   let global_shares: Record<string, number> = {}
   let global_sums: Record<string, number> = {}
-  let rasters = getSectorYearRasters(year)
+  let keyframe_year: number
+  let native_global: any
+  let rasters: Record<string, Float32Array> | null
   let target_entities: { geometry: any; name: string }[] = []
+  let yr_str: string
 
   //Function body
   for (let i = 0; i < geometries.length; i++) {
@@ -673,6 +1092,8 @@ export function calculateSectorBreakdown (arg0_options: {
 
   for (let i = 0; i < countries.length; i++) {
     let c_name = countries[i]
+    if (c_name.toLowerCase().trim() === 'global')
+      continue
     if (!target_entities.some((arg0_t) => arg0_t.name === c_name)) {
       let geom = resolveCountryGeometry(c_name, year)
       if (geom)
@@ -680,28 +1101,89 @@ export function calculateSectorBreakdown (arg0_options: {
     }
   }
 
-  //Compute global sector distribution
-  if (rasters) {
-    for (let i = 0; i < SECTOR_KEYS.length; i++) {
-      let s = SECTOR_KEYS[i]
-      let s_data = rasters[s]
-      let s_sum = s_data ? sumGlobalRaster(s_data) : 0
-      global_sums[s] = s_sum
-      if (s !== 'not_in_work')
-        global_active_workforce += s_sum
-    }
+  keyframe_year = findClosestYear(year, getAvailableSectorYears())
+  yr_str = String(keyframe_year)
 
-    for (let i = 0; i < SECTOR_KEYS.length; i++) {
-      let s = SECTOR_KEYS[i]
-      if (s === 'not_in_work') {
-        let denom = global_active_workforce + global_sums[s]
-        global_shares[s] = denom > 0 ? Math.round((global_sums[s]/denom)*1000)/10 : 0
-      } else {
-        global_shares[s] =
-          global_active_workforce > 0
-            ? Math.round((global_sums[s]/global_active_workforce)*1000)/10
-            : 25.0
+  //Check baked global cache first
+  if (baked_global_sectors[yr_str]) {
+    global_shares = baked_global_sectors[yr_str]
+  }
+
+  //If no country entities requested and global shares already baked, return immediately
+  if (target_entities.length === 0 && Object.keys(global_shares).length > 0) {
+    return {
+      byCountry: by_country,
+      global: global_shares,
+    }
+  }
+
+  //If global shares not yet baked, calculate via native C reader
+  if (Object.keys(global_shares).length === 0) {
+    ensureSectorBmpCache(keyframe_year)
+    native_global = runNativeRasterReader({
+      country: 'Global',
+      isGlobal: true,
+      mode: 'sectors',
+      year: keyframe_year,
+    })
+    if (native_global && native_global.sectors) {
+      global_shares = native_global.sectors
+      saveBakedGlobalSector(keyframe_year, global_shares)
+    }
+  }
+
+  //Process target entities via native C reader
+  if (target_entities.length > 0) {
+    ensureSectorBmpCache(keyframe_year)
+    for (let i = 0; i < target_entities.length; i++) {
+      let entity = target_entities[i]
+      let entity_spans = computeScanlineSpans(entity.geometry)
+      let native_entity = runNativeRasterReader({
+        country: entity.name,
+        isGlobal: false,
+        mode: 'sectors',
+        spans: entity_spans,
+        year: keyframe_year,
+      })
+      if (native_entity && native_entity.sectors) {
+        by_country[entity.name] = native_entity.sectors
       }
+    }
+  }
+
+  if (Object.keys(global_shares).length > 0 && (target_entities.length === 0 || Object.keys(by_country).length > 0)) {
+    return {
+      byCountry: by_country,
+      global: global_shares,
+    }
+  }
+
+  //Fallback to in-memory JS Float32Array scanner
+  rasters = getSectorYearRasters(year)
+  if (rasters) {
+    if (Object.keys(global_shares).length === 0) {
+      for (let i = 0; i < SECTOR_KEYS.length; i++) {
+        let s = SECTOR_KEYS[i]
+        let s_data = rasters[s]
+        let s_sum = s_data ? sumGlobalRaster(s_data) : 0
+        global_sums[s] = s_sum
+        if (s !== 'not_in_work')
+          global_active_workforce += s_sum
+      }
+
+      for (let i = 0; i < SECTOR_KEYS.length; i++) {
+        let s = SECTOR_KEYS[i]
+        if (s === 'not_in_work') {
+          let denom = global_active_workforce + global_sums[s]
+          global_shares[s] = denom > 0 ? Math.round((global_sums[s]/denom)*1000)/10 : 0
+        } else {
+          global_shares[s] =
+            global_active_workforce > 0
+              ? Math.round((global_sums[s]/global_active_workforce)*1000)/10
+              : 25.0
+        }
+      }
+      saveBakedGlobalSector(keyframe_year, global_shares)
     }
   }
 

@@ -181,7 +181,39 @@ export function getHistoricalPopulationThousands (arg0_country: string, arg1_yea
   let growth_ratio = 1.0
 
   //Function body
-  base_2025 = COUNTRY_POP_2025_THOUSANDS[country]
+  //Resolve historical and alternate names to modern population anchors
+  if (country.includes('prussia') || country.includes('weimar') || country.includes('german') || country.includes('reich')) {
+    base_2025 = 84000
+  } else if (country.includes('austria') || country.includes('habsburg') || country.includes('holy roman')) {
+    base_2025 = 35000
+  } else if (country.includes('russia') || country.includes('soviet') || country.includes('ussr') || country.includes('muscovy')) {
+    base_2025 = 144000
+  } else if (country.includes('ottoman') || country.includes('turkey') || country.includes('byzant')) {
+    base_2025 = 85000
+  } else if (country.includes('brit') || country.includes('england') || country.includes('scotland')) {
+    base_2025 = 67000
+  } else if (country.includes('france') || country.includes('gaul') || country.includes('frank')) {
+    base_2025 = 68000
+  } else if (country.includes('china') || country.includes('qing') || country.includes('ming') || country.includes('han') || country.includes('tang') || country.includes('song')) {
+    base_2025 = 1410000
+  } else if (country.includes('india') || country.includes('mughal') || country.includes('maratha') || country.includes('delhi')) {
+    base_2025 = 1430000
+  } else if (country.includes('roman') || country.includes('italy') || country.includes('venice') || country.includes('florence') || country.includes('papal')) {
+    base_2025 = 59000
+  } else if (country.includes('spain') || country.includes('castile') || country.includes('aragon')) {
+    base_2025 = 48000
+  } else if (country.includes('poland') || country.includes('lithuania') || country.includes('commonwealth')) {
+    base_2025 = 45000
+  } else if (country.includes('persia') || country.includes('iran') || country.includes('safavid')) {
+    base_2025 = 89000
+  } else if (country.includes('japan') || country.includes('tokugawa') || country.includes('edo') || country.includes('meiji')) {
+    base_2025 = 124000
+  } else if (country.includes('egypt') || country.includes('mamluk') || country.includes('ptolemaic')) {
+    base_2025 = 112000
+  } else {
+    base_2025 = COUNTRY_POP_2025_THOUSANDS[country]
+  }
+
   if (!base_2025) {
     let hash = 0
     for (let i = 0; i < country.length; i++)
@@ -302,8 +334,17 @@ export function getCountryDemographicPyramid (
   let cohort_densities: number[] = []
   let dependency_ratio: number
   let female_map: Record<string, number> = {}
+  let get_country_hash: (arg0_str: string) => number
+  let h: number
+  let is_developing: boolean
+  let is_high_fertility: boolean
+  let is_mature: boolean
+  let is_super_aged: boolean
+  let is_transition: boolean
+  let life_exp_mod: number
   let male_map: Record<string, number> = {}
   let old_dep_count = 0
+  let sex_bias_mod: number
   let sex_ratio: number
   let sum_unnormalised = 0
   let total_female = 0
@@ -313,11 +354,32 @@ export function getCountryDemographicPyramid (
   let working_count = 0
   let youth_dep_count = 0
 
-  //Determine country archetype
-  let is_high_fertility = HIGH_FERTILITY_COUNTRIES.has(clean_name)
-  let is_mature = MATURE_WESTERN_COUNTRIES.has(clean_name)
-  let is_super_aged = SUPER_AGED_COUNTRIES.has(clean_name)
-  let is_transition = TRANSITION_EMERGING_COUNTRIES.has(clean_name)
+  get_country_hash = function (arg0_str: string): number {
+    let hash = 0
+    for (let x = 0; x < arg0_str.length; x++) {
+      hash = ((hash << 5) - hash) + arg0_str.charCodeAt(x)
+      hash |= 0
+    }
+    return Math.abs(hash)
+  }
+
+  h = get_country_hash(clean_name)
+  sex_bias_mod = clean_name !== 'global' ? (((h >> 4) % 21)/20 - 0.5)*0.05 : 0
+  life_exp_mod = clean_name !== 'global' ? (((h >> 8) % 21)/20 - 0.5)*4.0 : 0
+
+  //Determine country archetype with historical border and keyword matching
+  is_high_fertility = HIGH_FERTILITY_COUNTRIES.has(clean_name) ||
+    clean_name.includes('africa') || clean_name.includes('congo') || clean_name.includes('sudan')
+  is_mature = MATURE_WESTERN_COUNTRIES.has(clean_name) ||
+    clean_name.includes('prussia') || clean_name.includes('brit') || clean_name.includes('france') ||
+    clean_name.includes('gaul') || clean_name.includes('habsburg') || clean_name.includes('roman')
+  is_super_aged = SUPER_AGED_COUNTRIES.has(clean_name) ||
+    clean_name.includes('germany') || clean_name.includes('japan') || clean_name.includes('italy')
+  is_transition = TRANSITION_EMERGING_COUNTRIES.has(clean_name) ||
+    clean_name.includes('russia') || clean_name.includes('soviet') || clean_name.includes('china') ||
+    clean_name.includes('qing') || clean_name.includes('ming') || clean_name.includes('ottoman')
+  is_developing = DEVELOPING_DIVIDEND_COUNTRIES.has(clean_name) ||
+    clean_name.includes('india') || clean_name.includes('mughal') || clean_name.includes('persia')
 
   //Function body
   try {
@@ -330,35 +392,36 @@ export function getCountryDemographicPyramid (
 
   total_pop_thousands = getHistoricalPopulationThousands(clean_name, year)
 
-  for (let i = 0; i < AGE_IDS.length; i++) {
+  for (let i = 0; i < AGE_COHORTS.length; i++) {
     let age = COHORT_MID_AGES[i]
     let annual_density = 1.0
     let cohort_w = COHORT_WIDTHS[i]
 
     if (year <= 1850) {
-      annual_density = Math.exp(-age/32)
+      let life_exp = Math.max(26, 32 + life_exp_mod*0.6)
+      annual_density = Math.exp(-age/life_exp)
     } else if (is_super_aged && year >= 1990) {
       let birth_decline = Math.min(0.65, 0.45 + (year - 1990)*0.007)
       let youth_curve = 1 - birth_decline*Math.exp(-Math.pow(age/24, 2))
       let bulge = 1 + 0.35*Math.exp(-Math.pow((age - 52)/14, 2))
-      let survival = Math.exp(-Math.pow(age/84, 5.5))
+      let survival = Math.exp(-Math.pow(age/(84 + life_exp_mod*0.5), 5.5))
       annual_density = youth_curve*bulge*survival
     } else if (is_mature && year >= 1970) {
       let birth_factor = 0.85 - 0.15*Math.exp(-Math.pow(age/22, 2))
       let bulge = 1 + 0.25*Math.exp(-Math.pow((age - 48)/16, 2))
-      let survival = Math.exp(-Math.pow(age/82, 5.0))
+      let survival = Math.exp(-Math.pow(age/(82 + life_exp_mod*0.5), 5.0))
       annual_density = birth_factor*bulge*survival
     } else if (is_transition && year >= 1990) {
       let birth_factor = 0.70 - 0.30*Math.exp(-Math.pow(age/20, 2))
       let bulge = 1 + 0.30*Math.exp(-Math.pow((age - 38)/15, 2))
-      let survival = Math.exp(-Math.pow(age/78, 4.5))
+      let survival = Math.exp(-Math.pow(age/(78 + life_exp_mod*0.5), 4.5))
       annual_density = birth_factor*bulge*survival
     } else if (is_high_fertility) {
-      let life_exp = year >= 1980 ? 46 : 38
+      let life_exp = (year >= 1980 ? 46 : 38) + life_exp_mod*0.4
       annual_density = Math.exp(-age/life_exp)
     } else {
       let t_progress = Math.min(1, Math.max(0, (year - 1950)/75))
-      let life_exp = 38 + t_progress*34
+      let life_exp = 38 + t_progress*34 + life_exp_mod
       let youth_factor = 1.0 - t_progress*0.25*Math.exp(-Math.pow(age/22, 2))
       let survival = Math.exp(-Math.pow(age/life_exp, 3.8))
       annual_density = youth_factor*survival
@@ -369,15 +432,15 @@ export function getCountryDemographicPyramid (
     sum_unnormalised += density_val
   }
 
-  for (let i = 0; i < AGE_IDS.length; i++) {
+  for (let i = 0; i < AGE_COHORTS.length; i++) {
     let age = COHORT_MID_AGES[i]
-    let cid = AGE_IDS[i]
+    let cid = AGE_COHORTS[i]
     let cohort_inhabitants = sum_unnormalised > 0
       ? (cohort_densities[i] / sum_unnormalised)*total_pop_thousands
-      : (total_pop_thousands / AGE_IDS.length)
+      : (total_pop_thousands / AGE_COHORTS.length)
     let f_val: number
     let m_val: number
-    let sex_bias = 1.05 - (age/90)*0.25
+    let sex_bias = 1.05 - (age/90)*0.25 + sex_bias_mod
 
     m_val = Math.max(0.1, cohort_inhabitants*(sex_bias/(1 + sex_bias)))
     f_val = Math.max(0.1, cohort_inhabitants*(1/(1 + sex_bias)))

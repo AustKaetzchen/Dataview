@@ -4,6 +4,7 @@ import { DecodedRaster } from '@/lib/geopng/types'
 import { CountryFeature, CountryStats } from '@/lib/geopng/polygonBinning'
 import { Icon } from '@/components/ui/icon'
 import { formatLegendValue } from '@/components/map/ColorBarLegend'
+import { computeSyntheticDemographicPyramid } from '@/lib/raster/syntheticDemographics'
 
 export interface PopulationPyramidChartProps {
   activeVariableSelectors?: Record<string, string | string[]>
@@ -50,6 +51,37 @@ export const AGE_COHORTS: AgeCohortItem[] = [
 ]
 
 /**
+ * Resolves a reliable entity display name across modern countries, CShapes polities, and Naissance territories.
+ *
+ * @param {any} arg0_feat
+ *
+ * @returns {string}
+ */
+export function getFeatureEntityName (arg0_feat: any): string {
+  //Guard clauses
+  if (!arg0_feat)
+    return 'Global'
+
+  //Declare local instance variables
+  let p = arg0_feat.properties || {}
+
+  //Return statement
+  return (
+    p.name ||
+    p.cntry_name ||
+    p.CNTRY_NAME ||
+    p.NAME ||
+    p.Country ||
+    p.country ||
+    p.adm0_a3 ||
+    p.id ||
+    arg0_feat.name ||
+    arg0_feat.id ||
+    'Historical Territory'
+  )
+}
+
+/**
  * PopulationPyramidChart renders bidirectional population pyramids with support for
  * individual country analysis and country switching.
  *
@@ -78,13 +110,21 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
   let effective_countries: CountryFeature[]
   let female_values: number[]
   let is_loading: boolean
+  let is_refining: boolean
   let male_values: number[]
   let option: any
   let pyramid_data: { female: Record<string, number>; male: Record<string, number> } | null
+  let refine_duration_estimate_ref = useRef<number>(3.5)
+  let refine_start_time_ref = useRef<number>(0)
+  let refining_pct: number
+  let refining_time_remaining: number
   let set_active_country_name: React.Dispatch<React.SetStateAction<string | null>>
   let set_dependency_ratio: React.Dispatch<React.SetStateAction<number>>
   let set_is_loading: React.Dispatch<React.SetStateAction<boolean>>
+  let set_is_refining: React.Dispatch<React.SetStateAction<boolean>>
   let set_pyramid_data: React.Dispatch<React.SetStateAction<{ female: Record<string, number>; male: Record<string, number> } | null>>
+  let set_refining_pct: React.Dispatch<React.SetStateAction<number>>
+  let set_refining_time_remaining: React.Dispatch<React.SetStateAction<number>>
   let set_sex_ratio: React.Dispatch<React.SetStateAction<number>>
   let set_total_female: React.Dispatch<React.SetStateAction<number>>
   let set_total_male: React.Dispatch<React.SetStateAction<number>>
@@ -102,10 +142,13 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
   }, [selected_countries, selected_country])
 
     ;[active_country_name, set_active_country_name] = useState<string | null>(
-      effective_countries.length > 0 ? effective_countries[effective_countries.length - 1].properties.name : null
+      effective_countries.length > 0 ? getFeatureEntityName(effective_countries[effective_countries.length - 1]) : null
     )
     ;[pyramid_data, set_pyramid_data] = useState<{ female: Record<string, number>; male: Record<string, number> } | null>(null)
     ;[is_loading, set_is_loading] = useState<boolean>(false)
+    ;[is_refining, set_is_refining] = useState<boolean>(false)
+    ;[refining_pct, set_refining_pct] = useState<number>(0)
+    ;[refining_time_remaining, set_refining_time_remaining] = useState<number>(3.5)
     ;[total_male, set_total_male] = useState<number>(0)
     ;[total_female, set_total_female] = useState<number>(0)
     ;[sex_ratio, set_sex_ratio] = useState<number>(1.0)
@@ -114,7 +157,7 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
   //Auto-synchronize active country selection when user selects or clicks countries
   useEffect(() => {
     if (effective_countries.length > 0) {
-      let names = effective_countries.map((arg0_c) => arg0_c.properties.name)
+      let names = effective_countries.map(getFeatureEntityName).filter(Boolean)
       if (!active_country_name || !names.includes(active_country_name)) {
         set_active_country_name(names[names.length - 1])
       }
@@ -123,14 +166,40 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
     }
   }, [effective_countries])
 
-  //Fetch individual country or global pyramid breakdown
+  //Fetch individual country or global pyramid breakdown with instantaneous synthetic responsiveness
   useEffect(() => {
     let cancelled = false
+    let current_yr = Math.round(current_year)
+    let interval: NodeJS.Timeout | null = null
+
+    //1. Instantaneous responsiveness ("fakery"): initialize immediately with synthetic demographic model
+    let synthetic = computeSyntheticDemographicPyramid(active_country_name || 'Global', current_yr)
+    set_pyramid_data({ female: synthetic.female, male: synthetic.male })
+    set_total_male(synthetic.totalMale)
+    set_total_female(synthetic.totalFemale)
+    set_sex_ratio(synthetic.sexRatio)
+    set_dependency_ratio(synthetic.dependencyRatio)
+
+    //2. Indicate that authentic calculations are being refined
     set_is_loading(true)
+    set_is_refining(true)
+    refine_start_time_ref.current = performance.now()
+    set_refining_pct(15)
+    set_refining_time_remaining(Math.max(0.3, Math.round(refine_duration_estimate_ref.current*10)/10))
+
+    interval = setInterval(() => {
+      let elapsed_sec = (performance.now() - refine_start_time_ref.current)/1000
+      let est_total = Math.max(1.0, refine_duration_estimate_ref.current)
+      let pct = Math.min(96, Math.round((1 - Math.exp(-elapsed_sec/(est_total*0.65)))*100))
+      let rem = Math.max(0.1, Math.round((est_total - elapsed_sec)*10)/10)
+
+      set_refining_pct(Math.max(15, pct))
+      set_refining_time_remaining(rem)
+    }, 80)
 
     let active_feat = effective_countries.find(
-      (arg0_c) => arg0_c.properties?.name === active_country_name
-    )
+      (arg0_c) => getFeatureEntityName(arg0_c) === active_country_name
+    ) || (effective_countries.length > 0 ? effective_countries[effective_countries.length - 1] : null)
 
     let fetch_promise: Promise<Response>
     if (active_feat && active_feat.geometry) {
@@ -139,13 +208,13 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
           country: active_country_name,
           geometry: active_feat.geometry,
           layer: 'age_sex',
-          year: Math.round(current_year),
+          year: current_yr,
         }),
         headers: { 'Content-Type': 'application/json' },
         method: 'POST',
       })
     } else {
-      let url = `/api/raster/breakdown?layer=age_sex&year=${Math.round(current_year)}`
+      let url = `/api/raster/breakdown?layer=age_sex&year=${current_yr}`
       if (active_country_name) {
         url += `&country=${encodeURIComponent(active_country_name)}`
       } else if (inspect_data && Number.isFinite(inspect_data.pixelX) && Number.isFinite(inspect_data.pixelY)) {
@@ -163,6 +232,13 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
       .then((arg0_json) => {
         if (cancelled)
           return
+        if (interval)
+          clearInterval(interval)
+
+        let actual_sec = (performance.now() - refine_start_time_ref.current)/1000
+        if (actual_sec > 0.3)
+          refine_duration_estimate_ref.current = Math.min(10.0, Math.max(0.8, refine_duration_estimate_ref.current*0.6 + actual_sec*0.4))
+
         if (arg0_json && arg0_json.male && arg0_json.female) {
           set_pyramid_data({ female: arg0_json.female, male: arg0_json.male })
           if (arg0_json.totalMale !== undefined)
@@ -173,90 +249,27 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
             set_sex_ratio(arg0_json.sexRatio)
           if (arg0_json.dependencyRatio !== undefined)
             set_dependency_ratio(arg0_json.dependencyRatio)
-        } else {
-          let total_pop_thousands = 25000
-          if (country_stats && country_stats.total && country_stats.total > 0) {
-            total_pop_thousands = Math.round(country_stats.total)
-          } else if (raster && raster.mean) {
-            total_pop_thousands = Math.round(raster.mean * 1500)
-          }
-
-          let growth_factor = 1.0
-          if (current_year <= 1800) {
-            growth_factor = 0.15
-          } else if (current_year <= 1850) {
-            growth_factor = 0.20
-          } else if (current_year <= 1900) {
-            growth_factor = 0.30
-          } else if (current_year <= 1950) {
-            growth_factor = 0.45
-          } else if (current_year <= 2000) {
-            growth_factor = 0.80
-          }
-          total_pop_thousands = Math.max(100, Math.round(total_pop_thousands * growth_factor))
-
-          let cohort_durations = [1, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 7]
-          let cohort_mid_ages = [0.5, 3.0, 7.5, 12.5, 17.5, 22.5, 27.5, 32.5, 37.5, 42.5, 47.5, 52.5, 57.5, 62.5, 67.5, 72.5, 77.5, 84.0]
-          let female_map: Record<string, number> = {}
-          let male_map: Record<string, number> = {}
-          let old_dep = 0
-          let sum_f = 0
-          let sum_m = 0
-          let sum_unnormalised = 0
-          let unnormalised_densities: number[] = []
-          let working_dep = 0
-          let youth_dep = 0
-
-          for (let i = 0; i < AGE_COHORTS.length; i++) {
-            let age = cohort_mid_ages[i]
-            let w = cohort_durations[i]
-            let life_exp = Math.min(80, Math.max(40, 45 + (current_year - 1900) * 0.25))
-            let survival = Math.exp(-Math.pow(age / life_exp, 3.5))
-            let d = w * survival
-            unnormalised_densities.push(d)
-            sum_unnormalised += d
-          }
-
-          for (let i = 0; i < AGE_COHORTS.length; i++) {
-            let age = cohort_mid_ages[i]
-            let cid = AGE_COHORTS[i].id
-            let inhabitants = (unnormalised_densities[i] / sum_unnormalised) * total_pop_thousands
-            let sex_bias = 1.05 - (age / 90) * 0.25
-            let m_val = Math.max(0.1, inhabitants * (sex_bias / (1 + sex_bias)))
-            let f_val = Math.max(0.1, inhabitants * (1 / (1 + sex_bias)))
-
-            male_map[cid] = Math.round(m_val * 10) / 10
-            female_map[cid] = Math.round(f_val * 10) / 10
-            sum_m += male_map[cid]
-            sum_f += female_map[cid]
-
-            if (i <= 3) {
-              youth_dep += male_map[cid] + female_map[cid]
-            } else if (i >= 14) {
-              old_dep += male_map[cid] + female_map[cid]
-            } else {
-              working_dep += male_map[cid] + female_map[cid]
-            }
-          }
-
-          let total_all = youth_dep + working_dep + old_dep
-          set_pyramid_data({ female: female_map, male: male_map })
-          set_total_male(Math.round(sum_m * 10) / 10)
-          set_total_female(Math.round(sum_f * 10) / 10)
-          set_sex_ratio(sum_f > 0 ? Math.round((sum_m / sum_f) * 1000) / 1000 : 1.0)
-          set_dependency_ratio(total_all > 0 ? Math.round(((youth_dep + old_dep) / total_all) * 1000) / 10 : 38.0)
         }
+        set_refining_pct(100)
+        set_refining_time_remaining(0)
+        set_is_refining(false)
         set_is_loading(false)
       })
       .catch(() => {
-        if (!cancelled)
+        if (!cancelled) {
+          if (interval)
+            clearInterval(interval)
+          set_is_refining(false)
           set_is_loading(false)
+        }
       })
 
     return () => {
       cancelled = true
+      if (interval)
+        clearInterval(interval)
     }
-  }, [active_country_name, current_year, inspect_data?.pixelX, inspect_data?.pixelY, country_stats?.mean, raster?.mean, effective_countries])
+  }, [active_country_name, current_year, inspect_data?.pixelX, inspect_data?.pixelY, effective_countries])
 
   //Resize observer for responsive panel updates
   useEffect(() => {
@@ -560,7 +573,7 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
             Global
           </button>
           {effective_countries.map((arg0_c) => {
-            let name = arg0_c.properties.name
+            let name = getFeatureEntityName(arg0_c)
             let is_active = active_country_name === name
             return (
               <button
@@ -583,11 +596,6 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
 
       {/* Chart Canvas */}
       <div className="flex-1 min-h-0 relative">
-        {is_loading && (
-          <div className="absolute inset-0 z-10 bg-background/40 flex items-center justify-center">
-            <Icon name="sync" className="animate-spin text-primary text-sm" />
-          </div>
-        )}
         <ReactECharts
           ref={echart_ref}
           option={option}
@@ -595,6 +603,26 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
           opts={{ renderer: 'canvas' }}
           notMerge={true}
         />
+
+        {/* Faint centered refining calculation indicator overlay */}
+        {is_refining && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none select-none">
+            <div className="flex flex-col items-center gap-1.5 px-3 py-1.5 bg-background/55 backdrop-blur-[2px] border border-border/40 text-foreground/80 text-xs font-mono shadow-sm">
+              <div className="flex items-center gap-2">
+                <Icon name="sync" className="text-amber-400 text-xs animate-spin" />
+                <span className="font-semibold text-amber-400/90">
+                  Refining Calculations: {refining_pct}% (~{refining_time_remaining.toFixed(1)}s)
+                </span>
+              </div>
+              <div className="w-32 h-1 bg-muted/60 border border-border/60 overflow-hidden">
+                <div
+                  className="h-full bg-amber-400/80 transition-all duration-100 ease-out"
+                  style={{ width: `${refining_pct}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

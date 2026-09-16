@@ -3,6 +3,7 @@ import ReactECharts from 'echarts-for-react'
 import { DecodedRaster } from '@/lib/geopng/types'
 import { CountryFeature, CountryStats } from '@/lib/geopng/polygonBinning'
 import { Icon } from '@/components/ui/icon'
+import { computeSyntheticSectorBreakdown } from '@/lib/raster/syntheticDemographics'
 
 export interface CategoryBreakdownChartProps {
   activeVariableSelectors?: Record<string, string | string[]>
@@ -36,6 +37,30 @@ export const PROFESSION_SECTORS: SectorItem[] = [
 ]
 
 /**
+ * Resolves the primary human-readable entity or country name from a geographic feature.
+ * Handles Natural Earth (.name), C-Shapes (.cntry_name, .CNTRY_NAME), and Naissance (.adm0_a3, .name, .id).
+ *
+ * @param {any} arg0_feat
+ *
+ * @returns {string}
+ */
+function getFeatureEntityName (arg0_feat: any): string {
+  if (!arg0_feat) return ''
+  let p = arg0_feat.properties || {}
+  return (
+    p.name ||
+    p.cntry_name ||
+    p.CNTRY_NAME ||
+    p.NAME ||
+    p.Country ||
+    p.country ||
+    p.adm0_a3 ||
+    p.id ||
+    (typeof arg0_feat.id === 'string' ? arg0_feat.id : '')
+  )
+}
+
+/**
  * CategoryBreakdownChart renders a split bar share per country when countries are selected,
  * and a single split bar of the global total when no countries are selected.
  *
@@ -66,10 +91,18 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
   let has_countries: boolean
   let is_loading: boolean
   let is_percentage_mode = !layer_id.includes('total')
+  let is_refining: boolean
   let option: any
+  let refine_duration_estimate_ref = useRef<number>(3.0)
+  let refine_start_time_ref = useRef<number>(0)
+  let refining_pct: number
+  let refining_time_remaining: number
   let set_by_country_data: React.Dispatch<React.SetStateAction<Record<string, Record<string, number>>>>
   let set_global_sector_data: React.Dispatch<React.SetStateAction<Record<string, number>>>
   let set_is_loading: React.Dispatch<React.SetStateAction<boolean>>
+  let set_is_refining: React.Dispatch<React.SetStateAction<boolean>>
+  let set_refining_pct: React.Dispatch<React.SetStateAction<number>>
+  let set_refining_time_remaining: React.Dispatch<React.SetStateAction<number>>
 
   //Function body
   effective_countries = useMemo(() => {
@@ -90,16 +123,44 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
   })
   ;[by_country_data, set_by_country_data] = useState<Record<string, Record<string, number>>>({})
   ;[is_loading, set_is_loading] = useState<boolean>(false)
+  ;[is_refining, set_is_refining] = useState<boolean>(false)
+  ;[refining_pct, set_refining_pct] = useState<number>(0)
+  ;[refining_time_remaining, set_refining_time_remaining] = useState<number>(3.0)
 
-  //Fetch breakdown from backend API for requested countries or global view
+  //Fetch breakdown from backend API with instantaneous synthetic responsiveness
   useEffect(() => {
     let cancelled = false
-    set_is_loading(true)
+    let current_yr = Math.round(current_year)
+    let interval: NodeJS.Timeout | null = null
 
-    let country_names = effective_countries.map((arg0_c) => arg0_c.properties.name).filter(Boolean)
+    let country_names = effective_countries.map(getFeatureEntityName).filter(Boolean)
+
+    //1. Instantaneous synthetic responsiveness ("fakery"): initialize immediately with synthetic sector model
+    let synthetic = computeSyntheticSectorBreakdown(country_names, current_yr)
+    set_global_sector_data(synthetic.global)
+    if (country_names.length > 0)
+      set_by_country_data(synthetic.byCountry)
+
+    //2. Indicate that authentic calculations are being refined
+    set_is_loading(true)
+    set_is_refining(true)
+    refine_start_time_ref.current = performance.now()
+    set_refining_pct(15)
+    set_refining_time_remaining(Math.max(0.3, Math.round(refine_duration_estimate_ref.current*10)/10))
+
+    interval = setInterval(() => {
+      let elapsed_sec = (performance.now() - refine_start_time_ref.current)/1000
+      let est_total = Math.max(1.0, refine_duration_estimate_ref.current)
+      let pct = Math.min(96, Math.round((1 - Math.exp(-elapsed_sec/(est_total*0.65)))*100))
+      let rem = Math.max(0.1, Math.round((est_total - elapsed_sec)*10)/10)
+
+      set_refining_pct(Math.max(15, pct))
+      set_refining_time_remaining(rem)
+    }, 80)
+
     let geometries = effective_countries
-      .filter((arg0_c) => arg0_c.geometry && arg0_c.properties?.name)
-      .map((arg0_c) => ({ geometry: arg0_c.geometry, name: arg0_c.properties.name }))
+      .filter((arg0_c) => arg0_c.geometry && getFeatureEntityName(arg0_c))
+      .map((arg0_c) => ({ geometry: arg0_c.geometry, name: getFeatureEntityName(arg0_c) }))
 
     let fetch_promise: Promise<Response>
     if (geometries.length > 0) {
@@ -108,13 +169,13 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
           countries: country_names,
           geometries,
           layer: layer_id,
-          year: Math.round(current_year),
+          year: current_yr,
         }),
         headers: { 'Content-Type': 'application/json' },
         method: 'POST',
       })
     } else {
-      let url = `/api/raster/breakdown?layer=${layer_id}&year=${Math.round(current_year)}`
+      let url = `/api/raster/breakdown?layer=${layer_id}&year=${current_yr}`
       if (country_names.length > 0) {
         url += `&countries=${encodeURIComponent(country_names.join(','))}`
       } else if (inspect_data && Number.isFinite(inspect_data.pixelX) && Number.isFinite(inspect_data.pixelY)) {
@@ -132,6 +193,13 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
       .then((arg0_json) => {
         if (cancelled)
           return
+        if (interval)
+          clearInterval(interval)
+
+        let actual_sec = (performance.now() - refine_start_time_ref.current)/1000
+        if (actual_sec > 0.3)
+          refine_duration_estimate_ref.current = Math.min(10.0, Math.max(0.8, refine_duration_estimate_ref.current*0.6 + actual_sec*0.4))
+
         if (arg0_json) {
           if (arg0_json.global)
             set_global_sector_data(arg0_json.global)
@@ -141,15 +209,24 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
           if (arg0_json.by_country)
             set_by_country_data(arg0_json.by_country)
         }
+        set_refining_pct(100)
+        set_refining_time_remaining(0)
+        set_is_refining(false)
         set_is_loading(false)
       })
       .catch(() => {
-        if (!cancelled)
+        if (!cancelled) {
+          if (interval)
+            clearInterval(interval)
+          set_is_refining(false)
           set_is_loading(false)
+        }
       })
 
     return () => {
       cancelled = true
+      if (interval)
+        clearInterval(interval)
     }
   }, [current_year, effective_countries, layer_id, inspect_data?.pixelX, inspect_data?.pixelY])
 
@@ -188,7 +265,7 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
   //Build ECharts 100% split-bar configuration
   option = useMemo(() => {
     let active_prof = active_variable_selectors.profession || 'agriculture'
-    let country_names = effective_countries.map((arg0_c) => arg0_c.properties.name)
+    let country_names = effective_countries.map(getFeatureEntityName)
     let entity_labels: string[]
     let series_list: any[]
 
@@ -364,11 +441,6 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
       </div>
 
       <div className="flex-1 min-h-0 relative">
-        {is_loading && (
-          <div className="absolute inset-0 z-10 bg-background/40 flex items-center justify-center">
-            <Icon name="sync" className="animate-spin text-primary text-sm" />
-          </div>
-        )}
         <ReactECharts
           ref={echart_ref}
           option={option}
@@ -376,6 +448,26 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
           opts={{ renderer: 'canvas' }}
           notMerge={true}
         />
+
+        {/* Faint centered refining calculation indicator overlay */}
+        {is_refining && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none select-none">
+            <div className="flex flex-col items-center gap-1.5 px-3 py-1.5 bg-background/55 backdrop-blur-[2px] border border-border/40 text-foreground/80 text-xs font-mono shadow-sm">
+              <div className="flex items-center gap-2">
+                <Icon name="sync" className="text-amber-400 text-xs animate-spin" />
+                <span className="font-semibold text-amber-400/90">
+                  Refining Calculations: {refining_pct}% (~{refining_time_remaining.toFixed(1)}s)
+                </span>
+              </div>
+              <div className="w-32 h-1 bg-muted/60 border border-border/60 overflow-hidden">
+                <div
+                  className="h-full bg-amber-400/80 transition-all duration-100 ease-out"
+                  style={{ width: `${refining_pct}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
