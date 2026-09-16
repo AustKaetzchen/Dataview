@@ -3,6 +3,8 @@
  * Provides historical cohort distributions for population pyramids and sector employment shares per country.
  */
 
+import { calculateDemographicPyramid, calculateSectorBreakdown } from './rasterDemographicsService.ts'
+
 export interface DemographicCohortResult {
   country: string
   dependencyRatio: number
@@ -318,6 +320,14 @@ export function getCountryDemographicPyramid (
   let is_transition = TRANSITION_EMERGING_COUNTRIES.has(clean_name)
 
   //Function body
+  try {
+    let real_pyramid = calculateDemographicPyramid({ country: clean_name, year })
+    if (real_pyramid && (real_pyramid.totalMale > 0 || real_pyramid.totalFemale > 0))
+      return real_pyramid
+  } catch (arg0_err) {
+    console.warn('[CountryBreakdown] Falling back to synthetic demographic model:', arg0_err)
+  }
+
   total_pop_thousands = getHistoricalPopulationThousands(clean_name, year)
 
   for (let i = 0; i < AGE_IDS.length; i++) {
@@ -438,6 +448,14 @@ export function getCountrySectorBreakdown (
   }
 
   //Function body
+  try {
+    let real_sectors = calculateSectorBreakdown({ countries, year })
+    if (real_sectors && Object.keys(real_sectors.global).length > 0)
+      return real_sectors
+  } catch (arg0_err) {
+    console.warn('[CountryBreakdown] Falling back to synthetic sector model:', arg0_err)
+  }
+
   compute_single_country = function (arg0_name: string): Record<string, number> {
     let clean = arg0_name.toLowerCase().trim()
     let h = get_country_hash(clean)

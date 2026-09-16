@@ -128,14 +128,33 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
     let cancelled = false
     set_is_loading(true)
 
-    let url = `/api/raster/breakdown?layer=age_sex&year=${Math.round(current_year)}`
-    if (active_country_name) {
-      url += `&country=${encodeURIComponent(active_country_name)}`
-    } else if (inspect_data && Number.isFinite(inspect_data.pixelX) && Number.isFinite(inspect_data.pixelY)) {
-      url += `&x=${inspect_data.pixelX}&y=${inspect_data.pixelY}`
+    let active_feat = effective_countries.find(
+      (arg0_c) => arg0_c.properties?.name === active_country_name
+    )
+
+    let fetch_promise: Promise<Response>
+    if (active_feat && active_feat.geometry) {
+      fetch_promise = fetch('/api/raster/breakdown', {
+        body: JSON.stringify({
+          country: active_country_name,
+          geometry: active_feat.geometry,
+          layer: 'age_sex',
+          year: Math.round(current_year),
+        }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      })
+    } else {
+      let url = `/api/raster/breakdown?layer=age_sex&year=${Math.round(current_year)}`
+      if (active_country_name) {
+        url += `&country=${encodeURIComponent(active_country_name)}`
+      } else if (inspect_data && Number.isFinite(inspect_data.pixelX) && Number.isFinite(inspect_data.pixelY)) {
+        url += `&x=${inspect_data.pixelX}&y=${inspect_data.pixelY}`
+      }
+      fetch_promise = fetch(url)
     }
 
-    fetch(url)
+    fetch_promise
       .then((arg0_res) => {
         if (arg0_res.ok)
           return arg0_res.json()
@@ -237,7 +256,7 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
     return () => {
       cancelled = true
     }
-  }, [active_country_name, current_year, inspect_data?.pixelX, inspect_data?.pixelY, country_stats?.mean, raster?.mean])
+  }, [active_country_name, current_year, inspect_data?.pixelX, inspect_data?.pixelY, country_stats?.mean, raster?.mean, effective_countries])
 
   //Resize observer for responsive panel updates
   useEffect(() => {

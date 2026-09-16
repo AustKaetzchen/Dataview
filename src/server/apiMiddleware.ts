@@ -5,6 +5,7 @@ import type { IncomingMessage, ServerResponse } from 'http'
 import JSON5 from 'json5'
 import { loadAndParseLayers, type LayerRegistryCache, type ParsedDataLayer } from './layerParser.ts'
 import { getCountryDemographicPyramid, getCountrySectorBreakdown } from './countryBreakdown.ts'
+import { calculateDemographicPyramid, calculateSectorBreakdown } from './rasterDemographicsService.ts'
 import {
   startTimelapseRenderJob,
   getTimelapseJobStatus,
@@ -263,75 +264,119 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
       }
     }
 
-    //Route 5: GET /api/raster/breakdown
+    //Route 5: GET / POST /api/raster/breakdown
     if (pathname === '/raster/breakdown' || pathname === '/api/raster/breakdown') {
-      let country = ((query.country as string) || '').trim()
-      let countries_str = ((query.countries as string) || '').trim()
-      let layer = (query.layer as string) || 'age_sex'
-      let raw_x = query.x !== undefined ? parseInt(query.x as string, 10) : undefined
-      let raw_y = query.y !== undefined ? parseInt(query.y as string, 10) : undefined
-      let year = parseInt(query.year as string, 10) || 1950
+      let process_breakdown = function (arg0_params: {
+        countries?: string | string[]
+        country?: string
+        geometries?: { geometry: any; name: string }[]
+        geometry?: any
+        layer?: string
+        x?: number
+        y?: number
+        year?: number
+      }) {
+        let params = arg0_params
+        let countries_str = Array.isArray(params.countries)
+          ? params.countries.join(',')
+          : (params.countries || '').trim()
+        let country = (params.country || '').trim()
+        let geometries = params.geometries
+        let geometry = params.geometry
+        let layer = params.layer || 'age_sex'
+        let raw_x = params.x
+        let raw_y = params.y
+        let year = params.year || 1950
 
-      let cache_key = `${layer}:${year}:${country}:${countries_str}:${raw_x ?? 'all'}:${raw_y ?? 'all'}`
-      if (breakdown_cache.has(cache_key)) {
-        res.statusCode = 200
+        let geom_key = geometry ? (geometry.coordinates?.[0]?.[0]?.[0] ?? 'custom') : 'none'
+        let cache_key = `${layer}:${year}:${country}:${countries_str}:${geom_key}:${raw_x ?? 'all'}:${raw_y ?? 'all'}`
+        if (breakdown_cache.has(cache_key)) {
+          res.statusCode = 200
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify(breakdown_cache.get(cache_key)))
+          return
+        }
+
+        if (layer === 'age_sex') {
+          let demo_res = calculateDemographicPyramid({ country: country || 'Global', geometry, year })
+          let result = {
+            country: demo_res.country,
+            dependencyRatio: demo_res.dependencyRatio,
+            female: demo_res.female,
+            layer,
+            male: demo_res.male,
+            sexRatio: demo_res.sexRatio,
+            totalFemale: demo_res.totalFemale,
+            totalMale: demo_res.totalMale,
+            x: raw_x,
+            y: raw_y,
+            year,
+          }
+          breakdown_cache.set(cache_key, result)
+          res.statusCode = 200
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify(result))
+          return
+        }
+
+        if (layer.includes('profession')) {
+          let target_countries: string[] = []
+
+          if (countries_str) {
+            target_countries = countries_str.split(',').map((arg0_c) => arg0_c.trim()).filter(Boolean)
+          } else if (country) {
+            target_countries = [country]
+          }
+
+          let sector_res = calculateSectorBreakdown({ countries: target_countries, geometries, year })
+          let result = {
+            by_country: sector_res.byCountry,
+            global: sector_res.global,
+            layer,
+            sectors: sector_res.global,
+            x: raw_x,
+            y: raw_y,
+            year,
+          }
+          breakdown_cache.set(cache_key, result)
+          res.statusCode = 200
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify(result))
+          return
+        }
+
+        res.statusCode = 404
         res.setHeader('Content-Type', 'application/json')
-        res.end(JSON.stringify(breakdown_cache.get(cache_key)))
+        res.end(JSON.stringify({ error: `Breakdown not supported for layer: ${layer}` }))
         return
       }
 
-      if (layer === 'age_sex') {
-        let demo_res = getCountryDemographicPyramid(country || 'global', year)
-        let result = {
-          country: demo_res.country,
-          dependencyRatio: demo_res.dependencyRatio,
-          female: demo_res.female,
-          layer,
-          male: demo_res.male,
-          sexRatio: demo_res.sexRatio,
-          totalFemale: demo_res.totalFemale,
-          totalMale: demo_res.totalMale,
-          x: raw_x,
-          y: raw_y,
-          year,
-        }
-        breakdown_cache.set(cache_key, result)
-        res.statusCode = 200
-        res.setHeader('Content-Type', 'application/json')
-        res.end(JSON.stringify(result))
-        return
+      if (req.method === 'POST') {
+        let body_chunks: Buffer[] = []
+        req.on('data', (arg0_chunk) => {
+          body_chunks.push(arg0_chunk)
+        })
+        req.on('end', () => {
+          let body_data: any = {}
+          try {
+            let body_str = Buffer.concat(body_chunks).toString('utf-8')
+            if (body_str)
+              body_data = JSON.parse(body_str)
+          } catch (arg0_err) {
+            console.error('[ApiMiddleware] Failed to parse JSON body for breakdown:', arg0_err)
+          }
+          process_breakdown(body_data)
+        })
+      } else {
+        process_breakdown({
+          countries: (query.countries as string) || '',
+          country: (query.country as string) || '',
+          layer: (query.layer as string) || 'age_sex',
+          x: query.x !== undefined ? parseInt(query.x as string, 10) : undefined,
+          y: query.y !== undefined ? parseInt(query.y as string, 10) : undefined,
+          year: parseInt(query.year as string, 10) || 1950,
+        })
       }
-
-      if (layer.includes('profession')) {
-        let is_pct = !layer.includes('total')
-        let target_countries: string[] = []
-
-        if (countries_str) {
-          target_countries = countries_str.split(',').map((arg0_c) => arg0_c.trim()).filter(Boolean)
-        } else if (country) {
-          target_countries = [country]
-        }
-
-        let sector_res = getCountrySectorBreakdown(target_countries, year, is_pct)
-        let result = {
-          by_country: sector_res.byCountry,
-          global: sector_res.global,
-          layer,
-          sectors: sector_res.global,
-          x: raw_x,
-          y: raw_y,
-          year,
-        }
-        breakdown_cache.set(cache_key, result)
-        res.statusCode = 200
-        res.setHeader('Content-Type', 'application/json')
-        res.end(JSON.stringify(result))
-        return
-      }
-
-      res.statusCode = 404
-      res.setHeader('Content-Type', 'application/json')
-      res.end(JSON.stringify({ error: `Breakdown not supported for layer: ${layer}` }))
       return
     }
 

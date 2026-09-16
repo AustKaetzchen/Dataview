@@ -97,15 +97,33 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
     set_is_loading(true)
 
     let country_names = effective_countries.map((arg0_c) => arg0_c.properties.name).filter(Boolean)
-    let url = `/api/raster/breakdown?layer=${layer_id}&year=${Math.round(current_year)}`
+    let geometries = effective_countries
+      .filter((arg0_c) => arg0_c.geometry && arg0_c.properties?.name)
+      .map((arg0_c) => ({ geometry: arg0_c.geometry, name: arg0_c.properties.name }))
 
-    if (country_names.length > 0) {
-      url += `&countries=${encodeURIComponent(country_names.join(','))}`
-    } else if (inspect_data && Number.isFinite(inspect_data.pixelX) && Number.isFinite(inspect_data.pixelY)) {
-      url += `&x=${inspect_data.pixelX}&y=${inspect_data.pixelY}`
+    let fetch_promise: Promise<Response>
+    if (geometries.length > 0) {
+      fetch_promise = fetch('/api/raster/breakdown', {
+        body: JSON.stringify({
+          countries: country_names,
+          geometries,
+          layer: layer_id,
+          year: Math.round(current_year),
+        }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      })
+    } else {
+      let url = `/api/raster/breakdown?layer=${layer_id}&year=${Math.round(current_year)}`
+      if (country_names.length > 0) {
+        url += `&countries=${encodeURIComponent(country_names.join(','))}`
+      } else if (inspect_data && Number.isFinite(inspect_data.pixelX) && Number.isFinite(inspect_data.pixelY)) {
+        url += `&x=${inspect_data.pixelX}&y=${inspect_data.pixelY}`
+      }
+      fetch_promise = fetch(url)
     }
 
-    fetch(url)
+    fetch_promise
       .then((arg0_res) => {
         if (arg0_res.ok)
           return arg0_res.json()
