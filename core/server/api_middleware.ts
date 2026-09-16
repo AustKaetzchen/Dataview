@@ -39,10 +39,20 @@ export let createApiMiddleware = function (arg0_options: ApiMiddlewareOptions) {
   let breakdown_cache = new Map<string, { mtime: number; payload: any }>()
   let config_dir = path.resolve(options.configDir)
   let exports_dir = path.resolve(options.exportsDir)
-  let permissions_path = path.join(config_dir, 'permissions.json5')
+  let permissions_path = fs.existsSync(path.join(config_dir, 'permissions', 'permissions.json5'))
+    ? path.join(config_dir, 'permissions', 'permissions.json5')
+    : path.join(config_dir, 'permissions.json5')
   let registry: LayerRegistryCache
 
   //Function body
+  //Check fallback for config_dir
+  if (!fs.existsSync(path.join(config_dir, 'layers')) && fs.existsSync(path.resolve(process.cwd(), 'common/layers'))) {
+    config_dir = path.resolve(process.cwd(), 'common')
+    permissions_path = fs.existsSync(path.join(config_dir, 'permissions', 'permissions.json5'))
+      ? path.join(config_dir, 'permissions', 'permissions.json5')
+      : path.join(config_dir, 'permissions.json5')
+  }
+
   //Initialise registry
   try {
     registry = loadAndParseLayers(config_dir)
@@ -64,6 +74,14 @@ export let createApiMiddleware = function (arg0_options: ApiMiddlewareOptions) {
     let parsed_url = url.parse(req.url || '', true)
     let pathname = parsed_url.pathname || ''
     let query = parsed_url.query
+
+    //Ensure config_dir fallback in request lifecycle
+    if (!fs.existsSync(path.join(config_dir, 'layers')) && fs.existsSync(path.resolve(process.cwd(), 'common/layers'))) {
+      config_dir = path.resolve(process.cwd(), 'common')
+      permissions_path = fs.existsSync(path.join(config_dir, 'permissions', 'permissions.json5'))
+        ? path.join(config_dir, 'permissions', 'permissions.json5')
+        : path.join(config_dir, 'permissions.json5')
+    }
 
     //Route 1: GET /api/layers
     if (pathname === '/layers' || pathname === '/api/layers') {

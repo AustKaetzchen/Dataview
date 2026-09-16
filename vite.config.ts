@@ -10,7 +10,7 @@ function dataviewBackendPlugin(): Plugin {
     configureServer(server) {
       server.middlewares.use(
         createApiMiddleware({
-          configDir: path.resolve(import.meta.dirname, './config'),
+          configDir: path.resolve(import.meta.dirname, './common'),
           exportsDir: path.resolve(import.meta.dirname, './exports'),
         })
       )
@@ -18,7 +18,7 @@ function dataviewBackendPlugin(): Plugin {
     configurePreviewServer(server) {
       server.middlewares.use(
         createApiMiddleware({
-          configDir: path.resolve(import.meta.dirname, './config'),
+          configDir: path.resolve(import.meta.dirname, './common'),
           exportsDir: path.resolve(import.meta.dirname, './exports'),
         })
       )

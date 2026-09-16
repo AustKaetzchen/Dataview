@@ -1,4 +1,5 @@
 import { createRoot } from 'react-dom/client'
+import { LocalisationProvider } from '@localisation'
 import './index.css'
 import App from './ui/app.tsx'
 
@@ -21,6 +22,10 @@ if (typeof console !== 'undefined' && typeof console.timeStamp === 'function') {
   let root_element = document.getElementById('root')
   if (root_element) {
     let root = createRoot(root_element)
-    root.render(<App />)
+    root.render(
+      <LocalisationProvider>
+        <App />
+      </LocalisationProvider>
+    )
   }
 }

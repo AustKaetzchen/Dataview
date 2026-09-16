@@ -37,7 +37,7 @@ export function useAppLayoutState (): AppLayoutStateResult {
       if (['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'].includes(normalized))
         return normalized
     }
-    return 'bottom-right'
+    return 'top-left'
   })
   let [sidebar_bottom_clearance, set_sidebar_bottom_clearance] = useState<number | undefined>(undefined)
   let [sidebar_width, set_sidebar_width] = useState<number>(336)

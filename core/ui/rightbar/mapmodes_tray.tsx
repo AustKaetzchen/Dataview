@@ -10,7 +10,8 @@ import {
 import { CountryFeature, CountryStats } from '@framework/geopng/polygon_binning.ts'
 import { Icon } from '@ui/components/icon'
 import { TooltipProvider } from '@ui/components/tooltip'
-import { LOCALISATION_CONFIG, UserRole } from '@common'
+import { UserRole } from '@common'
+import { useLocalisation } from '@localisation'
 import { CountryModeSettings } from './mapmodes/country_mode_settings'
 import {
   SpikeMapSettings,
@@ -118,11 +119,13 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
   let expanded_nodes: Record<string, boolean>
   let filtered_layers: ParsedDataLayer[]
   let filtered_overlays: MapModeItem[]
+  let format_string: (template: string, ...args: any[]) => string
   let handle_resize_left: (e: React.MouseEvent) => void
   let handle_resize_top: (e: React.MouseEvent) => void
   let handle_resize_top_left: (e: React.MouseEvent) => void
   let is_layer_accessible: (arg0_layer: ParsedDataLayer) => boolean
   let is_tray_collapsed: boolean
+  let localisation: ReturnType<typeof useLocalisation>
   let max_height_style: string
   let search_query: string
   let set_expanded_nodes: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
@@ -130,11 +133,15 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
   let set_search_query: React.Dispatch<React.SetStateAction<string>>
   let set_tray_height: React.Dispatch<React.SetStateAction<number>>
   let set_tray_width: React.Dispatch<React.SetStateAction<number>>
+  let t: ReturnType<typeof useLocalisation>['t']
   let toggle_node: (arg0_id: string) => void
   let tray_height: number
   let tray_width: number
 
     //Function body
+    localisation = useLocalisation()
+    format_string = localisation.formatString
+    t = localisation.t
     ;[is_tray_collapsed, set_is_tray_collapsed] = useState<boolean>(false)
     ;[search_query, set_search_query] = useState<string>('')
     ;[expanded_nodes, set_expanded_nodes] = useState<Record<string, boolean>>({
@@ -367,18 +374,18 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
           <div className="flex items-center gap-2">
             <Icon name="layers" className="text-primary text-sm" />
             <span className="font-bold text-foreground text-xs uppercase tracking-wider">
-              {LOCALISATION_CONFIG.mapmodes.title}
+              {t.mapmodes.title}
             </span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] px-1.5 py-0.5 bg-primary/20 text-primary border border-primary/40 font-mono font-medium">
-              {filtered_layers.length + filtered_overlays.length} Layers
+              {format_string(t.mapmodes.layersCount, filtered_layers.length + filtered_overlays.length)}
             </span>
             <button
               type="button"
               onClick={() => set_is_tray_collapsed((arg0_prev) => !arg0_prev)}
               className="p-1 text-muted-foreground hover:text-foreground cursor-pointer"
-              title={is_tray_collapsed ? 'Expand Mapmodes Tray' : 'Collapse Mapmodes Tray'}
+              title={is_tray_collapsed ? t.mapmodes.expand : t.mapmodes.collapse}
             >
               <Icon name={is_tray_collapsed ? 'expand_less' : 'expand_more'} className="text-sm" />
             </button>
@@ -395,7 +402,7 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
               />
               <input
                 type="text"
-                placeholder="Search mapmodes & layers..."
+                placeholder={t.mapmodes.searchPlaceholder}
                 value={search_query}
                 onChange={(arg0_e) => set_search_query(arg0_e.target.value)}
                 className="w-full h-7 pl-7 pr-6 bg-background border border-input rounded-none text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
@@ -415,12 +422,12 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
             <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
               {is_loading_layers && (
                 <div className="p-2 text-center text-xs text-muted-foreground animate-pulse">
-                  Loading raster layers...
+                  {t.mapmodes.loadingRaster}
                 </div>
               )}
               {Object.keys(dataset_folders).length === 0 && !is_loading_layers && filtered_overlays.length === 0 && (
                 <div className="p-2 text-center text-xs text-muted-foreground">
-                  No matching layers found.
+                  {t.mapmodes.noResults}
                 </div>
               )}
 
@@ -456,7 +463,7 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
                     <div className="flex items-center gap-1.5">
                       <Icon name="build" className="text-primary text-xs" />
                       <span className="font-bold text-xs text-foreground uppercase tracking-wide">
-                        Analytical Tools
+                        {t.mapmodes.analyticalTools}
                       </span>
                     </div>
                     <div className="flex items-center gap-1">
@@ -494,7 +501,7 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
                                   <span className="text-xs truncate">{arg0_mode.label}</span>
                                 </div>
                                 <span className="text-[10px] text-muted-foreground uppercase font-mono">
-                                  {is_active ? 'ON' : 'OFF'}
+                                  {is_active ? t.mapmodes.on : t.mapmodes.off}
                                 </span>
                               </button>
                             </MapmodeTooltip>

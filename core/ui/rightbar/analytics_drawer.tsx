@@ -10,6 +10,7 @@ import { LargestCitiesChart } from './largest_cities_chart'
 import { ParsedDataLayer } from '@server/layer_parser'
 import { Button } from '@ui/components/button'
 import { Icon } from '@ui/components/icon'
+import { useLocalisation } from '@localisation'
 
 export interface AnalyticsDrawerProps {
   activeLayer?: ParsedDataLayer | null
@@ -87,6 +88,7 @@ export let AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_prop
   //Declare local instance variables
   let active_tab: 'cities' | 'pyramid' | 'breakdown' | 'histogram' | 'stats'
   let effective_countries: CountryFeature[]
+  let format_string: (template: string, ...args: any[]) => string
   let handle_clear: () => void
   let has_category_breakdown = Boolean(
     active_layer?.type === 'raster.category_profession' ||
@@ -102,6 +104,7 @@ export let AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_prop
     active_layer?.id === 'age_sex'
   )
   let is_dev = user_role === 'developer'
+  let localisation: ReturnType<typeof useLocalisation>
   let right_offset = getAnalyticsPanelRightOffset(is_settings_drawer_open)
   let set_active_tab: React.Dispatch<React.SetStateAction<'cities' | 'pyramid' | 'breakdown' | 'histogram' | 'stats'>>
   let set_stats_progress_pct: React.Dispatch<React.SetStateAction<number>>
@@ -112,10 +115,14 @@ export let AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_prop
   let stats_progress_pct: number
   let stats_start_time_ref = useRef<number>(0)
   let stats_time_remaining: number
+  let t: ReturnType<typeof useLocalisation>['t']
   let use_placeholder_breakdown: boolean
   let use_placeholder_pyramid: boolean
 
   //Function body
+  localisation = useLocalisation()
+  format_string = localisation.formatString
+  t = localisation.t
   let initial_tab: 'cities' | 'pyramid' | 'breakdown' | 'histogram' | 'stats' = has_cities_chart
     ? 'cities'
     : has_population_pyramid
@@ -238,7 +245,7 @@ export let AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_prop
         <div className="flex items-center gap-[var(--padding)] min-w-0">
           <span className="text-[var(--header-font-size)] font-bold text-foreground flex items-center gap-1.5 shrink-0">
             <Icon name="bar_chart" />
-            <span>Raster Calculator</span>
+            <span>{t.analytics.title}</span>
           </span>
 
           <div className="flex items-center gap-1 bg-muted p-[var(--cell-padding)] rounded-none shrink-0">
@@ -254,7 +261,7 @@ export let AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_prop
                 }`}
               >
                 <Icon name="location_city" className="text-white text-xs" />
-                Largest Cities
+                {t.analytics.largestCities}
               </button>
             )}
 
@@ -270,7 +277,7 @@ export let AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_prop
                 }`}
               >
                 <Icon name="people" className="text-white text-xs" />
-                Pyramid
+                {t.analytics.pyramid}
               </button>
             )}
 
@@ -286,7 +293,7 @@ export let AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_prop
                 }`}
               >
                 <Icon name="briefcase" className="text-white text-xs" />
-                Sectors
+                {t.analytics.breakdown}
               </button>
             )}
 
@@ -300,7 +307,7 @@ export let AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_prop
               }`}
             >
               <Icon name="bar_chart" className="text-white text-xs" />
-              Distribution
+              {t.analytics.histogram}
             </button>
 
             <button
@@ -313,7 +320,7 @@ export let AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_prop
               }`}
             >
               <Icon name="info" className="text-white text-xs" />
-              Statistics
+              {t.analytics.summary}
             </button>
           </div>
         </div>
@@ -328,8 +335,8 @@ export let AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_prop
                 on_force_refresh()
               window.dispatchEvent(new Event('resize'))
             }}
-            title="Force Refresh Raster Calculator"
-            aria-label="Force Refresh Raster Calculator"
+            title={t.analytics.refresh}
+            aria-label={t.analytics.refresh}
           >
             <Icon name="refresh" className="text-white text-xs" />
           </Button>
@@ -339,7 +346,7 @@ export let AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_prop
             size="sm"
             className="h-6 w-6 p-0 rounded-none text-muted-foreground hover:text-foreground cursor-pointer"
             onClick={on_toggle_open}
-            title="Close Analytics Panel"
+            title={t.analytics.summary}
           >
             <Icon name="close" className="text-white" />
           </Button>
@@ -351,7 +358,7 @@ export let AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_prop
         <div className="flex items-center justify-between px-[var(--padding)] py-1 bg-muted/20 border-b border-border text-xs shrink-0 select-none">
           <div className="flex items-center gap-1.5 min-w-0">
             <span className={`w-1.5 h-1.5 rounded-none ${is_calculating_stats ? 'bg-amber-400 animate-pulse' : 'bg-primary'} shrink-0`} />
-            <span className="text-muted-foreground font-light text-[var(--body-font-size)]">Filter:</span>
+            <span className="text-muted-foreground font-light text-[var(--body-font-size)]">{t.analytics.filter}</span>
             <span className="font-medium text-foreground text-[var(--body-font-size)] truncate max-w-[320px]">
               {effective_countries.length === 1
                 ? effective_countries[0].properties.name
@@ -368,9 +375,9 @@ export let AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_prop
             type="button"
             onClick={handle_clear}
             className="text-muted-foreground hover:text-foreground text-[10px] underline cursor-pointer shrink-0 ml-2"
-            title="Clear country filter"
+            title={t.analytics.clearFilter}
           >
-            Clear Filter
+            {t.analytics.clearFilter}
           </button>
         </div>
       )}

@@ -29,6 +29,7 @@
       "@framework/*": ["./core/framework/*"],
       "@server/*": ["./core/server/*"],
       "@ui/*": ["./core/ui/*"],
+      "@localisation": ["./localisation/index.ts"],
       "@localisation/*": ["./localisation/*"]
     }
   },

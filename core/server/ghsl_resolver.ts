@@ -21,7 +21,7 @@ export interface ResolverQueueTask {
 }
 
 let city_cache: Record<string, CityCacheRecord> = {}
-let city_cache_path = path.resolve(process.cwd(), 'config/stadester_city_cache.json')
+let city_cache_path = path.resolve(process.cwd(), 'common/stadester_city_cache.json')
 let ghsl_csv_map = new Map<string, string>()
 let historical_cities_index: Array<{ coords: [number, number]; maxPop: number; name: string }> = []
 let is_cache_loaded = false

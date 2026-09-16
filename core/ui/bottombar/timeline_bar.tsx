@@ -3,6 +3,7 @@ import { UfDate, TIMELINE_MILESTONES, type UfDateObject } from '@framework/utils
 import { Icon } from '@ui/components/icon'
 import { Slider } from '@ui/components/slider'
 import { HistoricalDatePicker } from './historical_date_picker'
+import { useLocalisation } from '@localisation'
 
 export interface TimelineBarProps {
   availableKeyframes?: number[]
@@ -50,6 +51,7 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
   let anim_frame_ref = useRef<number | null>(null)
   let current_year_ref = useRef<number>(current_year)
   let date_obj: { day: number; month: number; year: number }
+  let format_string: (template: string, ...args: any[]) => string
   let formatted_date: string
   let handle_jump_year: (arg0_year: number) => void
   let handle_select_exact_date: (arg0_date: UfDateObject) => void
@@ -71,6 +73,7 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
   let loading_pct: number
   let loading_time_remaining: number
   let loading_visible: boolean
+  let localisation: ReturnType<typeof useLocalisation>
   let on_change_year_ref = useRef(on_change_year)
   let on_toggle_play_ref = useRef(on_toggle_play)
   let set_is_collapsed: React.Dispatch<React.SetStateAction<boolean>>
@@ -84,8 +87,12 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
   let slider_normalised_val: number
   let snap_ref = useRef<boolean>(snap_to_keyframes)
   let speed_options = [0.5, 1, 2, 5, 10]
+  let t: ReturnType<typeof useLocalisation>['t']
 
   //Function body
+  localisation = useLocalisation()
+  format_string = localisation.formatString
+  t = localisation.t
   ;[is_collapsed, set_is_collapsed] = useState(false)
   ;[is_date_picker_open, set_is_date_picker_open] = useState(false)
   ;[is_looping, set_is_looping] = useState(false)
@@ -345,7 +352,7 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
               type="button"
               onClick={on_toggle_play}
               className="h-7 w-7 flex items-center justify-center bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm cursor-pointer"
-              title={is_playing ? 'Pause timeline playback' : 'Start timeline animation'}
+              title={is_playing ? t.timeline.pause : t.timeline.play}
             >
               <Icon name={is_playing ? 'pause' : 'play_arrow'} />
             </button>
@@ -355,7 +362,7 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
               type="button"
               onClick={handle_step_backward}
               className="h-7 w-7 flex items-center justify-center bg-muted/60 hover:bg-muted text-foreground border border-border transition-colors cursor-pointer"
-              title="Step to previous keyframe"
+              title={t.timeline.stepBackward}
             >
               <Icon name="skip_previous" />
             </button>
@@ -365,7 +372,7 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
               type="button"
               onClick={handle_step_forward}
               className="h-7 w-7 flex items-center justify-center bg-muted/60 hover:bg-muted text-foreground border border-border transition-colors cursor-pointer"
-              title="Step to next keyframe"
+              title={t.timeline.stepForward}
             >
               <Icon name="skip_next" />
             </button>
@@ -380,7 +387,7 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
                     ? 'bg-primary text-primary-foreground border-primary'
                     : 'bg-muted/60 hover:bg-muted text-foreground border border-border'
                 }`}
-                title="Playback & Timeline Settings"
+                title={t.timeline.settings}
               >
                 <Icon name="settings" className="text-sm" />
               </button>
@@ -391,7 +398,7 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
                   <div className="flex items-center justify-between border-b border-border/60 pb-1.5">
                     <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
                       <Icon name="settings" className="text-sm text-primary" />
-                      Timeline Settings
+                      {t.timeline.settings}
                     </span>
                     <button
                       type="button"
@@ -404,7 +411,7 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
 
                   {/* Playback Speed */}
                   <div>
-                    <label className="text-[11px] text-muted-foreground block mb-1">Playback Speed</label>
+                    <label className="text-[11px] text-muted-foreground block mb-1">{t.timeline.speed}</label>
                     <div className="grid grid-cols-5 gap-1 border border-border bg-muted/30 p-0.5 text-xs font-mono">
                       {speed_options.map((arg0_spd) => (
                         <button
@@ -427,7 +434,7 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
                   <div className="pt-2 border-t border-border/40">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-xs font-medium text-foreground">Snap to Keyframes</div>
+                        <div className="text-xs font-medium text-foreground">{t.timeline.snap}</div>
                         <div className="text-[10px] text-muted-foreground">Scrub only genuine raster dates</div>
                       </div>
                       <button
@@ -446,7 +453,7 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
                   <div className="pt-2 border-t border-border/40">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-xs font-medium text-foreground">Loop Playback</div>
+                        <div className="text-xs font-medium text-foreground">{t.timeline.loop}</div>
                         <div className="text-[10px] text-muted-foreground">Restart from beginning at end</div>
                       </div>
                       <button
@@ -469,7 +476,7 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
               <div className="flex items-center gap-2 px-2.5 py-0.5 bg-primary/15 border border-primary/40 text-primary text-[11px] font-mono shadow-xs transition-opacity duration-200">
                 <Icon name="sync" className={`text-xs ${is_loading ? 'animate-spin' : ''}`} />
                 <span>
-                  {loading_pct >= 100 ? 'Raster Ready' : `Loading Raster: ${loading_pct}% (~${loading_time_remaining.toFixed(1)}s)`}
+                  {loading_pct >= 100 ? t.timeline.rasterReady : format_string(t.timeline.loadingRaster, loading_pct, loading_time_remaining.toFixed(1))}
                 </span>
                 <div className="w-14 h-1.5 bg-primary/20 border border-primary/30 overflow-hidden shrink-0">
                   <div

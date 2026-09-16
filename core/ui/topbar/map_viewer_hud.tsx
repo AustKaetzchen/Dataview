@@ -10,6 +10,7 @@ import {
 } from '@framework/geopng/types.ts'
 import { UI_LAYOUT } from '@framework/utils/ui_layout'
 import { MAP_CONFIG } from '@common'
+import { useLocalisation, type SupportedLocale } from '@localisation'
 import { ColorBarLegend } from './color_bar_legend'
 import { StadesterLegendCard } from './stadester_legend_card'
 import { InfoFlyoutPanel } from './info_flyout_panel'
@@ -137,6 +138,8 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
   let timeline_clearance = props.timelineClearance ?? 128
   let top_right_taken = props.topRightTaken ?? 0
   let ui_visible = props.uiVisible
+
+  let { locale, setLocale, t } = useLocalisation()
 
   //Declare local instance variables
   let container_style: React.CSSProperties = {}
@@ -267,13 +270,13 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
                   size="icon"
                   onClick={() => set_flyout_open(!flyout_open)}
                   className="h-7 w-7 rounded-none text-white cursor-pointer"
-                  aria-label="Map Display Settings"
+                  aria-label={t.settings.title}
                 >
                   <Icon name="settings" className="text-white" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="left">
-                <span>Map Display Settings (Basemap & Projection)</span>
+                <span>{t.settings.title}</span>
               </TooltipContent>
             </Tooltip>
 
@@ -285,13 +288,13 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
                   size="icon"
                   onClick={on_toggle_analytics}
                   className="h-7 w-7 rounded-none text-white cursor-pointer"
-                  aria-label="Toggle Raster Calculator"
+                  aria-label={t.analytics.title}
                 >
                   <Icon name="analytics" className="text-white" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="left">
-                <span>Toggle Raster Calculator (Top Right View Panel)</span>
+                <span>{t.analytics.title}</span>
               </TooltipContent>
             </Tooltip>
 
@@ -303,13 +306,13 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
                   size="icon"
                   onClick={() => set_show_graticule(!show_graticule)}
                   className="h-7 w-7 rounded-none text-white cursor-pointer"
-                  aria-label="Toggle Graticule Grid"
+                  aria-label={t.hud.graticule}
                 >
                   <Icon name="grid_on" className="text-white" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="left">
-                <span>Toggle Graticule Grid (Parallels & Meridians)</span>
+                <span>{t.hud.graticule}</span>
               </TooltipContent>
             </Tooltip>
 
@@ -321,13 +324,13 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
                   size="icon"
                   onClick={on_double_click}
                   className="h-7 w-7 rounded-none text-white cursor-pointer"
-                  aria-label="Reset View"
+                  aria-label={t.hud.resetView}
                 >
                   <Icon name="restart_alt" className="text-white" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="left">
-                <span>Reset Map View (Centre & Zoom)</span>
+                <span>{t.hud.resetView}</span>
               </TooltipContent>
             </Tooltip>
 
@@ -339,13 +342,13 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
                   size="icon"
                   onClick={on_toggle_ui}
                   className="h-7 w-7 rounded-none text-white cursor-pointer"
-                  aria-label={ui_visible ? 'Hide UI (Full Map View)' : 'Show UI'}
+                  aria-label={ui_visible ? t.hud.hideUi : t.hud.showUi}
                 >
                   <Icon name={ui_visible ? 'visibility' : 'visibility_off'} className="text-white" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="left">
-                <span>{ui_visible ? 'Hide UI (Full Map View)' : 'Show UI'}</span>
+                <span>{ui_visible ? t.hud.hideUi : t.hud.showUi}</span>
               </TooltipContent>
             </Tooltip>
           </div>
@@ -359,12 +362,12 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
                 top: `${UI_LAYOUT.margin}px`,
                 width: `${UI_LAYOUT.settingsDrawerWidth}px`,
               }}
-              className="absolute z-35 bg-card/98 backdrop-blur-md border border-border rounded-none p-[var(--padding)] shadow-2xl text-[var(--body-font-size)] text-card-foreground animate-in fade-in-0 zoom-in-95 duration-100 font-sans space-y-[var(--padding)] max-h-[340px] overflow-y-auto custom-scrollbar"
+              className="absolute z-35 bg-card/98 backdrop-blur-md border border-border rounded-none p-[var(--padding)] shadow-2xl text-[var(--body-font-size)] text-card-foreground animate-in fade-in-0 zoom-in-95 duration-100 font-sans space-y-[var(--padding)] max-h-[360px] overflow-y-auto custom-scrollbar"
             >
               <div className="flex items-center justify-between pb-1.5 border-b border-border">
                 <span className="text-[var(--body-font-size)] font-bold text-foreground flex items-center gap-1.5">
                   <Icon name="settings" />
-                  <span>Map Display Settings</span>
+                  <span>{t.settings.title}</span>
                 </span>
                 <button
                   type="button"
@@ -375,9 +378,37 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
                 </button>
               </div>
 
+              {/* Language Selector */}
+              <div className="space-y-1.5">
+                <span className="text-[var(--body-font-size)] font-bold text-foreground flex items-center gap-1.5">
+                  <Icon name="translate" className="text-xs" />
+                  <span>{t.settings.language}</span>
+                </span>
+                <div className="grid grid-cols-3 gap-1 bg-background/60 p-[var(--cell-padding)] rounded-none border border-border">
+                  {[
+                    { id: 'en-GB' as SupportedLocale, label: 'EN-GB' },
+                    { id: 'fr' as SupportedLocale, label: 'FR' },
+                    { id: 'de' as SupportedLocale, label: 'DE' },
+                  ].map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setLocale(item.id)}
+                      className={`px-2 py-1 rounded-none text-[var(--body-font-size)] transition-colors cursor-pointer text-center ${
+                        locale === item.id
+                          ? 'bg-primary text-primary-foreground font-bold shadow-xs'
+                          : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground font-light'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Projection Mode */}
               <div className="space-y-1.5">
-                <span className="text-[var(--body-font-size)] font-bold text-foreground">Projection Mode</span>
+                <span className="text-[var(--body-font-size)] font-bold text-foreground">{t.settings.projectionMode}</span>
                 <div className="grid grid-cols-2 gap-1 bg-background/60 p-[var(--cell-padding)] rounded-none border border-border">
                   {(['Mercator', 'Equirectangular', 'Globe', 'EqualEarth'] as ProjectionType[]).map((p) => (
                     <button
@@ -389,7 +420,7 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
                         : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground font-light'
                         }`}
                     >
-                      {p === 'Equirectangular' ? 'Equirectangular' : p === 'EqualEarth' ? 'Equal Earth' : p}
+                      {p === 'Equirectangular' ? t.settings.projections.equirectangular : p === 'EqualEarth' ? t.settings.projections.equalEarth : p === 'Globe' ? t.settings.projections.globe : t.settings.projections.mercator}
                     </button>
                   ))}
                 </div>
@@ -397,7 +428,7 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
 
               {/* Basemap Layer */}
               <div className="space-y-1.5">
-                <span className="text-[var(--body-font-size)] font-bold text-foreground">Basemap Layer</span>
+                <span className="text-[var(--body-font-size)] font-bold text-foreground">{t.settings.basemapLayer}</span>
                 <div className="space-y-1 bg-background/60 p-[var(--cell-padding)] rounded-none border border-border">
                   {MAP_CONFIG.basemapLayers.map((arg0_item: { id: string; label: string }) => (
                     <button
@@ -418,15 +449,15 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
 
               {/* Colourbar Position */}
               <div className="space-y-1.5">
-                <span className="text-[var(--body-font-size)] font-bold text-foreground">Colourbar Position</span>
+                <span className="text-[var(--body-font-size)] font-bold text-foreground">{t.settings.colourbarPosition}</span>
                 <div className="grid grid-cols-3 gap-1 bg-background/60 p-[var(--cell-padding)] rounded-none border border-border">
                   {[
-                    { id: 'top-left', label: 'Top Left' },
-                    { id: 'top-center', label: 'Top Centre' },
-                    { id: 'top-right', label: 'Top Right' },
-                    { id: 'bottom-left', label: 'Bottom Left' },
-                    { id: 'bottom-center', label: 'Bottom Centre' },
-                    { id: 'bottom-right', label: 'Bottom Right' },
+                    { id: 'top-left', label: t.settings.positions.topLeft },
+                    { id: 'top-center', label: t.settings.positions.topCenter },
+                    { id: 'top-right', label: t.settings.positions.topRight },
+                    { id: 'bottom-left', label: t.settings.positions.bottomLeft },
+                    { id: 'bottom-center', label: t.settings.positions.bottomCenter },
+                    { id: 'bottom-right', label: t.settings.positions.bottomRight },
                   ].map((pos) => (
                     <button
                       key={pos.id}
@@ -446,7 +477,7 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
               {/* Performant Mode (Optimization Logic) */}
               <div className="space-y-1.5 pt-1 border-t border-border">
                 <div className="flex items-center justify-between">
-                  <span className="text-[var(--body-font-size)] font-bold text-foreground">Performant Mode</span>
+                  <span className="text-[var(--body-font-size)] font-bold text-foreground">{t.settings.performantMode}</span>
                   <button
                     type="button"
                     onClick={() => on_toggle_performant_mode && on_toggle_performant_mode(!performant_mode)}
@@ -455,11 +486,11 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
                       : 'bg-muted text-muted-foreground hover:text-foreground'
                       }`}
                   >
-                    {performant_mode ? 'ENABLED' : 'DISABLED'}
+                    {performant_mode ? t.settings.enabled : t.settings.disabled}
                   </button>
                 </div>
                 <span className="text-[10px] text-muted-foreground block leading-normal">
-                  Actively culls RAM cache to 1 keyframe and disables background prefetch to cap memory usage.
+                  {t.settings.performantDesc}
                 </span>
               </div>
             </div>

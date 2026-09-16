@@ -2,7 +2,7 @@ import React from 'react';
 import { CircleOverlayConfig } from '@framework/geopng/types.ts';
 import { Icon } from '@ui/components/icon';
 import { Slider } from '@ui/components/slider';
-import { LOCALISATION_CONFIG } from '@common';
+import { useLocalisation } from '@localisation';
 
 export interface CircleOverlaySettingsProps {
   circleOverlayConfig: CircleOverlayConfig;
@@ -23,6 +23,9 @@ export function CircleOverlaySettings (arg0_props: CircleOverlaySettingsProps) {
     circleOverlayConfig: circle_overlay_config,
     setCircleOverlayConfig: set_circle_overlay_config,
   } = props;
+
+  //Declare local instance variables
+  let { t } = useLocalisation();
 
   //Return statement
   return (
@@ -130,9 +133,9 @@ export function CircleOverlaySettings (arg0_props: CircleOverlaySettingsProps) {
       {/* Black Halo Thickness */}
       <div className="space-y-1.5">
         <div className="flex justify-between items-center text-[var(--body-font-size)]">
-          <span className="text-muted-foreground">{LOCALISATION_CONFIG.mapmodes.haloThicknessLabel}</span>
+          <span className="text-muted-foreground">{t.mapmodes.haloThicknessLabel}</span>
           <span className="text-foreground font-bold">
-            {circle_overlay_config.haloWidth ?? 1} {LOCALISATION_CONFIG.mapmodes.haloThicknessUnit}
+            {circle_overlay_config.haloWidth ?? 1} {t.mapmodes.haloThicknessUnit}
           </span>
         </div>
         <Slider
@@ -150,7 +153,7 @@ export function CircleOverlaySettings (arg0_props: CircleOverlaySettingsProps) {
       </div>
 
       <p className="text-[var(--body-font-size)] text-muted-foreground font-light leading-tight">
-        {LOCALISATION_CONFIG.mapmodes.haloDescription}
+        {t.mapmodes.haloDescription}
       </p>
     </div>
   );
