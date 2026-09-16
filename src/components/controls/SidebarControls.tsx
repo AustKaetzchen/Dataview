@@ -191,15 +191,18 @@ export const SidebarControls: React.FC<SidebarControlsProps> = function (arg0_pr
       return active_layer.description
     if (stadester_config?.enabled && layers?.['stadester']?.description)
       return layers['stadester'].description
-    if (historical_borders_config?.enabled && layers?.['statistical_borders']?.description)
-      return layers['statistical_borders'].description
+    if (historical_borders_config?.enabled) {
+      let border_dataset = historical_borders_config.dataset || 'statistical_borders'
+      if (layers?.[border_dataset]?.description)
+        return layers[border_dataset].description
+    }
     if (map_modes && map_modes.length > 0) {
       let active_mode = map_modes.find((arg0_m) => arg0_m.active && arg0_m.id !== 'default' && (arg0_m as any).description)
       if (active_mode && (active_mode as any).description)
         return (active_mode as any).description
     }
     return null
-  }, [active_layer, historical_borders_config?.enabled, layers, map_modes, stadester_config?.enabled])
+  }, [active_layer, historical_borders_config?.dataset, historical_borders_config?.enabled, layers, map_modes, stadester_config?.enabled])
 
   toggle_folder = function (arg0_folder_key: string) {
     let folder_key = arg0_folder_key

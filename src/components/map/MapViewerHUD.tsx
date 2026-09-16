@@ -33,6 +33,7 @@ export interface MapViewerHUDProps {
   flyoutOpen: boolean
   hasCanvas?: boolean
   heightmapConfig: HeightmapConfig
+  hideColourbar?: boolean
   hoveredCity?: CityPoint | null
   infoPanelOpen?: boolean
   inspectData?: any
@@ -96,6 +97,7 @@ export const MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
   let flyout_open = props.flyoutOpen
   let has_canvas = Boolean(props.hasCanvas)
   let heightmap_config = props.heightmapConfig
+  let hide_colourbar = Boolean(props.hideColourbar)
   let hovered_city = props.hoveredCity
   let info_panel_open = props.infoPanelOpen
   let inspect_data = props.inspectData
@@ -189,7 +191,7 @@ export const MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
   return (
     <>
       {/* Floating Legend Container */}
-      {!is_timelapse_exporting && ui_visible && (Boolean(raster) || Boolean(has_canvas) || Boolean(stadester_config?.enabled) || Boolean(info_panel_open)) && (
+      {!is_timelapse_exporting && ui_visible && ((!hide_colourbar && (Boolean(raster) || Boolean(has_canvas))) || Boolean(stadester_config?.enabled) || Boolean(info_panel_open)) && (
         <div
           id="dataview-legend-card-container"
           style={container_style}
@@ -197,7 +199,7 @@ export const MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
             }`}
         >
           {/* Main Raster ColourBar Legend */}
-          {legend_title !== 'None' && (
+          {!hide_colourbar && legend_title !== 'None' && (Boolean(raster) || Boolean(has_canvas)) && (
             <div className="pointer-events-auto">
               <ColorBarLegend
                 palette={color_palette}

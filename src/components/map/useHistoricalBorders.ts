@@ -27,16 +27,20 @@ let client_borders_cache = new Map<number, HistoricalBordersResponse>()
 export const useHistoricalBorders = function (
   arg0_active_layer_id?: string | null,
   arg1_timeline_year: number = 1950,
-  arg2_enabled: boolean = false
+  arg2_enabled: boolean = false,
+  arg3_dataset?: string
 ): HistoricalBordersHookResult {
   //Convert from parameters
   let active_layer_id = arg0_active_layer_id
+  let custom_dataset = arg3_dataset
   let enabled = arg2_enabled
   let timeline_year = arg1_timeline_year
 
   //Declare local instance variables
   let abort_controller_ref = useRef<AbortController | null>(null)
   let borders_data: { features: HistoricalBorderFeature[]; type: 'FeatureCollection' } | null
+  let cache_key: string
+  let dataset = custom_dataset || (active_layer_id && active_layer_id.includes('border') ? active_layer_id : 'statistical_borders')
   let domain: [number, number] | null
   let error: string | null
   let is_active: boolean
@@ -56,7 +60,8 @@ export const useHistoricalBorders = function (
   ;[is_loading, set_is_loading] = useState<boolean>(false)
   ;[source, set_source] = useState<'cshapes' | 'naissance' | null>(null)
 
-  is_active = enabled || active_layer_id === 'statistical_borders' || Boolean(active_layer_id && active_layer_id.includes('border'))
+  cache_key = `${dataset}:${target_year}`
+  is_active = enabled || active_layer_id === 'statistical_borders' || active_layer_id === 'detailed_borders' || Boolean(active_layer_id && active_layer_id.includes('border'))
 
   useEffect(() => {
     //Guard clauses
@@ -68,8 +73,8 @@ export const useHistoricalBorders = function (
     }
 
     //Check client cache
-    if (client_borders_cache.has(target_year)) {
-      let cached = client_borders_cache.get(target_year)!
+    if (client_borders_cache.has(cache_key as any)) {
+      let cached = client_borders_cache.get(cache_key as any)!
       set_borders_data({
         features: cached.features,
         type: 'FeatureCollection',
@@ -91,7 +96,7 @@ export const useHistoricalBorders = function (
     set_error(null)
 
     //Fetch sliced borders from backend API
-    fetch(`/api/atlas/borders?year=${target_year}`, {
+    fetch(`/api/atlas/borders?year=${target_year}&dataset=${dataset}`, {
       signal: controller.signal,
     })
       .then((arg0_res) => {
@@ -100,7 +105,7 @@ export const useHistoricalBorders = function (
         return arg0_res.json()
       })
       .then((arg0_json: HistoricalBordersResponse) => {
-        client_borders_cache.set(target_year, arg0_json)
+        client_borders_cache.set(cache_key as any, arg0_json)
         set_borders_data({
           features: arg0_json.features,
           type: 'FeatureCollection',
@@ -120,7 +125,7 @@ export const useHistoricalBorders = function (
     return () => {
       controller.abort()
     }
-  }, [is_active, target_year])
+  }, [cache_key, dataset, is_active, target_year])
 
   //Return statement
   return {

@@ -59,9 +59,19 @@ interface NaissanceEntityRecord {
 let cached_cshapes_data: any = null
 let cached_cshapes_features: any[] = null as unknown as any[]
 let cached_cshapes_keyframes_by_gwcode: Map<number, HistoricalBorderKeyframe[]> = new Map()
-let cached_naissance_data: any = null
-let cached_naissance_entities: Map<string, NaissanceEntityRecord> = null as unknown as Map<string, NaissanceEntityRecord>
-let in_memory_slice_lru: Map<number, HistoricalBorderFeature[]> = new Map()
+let cached_naissance_entities_by_path: Map<string, Map<string, NaissanceEntityRecord>> = new Map()
+let detailed_borders_slices = [
+  { domain: [-3500, 476], file: '0.476.1.1.naissance' },
+  { domain: [476, 1356], file: '1.1356.1.1.naissance' },
+  { domain: [1356, 1707], file: '2.1707.1.1.naissance' },
+  { domain: [1707, 1815], file: '3.1815.1.1.naissance' },
+  { domain: [1815, 1914], file: '4.1914.1.1.naissance' },
+  { domain: [1914, 1936], file: '5.1936.1.1.naissance' },
+  { domain: [1936, 1946], file: '6.1946.1.1.naissance' },
+  { domain: [1946, 1991], file: '7.1991.1.1.naissance' },
+  { domain: [1991, 2026], file: '8.2026.1.1.naissance' },
+]
+let in_memory_slice_lru: Map<string, HistoricalBorderFeature[]> = new Map()
 let max_lru_entries = 50
 
 /**
@@ -121,13 +131,14 @@ export class AtlasBordersService {
   /**
    * Retrieves the absolute filesystem paths for atlas datasets.
    *
-   * @returns {{ cacheDir: string, cshapesPath: string, naissancePath: string }}
+   * @returns {{ cacheDir: string, cshapesPath: string, detailedDir: string, naissancePath: string }}
    */
-  static getDatasetPaths (): { cacheDir: string; cshapesPath: string; naissancePath: string } {
+  static getDatasetPaths (): { cacheDir: string; cshapesPath: string; detailedDir: string; naissancePath: string } {
     //Declare local instance variables
     let base_dir = path.resolve(process.cwd(), 'data/atlas')
     let cache_dir = path.join(base_dir, 'cache')
     let cshapes_path = path.join(base_dir, 'CShapes-2.0.geojson')
+    let detailed_dir = path.join(base_dir, 'detailed')
     let naissance_path = path.join(base_dir, 'atlas.naissance')
 
     //Function body
@@ -138,6 +149,7 @@ export class AtlasBordersService {
     return {
       cacheDir: cache_dir,
       cshapesPath: cshapes_path,
+      detailedDir: detailed_dir,
       naissancePath: naissance_path,
     }
   }
@@ -207,35 +219,44 @@ export class AtlasBordersService {
    *
    * @returns {Map<string, NaissanceEntityRecord>}
    */
-  static loadNaissance (): Map<string, NaissanceEntityRecord> {
-    //Guard clauses
-    if (cached_naissance_entities)
-      return cached_naissance_entities
+  /**
+   * Loads and indexes a .naissance file in memory on first access using SVEA History keyframe specifications.
+   *
+   * @param {string} [arg0_file_path]
+   *
+   * @returns {Map<string, NaissanceEntityRecord>}
+   */
+  static loadNaissance (arg0_file_path?: string): Map<string, NaissanceEntityRecord> {
+    //Convert from parameters
+    let file_path = arg0_file_path || AtlasBordersService.getDatasetPaths().naissancePath
 
-    //Declare local instance variables
-    let file_path = AtlasBordersService.getDatasetPaths().naissancePath
-
     //Guard clauses
+    if (cached_naissance_entities_by_path.has(file_path))
+      return cached_naissance_entities_by_path.get(file_path)!
+
     if (!fs.existsSync(file_path)) {
       console.warn(`[AtlasBordersService] Naissance file not found: ${file_path}`)
-      cached_naissance_entities = new Map()
-      return cached_naissance_entities
+      let empty_map = new Map<string, NaissanceEntityRecord>()
+      cached_naissance_entities_by_path.set(file_path, empty_map)
+      return empty_map
     }
+
+    //Declare local instance variables
+    let entity_records = new Map<string, NaissanceEntityRecord>()
 
     //Function body
     try {
-      console.log(`[AtlasBordersService] Loading and indexing atlas.naissance...`)
+      console.log(`[AtlasBordersService] Loading and indexing ${path.basename(file_path)}...`)
       let raw = fs.readFileSync(file_path, 'utf-8')
-      cached_naissance_data = JSON.parse(raw)
-      cached_naissance_entities = new Map()
+      let parsed_data = JSON.parse(raw)
 
-      let keys = Object.keys(cached_naissance_data)
+      let keys = Object.keys(parsed_data)
       for (let i = 0; i < keys.length; i++) {
         let ent_id = keys[i]
         if (ent_id === 'map_settings')
           continue
 
-        let ent = cached_naissance_data[ent_id]
+        let ent = parsed_data[ent_id]
         if (!ent || ent.class_name !== 'GeometryPolygon' || !ent.history)
           continue
 
@@ -253,7 +274,7 @@ export class AtlasBordersService {
             kf_map.set(ts, val as [any, any, any])
         }
 
-        cached_naissance_entities.set(ent_id, {
+        entity_records.set(ent_id, {
           class_name: ent.class_name,
           id: ent_id,
           keyframes: kf_map,
@@ -264,28 +285,37 @@ export class AtlasBordersService {
         })
       }
 
-      console.log(`[AtlasBordersService] Successfully indexed ${cached_naissance_entities.size} Naissance historical polygon entities.`)
+      console.log(`[AtlasBordersService] Successfully indexed ${entity_records.size} entities from ${path.basename(file_path)}.`)
     } catch (arg0_err) {
-      console.error('[AtlasBordersService] Failed to load atlas.naissance:', arg0_err)
-      cached_naissance_entities = new Map()
+      console.error(`[AtlasBordersService] Failed to load ${file_path}:`, arg0_err)
     }
 
+    //Maintain at most 4 active slices in memory cache to bound memory consumption
+    if (cached_naissance_entities_by_path.size >= 4) {
+      let oldest_key = cached_naissance_entities_by_path.keys().next().value
+      if (oldest_key !== undefined)
+        cached_naissance_entities_by_path.delete(oldest_key)
+    }
+
+    cached_naissance_entities_by_path.set(file_path, entity_records)
+
     //Return statement
-    return cached_naissance_entities
+    return entity_records
   }
 
   /**
-   * Slices active historical borders for a given year.
+   * Slices active historical borders for a given year and dataset.
    *
    * @param {number} arg0_year
    * @param {Object} [arg1_options]
    * @param {[number, number, number, number]} [arg1_options.bbox]
+   * @param {string} [arg1_options.dataset]
    *
    * @returns {HistoricalBordersResponse}
    */
   static getBordersAtYear (
     arg0_year: number,
-    arg1_options?: { bbox?: [number, number, number, number] }
+    arg1_options?: { bbox?: [number, number, number, number]; dataset?: string }
   ): HistoricalBordersResponse {
     //Convert from parameters
     let options = arg1_options || {}
@@ -293,13 +323,23 @@ export class AtlasBordersService {
 
     //Declare local instance variables
     let bbox = options.bbox
-    let domain: [number, number] = target_year >= 1886 ? [1886, 2026] : [-3500, 1886]
+    let dataset = options.dataset || 'statistical_borders'
+    let disk_cache_path = path.join(
+      AtlasBordersService.getDatasetPaths().cacheDir,
+      `borders_${dataset}_${target_year}.json`
+    )
+    let domain: [number, number] = dataset === 'detailed_borders'
+      ? [-3500, 2026]
+      : (target_year >= 1886 ? [1886, 2026] : [-3500, 1886])
     let features: HistoricalBorderFeature[] = []
-    let source: 'cshapes' | 'naissance' = target_year >= 1886 ? 'cshapes' : 'naissance'
+    let lru_key = `${dataset}_${target_year}`
+    let source: 'cshapes' | 'naissance' = dataset === 'detailed_borders'
+      ? 'naissance'
+      : (target_year >= 1886 ? 'cshapes' : 'naissance')
 
     //Check in-memory LRU cache if no bbox
-    if (!bbox && in_memory_slice_lru.has(target_year)) {
-      let cached_list = in_memory_slice_lru.get(target_year)!
+    if (!bbox && in_memory_slice_lru.has(lru_key)) {
+      let cached_list = in_memory_slice_lru.get(lru_key)!
       return {
         count: cached_list.length,
         domain,
@@ -310,15 +350,11 @@ export class AtlasBordersService {
     }
 
     //Check disk cache if no bbox
-    let disk_cache_path = path.join(
-      AtlasBordersService.getDatasetPaths().cacheDir,
-      `borders_${target_year}.json`
-    )
     if (!bbox && fs.existsSync(disk_cache_path)) {
       try {
         let cached_json = JSON.parse(fs.readFileSync(disk_cache_path, 'utf-8'))
         if (Array.isArray(cached_json.features)) {
-          in_memory_slice_lru.set(target_year, cached_json.features)
+          in_memory_slice_lru.set(lru_key, cached_json.features)
           return {
             count: cached_json.features.length,
             domain,
@@ -333,8 +369,123 @@ export class AtlasBordersService {
     }
 
     //Function body
-    if (target_year >= 1886) {
-      //--- 1. CSHAPES-2.0 GEOJSON SLICER (1886 - Present) ---
+    if (dataset === 'detailed_borders') {
+      //--- 1. DETAILED BORDERS SLICER (-3500 to 2026) ---
+      let slice = detailed_borders_slices.find((arg0_s) =>
+        target_year >= arg0_s.domain[0] && (target_year < arg0_s.domain[1] || arg0_s.domain[1] === 2026)
+      )
+      if (!slice)
+        slice = target_year < -3500 ? detailed_borders_slices[0] : detailed_borders_slices[detailed_borders_slices.length - 1]
+
+      let detailed_path = path.join(AtlasBordersService.getDatasetPaths().detailedDir, slice.file)
+      let entities = AtlasBordersService.loadNaissance(detailed_path)
+      let target_ts = UfDate.getTimestamp({
+        day: 1,
+        hour: 0,
+        minute: 0,
+        month: 1,
+        year: target_year,
+      })
+
+      for (let [ent_id, ent] of entities.entries()) {
+        //Guard clause: check if entity exists at or before target timestamp
+        if (ent.min_ts > target_ts)
+          continue
+
+        let current_geom: any = null
+        let current_props: Record<string, any> = {}
+        let current_symbol: Record<string, any> = {}
+        let resolved_ts = ent.min_ts
+
+        //Resolve state at target_ts using SVEA History algorithm
+        for (let i = 0; i < ent.sorted_timestamps.length; i++) {
+          let ts = ent.sorted_timestamps[i]
+          if (ts > target_ts)
+            break
+
+          resolved_ts = ts
+          let kf = ent.keyframes.get(ts)
+          if (!kf)
+            continue
+
+          if (kf[0] !== undefined)
+            current_geom = kf[0]
+          if (kf[1] !== undefined && typeof kf[1] === 'object' && kf[1] !== null)
+            current_symbol = { ...current_symbol, ...kf[1] }
+          if (kf[2] !== undefined && typeof kf[2] === 'object' && kf[2] !== null)
+            current_props = { ...current_props, ...kf[2] }
+        }
+
+        //If territory ceased existing (.properties.hidden in SVEA) or geometry is missing, skip
+        if (current_props.hidden === true)
+          continue
+        if (!current_geom)
+          continue
+
+        let geom = current_geom.feature?.geometry || current_geom.geometry || (current_geom.type && current_geom.coordinates ? current_geom : null)
+        if (!geom || !geom.coordinates)
+          continue
+
+        let geom_bbox = computeGeometryBBox(geom)
+
+        if (bbox) {
+          let [b_min_x, b_min_y, b_max_x, b_max_y] = bbox
+          let [g_min_x, g_min_y, g_max_x, g_max_y] = geom_bbox
+          if (g_max_x < b_min_x || g_min_x > b_max_x || g_max_y < b_min_y || g_min_y > b_max_y)
+            continue
+        }
+
+        //Format keyframes list for inspection
+        let keyframes_list: HistoricalBorderKeyframe[] = []
+        for (let k = 0; k < ent.sorted_timestamps.length; k++) {
+          let k_ts = ent.sorted_timestamps[k]
+          let date_obj = UfDate.convertTimestampToDate(k_ts)
+          let k_val = ent.keyframes.get(k_ts)
+          let label = 'Territory modified'
+          if (k_val && (k_val[0] === null || k_val[2]?.hidden === true))
+            label = 'Territory dissolved / deleted'
+          else if (k === 0)
+            label = 'Territory established'
+          else if (k_val && k_val[2] && k_val[2].name)
+            label = `Renamed to ${String(k_val[2].name).replace(/\n+/g, ' ')}`
+
+          keyframes_list.push({
+            date: UfDate.formatDate(date_obj),
+            label,
+            timestamp: k_ts,
+            year: date_obj.year,
+          })
+        }
+
+        let raw_name = current_props.name || ent.name || `Entity ${ent_id}`
+        let entity_name = typeof raw_name === 'string' ? raw_name.replace(/\n+/g, ' ') : `Entity ${ent_id}`
+        let resolved_date_obj = UfDate.convertTimestampToDate(resolved_ts)
+
+        features.push({
+          bbox: geom_bbox,
+          geometry: geom,
+          id: `detailed_${ent_id}`,
+          properties: {
+            adm0_a3: entity_name,
+            area: current_props.area,
+            date: UfDate.formatDate(resolved_date_obj),
+            flags: current_props.flags,
+            id: ent_id,
+            iso_a3: entity_name,
+            keyframes: keyframes_list,
+            label: current_props.label,
+            link: current_props.link,
+            name: entity_name,
+            name_long: entity_name,
+            state_id: current_props.state_id,
+            symbol: current_symbol,
+            timestamp: resolved_ts,
+          },
+          type: 'Feature',
+        })
+      }
+    } else if (target_year >= 1886) {
+      //--- 2. CSHAPES-2.0 GEOJSON SLICER (1886 - Present) ---
       let cshapes = AtlasBordersService.loadCShapes()
 
       for (let i = 0; i < cshapes.length; i++) {
@@ -385,7 +536,7 @@ export class AtlasBordersService {
         })
       }
     } else {
-      //--- 2. ATLAS.NAISSANCE SLICER (-3500 to 1886) ---
+      //--- 3. ATLAS.NAISSANCE SLICER (-3500 to 1886) ---
       let entities = AtlasBordersService.loadNaissance()
       let target_ts = UfDate.getTimestamp({
         day: 1,
@@ -427,10 +578,13 @@ export class AtlasBordersService {
         //If territory ceased existing (.properties.hidden in SVEA) or geometry is missing, skip
         if (current_props.hidden === true)
           continue
-        if (!current_geom || !current_geom.feature || !current_geom.feature.geometry)
+        if (!current_geom)
           continue
 
-        let geom = current_geom.feature.geometry
+        let geom = current_geom.feature?.geometry || current_geom.geometry || (current_geom.type && current_geom.coordinates ? current_geom : null)
+        if (!geom || !geom.coordinates)
+          continue
+
         let geom_bbox = computeGeometryBBox(geom)
 
         if (bbox) {
@@ -452,7 +606,7 @@ export class AtlasBordersService {
           else if (k === 0)
             label = 'Territory established'
           else if (k_val && k_val[2] && k_val[2].name)
-            label = `Renamed to ${k_val[2].name}`
+            label = `Renamed to ${String(k_val[2].name).replace(/\n+/g, ' ')}`
 
           keyframes_list.push({
             date: UfDate.formatDate(date_obj),
@@ -462,7 +616,8 @@ export class AtlasBordersService {
           })
         }
 
-        let entity_name = current_props.name || ent.name || `Entity ${ent_id}`
+        let raw_name = current_props.name || ent.name || `Entity ${ent_id}`
+        let entity_name = typeof raw_name === 'string' ? raw_name.replace(/\n+/g, ' ') : `Entity ${ent_id}`
         let resolved_date_obj = UfDate.convertTimestampToDate(resolved_ts)
 
         features.push({
@@ -495,7 +650,7 @@ export class AtlasBordersService {
         if (first_key !== undefined)
           in_memory_slice_lru.delete(first_key)
       }
-      in_memory_slice_lru.set(target_year, features)
+      in_memory_slice_lru.set(lru_key, features)
 
       //Persist to disk cache asynchronously
       try {
@@ -527,13 +682,14 @@ export class AtlasBordersService {
    * @param {number} arg1_year
    * @param {Object} [arg2_options]
    * @param {[number, number, number, number]} [arg2_options.bbox]
+   * @param {string} [arg2_options.dataset]
    *
    * @returns {void}
    */
   static streamBorders (
     arg0_res: ServerResponse,
     arg1_year: number,
-    arg2_options?: { bbox?: [number, number, number, number] }
+    arg2_options?: { bbox?: [number, number, number, number]; dataset?: string }
   ): void {
     //Convert from parameters
     let options = arg2_options || {}
@@ -578,41 +734,45 @@ export class AtlasBordersService {
    */
   static getEntityDetails (arg0_id: string): any {
     //Convert from parameters
-    let target_id = arg0_id.replace(/^(naissance_|cshapes_)/, '')
+    let target_id = arg0_id.replace(/^(naissance_|cshapes_|detailed_)/, '')
 
     //Declare local instance variables
     let cshapes = AtlasBordersService.loadCShapes()
-    let entities = AtlasBordersService.loadNaissance()
+    let default_entities = AtlasBordersService.loadNaissance()
+    let search_entity_maps = [default_entities, ...cached_naissance_entities_by_path.values()]
 
     //Function body
-    //1. Check Naissance entities
-    if (entities.has(target_id)) {
-      let ent = entities.get(target_id)!
-      let keyframes_detail: any[] = []
+    //1. Check Naissance entities across any loaded maps or default atlas.naissance
+    for (let i = 0; i < search_entity_maps.length; i++) {
+      let entities = search_entity_maps[i]
+      if (entities.has(target_id)) {
+        let ent = entities.get(target_id)!
+        let keyframes_detail: any[] = []
 
-      for (let i = 0; i < ent.sorted_timestamps.length; i++) {
-        let ts = ent.sorted_timestamps[i]
-        let kf = ent.keyframes.get(ts)
-        let date_obj = UfDate.convertTimestampToDate(ts)
+        for (let x = 0; x < ent.sorted_timestamps.length; x++) {
+          let ts = ent.sorted_timestamps[x]
+          let kf = ent.keyframes.get(ts)
+          let date_obj = UfDate.convertTimestampToDate(ts)
 
-        keyframes_detail.push({
-          date: UfDate.formatDate(date_obj),
-          hasGeometry: Boolean(kf && kf[0] && kf[0] !== null),
-          properties: kf?.[2] || {},
-          symbol: kf?.[1] || {},
-          timestamp: ts,
-          year: date_obj.year,
-        })
-      }
+          keyframes_detail.push({
+            date: UfDate.formatDate(date_obj),
+            hasGeometry: Boolean(kf && kf[0] && kf[0] !== null),
+            properties: kf?.[2] || {},
+            symbol: kf?.[1] || {},
+            timestamp: ts,
+            year: date_obj.year,
+          })
+        }
 
-      //Return statement
-      return {
-        class_name: ent.class_name,
-        id: ent.id,
-        keyframes: keyframes_detail,
-        name: ent.name,
-        source: 'naissance',
-        totalKeyframes: keyframes_detail.length,
+        //Return statement
+        return {
+          class_name: ent.class_name,
+          id: ent.id,
+          keyframes: keyframes_detail,
+          name: ent.name,
+          source: 'naissance',
+          totalKeyframes: keyframes_detail.length,
+        }
       }
     }
 
@@ -659,6 +819,7 @@ export class AtlasBordersService {
   static clearCache (): void {
     //Function body
     in_memory_slice_lru.clear()
+    cached_naissance_entities_by_path.clear()
     let cache_dir = AtlasBordersService.getDatasetPaths().cacheDir
     if (fs.existsSync(cache_dir)) {
       let files = fs.readdirSync(cache_dir)

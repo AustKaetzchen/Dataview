@@ -150,6 +150,7 @@ export interface CityFullRecord {
 }
 
 export interface HistoricalBordersConfig {
+  dataset?: string
   enabled: boolean
   fillOpacity: number
   strokeColor: string
@@ -157,6 +158,7 @@ export interface HistoricalBordersConfig {
 }
 
 export const DEFAULT_HISTORICAL_BORDERS_CONFIG: HistoricalBordersConfig = {
+  dataset: 'statistical_borders',
   enabled: false,
   fillOpacity: 0.25,
   strokeColor: '#ffffff',

@@ -256,13 +256,19 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
           let is_parent_of_active = Boolean(active_layer && active_layer.parent_id === arg0_layer.id)
           let is_highlighted = is_exact_active || is_parent_of_active
           let years_count = arg0_layer.available_years ? arg0_layer.available_years.length : 0
-          let is_borders = arg0_layer.id === 'statistical_borders' || arg0_layer.type === 'vector.polygon' || arg0_layer.id.includes('borders')
+          let is_borders = arg0_layer.id === 'statistical_borders' || arg0_layer.id === 'detailed_borders' || arg0_layer.type === 'vector.polygon' || arg0_layer.id.includes('borders')
+          let is_border_dataset_match = is_borders
+            ? (historical_borders_config?.dataset === arg0_layer.id || (!historical_borders_config?.dataset && arg0_layer.id === 'statistical_borders'))
+            : false
           let is_stadester = arg0_layer.id.includes('stadester')
+          let is_stadester_dataset_match = is_stadester
+            ? (arg0_layer.id === 'stadester' || stadester_config?.dataset === arg0_layer.id || (!stadester_config?.dataset && arg0_layer.id === 'stadester_1.1'))
+            : false
           let is_vector_overlay = arg0_layer.type === 'vector.points' || is_stadester || is_borders
           let is_overlay_active = is_borders
-            ? Boolean(historical_borders_config?.enabled)
+            ? (Boolean(historical_borders_config?.enabled) && is_border_dataset_match)
             : is_stadester
-              ? Boolean(stadester_config?.enabled)
+              ? (Boolean(stadester_config?.enabled) && is_stadester_dataset_match)
               : false
 
           return (
@@ -278,10 +284,23 @@ export const DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props)
                 onClick={() => {
                   if (accessible) {
                     if (is_borders && on_change_historical_borders_config) {
-                      on_change_historical_borders_config((arg0_prev) => ({
-                        ...arg0_prev,
-                        enabled: !arg0_prev.enabled,
-                      }))
+                      on_change_historical_borders_config((arg0_prev) => {
+                        let is_currently_active = arg0_prev.enabled && (
+                          arg0_prev.dataset === arg0_layer.id ||
+                          (!arg0_prev.dataset && arg0_layer.id === 'statistical_borders')
+                        )
+                        if (is_currently_active) {
+                          return {
+                            ...arg0_prev,
+                            enabled: false,
+                          }
+                        }
+                        return {
+                          ...arg0_prev,
+                          dataset: arg0_layer.id,
+                          enabled: true,
+                        }
+                      })
                     } else if (is_vector_overlay && is_stadester && on_change_stadester_config) {
                       on_change_stadester_config((arg0_prev) => ({
                         ...arg0_prev,

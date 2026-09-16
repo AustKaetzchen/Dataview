@@ -54,17 +54,29 @@ export const DataLayerNode: React.FC<DataLayerNodeProps> = function (arg0_props)
   let has_variable_selectors = Boolean(layer.variable_selectors && Object.keys(layer.variable_selectors).length > 0)
   let is_accessible = is_layer_accessible(layer)
   let is_active = active_layer_id === layer.id
-  let is_borders = layer.id === 'statistical_borders' || layer.type === 'vector.polygon' || layer.id.includes('borders')
-  let is_dataset_match = layer.id.includes('stadester') ? (layer.id === 'stadester' || stadester_config?.dataset === layer.id || (!stadester_config?.dataset && layer.id === 'stadester_1.1')) : true
+  let is_border_dataset_match: boolean
+  let is_borders = layer.id === 'statistical_borders' || layer.id === 'detailed_borders' || layer.type === 'vector.polygon' || layer.id.includes('borders')
+  let is_dataset_match: boolean
   let is_node_expanded = Boolean(search_query.trim()) || (expanded_nodes[layer.id] ?? true)
-  let is_overlay_active = is_borders
-    ? Boolean(historical_borders_config?.enabled)
-    : layer.id.includes('stadester')
-      ? (Boolean(stadester_config?.enabled) && is_dataset_match)
-      : false
+  let is_overlay_active: boolean
   let is_searching = Boolean(search_query.trim())
   let is_stadester = layer.id.includes('stadester')
+  let is_stadester_dataset_match: boolean
   let is_vector_overlay = layer.type === 'vector.points' || is_stadester || is_borders
+
+  //Function body
+  is_border_dataset_match = is_borders
+    ? (historical_borders_config?.dataset === layer.id || (!historical_borders_config?.dataset && layer.id === 'statistical_borders'))
+    : false
+  is_stadester_dataset_match = is_stadester
+    ? (layer.id === 'stadester' || stadester_config?.dataset === layer.id || (!stadester_config?.dataset && layer.id === 'stadester_1.1'))
+    : false
+  is_dataset_match = is_borders ? is_border_dataset_match : is_stadester_dataset_match
+  is_overlay_active = is_borders
+    ? (Boolean(historical_borders_config?.enabled) && is_border_dataset_match)
+    : is_stadester
+      ? (Boolean(stadester_config?.enabled) && is_stadester_dataset_match)
+      : false
 
   //Return statement
   return (
@@ -76,10 +88,23 @@ export const DataLayerNode: React.FC<DataLayerNodeProps> = function (arg0_props)
               onClick={() => {
                 if (is_borders) {
                   if (set_historical_borders_config) {
-                    set_historical_borders_config((arg0_prev) => ({
-                      ...arg0_prev,
-                      enabled: !arg0_prev.enabled,
-                    }))
+                    set_historical_borders_config((arg0_prev) => {
+                      let is_currently_active = arg0_prev.enabled && (
+                        arg0_prev.dataset === layer.id ||
+                        (!arg0_prev.dataset && layer.id === 'statistical_borders')
+                      )
+                      if (is_currently_active) {
+                        return {
+                          ...arg0_prev,
+                          enabled: false,
+                        }
+                      }
+                      return {
+                        ...arg0_prev,
+                        dataset: layer.id,
+                        enabled: true,
+                      }
+                    })
                   } else if (on_select_layer) {
                     on_select_layer(layer.id)
                   }

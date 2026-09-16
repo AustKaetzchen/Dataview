@@ -757,17 +757,18 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
         if (parts.length === 4 && !parts.some(Number.isNaN))
           bbox = [parts[0], parts[1], parts[2], parts[3]]
       }
+      let dataset = (query.dataset as string) || 'statistical_borders'
       let is_streaming = query.stream === '1' || query.stream === 'true'
       let raw_year = parseFloat(query.year as string)
       let year = Number.isNaN(raw_year) ? 1950 : raw_year
 
       try {
         if (is_streaming) {
-          AtlasBordersService.streamBorders(res, year, { bbox })
+          AtlasBordersService.streamBorders(res, year, { bbox, dataset })
           return
         }
 
-        let borders_payload = AtlasBordersService.getBordersAtYear(year, { bbox })
+        let borders_payload = AtlasBordersService.getBordersAtYear(year, { bbox, dataset })
         res.statusCode = 200
         res.setHeader('Content-Type', 'application/json')
         res.setHeader('Cache-Control', 'public, max-age=3600')

@@ -158,7 +158,7 @@ export const App: React.FC = function () {
   let [inspect_data, set_inspect_data] = useState<any>(null)
 
   let [layers, set_layers] = useState<Record<string, ParsedDataLayer>>({})
-  let [active_layer_id, set_active_layer_id] = useState<string | null>('basemap_only')
+  let [active_layer_id, set_active_layer_id] = useState<string | null>('default_basemap')
   let [active_variable_selectors, set_active_variable_selectors] = useState<Record<string, string | string[]>>({
     gender: ['t'],
     profession: ['agriculture'],
@@ -447,7 +447,7 @@ export const App: React.FC = function () {
     let target = layers[layer_id]
     if (target?.encoding)
       set_data_format(target.encoding)
-    if (target?.type === 'vector.basemap' || layer_id === 'basemap_only')
+    if (target?.type === 'vector.basemap' || layer_id === 'default_basemap' || layer_id === 'basemap_only')
       set_raster_a(null)
     set_max_val_override('')
     set_min_val_override('')
@@ -857,6 +857,7 @@ export const App: React.FC = function () {
           maxVal={max_val}
           legendTitle={legend_title}
           legendSubtitle={legend_subtitle}
+          hideColourbar={Boolean(active_layer?.hide_colourbar)}
           scaleType={scale_type}
           logSigma={log_sigma}
           breaks={breaks}

@@ -67,6 +67,7 @@ export interface MapViewerProps {
   isTimelapseExporting?: boolean
   legendSubtitle?: string
   legendTitle: string
+  hideColourbar?: boolean
   scaleType: string
   logSigma: number
   breaks?: number[]
@@ -146,6 +147,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
   let countries_mode = props.countriesMode
   let country_stats = props.countryStats
   let heightmap_config = props.heightmapConfig
+  let hide_colourbar = Boolean(props.hideColourbar)
   let historical_borders_config = props.historicalBordersConfig
   let hovered_country = props.hoveredCountry
   let info_panel_open = props.infoPanelOpen ?? false
@@ -241,10 +243,12 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
   let [timeline_clearance, set_timeline_clearance] = useState<number>(128)
   let [top_right_taken, set_top_right_taken] = useState<number>(0)
 
+  let border_dataset = historical_borders_config?.dataset || (props.activeLayerId && props.activeLayerId.includes('border') ? props.activeLayerId : 'statistical_borders')
   let is_historical_borders_active = Boolean(
     historical_borders_config?.enabled ||
     props.historicalBordersEnabled ||
     props.activeLayerId === 'statistical_borders' ||
+    props.activeLayerId === 'detailed_borders' ||
     (props.activeLayerId && props.activeLayerId.includes('border')) ||
     map_modes.find((arg0_m) => arg0_m.id === 'historical_borders')?.active
   )
@@ -252,7 +256,8 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
   let historical_borders_result = useHistoricalBorders(
     props.activeLayerId,
     timeline_year || 1950,
-    is_historical_borders_active
+    is_historical_borders_active,
+    border_dataset
   )
 
   //Dismiss city hover tooltip when cities overlay is disabled or mode changes
@@ -1032,6 +1037,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
               flyoutOpen={flyout_open}
               hasCanvas={has_canvas}
               heightmapConfig={heightmap_config}
+              hideColourbar={hide_colourbar}
               hoveredCity={hovered_city}
               infoPanelOpen={info_panel_open}
               inspectData={inspect_data}

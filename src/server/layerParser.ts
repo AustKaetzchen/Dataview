@@ -33,6 +33,7 @@ export interface ParsedDataLayer {
   encoding: 'float32' | 'int32'
   filepath_template: string
   filepaths?: LayerFilepathItem[]
+  hide_colourbar?: boolean
   icon?: string
   id: string
   is_nested?: boolean
@@ -462,11 +463,15 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
       'encoding',
       'filepath',
       'filepaths',
+      'hide_colourbar',
+      'hide_colorbar',
       'legend',
       'name',
       'permissions',
       'pixel_offset',
       'root_folders',
+      'show_colourbar',
+      'show_colorbar',
       'type',
       'unit',
       'variable_selectors',
@@ -665,6 +670,7 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
             description: sub_desc_text,
             encoding: sub_item.encoding || 'float32',
             filepath_template: sub_template,
+            hide_colourbar: Boolean(sub_item.hide_colourbar ?? sub_item.hide_colorbar ?? item.hide_colourbar ?? item.hide_colorbar ?? (sub_item.show_colourbar === false || sub_item.show_colorbar === false || item.show_colourbar === false || item.show_colorbar === false)),
             icon: getLayerIcon(sub_k),
             id: sub_full_id,
             is_nested: true,
@@ -699,6 +705,7 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
           encoding: item.encoding || 'float32',
           filepath_template: resolved_template,
           filepaths: has_filepaths ? resolved_filepaths : undefined,
+          hide_colourbar: Boolean(item.hide_colourbar ?? item.hide_colorbar ?? (item.show_colourbar === false || item.show_colorbar === false)),
           icon: getLayerIcon(k),
           id: k,
           legend: item.legend,
