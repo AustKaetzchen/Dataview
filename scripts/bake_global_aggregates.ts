@@ -31,6 +31,14 @@ let DEFAULT_KEY_YEARS = [
  *
  * @returns {boolean}
  */
+/**
+ * Converts a float32 GeoPNG into a 32-bit BMP cache file.
+ *
+ * @param {string} arg0_png_path
+ * @param {string} arg1_bmp_path
+ *
+ * @returns {boolean}
+ */
 function convertPngToBmp (arg0_png_path: string, arg1_bmp_path: string): boolean {
   //Convert from parameters
   let bmp_path = arg1_bmp_path
@@ -39,8 +47,14 @@ function convertPngToBmp (arg0_png_path: string, arg1_bmp_path: string): boolean
   //Guard clauses
   if (!fs.existsSync(png_path))
     return false
-  if (fs.existsSync(bmp_path))
-    return true
+  if (fs.existsSync(bmp_path)) {
+    try {
+      let bmp_st = fs.statSync(bmp_path)
+      let png_st = fs.statSync(png_path)
+      if (png_st.mtimeMs <= bmp_st.mtimeMs)
+        return true
+    } catch {}
+  }
 
   //Declare local instance variables
   let buf: Buffer
@@ -88,6 +102,78 @@ function convertPngToBmp (arg0_png_path: string, arg1_bmp_path: string): boolean
 }
 
 /**
+ * Returns the latest modification timestamp (mtimeMs) among all 36 source demographic GeoPNGs for a year.
+ *
+ * @param {number} arg0_year
+ *
+ * @returns {number}
+ */
+function getDemographicSourceMaxMtime (arg0_year: number): number {
+  //Convert from parameters
+  let year = arg0_year
+
+  //Declare local instance variables
+  let max_mtime = 0
+
+  //Function body
+  for (let i = 0; i < AGE_COHORTS.length; i++) {
+    let cid = AGE_COHORTS[i]
+    let f_path = path.join(COHORTS_DIR, `f_${cid}_${year}.png`)
+    let m_path = path.join(COHORTS_DIR, `m_${cid}_${year}.png`)
+
+    if (fs.existsSync(f_path)) {
+      try {
+        let st = fs.statSync(f_path)
+        if (st.mtimeMs > max_mtime)
+          max_mtime = st.mtimeMs
+      } catch {}
+    }
+    if (fs.existsSync(m_path)) {
+      try {
+        let st = fs.statSync(m_path)
+        if (st.mtimeMs > max_mtime)
+          max_mtime = st.mtimeMs
+      } catch {}
+    }
+  }
+
+  //Return statement
+  return max_mtime
+}
+
+/**
+ * Returns the latest modification timestamp (mtimeMs) among all 5 source profession GeoPNGs for a year.
+ *
+ * @param {number} arg0_year
+ *
+ * @returns {number}
+ */
+function getSectorSourceMaxMtime (arg0_year: number): number {
+  //Convert from parameters
+  let year = arg0_year
+
+  //Declare local instance variables
+  let max_mtime = 0
+
+  //Function body
+  for (let i = 0; i < SECTOR_KEYS.length; i++) {
+    let s = SECTOR_KEYS[i]
+    let s_path = path.join(PROFESSIONS_DIR, `${s}_t_${year}.png`)
+
+    if (fs.existsSync(s_path)) {
+      try {
+        let st = fs.statSync(s_path)
+        if (st.mtimeMs > max_mtime)
+          max_mtime = st.mtimeMs
+      } catch {}
+    }
+  }
+
+  //Return statement
+  return max_mtime
+}
+
+/**
  * Main baking function that processes keyframe years.
  */
 async function runBake (): Promise<void> {
@@ -128,7 +214,12 @@ async function runBake (): Promise<void> {
     let yr_str = String(year)
 
     //1. Demographics
-    if (!baked_demographics[yr_str]) {
+    let demo_src_mtime = getDemographicSourceMaxMtime(year)
+    let is_demo_stale =
+      !baked_demographics[yr_str] ||
+      (demo_src_mtime > 0 && demo_src_mtime > (baked_demographics[yr_str].lastModified || 0))
+
+    if (is_demo_stale) {
       console.log(`[Bake] Baking demographics for year ${year}...`)
       for (let x = 0; x < AGE_COHORTS.length; x++) {
         let cid = AGE_COHORTS[x]
@@ -147,6 +238,7 @@ async function runBake (): Promise<void> {
       if (proc_res.status === 0 && proc_res.stdout) {
         try {
           let parsed = JSON.parse(proc_res.stdout)
+          parsed.lastModified = demo_src_mtime > 0 ? demo_src_mtime : Date.now()
           baked_demographics[yr_str] = parsed
           fs.writeFileSync(BAKED_DEMOGRAPHICS_PATH, JSON.stringify(baked_demographics, null, 2), 'utf8')
           console.log(`[Bake] Successfully baked demographics for year ${year}`)
@@ -155,11 +247,16 @@ async function runBake (): Promise<void> {
         }
       }
     } else {
-      console.log(`[Bake] Demographics for year ${year} already baked.`)
+      console.log(`[Bake] Demographics for year ${year} is up-to-date.`)
     }
 
     //2. Sectors
-    if (!baked_sectors[yr_str]) {
+    let sec_src_mtime = getSectorSourceMaxMtime(year)
+    let is_sec_stale =
+      !baked_sectors[yr_str] ||
+      (sec_src_mtime > 0 && sec_src_mtime > ((baked_sectors[yr_str] as any).lastModified || 0))
+
+    if (is_sec_stale) {
       console.log(`[Bake] Baking sectors for year ${year}...`)
       for (let x = 0; x < SECTOR_KEYS.length; x++) {
         let s = SECTOR_KEYS[x]
@@ -178,7 +275,13 @@ async function runBake (): Promise<void> {
         try {
           let parsed = JSON.parse(proc_res.stdout)
           if (parsed && parsed.sectors) {
-            baked_sectors[yr_str] = parsed.sectors
+            let clean_sectors: Record<string, any> = {}
+            for (let x = 0; x < SECTOR_KEYS.length; x++) {
+              let s = SECTOR_KEYS[x]
+              clean_sectors[s] = parsed.sectors[s]
+            }
+            clean_sectors.lastModified = sec_src_mtime > 0 ? sec_src_mtime : Date.now()
+            baked_sectors[yr_str] = clean_sectors
             fs.writeFileSync(BAKED_SECTORS_PATH, JSON.stringify(baked_sectors, null, 2), 'utf8')
             console.log(`[Bake] Successfully baked sectors for year ${year}`)
           }
@@ -187,7 +290,7 @@ async function runBake (): Promise<void> {
         }
       }
     } else {
-      console.log(`[Bake] Sectors for year ${year} already baked.`)
+      console.log(`[Bake] Sectors for year ${year} is up-to-date.`)
     }
   }
 

@@ -8,6 +8,7 @@ export interface DemographicCohortResult {
   country: string
   dependencyRatio: number
   female: Record<string, number>
+  lastModified?: number
   male: Record<string, number>
   sexRatio: number
   totalFemale: number
@@ -17,6 +18,7 @@ export interface DemographicCohortResult {
 export interface SectorBreakdownResult {
   byCountry: Record<string, Record<string, number>>
   global: Record<string, number>
+  lastModified?: number
 }
 
 export interface ScanlineSpan {
@@ -49,11 +51,144 @@ let RASTER_HEIGHT = 2160
 
 let baked_global_demographics: Record<string, DemographicCohortResult> = {}
 let baked_global_sectors: Record<string, Record<string, number>> = {}
+let demographic_cache_mtimes = new Map<number, number>()
 let demographic_year_cache = new Map<number, { f: Record<string, Float32Array>; m: Record<string, Float32Array> }>()
+let sector_cache_mtimes = new Map<number, number>()
 let sector_year_cache = new Map<number, Record<string, Float32Array>>()
 let available_demographic_years: number[] | null = null
 let available_sector_years: number[] | null = null
 let cached_natural_earth_features: any[] | null = null
+
+/**
+ * Returns the latest modification timestamp (mtimeMs) among all 36 source demographic GeoPNGs for a year.
+ *
+ * @param {number} arg0_year
+ *
+ * @returns {number}
+ */
+export function getDemographicSourceMaxMtime (arg0_year: number): number {
+  //Convert from parameters
+  let year = arg0_year
+
+  //Declare local instance variables
+  let max_mtime = 0
+
+  //Function body
+  for (let i = 0; i < AGE_COHORTS.length; i++) {
+    let cid = AGE_COHORTS[i]
+    let f_path = path.join(COHORTS_DIR, `f_${cid}_${year}.png`)
+    let m_path = path.join(COHORTS_DIR, `m_${cid}_${year}.png`)
+
+    if (fs.existsSync(f_path)) {
+      try {
+        let st = fs.statSync(f_path)
+        if (st.mtimeMs > max_mtime)
+          max_mtime = st.mtimeMs
+      } catch {}
+    }
+    if (fs.existsSync(m_path)) {
+      try {
+        let st = fs.statSync(m_path)
+        if (st.mtimeMs > max_mtime)
+          max_mtime = st.mtimeMs
+      } catch {}
+    }
+  }
+
+  //Return statement
+  return max_mtime
+}
+
+/**
+ * Returns the latest modification timestamp (mtimeMs) among all 5 source profession GeoPNGs for a year.
+ *
+ * @param {number} arg0_year
+ *
+ * @returns {number}
+ */
+export function getSectorSourceMaxMtime (arg0_year: number): number {
+  //Convert from parameters
+  let year = arg0_year
+
+  //Declare local instance variables
+  let max_mtime = 0
+
+  //Function body
+  for (let i = 0; i < SECTOR_KEYS.length; i++) {
+    let s = SECTOR_KEYS[i]
+    let s_path = path.join(PROFESSIONS_DIR, `${s}_t_${year}.png`)
+
+    if (fs.existsSync(s_path)) {
+      try {
+        let st = fs.statSync(s_path)
+        if (st.mtimeMs > max_mtime)
+          max_mtime = st.mtimeMs
+      } catch {}
+    }
+  }
+
+  //Return statement
+  return max_mtime
+}
+
+/**
+ * Helper to determine if a cached file is missing or older than its source file.
+ *
+ * @param {string} arg0_source_path
+ * @param {string} arg1_cache_path
+ *
+ * @returns {boolean}
+ */
+export function isFileCacheStale (arg0_source_path: string, arg1_cache_path: string): boolean {
+  //Convert from parameters
+  let cache_path = arg1_cache_path
+  let source_path = arg0_source_path
+
+  //Guard clauses
+  if (!fs.existsSync(cache_path))
+    return true
+  if (!fs.existsSync(source_path))
+    return false
+
+  //Declare local instance variables
+  let cache_stat: fs.Stats
+  let source_stat: fs.Stats
+
+  //Function body
+  try {
+    cache_stat = fs.statSync(cache_path)
+    source_stat = fs.statSync(source_path)
+
+    //Return statement
+    return source_stat.mtimeMs > cache_stat.mtimeMs
+  } catch {
+    //Return statement
+    return true
+  }
+}
+
+/**
+ * Returns the latest modification timestamp for either demographics or professions at a given year.
+ *
+ * @param {string} arg0_layer
+ * @param {number} arg1_year
+ *
+ * @returns {number}
+ */
+export function getLayerYearSourceMtime (arg0_layer: string, arg1_year: number): number {
+  //Convert from parameters
+  let layer = arg0_layer
+  let year = arg1_year
+
+  //Function body
+  if (layer === 'age_sex')
+    return getDemographicSourceMaxMtime(year)
+  if (layer.includes('profession'))
+    return getSectorSourceMaxMtime(year)
+
+  //Return statement
+  return 0
+}
 
 /**
  * Loads baked global demographics from disk into memory cache.
@@ -62,8 +197,15 @@ function loadBakedGlobalDemographics (): void {
   //Function body
   try {
     if (fs.existsSync(BAKED_DEMOGRAPHICS_PATH)) {
+      let file_mtime = fs.statSync(BAKED_DEMOGRAPHICS_PATH).mtimeMs
       let raw = fs.readFileSync(BAKED_DEMOGRAPHICS_PATH, 'utf8')
       baked_global_demographics = JSON.parse(raw)
+      let all_years = Object.keys(baked_global_demographics)
+      for (let i = 0; i < all_years.length; i++) {
+        let yr = all_years[i]
+        if (!baked_global_demographics[yr].lastModified)
+          baked_global_demographics[yr].lastModified = file_mtime
+      }
     }
   } catch (arg0_err) {
     console.error('[RasterDemographicsService] Failed to load baked global demographics:', arg0_err)
@@ -77,8 +219,15 @@ function loadBakedGlobalSectors (): void {
   //Function body
   try {
     if (fs.existsSync(BAKED_SECTORS_PATH)) {
+      let file_mtime = fs.statSync(BAKED_SECTORS_PATH).mtimeMs
       let raw = fs.readFileSync(BAKED_SECTORS_PATH, 'utf8')
       baked_global_sectors = JSON.parse(raw)
+      let all_years = Object.keys(baked_global_sectors)
+      for (let i = 0; i < all_years.length; i++) {
+        let yr = all_years[i]
+        if (!(baked_global_sectors[yr] as any).lastModified)
+          (baked_global_sectors[yr] as any).lastModified = file_mtime
+      }
     }
   } catch (arg0_err) {
     console.error('[RasterDemographicsService] Failed to load baked global sectors:', arg0_err)
@@ -100,9 +249,11 @@ function saveBakedGlobalDemographic (arg0_year: number, arg1_result: Demographic
   let year = arg0_year
 
   //Declare local instance variables
+  let src_mtime = getDemographicSourceMaxMtime(year)
   let yr_str = String(year)
 
   //Function body
+  result.lastModified = src_mtime > 0 ? src_mtime : Date.now()
   baked_global_demographics[yr_str] = result
   try {
     fs.writeFileSync(BAKED_DEMOGRAPHICS_PATH, JSON.stringify(baked_global_demographics, null, 2), 'utf8')
@@ -123,10 +274,18 @@ function saveBakedGlobalSector (arg0_year: number, arg1_sectors: Record<string, 
   let year = arg0_year
 
   //Declare local instance variables
+  let clean_sectors: Record<string, number> = {}
+  let src_mtime = getSectorSourceMaxMtime(year)
   let yr_str = String(year)
 
   //Function body
-  baked_global_sectors[yr_str] = sectors
+  for (let i = 0; i < SECTOR_KEYS.length; i++) {
+    let s = SECTOR_KEYS[i]
+    if (typeof sectors[s] === 'number')
+      clean_sectors[s] = sectors[s]
+  }
+  clean_sectors.lastModified = src_mtime > 0 ? src_mtime : Date.now()
+  baked_global_sectors[yr_str] = clean_sectors
   try {
     fs.writeFileSync(BAKED_SECTORS_PATH, JSON.stringify(baked_global_sectors, null, 2), 'utf8')
   } catch (arg0_err) {
@@ -372,15 +531,19 @@ function loadGeoPngAsFloat32 (arg0_filepath: string): Float32Array | null {
   let buf: Buffer
   let cached_bmp: Float32Array | null
   let img: any
+  let is_stale: boolean
   let out_buf: ArrayBuffer
   let out_f32: Float32Array
   let out_u32: Uint32Array
   let src_u32: Uint32Array
 
-  //Check BMP cache first for instantaneous ~13ms lookup
-  cached_bmp = readFloat32FromBmp(bmp_path)
-  if (cached_bmp)
-    return cached_bmp
+  //Check BMP cache first if fresh
+  is_stale = isFileCacheStale(filepath, bmp_path)
+  if (!is_stale) {
+    cached_bmp = readFloat32FromBmp(bmp_path)
+    if (cached_bmp)
+      return cached_bmp
+  }
 
   //Guard clause: check if source GeoPNG exists
   if (!fs.existsSync(filepath))
@@ -412,7 +575,7 @@ function loadGeoPngAsFloat32 (arg0_filepath: string): Float32Array | null {
 }
 
 /**
- * Ensures that all 36 demographic cohort rasters for a keyframe year exist in BMP cache.
+ * Ensures that all 36 demographic cohort rasters for a keyframe year exist in BMP cache and are up-to-date.
  *
  * @param {number} arg0_year
  */
@@ -424,17 +587,19 @@ function ensureDemographicBmpCache (arg0_year: number): void {
   for (let i = 0; i < AGE_COHORTS.length; i++) {
     let cid = AGE_COHORTS[i]
     let f_bmp = path.join(BMP_CACHE_DIR, `f_${cid}_${year}.bmp`)
+    let f_png = path.join(COHORTS_DIR, `f_${cid}_${year}.png`)
     let m_bmp = path.join(BMP_CACHE_DIR, `m_${cid}_${year}.bmp`)
+    let m_png = path.join(COHORTS_DIR, `m_${cid}_${year}.png`)
 
-    if (!fs.existsSync(f_bmp))
-      loadGeoPngAsFloat32(path.join(COHORTS_DIR, `f_${cid}_${year}.png`))
-    if (!fs.existsSync(m_bmp))
-      loadGeoPngAsFloat32(path.join(COHORTS_DIR, `m_${cid}_${year}.png`))
+    if (isFileCacheStale(f_png, f_bmp))
+      loadGeoPngAsFloat32(f_png)
+    if (isFileCacheStale(m_png, m_bmp))
+      loadGeoPngAsFloat32(m_png)
   }
 }
 
 /**
- * Ensures that all 5 sector rasters for a keyframe year exist in BMP cache.
+ * Ensures that all 5 sector rasters for a keyframe year exist in BMP cache and are up-to-date.
  *
  * @param {number} arg0_year
  */
@@ -446,9 +611,10 @@ function ensureSectorBmpCache (arg0_year: number): void {
   for (let i = 0; i < SECTOR_KEYS.length; i++) {
     let s = SECTOR_KEYS[i]
     let s_bmp = path.join(BMP_CACHE_DIR, `${s}_t_${year}.bmp`)
+    let s_png = path.join(PROFESSIONS_DIR, `${s}_t_${year}.png`)
 
-    if (!fs.existsSync(s_bmp))
-      loadGeoPngAsFloat32(path.join(PROFESSIONS_DIR, `${s}_t_${year}.png`))
+    if (isFileCacheStale(s_png, s_bmp))
+      loadGeoPngAsFloat32(s_png)
   }
 }
 
@@ -544,12 +710,22 @@ function getDemographicYearRasters (
 
   //Declare local instance variables
   let available = getAvailableDemographicYears()
+  let cached_mtime: number
+  let current_mtime: number
   let female_map: Record<string, Float32Array> = {}
   let keyframe_year: number
   let male_map: Record<string, Float32Array> = {}
 
   //Guard clauses
   keyframe_year = findClosestYear(year, available)
+
+  current_mtime = getDemographicSourceMaxMtime(keyframe_year)
+  cached_mtime = demographic_cache_mtimes.get(keyframe_year) ?? 0
+  if (current_mtime > cached_mtime) {
+    demographic_year_cache.delete(keyframe_year)
+    demographic_cache_mtimes.delete(keyframe_year)
+  }
+
   if (demographic_year_cache.has(keyframe_year))
     return demographic_year_cache.get(keyframe_year)!
 
@@ -571,11 +747,14 @@ function getDemographicYearRasters (
   //Evict oldest if cache exceeds 3 years
   if (demographic_year_cache.size >= 3) {
     let first_key = demographic_year_cache.keys().next().value
-    if (first_key !== undefined)
+    if (first_key !== undefined) {
       demographic_year_cache.delete(first_key)
+      demographic_cache_mtimes.delete(first_key)
+    }
   }
 
   let year_payload = { f: female_map, m: male_map }
+  demographic_cache_mtimes.set(keyframe_year, current_mtime)
   demographic_year_cache.set(keyframe_year, year_payload)
 
   //Return statement
@@ -595,11 +774,21 @@ function getSectorYearRasters (arg0_year: number): Record<string, Float32Array> 
 
   //Declare local instance variables
   let available = getAvailableSectorYears()
+  let cached_mtime: number
+  let current_mtime: number
   let keyframe_year: number
   let sector_map: Record<string, Float32Array> = {}
 
   //Guard clauses
   keyframe_year = findClosestYear(year, available)
+
+  current_mtime = getSectorSourceMaxMtime(keyframe_year)
+  cached_mtime = sector_cache_mtimes.get(keyframe_year) ?? 0
+  if (current_mtime > cached_mtime) {
+    sector_year_cache.delete(keyframe_year)
+    sector_cache_mtimes.delete(keyframe_year)
+  }
+
   if (sector_year_cache.has(keyframe_year))
     return sector_year_cache.get(keyframe_year)!
 
@@ -614,10 +803,13 @@ function getSectorYearRasters (arg0_year: number): Record<string, Float32Array> 
 
   if (sector_year_cache.size >= 4) {
     let first_key = sector_year_cache.keys().next().value
-    if (first_key !== undefined)
+    if (first_key !== undefined) {
       sector_year_cache.delete(first_key)
+      sector_cache_mtimes.delete(first_key)
+    }
   }
 
+  sector_cache_mtimes.set(keyframe_year, current_mtime)
   sector_year_cache.set(keyframe_year, sector_map)
 
   //Return statement
@@ -927,6 +1119,7 @@ export function calculateDemographicPyramid (arg0_options: {
   let rasters: { f: Record<string, Float32Array>; m: Record<string, Float32Array> } | null
   let result_payload: DemographicCohortResult
   let sex_ratio: number
+  let source_max_mtime: number
   let spans: ScanlineSpan[] = []
   let total_female = 0
   let total_male = 0
@@ -944,6 +1137,14 @@ export function calculateDemographicPyramid (arg0_options: {
   keyframe_year = findClosestYear(year, getAvailableDemographicYears())
   yr_str = String(keyframe_year)
 
+  //Check if source files were modified after cache
+  source_max_mtime = getDemographicSourceMaxMtime(keyframe_year)
+  if (baked_global_demographics[yr_str]) {
+    let baked_mtime = baked_global_demographics[yr_str].lastModified || 0
+    if (source_max_mtime > 0 && source_max_mtime > baked_mtime)
+      delete baked_global_demographics[yr_str]
+  }
+
   //Check baked global cache first
   if (is_global && baked_global_demographics[yr_str]) {
     baked = baked_global_demographics[yr_str]
@@ -951,6 +1152,7 @@ export function calculateDemographicPyramid (arg0_options: {
       country: 'Global',
       dependencyRatio: baked.dependencyRatio,
       female: baked.female,
+      lastModified: baked.lastModified,
       male: baked.male,
       sexRatio: baked.sexRatio,
       totalFemale: baked.totalFemale,
@@ -977,6 +1179,7 @@ export function calculateDemographicPyramid (arg0_options: {
       country: is_global ? 'Global' : country_name,
       dependencyRatio: native_res.dependencyRatio,
       female: native_res.female,
+      lastModified: source_max_mtime,
       male: native_res.male,
       sexRatio: native_res.sexRatio,
       totalFemale: native_res.totalFemale,
@@ -1040,6 +1243,7 @@ export function calculateDemographicPyramid (arg0_options: {
     country: is_global ? 'Global' : country_name,
     dependencyRatio: dependency_ratio,
     female: female_map,
+    lastModified: source_max_mtime,
     male: male_map,
     sexRatio: sex_ratio,
     totalFemale: Math.round(total_female*10)/10,
@@ -1081,6 +1285,7 @@ export function calculateSectorBreakdown (arg0_options: {
   let keyframe_year: number
   let native_global: any
   let rasters: Record<string, Float32Array> | null
+  let source_max_mtime: number
   let target_entities: { geometry: any; name: string }[] = []
   let yr_str: string
 
@@ -1104,9 +1309,21 @@ export function calculateSectorBreakdown (arg0_options: {
   keyframe_year = findClosestYear(year, getAvailableSectorYears())
   yr_str = String(keyframe_year)
 
+  //Check if source files were modified after cache
+  source_max_mtime = getSectorSourceMaxMtime(keyframe_year)
+  if (baked_global_sectors[yr_str]) {
+    let baked_mtime = (baked_global_sectors[yr_str] as any).lastModified || 0
+    if (source_max_mtime > 0 && source_max_mtime > baked_mtime)
+      delete baked_global_sectors[yr_str]
+  }
+
   //Check baked global cache first
   if (baked_global_sectors[yr_str]) {
-    global_shares = baked_global_sectors[yr_str]
+    for (let i = 0; i < SECTOR_KEYS.length; i++) {
+      let s = SECTOR_KEYS[i]
+      if (typeof baked_global_sectors[yr_str][s] === 'number')
+        global_shares[s] = baked_global_sectors[yr_str][s]
+    }
   }
 
   //If no country entities requested and global shares already baked, return immediately
@@ -1114,6 +1331,7 @@ export function calculateSectorBreakdown (arg0_options: {
     return {
       byCountry: by_country,
       global: global_shares,
+      lastModified: source_max_mtime || ((baked_global_sectors[yr_str] as any)?.lastModified ?? 0),
     }
   }
 
@@ -1226,6 +1444,7 @@ export function calculateSectorBreakdown (arg0_options: {
   return {
     byCountry: by_country,
     global: global_shares,
+    lastModified: source_max_mtime || ((baked_global_sectors[yr_str] as any)?.lastModified ?? 0),
   }
 }
 
@@ -1233,5 +1452,9 @@ export default {
   calculateDemographicPyramid,
   calculateSectorBreakdown,
   computeScanlineSpans,
+  getDemographicSourceMaxMtime,
+  getLayerYearSourceMtime,
+  getSectorSourceMaxMtime,
+  isFileCacheStale,
   resolveCountryGeometry,
 }

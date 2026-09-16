@@ -5,7 +5,11 @@ import type { IncomingMessage, ServerResponse } from 'http'
 import JSON5 from 'json5'
 import { loadAndParseLayers, type LayerRegistryCache, type ParsedDataLayer } from './layerParser.ts'
 import { getCountryDemographicPyramid, getCountrySectorBreakdown } from './countryBreakdown.ts'
-import { calculateDemographicPyramid, calculateSectorBreakdown } from './rasterDemographicsService.ts'
+import {
+  calculateDemographicPyramid,
+  calculateSectorBreakdown,
+  getLayerYearSourceMtime,
+} from './rasterDemographicsService.ts'
 import {
   startTimelapseRenderJob,
   getTimelapseJobStatus,
@@ -33,7 +37,7 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
   let options = arg0_options
 
   //Declare local instance variables
-  let breakdown_cache = new Map<string, any>()
+  let breakdown_cache = new Map<string, { mtime: number; payload: any }>()
   let config_dir = path.resolve(options.configDir)
   let exports_dir = path.resolve(options.exportsDir)
   let permissions_path = path.join(config_dir, 'permissions.json5')
@@ -288,13 +292,19 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
         let raw_y = params.y
         let year = params.year || 1950
 
+        let current_source_mtime = getLayerYearSourceMtime(layer, year)
         let geom_key = geometry ? (geometry.coordinates?.[0]?.[0]?.[0] ?? 'custom') : 'none'
         let cache_key = `${layer}:${year}:${country}:${countries_str}:${geom_key}:${raw_x ?? 'all'}:${raw_y ?? 'all'}`
-        if (breakdown_cache.has(cache_key)) {
-          res.statusCode = 200
-          res.setHeader('Content-Type', 'application/json')
-          res.end(JSON.stringify(breakdown_cache.get(cache_key)))
-          return
+        let cached = breakdown_cache.get(cache_key)
+        if (cached) {
+          if (current_source_mtime > 0 && current_source_mtime > cached.mtime) {
+            breakdown_cache.delete(cache_key)
+          } else {
+            res.statusCode = 200
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify(cached.payload))
+            return
+          }
         }
 
         if (layer === 'age_sex') {
@@ -303,6 +313,7 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
             country: demo_res.country,
             dependencyRatio: demo_res.dependencyRatio,
             female: demo_res.female,
+            lastModified: demo_res.lastModified,
             layer,
             male: demo_res.male,
             sexRatio: demo_res.sexRatio,
@@ -312,7 +323,7 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
             y: raw_y,
             year,
           }
-          breakdown_cache.set(cache_key, result)
+          breakdown_cache.set(cache_key, { mtime: current_source_mtime, payload: result })
           res.statusCode = 200
           res.setHeader('Content-Type', 'application/json')
           res.end(JSON.stringify(result))
@@ -335,13 +346,14 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
           let result = {
             by_country: sector_res.byCountry,
             global: sector_res.global,
+            lastModified: sector_res.lastModified,
             layer,
             sectors: sector_res.global,
             x: raw_x,
             y: raw_y,
             year,
           }
-          breakdown_cache.set(cache_key, result)
+          breakdown_cache.set(cache_key, { mtime: current_source_mtime, payload: result })
           res.statusCode = 200
           res.setHeader('Content-Type', 'application/json')
           res.end(JSON.stringify(result))
