@@ -13,6 +13,7 @@ import {
 } from './videoRenderer.ts'
 import { StadesterService } from './stadesterService.ts'
 import { AtlasBordersService } from './atlasBordersService.ts'
+import { UfDate } from '../lib/ufDate.ts'
 
 export interface ApiMiddlewareOptions {
   configDir: string
@@ -758,17 +759,30 @@ export const createApiMiddleware = function (arg0_options: ApiMiddlewareOptions)
           bbox = [parts[0], parts[1], parts[2], parts[3]]
       }
       let dataset = (query.dataset as string) || 'statistical_borders'
+      let day_param = query.day ? parseInt(query.day as string, 10) : undefined
+      let month_param = query.month ? parseInt(query.month as string, 10) : undefined
+      let day = Number.isInteger(day_param) ? day_param : undefined
       let is_streaming = query.stream === '1' || query.stream === 'true'
+      let month = Number.isInteger(month_param) ? month_param : undefined
       let raw_year = parseFloat(query.year as string)
       let year = Number.isNaN(raw_year) ? 1950 : raw_year
 
+      if (day === undefined || month === undefined) {
+        if (!Number.isInteger(year)) {
+          let parsed_date = UfDate.fromFractionalYear(year)
+          day = parsed_date.day
+          month = parsed_date.month
+          year = parsed_date.year
+        }
+      }
+
       try {
         if (is_streaming) {
-          AtlasBordersService.streamBorders(res, year, { bbox, dataset })
+          AtlasBordersService.streamBorders(res, year, { bbox, dataset, day, month })
           return
         }
 
-        let borders_payload = AtlasBordersService.getBordersAtYear(year, { bbox, dataset })
+        let borders_payload = AtlasBordersService.getBordersAtYear(year, { bbox, dataset, day, month })
         res.statusCode = 200
         res.setHeader('Content-Type', 'application/json')
         res.setHeader('Cache-Control', 'public, max-age=3600')

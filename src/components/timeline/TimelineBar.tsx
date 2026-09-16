@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import { UfDate, TIMELINE_MILESTONES } from '@/lib/ufDate'
+import { UfDate, TIMELINE_MILESTONES, type UfDateObject } from '@/lib/ufDate'
 import { Icon } from '@/components/ui/icon'
 import { Slider } from '@/components/ui/slider'
+import { HistoricalDatePicker } from './HistoricalDatePicker'
 
 export interface TimelineBarProps {
   availableKeyframes?: number[]
@@ -51,10 +52,12 @@ export const TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
   let date_obj: { day: number; month: number; year: number }
   let formatted_date: string
   let handle_jump_year: (arg0_year: number) => void
+  let handle_select_exact_date: (arg0_date: UfDateObject) => void
   let handle_slider_change: (arg0_val: number[]) => void
   let handle_step_backward: () => void
   let handle_step_forward: () => void
   let is_collapsed: boolean
+  let is_date_picker_open: boolean
   let is_loading_ref = useRef<boolean>(is_loading)
   let is_looping: boolean
   let is_looping_ref = useRef<boolean>(false)
@@ -66,6 +69,7 @@ export const TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
   let on_change_year_ref = useRef(on_change_year)
   let on_toggle_play_ref = useRef(on_toggle_play)
   let set_is_collapsed: React.Dispatch<React.SetStateAction<boolean>>
+  let set_is_date_picker_open: React.Dispatch<React.SetStateAction<boolean>>
   let set_is_looping: React.Dispatch<React.SetStateAction<boolean>>
   let set_is_settings_open: React.Dispatch<React.SetStateAction<boolean>>
   let settings_popover_ref = useRef<HTMLDivElement | null>(null)
@@ -75,6 +79,7 @@ export const TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
 
   //Function body
   ;[is_collapsed, set_is_collapsed] = useState(false)
+  ;[is_date_picker_open, set_is_date_picker_open] = useState(false)
   ;[is_looping, set_is_looping] = useState(false)
   ;[is_settings_open, set_is_settings_open] = useState(false)
 
@@ -136,6 +141,14 @@ export const TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
       on_change_year(yr)
     },
     [min_year, max_year, on_change_year]
+  )
+
+  handle_select_exact_date = useCallback(
+    function (arg0_date: UfDateObject) {
+      let frac_year = UfDate.toFractionalYear(arg0_date)
+      handle_jump_year(frac_year)
+    },
+    [handle_jump_year]
   )
 
   handle_step_backward = useCallback(() => {
@@ -407,12 +420,34 @@ export const TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
             )}
           </div>
 
-          {/* Centre Date Badge - strictly anchored to exact horizontal center */}
-          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 bg-background/90 border border-border px-4 py-1 shadow-inner pointer-events-auto">
-            <Icon name="event" className="text-primary text-sm" />
-            <span className="text-sm font-bold tracking-tight text-foreground font-mono">
-              {formatted_date}
-            </span>
+          {/* Centre Date Badge with Interactive Historical Date Picker */}
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center">
+            <button
+              type="button"
+              onClick={() => set_is_date_picker_open((arg0_prev) => !arg0_prev)}
+              className={`flex items-center gap-2 bg-background/90 hover:bg-background border px-4 py-1 shadow-inner pointer-events-auto cursor-pointer transition-colors group ${
+                is_date_picker_open ? 'border-primary ring-1 ring-primary/40' : 'border-border hover:border-primary/50'
+              }`}
+              title="Click to select exact historical date"
+            >
+              <Icon name="event" className="text-primary text-sm group-hover:scale-105 transition-transform" />
+              <span className="text-sm font-bold tracking-tight text-foreground font-mono">
+                {formatted_date}
+              </span>
+              <Icon
+                name={is_date_picker_open ? 'expand_less' : 'expand_more'}
+                className="text-muted-foreground text-xs group-hover:text-primary transition-colors ml-0.5"
+              />
+            </button>
+
+            <HistoricalDatePicker
+              currentYear={current_year}
+              isOpen={is_date_picker_open}
+              maxYear={max_year}
+              minYear={min_year}
+              onClose={() => set_is_date_picker_open(false)}
+              onSelectDate={handle_select_exact_date}
+            />
           </div>
 
           {/* Right Controls: Collapse Toggle */}

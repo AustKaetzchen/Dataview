@@ -402,7 +402,6 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
             getLineColor: [55, 62, 78, 255],
             getLineWidth: 1,
             lineWidthUnits: 'pixels',
-            wrapLongitude: true,
             parameters: { depthTest: false },
             extensions: (projection === 'Globe') ? [new GlobeAntipodeCullExtension({ cullThreshold: -0.005 })] : [],
           })
@@ -643,7 +642,6 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
             getFillColor: [selected_key],
             getLineColor: [selected_key],
           },
-          wrapLongitude: true,
           parameters: { depthTest: false },
           extensions: (projection === 'Globe') ? [new GlobeAntipodeCullExtension({ cullThreshold: -0.005 })] : [],
         })
@@ -677,7 +675,6 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
           getLineColor: [255, 255, 255, 220],
           getLineWidth: 1.5,
           lineWidthUnits: 'pixels',
-          wrapLongitude: true,
           parameters: { depthTest: false },
           extensions: (projection === 'Globe') ? [new GlobeAntipodeCullExtension({ cullThreshold: -0.005 })] : [],
         })

@@ -39,10 +39,13 @@ export const HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanel
   let sidebar_width = props.sidebarWidth
 
   //Declare local instance variables
+  let active_kf_index = -1
   let alt_names_str: string | undefined
   let area_val_str: string
   let cap_name: string | undefined
   let country_name: string
+  let current_date: { day: number; month: number; year: number }
+  let current_ts: number
   let display_year: string
   let end_year: number | undefined
   let keyframes_list: any[]
@@ -66,10 +69,34 @@ export const HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanel
   //Function body
   cap_name = feature.properties?.capname
   country_name = feature.properties?.name || 'Historical Entity'
-  display_year = UfDate.formatYear(current_year)
+  current_date = UfDate.fromFractionalYear(current_year)
+  current_ts = UfDate.getTimestamp(current_date)
+  display_year = (current_year !== Math.floor(current_year))
+    ? UfDate.formatDate(current_date)
+    : UfDate.formatYear(current_year)
   end_year = feature.properties?.endYear
   keyframes_list = feature.properties?.keyframes || []
   start_year = feature.properties?.startYear
+
+  //Determine the single active keyframe index for current timeline timestamp
+  active_kf_index = -1
+  for (let i = 0; i < keyframes_list.length; i++) {
+    let kf = keyframes_list[i]
+    let kf_ts = kf.timestamp !== undefined
+      ? kf.timestamp
+      : UfDate.getTimestamp({
+          day: kf.day || 1,
+          month: kf.month || 1,
+          year: kf.year,
+        })
+    if (kf_ts <= current_ts) {
+      active_kf_index = i
+    } else {
+      break
+    }
+  }
+  if (active_kf_index === -1 && keyframes_list.length > 0)
+    active_kf_index = 0
 
   if (feature.id?.toString().startsWith('cshapes') || feature.properties?.gwcode) {
     source_label = 'CShapes-2.0'
@@ -302,18 +329,31 @@ export const HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanel
       {keyframes_list.length > 0 ? (
         <div className="max-h-44 overflow-y-auto custom-scrollbar space-y-1 pr-0.5">
           {keyframes_list.map((arg0_kf: any, arg1_idx: number) => {
-            let is_curr = Math.abs(arg0_kf.year - current_year) <= 1
+            let is_curr = arg1_idx === active_kf_index
             let is_unrecorded = Boolean(arg0_kf.label?.toLowerCase().includes('unrecorded') || arg0_kf.label?.toLowerCase().includes('hidden') || arg0_kf.label?.toLowerCase().includes('dissolved') || arg0_kf.label?.toLowerCase().includes('deleted'))
             let kf = arg0_kf
-            let kf_label = kf.label || UfDate.formatYear(kf.year)
+            let kf_date_str = kf.date || UfDate.formatYear(kf.year)
+            let kf_label = kf.label || 'Boundary updated'
 
             return (
               <button
-                key={`${kf.year}-${arg1_idx}`}
+                key={`${kf.timestamp || kf.year}-${arg1_idx}`}
                 type="button"
                 onClick={() => {
-                  if (on_jump_to_year)
-                    on_jump_to_year(kf.year)
+                  if (on_jump_to_year) {
+                    if (kf.timestamp !== undefined) {
+                      let kf_date_obj = UfDate.convertTimestampToDate(kf.timestamp)
+                      let kf_frac = UfDate.toFractionalYear(kf_date_obj)
+                      on_jump_to_year(kf_frac)
+                    } else if (kf.year !== undefined) {
+                      let kf_frac = UfDate.toFractionalYear({
+                        day: kf.day || 1,
+                        month: kf.month || 1,
+                        year: kf.year,
+                      })
+                      on_jump_to_year(kf_frac)
+                    }
+                  }
                 }}
                 className={`w-full text-left px-2 py-1.5 text-[11px] flex items-center justify-between transition-colors cursor-pointer border ${
                   is_curr
@@ -322,7 +362,7 @@ export const HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanel
                       ? 'bg-muted/30 border-border/40 hover:bg-muted/50 text-muted-foreground'
                       : 'bg-card hover:bg-muted/50 border-border/40 text-muted-foreground hover:text-foreground'
                 }`}
-                title={`Jump timeline to ${kf.date || kf_label}`}
+                title={`Jump timeline to ${kf_date_str}`}
               >
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
                   <span
@@ -330,7 +370,7 @@ export const HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanel
                       is_curr ? 'bg-red-500' : (is_unrecorded ? 'bg-muted-foreground/40' : 'bg-muted-foreground/60')
                     }`}
                   />
-                  <span className="font-mono font-semibold shrink-0">{UfDate.formatYear(kf.year)}</span>
+                  <span className="font-mono font-semibold shrink-0 text-foreground">{kf_date_str}</span>
                   <span className="truncate text-[10px] text-muted-foreground ml-1">{kf_label}</span>
                 </div>
 
@@ -340,7 +380,7 @@ export const HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanel
                       Unrecorded
                     </span>
                   )}
-                  <span className="text-[10px] text-red-500 hover:underline font-mono">
+                  <span className="text-[10px] text-red-500 hover:text-red-400 hover:underline font-mono">
                     Jump →
                   </span>
                 </div>

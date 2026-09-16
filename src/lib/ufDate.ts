@@ -121,16 +121,19 @@ export const UfDate = {
     let all_months = Object.keys(UfDate.months) as (keyof typeof UfDate.months)[]
     let date_obj = UfDate.getBlankDate()
     let days: number
+    let days_passed: number
     let remainder: number
+    let total_days: number
 
     //Function body
     //1. Parse whole years
     date_obj.year = Math.floor(years)
     remainder = years - date_obj.year
+    total_days = UfDate.isLeapYear(date_obj.year) ? 366 : 365
 
-    //2. Convert remaining fractional years into days
-    days = remainder*365
-    date_obj.day = Math.floor(days)
+    //2. Convert remaining fractional years into days with floating-point epsilon
+    days = remainder*total_days + 1e-7
+    days_passed = Math.floor(days)
 
     //3. Parse months (1-based)
     date_obj.month = 1
@@ -142,8 +145,8 @@ export const UfDate = {
       if (UfDate.isLeapYear(date_obj.year) && local_month.leap_year_days)
         days_in_month = local_month.leap_year_days
 
-      if (date_obj.day >= days_in_month) {
-        date_obj.day -= days_in_month
+      if (days_passed >= days_in_month) {
+        days_passed -= days_in_month
         date_obj.month++
 
         if (date_obj.month > 12) {
@@ -155,12 +158,11 @@ export const UfDate = {
       }
     }
 
-    //Clamp day to at least 1
-    if (date_obj.day < 1)
-      date_obj.day = 1
+    //Set 1-based day
+    date_obj.day = Math.max(1, days_passed + 1)
 
-    //4. Convert remaining day fraction into hours
-    let remaining_day_fraction = days - Math.floor(days)
+    //4. Convert remaining day fraction into hours and minutes
+    let remaining_day_fraction = Math.max(0, days - Math.floor(days))
     date_obj.hour = Math.floor(remaining_day_fraction*24)
     date_obj.minute = Math.floor((remaining_day_fraction*24 - date_obj.hour)*60)
 
@@ -181,6 +183,42 @@ export const UfDate = {
 
     //Return statement
     return UfDate.parseYears(frac)
+  },
+
+  /**
+   * Converts a UfDateObject into a continuous fractional year.
+   * Direct reversible inverse of UfDate.fromFractionalYear / UfDate.parseYears.
+   *
+   * @param {UfDateObject} arg0_date
+   *
+   * @returns {number}
+   */
+  toFractionalYear: function (arg0_date: UfDateObject): number {
+    //Convert from parameters
+    let date = arg0_date
+
+    //Declare local instance variables
+    let all_months = Object.keys(UfDate.months) as (keyof typeof UfDate.months)[]
+    let day = Math.max(1, date.day || 1)
+    let hour = date.hour || 0
+    let minute = date.minute || 0
+    let month = Math.max(1, Math.min(12, date.month || 1))
+    let passed_days = 0
+    let total_days = UfDate.isLeapYear(date.year) ? 366 : 365
+    let year = date.year
+
+    //Function body
+    for (let i = 1; i < month; i++) {
+      let local_month = UfDate.months[all_months[i - 1]]
+      let dim = UfDate.isLeapYear(year) ? (local_month.leap_year_days || local_month.days) : local_month.days
+      passed_days += dim
+    }
+
+    passed_days += (day - 1)
+    passed_days += hour/24 + minute/(24*60)
+
+    //Return statement
+    return year + passed_days/total_days
   },
 
   /**

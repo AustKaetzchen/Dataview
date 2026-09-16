@@ -274,6 +274,23 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
   }, [selected_countries, selected_country])
 
   useEffect(() => {
+    if (selected_historical_feature && historical_borders_result.bordersData) {
+      let current_gw = selected_historical_feature.properties?.gwcode
+      let current_id = selected_historical_feature.id || selected_historical_feature.properties?.id
+      let current_name = selected_historical_feature.properties?.name
+      let updated_feat = historical_borders_result.bordersData.features.find(
+        (arg0_f) =>
+          arg0_f.id === current_id ||
+          (current_gw !== undefined && arg0_f.properties?.gwcode === current_gw) ||
+          (current_id !== undefined && arg0_f.properties?.id === current_id) ||
+          (current_name && arg0_f.properties?.name === current_name)
+      )
+      if (updated_feat && updated_feat !== selected_historical_feature)
+        set_selected_historical_feature(updated_feat)
+    }
+  }, [historical_borders_result.bordersData])
+
+  useEffect(() => {
     let updateClearance = () => {
       //1. Timeline bounds and clearance
       let timeline_el = document.getElementById('dataview-timelinebar-container')

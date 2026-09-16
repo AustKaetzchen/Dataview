@@ -914,7 +914,7 @@ export const App: React.FC = function () {
           setStadesterConfig={set_stadester_config}
           stadesterCities={stadester_cities}
           stadesterConfig={stadester_config}
-          timelineYear={Math.round(timeline_year)}
+          timelineYear={timeline_year}
           userRole={user_role}
           onChangeYear={set_timeline_year}
         />

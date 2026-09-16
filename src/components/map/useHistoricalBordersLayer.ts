@@ -67,6 +67,7 @@ export function createHistoricalBordersDeckLayer (
 
   //Declare local instance variables
   let base_rgba: [number, number, number, number]
+  let date_tag: string | number
   let feature_count: number
   let fill_alpha: number
   let fill_opacity: number
@@ -89,7 +90,8 @@ export function createHistoricalBordersDeckLayer (
   stroke_width = (config?.strokeWidth !== undefined) ? config.strokeWidth : 1.25
   base_rgba = parseHexToRgba(stroke_color, 200)
 
-  layer_id = `historical-borders-${projection}-${timeline_year}-${feature_count}`
+  date_tag = borders_data.features[0]?.properties?.date || timeline_year
+  layer_id = `historical-borders-${projection}-${timeline_year}-${date_tag}-${feature_count}`
 
   if (projection === 'EqualEarth') {
     layer_data = borders_data.features.map((arg0_f) => ({
@@ -166,7 +168,6 @@ export function createHistoricalBordersDeckLayer (
       if (on_hover)
         on_hover(arg0_info.object || null, arg0_info.x, arg0_info.y)
     },
-    wrapLongitude: true,
     extensions: (projection === 'Globe') ? [new GlobeAntipodeCullExtension({ cullThreshold: -0.005 })] : [],
     parameters: {
       depthTest: false,

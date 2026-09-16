@@ -1,11 +1,13 @@
 import fs from 'fs'
 import path from 'path'
 import type { ServerResponse } from 'http'
-import { UfDate } from '../lib/ufDate.ts'
+import { UfDate, type UfDateObject } from '../lib/ufDate.ts'
 
 export interface HistoricalBorderKeyframe {
   date: string
+  day?: number
   label: string
+  month?: number
   timestamp?: number
   year: number
 }
@@ -40,9 +42,11 @@ export interface HistoricalBorderFeature {
 
 export interface HistoricalBordersResponse {
   count: number
+  date?: string
   domain: [number, number]
   features: HistoricalBorderFeature[]
   source: 'cshapes' | 'naissance'
+  timestamp?: number
   year: number
 }
 
@@ -50,6 +54,7 @@ interface NaissanceEntityRecord {
   class_name: string
   id: string
   keyframes: Map<number, [any, any, any]>
+  keyframes_summary?: HistoricalBorderKeyframe[]
   max_ts: number
   min_ts: number
   name?: string
@@ -72,7 +77,7 @@ let detailed_borders_slices = [
   { domain: [1991, 2026], file: '8.2026.1.1.naissance' },
 ]
 let in_memory_slice_lru: Map<string, HistoricalBorderFeature[]> = new Map()
-let max_lru_entries = 50
+let max_lru_entries = 60
 
 /**
  * Computes a 2D bounding box [minLng, minLat, maxLng, maxLat] for a GeoJSON geometry.
@@ -181,27 +186,57 @@ export class AtlasBordersService {
       cached_cshapes_data = JSON.parse(raw)
       cached_cshapes_features = cached_cshapes_data.features || []
 
-      //Index keyframes by gwcode
+      //Index keyframes by gwcode and precalculate start/end timestamps
       cached_cshapes_keyframes_by_gwcode = new Map()
       for (let i = 0; i < cached_cshapes_features.length; i++) {
         let feat = cached_cshapes_features[i]
         let p = feat.properties
+        let s_day = p.gwsday || 1
+        let s_month = p.gwsmonth || 1
+        let s_year = p.gwsyear
+        let e_day = p.gweday || 1
+        let e_month = p.gwemonth || 1
+        let e_year = p.gweyear
+
+        feat._start_ts = UfDate.getTimestamp({
+          day: s_day,
+          hour: 0,
+          minute: 0,
+          month: s_month,
+          year: s_year,
+        })
+        feat._end_ts = UfDate.getTimestamp({
+          day: e_day,
+          hour: 23,
+          minute: 59,
+          month: e_month,
+          year: e_year,
+        })
+
         let gw = p.gwcode
         if (gw !== undefined) {
           if (!cached_cshapes_keyframes_by_gwcode.has(gw))
             cached_cshapes_keyframes_by_gwcode.set(gw, [])
           let list = cached_cshapes_keyframes_by_gwcode.get(gw)!
+          let formatted_date = UfDate.formatDate({
+            day: s_day,
+            month: s_month,
+            year: s_year,
+          })
           list.push({
-            date: p.gwsdate || `${p.gwsyear}`,
-            label: `Boundary keyframe (${p.gwsyear}-${p.gweyear})`,
-            year: p.gwsyear,
+            date: formatted_date,
+            day: s_day,
+            label: `Boundary keyframe (${s_year}-${e_year})`,
+            month: s_month,
+            timestamp: feat._start_ts,
+            year: s_year,
           })
         }
       }
 
       //Sort keyframes chronologically
       for (let list of cached_cshapes_keyframes_by_gwcode.values()) {
-        list.sort((arg0_a, arg0_b) => arg0_a.year - arg0_b.year)
+        list.sort((arg0_a, arg0_b) => (arg0_a.timestamp || 0) - (arg0_b.timestamp || 0))
       }
 
       console.log(`[AtlasBordersService] Successfully indexed ${cached_cshapes_features.length} CShapes features across ${cached_cshapes_keyframes_by_gwcode.size} nations.`)
@@ -279,10 +314,36 @@ export class AtlasBordersService {
             kf_map.set(ts, val as [any, any, any])
         }
 
+        let keyframes_summary: HistoricalBorderKeyframe[] = []
+        for (let k = 0; k < sorted_ts.length; k++) {
+          let k_ts = sorted_ts[k]
+          let date_obj = UfDate.convertTimestampToDate(k_ts)
+          let k_val = kf_map.get(k_ts)
+          let label = 'Boundary keyframe'
+          if (k_val && (k_val[0] === null || k_val[2]?.hidden === true))
+            label = 'Boundary unrecorded / hidden'
+          else if (k === 0)
+            label = 'Recorded keyframe'
+          else if (k_val && k_val[2] && k_val[2].name)
+            label = `Renamed to ${String(k_val[2].name).replace(/\n+/g, ' ')}`
+          else
+            label = 'Boundary updated'
+
+          keyframes_summary.push({
+            date: UfDate.formatDate(date_obj),
+            day: date_obj.day,
+            label,
+            month: date_obj.month,
+            timestamp: k_ts,
+            year: date_obj.year,
+          })
+        }
+
         entity_records.set(ent_id, {
           class_name: ent.class_name,
           id: ent_id,
           keyframes: kf_map,
+          keyframes_summary,
           max_ts: sorted_ts[sorted_ts.length - 1],
           min_ts: sorted_ts[0],
           name: ent.name,
@@ -304,61 +365,111 @@ export class AtlasBordersService {
 
   /**
    * Slices active historical borders for a given year and dataset.
+   * Supports sub-yearly continuous GMT timestamps and capped LRU caching.
    *
    * @param {number} arg0_year
    * @param {Object} [arg1_options]
    * @param {[number, number, number, number]} [arg1_options.bbox]
    * @param {string} [arg1_options.dataset]
+   * @param {number} [arg1_options.day]
+   * @param {number} [arg1_options.month]
    *
    * @returns {HistoricalBordersResponse}
    */
   static getBordersAtYear (
     arg0_year: number,
-    arg1_options?: { bbox?: [number, number, number, number]; dataset?: string }
+    arg1_options?: {
+      bbox?: [number, number, number, number]
+      dataset?: string
+      day?: number
+      month?: number
+    }
   ): HistoricalBordersResponse {
     //Convert from parameters
     let options = arg1_options || {}
-    let target_year = Math.round(arg0_year)
-
-    //Declare local instance variables
+    let target_year = arg0_year
     let bbox = options.bbox
     let dataset = options.dataset || 'statistical_borders'
-    let disk_cache_path = path.join(
-      AtlasBordersService.getDatasetPaths().cacheDir,
-      `borders_${dataset}_${target_year}.json`
-    )
-    let domain: [number, number] = dataset === 'detailed_borders'
-      ? [-3500, 2026]
-      : (target_year >= 1886 ? [1886, 2026] : [-3500, 1886])
-    let features: HistoricalBorderFeature[] = []
-    let lru_key = `${dataset}_${target_year}`
-    let source: 'cshapes' | 'naissance' = dataset === 'detailed_borders'
-      ? 'naissance'
-      : (target_year >= 1886 ? 'cshapes' : 'naissance')
+    let target_day = options.day
+    let target_month = options.month
 
-    //Check in-memory LRU cache if no bbox
-    if (!bbox && in_memory_slice_lru.has(lru_key)) {
-      let cached_list = in_memory_slice_lru.get(lru_key)!
-      return {
-        count: cached_list.length,
-        domain,
-        features: cached_list,
-        source,
+    //Declare local instance variables
+    let disk_cache_path: string
+    let domain: [number, number]
+    let features: HistoricalBorderFeature[] = []
+    let is_whole_year_query: boolean
+    let lru_key: string
+    let source: 'cshapes' | 'naissance'
+    let target_date_obj: UfDateObject
+    let target_ts: number
+
+    //Function body
+    if (target_day !== undefined && target_month !== undefined) {
+      target_date_obj = {
+        day: target_day,
+        hour: 0,
+        minute: 0,
+        month: target_month,
+        year: (target_year < 0 ? Math.ceil(target_year) : Math.floor(target_year)),
+      }
+    } else if (target_year !== Math.floor(target_year)) {
+      target_date_obj = UfDate.fromFractionalYear(target_year)
+    } else {
+      target_date_obj = {
+        day: 1,
+        hour: 0,
+        minute: 0,
+        month: 1,
         year: target_year,
       }
     }
 
-    //Check disk cache if no bbox
-    if (!bbox && fs.existsSync(disk_cache_path)) {
+    target_ts = UfDate.getTimestamp(target_date_obj)
+    target_year = target_date_obj.year
+
+    domain = dataset === 'detailed_borders'
+      ? [-3500, 2026]
+      : (target_year >= 1886 ? [1886, 2026] : [-3500, 1886])
+
+    source = dataset === 'detailed_borders'
+      ? 'naissance'
+      : (target_year >= 1886 ? 'cshapes' : 'naissance')
+
+    lru_key = `${dataset}_${target_date_obj.year}_${target_date_obj.month}_${target_date_obj.day}_${bbox ? bbox.join(',') : 'all'}`
+    is_whole_year_query = Boolean(!bbox && target_date_obj.day === 1 && target_date_obj.month === 1 && Number.isInteger(arg0_year))
+
+    //Check in-memory LRU cache
+    if (in_memory_slice_lru.has(lru_key)) {
+      let cached_list = in_memory_slice_lru.get(lru_key)!
+      return {
+        count: cached_list.length,
+        date: UfDate.formatDate(target_date_obj),
+        domain,
+        features: cached_list,
+        source,
+        timestamp: target_ts,
+        year: target_year,
+      }
+    }
+
+    disk_cache_path = path.join(
+      AtlasBordersService.getDatasetPaths().cacheDir,
+      `borders_${dataset}_${target_year}.json`
+    )
+
+    //Check disk cache only for baseline whole-year queries without spatial bbox
+    if (is_whole_year_query && fs.existsSync(disk_cache_path)) {
       try {
         let cached_json = JSON.parse(fs.readFileSync(disk_cache_path, 'utf-8'))
         if (Array.isArray(cached_json.features)) {
           in_memory_slice_lru.set(lru_key, cached_json.features)
           return {
             count: cached_json.features.length,
+            date: cached_json.date || UfDate.formatDate(target_date_obj),
             domain,
             features: cached_json.features,
             source,
+            timestamp: cached_json.timestamp || target_ts,
             year: target_year,
           }
         }
@@ -367,7 +478,6 @@ export class AtlasBordersService {
       }
     }
 
-    //Function body
     if (dataset === 'detailed_borders') {
       //--- 1. DETAILED BORDERS SLICER (-3500 to 2026) ---
       let slice = detailed_borders_slices.find((arg0_s) =>
@@ -378,13 +488,6 @@ export class AtlasBordersService {
 
       let detailed_path = path.join(AtlasBordersService.getDatasetPaths().detailedDir, slice.file)
       let entities = AtlasBordersService.loadNaissance(detailed_path)
-      let target_ts = UfDate.getTimestamp({
-        day: 1,
-        hour: 0,
-        minute: 0,
-        month: 1,
-        year: target_year,
-      })
 
       for (let [ent_id, ent] of entities.entries()) {
         //Guard clause: check if entity exists at or before target timestamp
@@ -434,30 +537,6 @@ export class AtlasBordersService {
             continue
         }
 
-        //Format keyframes list for inspection
-        let keyframes_list: HistoricalBorderKeyframe[] = []
-        for (let k = 0; k < ent.sorted_timestamps.length; k++) {
-          let k_ts = ent.sorted_timestamps[k]
-          let date_obj = UfDate.convertTimestampToDate(k_ts)
-          let k_val = ent.keyframes.get(k_ts)
-          let label = 'Boundary keyframe'
-          if (k_val && (k_val[0] === null || k_val[2]?.hidden === true))
-            label = 'Boundary unrecorded / hidden'
-          else if (k === 0)
-            label = 'Recorded keyframe'
-          else if (k_val && k_val[2] && k_val[2].name)
-            label = `Renamed to ${String(k_val[2].name).replace(/\n+/g, ' ')}`
-          else
-            label = 'Boundary updated'
-
-          keyframes_list.push({
-            date: UfDate.formatDate(date_obj),
-            label,
-            timestamp: k_ts,
-            year: date_obj.year,
-          })
-        }
-
         let raw_name = current_props.name || ent.name || `Entity ${ent_id}`
         let entity_name = typeof raw_name === 'string' ? raw_name.replace(/\n+/g, ' ') : `Entity ${ent_id}`
         let resolved_date_obj = UfDate.convertTimestampToDate(resolved_ts)
@@ -473,7 +552,7 @@ export class AtlasBordersService {
             flags: current_props.flags,
             id: ent_id,
             iso_a3: entity_name,
-            keyframes: keyframes_list,
+            keyframes: ent.keyframes_summary || [],
             label: current_props.label,
             link: current_props.link,
             name: entity_name,
@@ -492,11 +571,9 @@ export class AtlasBordersService {
       for (let i = 0; i < cshapes.length; i++) {
         let feat = cshapes[i]
         let p = feat.properties
-        let s_yr = p.gwsyear
-        let e_yr = p.gweyear
 
-        //Check temporal domain validity
-        let is_active = s_yr <= target_year && (e_yr >= target_year || (e_yr >= 2019 && target_year >= 2019))
+        //Check temporal domain validity using precalculated timestamps
+        let is_active = feat._start_ts <= target_ts && (feat._end_ts >= target_ts || (p.gweyear >= 2019 && target_year >= 2019))
         if (!is_active)
           continue
 
@@ -522,6 +599,11 @@ export class AtlasBordersService {
             caplat: p.caplat,
             caplong: p.caplong,
             capname: p.capname,
+            date: UfDate.formatDate({
+              day: p.gwsday || 1,
+              month: p.gwsmonth || 1,
+              year: p.gwsyear,
+            }),
             endDate: p.gwedate,
             endYear: p.gweyear,
             gwcode: p.gwcode,
@@ -539,13 +621,6 @@ export class AtlasBordersService {
     } else {
       //--- 3. ATLAS.NAISSANCE SLICER (-3500 to 1886) ---
       let entities = AtlasBordersService.loadNaissance()
-      let target_ts = UfDate.getTimestamp({
-        day: 1,
-        hour: 0,
-        minute: 0,
-        month: 1,
-        year: target_year,
-      })
 
       for (let [ent_id, ent] of entities.entries()) {
         //Guard clause: check if entity exists at or before target timestamp
@@ -595,30 +670,6 @@ export class AtlasBordersService {
             continue
         }
 
-        //Format keyframes list for inspection
-        let keyframes_list: HistoricalBorderKeyframe[] = []
-        for (let k = 0; k < ent.sorted_timestamps.length; k++) {
-          let k_ts = ent.sorted_timestamps[k]
-          let date_obj = UfDate.convertTimestampToDate(k_ts)
-          let k_val = ent.keyframes.get(k_ts)
-          let label = 'Boundary keyframe'
-          if (k_val && (k_val[0] === null || k_val[2]?.hidden === true))
-            label = 'Boundary unrecorded / hidden'
-          else if (k === 0)
-            label = 'Recorded keyframe'
-          else if (k_val && k_val[2] && k_val[2].name)
-            label = `Renamed to ${String(k_val[2].name).replace(/\n+/g, ' ')}`
-          else
-            label = 'Boundary updated'
-
-          keyframes_list.push({
-            date: UfDate.formatDate(date_obj),
-            label,
-            timestamp: k_ts,
-            year: date_obj.year,
-          })
-        }
-
         let raw_name = current_props.name || ent.name || `Entity ${ent_id}`
         let entity_name = typeof raw_name === 'string' ? raw_name.replace(/\n+/g, ' ') : `Entity ${ent_id}`
         let resolved_date_obj = UfDate.convertTimestampToDate(resolved_ts)
@@ -632,7 +683,7 @@ export class AtlasBordersService {
             date: UfDate.formatDate(resolved_date_obj),
             id: ent_id,
             iso_a3: entity_name,
-            keyframes: keyframes_list,
+            keyframes: ent.keyframes_summary || [],
             name: entity_name,
             name_long: entity_name,
             symbol: current_symbol,
@@ -646,20 +697,20 @@ export class AtlasBordersService {
     //Sort features deterministically by name
     features.sort((arg0_a, arg0_b) => arg0_a.properties.name.localeCompare(arg0_b.properties.name))
 
-    //Update caches if query was global (no bbox)
-    if (!bbox) {
-      if (in_memory_slice_lru.size >= max_lru_entries) {
-        let first_key = in_memory_slice_lru.keys().next().value
-        if (first_key !== undefined)
-          in_memory_slice_lru.delete(first_key)
-      }
-      in_memory_slice_lru.set(lru_key, features)
+    //Update in-memory LRU with capacity cap
+    if (in_memory_slice_lru.size >= max_lru_entries) {
+      let oldest_key = in_memory_slice_lru.keys().next().value
+      if (oldest_key !== undefined)
+        in_memory_slice_lru.delete(oldest_key)
+    }
+    in_memory_slice_lru.set(lru_key, features)
 
-      //Persist to disk cache asynchronously
+    //Persist to disk cache asynchronously only for baseline whole-year queries
+    if (is_whole_year_query) {
       try {
         fs.writeFile(
           disk_cache_path,
-          JSON.stringify({ domain, features, source, year: target_year }),
+          JSON.stringify({ date: UfDate.formatDate(target_date_obj), domain, features, source, timestamp: target_ts, year: target_year }),
           'utf-8',
           () => {}
         )
@@ -671,9 +722,11 @@ export class AtlasBordersService {
     //Return statement
     return {
       count: features.length,
+      date: UfDate.formatDate(target_date_obj),
       domain,
       features,
       source,
+      timestamp: target_ts,
       year: target_year,
     }
   }
@@ -686,13 +739,20 @@ export class AtlasBordersService {
    * @param {Object} [arg2_options]
    * @param {[number, number, number, number]} [arg2_options.bbox]
    * @param {string} [arg2_options.dataset]
+   * @param {number} [arg2_options.day]
+   * @param {number} [arg2_options.month]
    *
    * @returns {void}
    */
   static streamBorders (
     arg0_res: ServerResponse,
     arg1_year: number,
-    arg2_options?: { bbox?: [number, number, number, number]; dataset?: string }
+    arg2_options?: {
+      bbox?: [number, number, number, number]
+      dataset?: string
+      day?: number
+      month?: number
+    }
   ): void {
     //Convert from parameters
     let options = arg2_options || {}
@@ -712,6 +772,8 @@ export class AtlasBordersService {
     res.write('{\n')
     res.write(`  "type": "FeatureCollection",\n`)
     res.write(`  "year": ${borders_res.year},\n`)
+    res.write(`  "date": "${borders_res.date || ''}",\n`)
+    res.write(`  "timestamp": ${borders_res.timestamp || 0},\n`)
     res.write(`  "source": "${borders_res.source}",\n`)
     res.write(`  "domain": [${borders_res.domain[0]}, ${borders_res.domain[1]}],\n`)
     res.write(`  "count": ${features.length},\n`)
