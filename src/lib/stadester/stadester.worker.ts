@@ -256,7 +256,7 @@ function processViewportLayout (arg0_msg: WorkerInMessage & { type: 'LAYOUT_VIEW
 
         //1. Globe orthographic culling (eliminates antipodal cities completely)
         if (is_globe) {
-          if (!isGlobePointVisible(c_lon, c_lat, view_state, 0.02))
+          if (!isGlobePointVisible(c_lon, c_lat, view_state, -0.20))
             continue
         }
 
@@ -337,7 +337,7 @@ function processViewportLayout (arg0_msg: WorkerInMessage & { type: 'LAYOUT_VIEW
 
           if (projection === 'Globe') {
             let proj = projectGlobeCoordinates(cand.position[0], cand.position[1], view_state, window_w, window_h)
-            if (!proj.is_visible || proj.dot < 0.08)
+            if (!proj.is_visible || proj.dot < -0.15)
               continue
 
             sx = proj.sx

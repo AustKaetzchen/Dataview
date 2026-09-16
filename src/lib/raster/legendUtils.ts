@@ -1,5 +1,6 @@
 import { ColorPalette, ScaleType } from '@/lib/geopng/types'
 import { ParsedDataLayer } from '@/server/layerParser'
+import { formatCohortDisplay } from '@/components/map/ClickInfoPanel'
 
 /**
  * Maps raw JSON5 colourscheme strings to the corresponding D3 ColorPalette enum name.
@@ -78,12 +79,15 @@ export const applyLayerLegend = function (
     return
 
   //Declare local instance variables
+  let base_name: string
   let candidate_legend: { colourscheme?: string; inverted?: boolean; steepness?: number; type?: string } | undefined
   let candidate_title = layer.name || layer.id
   let candidate_unit = layer.unit || ''
   let mapped_palette: ColorPalette | null = null
 
   //Function body
+  base_name = (layer.name || layer.id).replace(/\s*\(Total\)/i, '')
+
   if (layer.variable_selectors) {
     let sel_keys = Object.keys(layer.variable_selectors)
     let selected_option_names: string[] = []
@@ -110,8 +114,33 @@ export const applyLayerLegend = function (
       }
     }
 
-    if (selected_option_names.length > 0)
-      candidate_title = `${layer.name} (${selected_option_names.join(', ')})`
+    //1. Age / Sex demographic cohorts (e.g. M10-15, F20-25)
+    let is_age_sex = (layer.type === 'raster.age_sex') || Boolean(layer.variable_selectors?.gender && layer.variable_selectors?.age)
+    if (is_age_sex) {
+      let cohort_str = formatCohortDisplay(selectors.gender, selectors.age, layer)
+      if (cohort_str && cohort_str !== 'All Ages') {
+        candidate_title = `${base_name} (${cohort_str})`
+        candidate_unit = cohort_str
+      }
+    } else if (layer.variable_selectors?.profession) {
+      //2. Professions / occupations breakdown
+      let prof_key = Array.isArray(selectors.profession) ? selectors.profession[0] : selectors.profession
+      let prof_name = layer.variable_selectors.profession?.options?.[prof_key]?.name || prof_key
+      let gender_key = Array.isArray(selectors.gender) ? selectors.gender[0] : selectors.gender
+      let gender_name = (gender_key && gender_key !== 't' && layer.variable_selectors.gender?.options?.[gender_key]?.name)
+        ? layer.variable_selectors.gender.options[gender_key].name
+        : null
+
+      let prof_label = (gender_name && gender_name !== 'Total') ? `${prof_name} (${gender_name})` : prof_name
+      if (prof_label) {
+        candidate_title = `${base_name}: ${prof_label}`
+        candidate_unit = prof_label
+      }
+    } else if (selected_option_names.length > 0) {
+      candidate_title = `${base_name} (${selected_option_names.join(', ')})`
+      if (!candidate_unit || candidate_unit === 'Total' || candidate_unit.toLowerCase().includes('selected occupation'))
+        candidate_unit = selected_option_names.join(', ')
+    }
   }
 
   if (!candidate_legend)

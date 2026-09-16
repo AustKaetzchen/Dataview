@@ -125,7 +125,7 @@ export function createHistoricalBordersDeckLayer (
       let is_hovered = Boolean(hovered_id && (arg0_d.id === hovered_id || arg0_d.properties?.id === hovered_id || arg0_d.properties?.gwcode === hovered_id))
 
       if (is_selected)
-        return [250, 204, 21, 255]
+        return [220, 38, 38, 255]
       if (is_hovered)
         return [255, 255, 255, 240]
       return base_rgba
@@ -135,7 +135,7 @@ export function createHistoricalBordersDeckLayer (
       let is_hovered = Boolean(hovered_id && (arg0_d.id === hovered_id || arg0_d.properties?.id === hovered_id || arg0_d.properties?.gwcode === hovered_id))
 
       if (is_selected)
-        return [250, 204, 21, Math.max(fill_alpha, 55)]
+        return [220, 38, 38, Math.max(fill_alpha, 55)]
       if (is_hovered)
         return [255, 255, 255, Math.max(fill_alpha, 30)]
 
@@ -166,7 +166,8 @@ export function createHistoricalBordersDeckLayer (
       if (on_hover)
         on_hover(arg0_info.object || null, arg0_info.x, arg0_info.y)
     },
-    extensions: [new GlobeAntipodeCullExtension()],
+    wrapLongitude: true,
+    extensions: (projection === 'Globe') ? [new GlobeAntipodeCullExtension({ cullThreshold: -0.005 })] : [],
     parameters: {
       depthTest: false,
     },

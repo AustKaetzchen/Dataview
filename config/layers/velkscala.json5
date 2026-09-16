@@ -12,7 +12,7 @@
         stad: "${h1}/population_Stadester_Legacy/"
     },
     age_sex: {
-        name: "Age/Sex (Total)",
+        name: "Age/Sex",
         filepath: "${age_sex}/${gender}_${age}_${year}.png",
         type: "raster.age_sex", //This needs to be displayed as a population pyramid in tooltips/raster analysis somehow
         unit: "Total",

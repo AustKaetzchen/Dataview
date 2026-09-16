@@ -44,10 +44,10 @@ export const HistoricalBordersSettings: React.FC<HistoricalBordersSettingsProps>
       {/* Header */}
       <div className="flex items-center justify-between pb-1 border-b border-border/40">
         <div className="flex items-center gap-1.5">
-          <Icon name="flag" className="text-amber-400 text-xs" />
+          <Icon name="flag" className="text-white text-xs" />
           <span className="font-semibold text-foreground">Borders Appearance</span>
         </div>
-        <span className="text-[10px] px-1.5 py-0.2 bg-amber-500/20 text-amber-400 border border-amber-500/40 font-mono">
+        <span className="text-[10px] px-1.5 py-0.2 bg-muted/40 text-foreground border border-border font-mono">
           {stroke_color.toUpperCase()}
         </span>
       </div>

@@ -35,9 +35,9 @@ export const HistoricalKeyframesTimeline: React.FC<HistoricalKeyframesTimelinePr
 
   //Return statement
   return (
-    <div className="flex items-center gap-2 px-[var(--padding)] py-1 bg-amber-500/10 border-b border-amber-500/30 text-xs shrink-0 select-none overflow-x-auto custom-scrollbar">
-      <div className="flex items-center gap-1 text-[11px] font-semibold text-amber-300 shrink-0">
-        <Icon name="history" className="text-xs" />
+    <div className="flex items-center gap-2 px-[var(--padding)] py-1 bg-card/90 border-b border-border text-xs shrink-0 select-none overflow-x-auto custom-scrollbar">
+      <div className="flex items-center gap-1 text-[11px] font-semibold text-foreground shrink-0">
+        <Icon name="history" className="text-white text-xs" />
         <span>Keyframes ({keyframes_count}):</span>
       </div>
 
@@ -57,8 +57,8 @@ export const HistoricalKeyframesTimeline: React.FC<HistoricalKeyframesTimelinePr
               }}
               className={`px-1.5 py-0.5 rounded-none text-[10px] font-mono transition-colors cursor-pointer shrink-0 border ${
                 is_active
-                  ? 'bg-amber-400 text-black font-bold border-amber-300 shadow-sm'
-                  : 'bg-card/70 hover:bg-card text-muted-foreground hover:text-foreground border-border/50'
+                  ? 'bg-red-600 text-white font-bold border-red-500 shadow-sm'
+                  : 'bg-card/70 hover:bg-card text-muted-foreground hover:text-foreground border-border/50 hover:border-red-500/40'
               }`}
               title={kf.date || `Jump to ${label}`}
             >

@@ -26,6 +26,7 @@ import {
   StadesterConfig,
 } from '@/lib/geopng/types'
 import { createHistoricalBordersDeckLayer } from './useHistoricalBordersLayer'
+import { GlobeAntipodeCullExtension } from './layers/GlobeAntipodeCullExtension'
 import type { HistoricalBorderFeature } from '@/server/atlasBordersService'
 import {
   isGlobePointVisible,
@@ -401,7 +402,9 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
             getLineColor: [55, 62, 78, 255],
             getLineWidth: 1,
             lineWidthUnits: 'pixels',
+            wrapLongitude: true,
             parameters: { depthTest: false },
+            extensions: (projection === 'Globe') ? [new GlobeAntipodeCullExtension({ cullThreshold: -0.005 })] : [],
           })
         )
       }
@@ -640,7 +643,9 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
             getFillColor: [selected_key],
             getLineColor: [selected_key],
           },
+          wrapLongitude: true,
           parameters: { depthTest: false },
+          extensions: (projection === 'Globe') ? [new GlobeAntipodeCullExtension({ cullThreshold: -0.005 })] : [],
         })
       )
     }
@@ -672,7 +677,9 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
           getLineColor: [255, 255, 255, 220],
           getLineWidth: 1.5,
           lineWidthUnits: 'pixels',
+          wrapLongitude: true,
           parameters: { depthTest: false },
+          extensions: (projection === 'Globe') ? [new GlobeAntipodeCullExtension({ cullThreshold: -0.005 })] : [],
         })
       )
     }
@@ -699,7 +706,7 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
     //In Globe mode, filter effective_points to ensure no antipodal cities are rendered through the globe
     if (projection === 'Globe' && effective_points.length > 0) {
       effective_points = effective_points.filter((arg0_pt: any) =>
-        isGlobePointVisible(arg0_pt.position[0], arg0_pt.position[1], options.viewState, 0.02)
+        isGlobePointVisible(arg0_pt.position[0], arg0_pt.position[1], options.viewState, -0.20)
       )
     }
 
@@ -783,7 +790,7 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
       if (options.selectedCityKey) {
         let selected_city_item = effective_points.find((c: any) => c.key === options.selectedCityKey)
         if (selected_city_item && projection === 'Globe') {
-          if (!isGlobePointVisible(selected_city_item.position[0], selected_city_item.position[1], options.viewState, 0.02))
+          if (!isGlobePointVisible(selected_city_item.position[0], selected_city_item.position[1], options.viewState, -0.20))
             selected_city_item = null
         }
         if (selected_city_item) {
@@ -835,7 +842,7 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
 
             if (projection === 'Globe') {
               let proj = projectGlobeCoordinates(c.position[0], c.position[1], options.viewState, window_w, window_h)
-              if (!proj.is_visible || proj.dot < 0.08)
+              if (!proj.is_visible || proj.dot < -0.15)
                 continue
 
               sx = proj.sx
@@ -897,7 +904,7 @@ export const useDeckLayers = function (arg0_options: UseDeckLayersParams): any[]
         if (visible_label_cities && visible_label_cities.length > 0) {
           if (projection === 'Globe') {
             visible_label_cities = visible_label_cities.filter((arg0_c: any) =>
-              isGlobePointVisible(arg0_c.position[0], arg0_c.position[1], options.viewState, 0.08)
+              isGlobePointVisible(arg0_c.position[0], arg0_c.position[1], options.viewState, -0.15)
             )
           }
         }

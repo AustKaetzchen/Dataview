@@ -861,7 +861,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
         px = proj[0]
         py = proj[1]
       } else if (projection === 'Globe') {
-        if (!isGlobePointVisible(c_lon, c_lat, proj_view_states.Globe, 0.02))
+        if (!isGlobePointVisible(c_lon, c_lat, proj_view_states.Globe, -0.20))
           return null
       }
       let projected = vp.project([px, py])
@@ -891,7 +891,7 @@ export const MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapView
         px = proj[0]
         py = proj[1]
       } else if (projection === 'Globe') {
-        if (!isGlobePointVisible(c_lon, c_lat, proj_view_states.Globe, 0.02))
+        if (!isGlobePointVisible(c_lon, c_lat, proj_view_states.Globe, -0.20))
           return null
       }
       let projected = vp.project([px, py])

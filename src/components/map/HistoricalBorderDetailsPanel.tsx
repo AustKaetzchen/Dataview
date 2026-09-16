@@ -148,15 +148,15 @@ export const HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanel
       {/* Header */}
       <div className="flex items-start justify-between border-b border-border/70 pb-2 mb-2.5">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="w-8 h-8 rounded-none bg-amber-500/20 border border-amber-500/40 flex items-center justify-center shrink-0">
-            <Icon name="flag" className="text-amber-400 text-base" />
+          <div className="w-8 h-8 rounded-none bg-muted/40 border border-border flex items-center justify-center shrink-0">
+            <Icon name="flag" className="text-white text-base" />
           </div>
           <div className="min-w-0">
             <h3 className="text-sm font-bold text-foreground truncate" title={country_name}>
               {country_name}
             </h3>
             <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-mono">
-              <span className="text-amber-400 font-semibold">{source_label}</span>
+              <span className="text-foreground font-semibold">{source_label}</span>
               <span>•</span>
               <span className="truncate">{validity_str}</span>
             </div>
@@ -184,7 +184,7 @@ export const HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanel
           )}
           {cap_name && (
             <div className="flex items-center gap-1">
-              <Icon name="location_city" className="text-xs text-amber-300" />
+              <Icon name="location_city" className="text-xs text-white" />
               <span>Capital: </span>
               <span className="text-foreground font-semibold">{cap_name}</span>
             </div>
@@ -246,7 +246,7 @@ export const HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanel
               <button
                 type="button"
                 onClick={on_open_analytics}
-                className="text-[10px] underline text-amber-400 hover:text-amber-300 cursor-pointer"
+                className="text-[10px] text-red-500 hover:text-red-400 hover:underline cursor-pointer"
               >
                 Full Calculator
               </button>
@@ -284,14 +284,14 @@ export const HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanel
       {/* Keyframe Timeline Trajectory Header */}
       <div className="flex items-center justify-between text-[11px] font-semibold text-foreground mb-1.5 border-t border-border/50 pt-2">
         <span className="flex items-center gap-1.5">
-          <Icon name="timeline" className="text-xs text-amber-400" />
+          <Icon name="timeline" className="text-xs text-white" />
           <span className="uppercase tracking-wider font-mono text-[10px]">Historical Trajectory</span>
         </span>
         {on_open_analytics && !country_stats && (
           <button
             type="button"
             onClick={on_open_analytics}
-            className="text-[10px] underline text-amber-400 hover:text-amber-300 cursor-pointer"
+            className="text-[10px] text-red-500 hover:text-red-400 hover:underline cursor-pointer"
           >
             Analytics Drawer
           </button>
@@ -303,7 +303,7 @@ export const HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanel
         <div className="max-h-44 overflow-y-auto custom-scrollbar space-y-1 pr-0.5">
           {keyframes_list.map((arg0_kf: any, arg1_idx: number) => {
             let is_curr = Math.abs(arg0_kf.year - current_year) <= 1
-            let is_dissolved = Boolean(arg0_kf.label?.toLowerCase().includes('dissolved') || arg0_kf.label?.toLowerCase().includes('deleted'))
+            let is_unrecorded = Boolean(arg0_kf.label?.toLowerCase().includes('unrecorded') || arg0_kf.label?.toLowerCase().includes('hidden') || arg0_kf.label?.toLowerCase().includes('dissolved') || arg0_kf.label?.toLowerCase().includes('deleted'))
             let kf = arg0_kf
             let kf_label = kf.label || UfDate.formatYear(kf.year)
 
@@ -317,9 +317,9 @@ export const HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanel
                 }}
                 className={`w-full text-left px-2 py-1.5 text-[11px] flex items-center justify-between transition-colors cursor-pointer border ${
                   is_curr
-                    ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 font-bold shadow-xs'
-                    : is_dissolved
-                      ? 'bg-destructive/10 border-destructive/30 hover:bg-destructive/20 text-destructive'
+                    ? 'bg-red-500/20 border-red-500/60 text-red-400 font-bold shadow-xs'
+                    : is_unrecorded
+                      ? 'bg-muted/30 border-border/40 hover:bg-muted/50 text-muted-foreground'
                       : 'bg-card hover:bg-muted/50 border-border/40 text-muted-foreground hover:text-foreground'
                 }`}
                 title={`Jump timeline to ${kf.date || kf_label}`}
@@ -327,7 +327,7 @@ export const HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanel
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
                   <span
                     className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                      is_curr ? 'bg-amber-400' : (is_dissolved ? 'bg-destructive' : 'bg-muted-foreground/50')
+                      is_curr ? 'bg-red-500' : (is_unrecorded ? 'bg-muted-foreground/40' : 'bg-muted-foreground/60')
                     }`}
                   />
                   <span className="font-mono font-semibold shrink-0">{UfDate.formatYear(kf.year)}</span>
@@ -335,12 +335,12 @@ export const HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanel
                 </div>
 
                 <div className="flex items-center gap-1 shrink-0 ml-2">
-                  {is_dissolved && (
-                    <span className="text-[9px] px-1 py-0.2 bg-destructive/20 text-destructive border border-destructive/40 font-mono">
-                      Dissolved
+                  {is_unrecorded && (
+                    <span className="text-[9px] px-1 py-0.2 bg-muted text-muted-foreground border border-border/60 font-mono">
+                      Unrecorded
                     </span>
                   )}
-                  <span className="text-[10px] text-primary hover:underline font-mono">
+                  <span className="text-[10px] text-red-500 hover:underline font-mono">
                     Jump →
                   </span>
                 </div>

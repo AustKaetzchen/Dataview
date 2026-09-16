@@ -440,13 +440,15 @@ export class AtlasBordersService {
           let k_ts = ent.sorted_timestamps[k]
           let date_obj = UfDate.convertTimestampToDate(k_ts)
           let k_val = ent.keyframes.get(k_ts)
-          let label = 'Territory modified'
+          let label = 'Boundary keyframe'
           if (k_val && (k_val[0] === null || k_val[2]?.hidden === true))
-            label = 'Territory dissolved / deleted'
+            label = 'Boundary unrecorded / hidden'
           else if (k === 0)
-            label = 'Territory established'
+            label = 'Recorded keyframe'
           else if (k_val && k_val[2] && k_val[2].name)
             label = `Renamed to ${String(k_val[2].name).replace(/\n+/g, ' ')}`
+          else
+            label = 'Boundary updated'
 
           keyframes_list.push({
             date: UfDate.formatDate(date_obj),
@@ -599,13 +601,15 @@ export class AtlasBordersService {
           let k_ts = ent.sorted_timestamps[k]
           let date_obj = UfDate.convertTimestampToDate(k_ts)
           let k_val = ent.keyframes.get(k_ts)
-          let label = 'Territory modified'
+          let label = 'Boundary keyframe'
           if (k_val && (k_val[0] === null || k_val[2]?.hidden === true))
-            label = 'Territory dissolved / deleted'
+            label = 'Boundary unrecorded / hidden'
           else if (k === 0)
-            label = 'Territory established'
+            label = 'Recorded keyframe'
           else if (k_val && k_val[2] && k_val[2].name)
             label = `Renamed to ${String(k_val[2].name).replace(/\n+/g, ' ')}`
+          else
+            label = 'Boundary updated'
 
           keyframes_list.push({
             date: UfDate.formatDate(date_obj),

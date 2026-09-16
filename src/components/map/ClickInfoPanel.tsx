@@ -322,8 +322,8 @@ export const ClickInfoPanel: React.FC<ClickInfoPanelProps> = React.memo(function
       {/* 3. Appended Historical Country Section */}
       {has_historical && hovered_historical && (
         <div className={(has_raster || (has_stadester && hovered_city)) ? 'pt-1.5 mt-1.5 border-t border-border/60' : ''}>
-          <div className="font-semibold text-amber-300 flex items-center gap-1.5">
-            <span className="w-2 h-2 bg-amber-400 shrink-0" />
+          <div className="font-semibold text-foreground flex items-center gap-1.5">
+            <span className="w-2 h-2 bg-red-500 shrink-0" />
             <span className="truncate">{hovered_historical.properties?.name || 'Historical Entity'}</span>
           </div>
           <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono mt-0.5">
@@ -333,7 +333,7 @@ export const ClickInfoPanel: React.FC<ClickInfoPanelProps> = React.memo(function
                 : hovered_historical.properties?.date || ''}
             </span>
             {hovered_historical.properties?.keyframes && (
-              <span className="text-amber-400">({hovered_historical.properties.keyframes.length} kf)</span>
+              <span className="text-muted-foreground">({hovered_historical.properties.keyframes.length} kf)</span>
             )}
           </div>
         </div>

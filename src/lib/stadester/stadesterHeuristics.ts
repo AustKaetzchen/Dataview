@@ -308,7 +308,7 @@ export function isGlobePointVisible (
   //Convert from parameters
   let lat = arg1_lat
   let lng = arg0_lng
-  let min_cosine = (arg3_min_cosine !== undefined) ? arg3_min_cosine : 0.0
+  let min_cosine = (arg3_min_cosine !== undefined) ? arg3_min_cosine : -0.20
   let view_state = arg2_view_state
 
   //Guard clauses
