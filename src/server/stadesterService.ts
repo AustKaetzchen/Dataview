@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { clearStadesterDiskCache, indexHistoricalCities, loadGhslCsvNames, resolveCityDisplayName } from './ghslResolver.ts'
+import { indexHistoricalCities, loadGhslCsvNames, resolveCityDisplayName } from './ghslResolver.ts'
 import { getPrimaryCityName, isCorruptedCityName, isBuggedCityName } from '../lib/stadester/cityNameFramework.ts'
 
 let bugged_cities_set: Set<string> | null = null
@@ -151,7 +151,6 @@ export const StadesterService = {
 
     //Check lite disk cache for pre-resolved names
     let cache_dir = path.resolve(process.cwd(), 'data/stadester/cache')
-    let has_stale_settlements = false
     let lite_file_path = path.join(cache_dir, `${dataset_name}_lite.json`)
     let lite_name_map = new Map<string, string>()
 
@@ -161,18 +160,11 @@ export const StadesterService = {
         if (Array.isArray(lite_data)) {
           for (let i = 0; i < lite_data.length; i++) {
             if (lite_data[i].key && lite_data[i].name) {
-              if (isCorruptedCityName(lite_data[i].name))
-                has_stale_settlements = true
-              lite_name_map.set(lite_data[i].key, lite_data[i].name)
+              if (!isCorruptedCityName(lite_data[i].name))
+                lite_name_map.set(lite_data[i].key, lite_data[i].name)
             }
           }
-          if (has_stale_settlements) {
-            console.log(`[StadesterService] Stale/corrupted entries detected in ${lite_file_path}, invalidating cache...`)
-            lite_name_map.clear()
-            clearStadesterDiskCache()
-          } else {
-            console.log(`[StadesterService] Loaded ${lite_name_map.size} pre-resolved city names from ${lite_file_path}`)
-          }
+          console.log(`[StadesterService] Loaded ${lite_name_map.size} pre-resolved city names from ${lite_file_path}`)
         }
       } catch (arg0_err) {
         console.warn('[StadesterService] Failed to read lite cache for names:', arg0_err)
@@ -184,6 +176,7 @@ export const StadesterService = {
     console.log(`[StadesterService] Indexing dataset ${dataset_name} from ${file_path}...`)
     raw_text = fs.readFileSync(file_path, 'utf-8')
     raw_data = JSON.parse(raw_text)
+    raw_text = ''
     indexHistoricalCities(raw_data)
     all_city_keys = Object.keys(raw_data)
 
@@ -226,8 +219,10 @@ export const StadesterService = {
         region: c.region,
         years: pop_years,
       }
+      delete raw_data[key]
     }
 
+    raw_data = {} as any
     StadesterService.datasets.set(dataset_name, indexed_record)
     console.log(`[StadesterService] Successfully indexed ${all_city_keys.length} cities for ${dataset_name}.`)
 

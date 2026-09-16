@@ -244,11 +244,16 @@ export class AtlasBordersService {
     //Declare local instance variables
     let entity_records = new Map<string, NaissanceEntityRecord>()
 
+    //Release previous slice from memory cache to prevent holding multiple 600MB-900MB slices in RAM
+    if (cached_naissance_entities_by_path.size >= 1)
+      cached_naissance_entities_by_path.clear()
+
     //Function body
     try {
       console.log(`[AtlasBordersService] Loading and indexing ${path.basename(file_path)}...`)
       let raw = fs.readFileSync(file_path, 'utf-8')
       let parsed_data = JSON.parse(raw)
+      raw = ''
 
       let keys = Object.keys(parsed_data)
       for (let i = 0; i < keys.length; i++) {
@@ -285,16 +290,10 @@ export class AtlasBordersService {
         })
       }
 
+      parsed_data = null as any
       console.log(`[AtlasBordersService] Successfully indexed ${entity_records.size} entities from ${path.basename(file_path)}.`)
     } catch (arg0_err) {
       console.error(`[AtlasBordersService] Failed to load ${file_path}:`, arg0_err)
-    }
-
-    //Maintain at most 4 active slices in memory cache to bound memory consumption
-    if (cached_naissance_entities_by_path.size >= 4) {
-      let oldest_key = cached_naissance_entities_by_path.keys().next().value
-      if (oldest_key !== undefined)
-        cached_naissance_entities_by_path.delete(oldest_key)
     }
 
     cached_naissance_entities_by_path.set(file_path, entity_records)

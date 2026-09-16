@@ -1,5 +1,6 @@
 @echo off
 setlocal
+set NODE_OPTIONS=--max-old-space-size=8192
 title Project 1436 - Dataview Webviewer
 
 :: Change to the directory where this script is located
