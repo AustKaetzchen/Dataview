@@ -48,6 +48,7 @@ export interface ParsedDataLayer {
   permissions: string[]
   pixel_offset?: number | { covariate?: string; x?: number; y?: number }
   sub_layers?: ParsedDataLayer[]
+  synthetic_by_default?: boolean
   type: string
   unit?: string
   variable_selectors?: Record<string, LayerVariableSelector>
@@ -472,6 +473,7 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
       'root_folders',
       'show_colourbar',
       'show_colorbar',
+      'synthetic_by_default',
       'type',
       'unit',
       'variable_selectors',
@@ -679,6 +681,11 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
             parent_id: k,
             permissions: sub_item.permissions ? (Array.isArray(sub_item.permissions) ? sub_item.permissions : [sub_item.permissions]) : ['default'],
             pixel_offset: sub_item.pixel_offset ?? item.pixel_offset,
+            synthetic_by_default: sub_item.synthetic_by_default !== undefined
+              ? Boolean(sub_item.synthetic_by_default)
+              : (item.synthetic_by_default !== undefined
+                ? Boolean(item.synthetic_by_default)
+                : (parsed_json.synthetic_by_default !== undefined ? Boolean(parsed_json.synthetic_by_default) : undefined)),
             type: sub_item.type || layer_type,
             unit: sub_item.unit || item.unit,
           })
@@ -713,6 +720,9 @@ export const loadAndParseLayers = function (arg0_config_dir: string): LayerRegis
           permissions: item.permissions ? (Array.isArray(item.permissions) ? item.permissions : [item.permissions]) : ['default'],
           pixel_offset: item.pixel_offset,
           sub_layers: sub_layer_list.length > 0 ? sub_layer_list : undefined,
+          synthetic_by_default: item.synthetic_by_default !== undefined
+            ? Boolean(item.synthetic_by_default)
+            : (parsed_json.synthetic_by_default !== undefined ? Boolean(parsed_json.synthetic_by_default) : undefined),
           type: layer_type,
           unit: item.unit,
           variable_selectors: selectors,

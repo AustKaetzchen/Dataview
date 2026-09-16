@@ -1,5 +1,6 @@
 {
     name: "Eoscala (Economics)",
+    synthetic_by_default: true,
     root_folders: {
         nwm: "D:/Project 1509 - SVEA/histmap/", //Determines root folder on the server device
         h1: "${nwm}/histmap/1.data_raw/",
@@ -106,6 +107,7 @@
     professions_percentage: {
         name: "Professions (%)",
         unit: "%",
+        synthetic_by_default: true,
         filepath: "${prof_per}/${profession}_${gender}_${year}.png",
         legend: {
             type: "linear"
@@ -164,6 +166,7 @@
     },
     professions_total: {
         name: "Professions",
+        synthetic_by_default: true,
         filepath: "${prof_tot}/${profession}_${gender}_${year}.png",
         unit: "Total workforce in the selected occupation(s)",
         variable_selectors: { //There should also be an option to enable all variable selectors

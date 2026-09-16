@@ -947,6 +947,7 @@ export const App: React.FC = function () {
           }}
           onChangeYear={set_timeline_year}
           stadesterDataset={stadester_config.dataset}
+          userRole={user_role}
         />
       </div>
 

@@ -18,9 +18,12 @@ export interface CategoryBreakdownChartProps {
     value: number | null
   } | null
   layerId?: string
+  onTogglePlaceholder?: (arg0_val: boolean) => void
   raster: DecodedRaster | null
   selectedCountries?: CountryFeature[]
   selectedCountry?: CountryFeature | null
+  syntheticByDefault?: boolean
+  usePlaceholder?: boolean
 }
 
 export interface SectorItem {
@@ -44,7 +47,7 @@ export const PROFESSION_SECTORS: SectorItem[] = [
  *
  * @returns {string}
  */
-function getFeatureEntityName (arg0_feat: any): string {
+function getFeatureEntityName(arg0_feat: any): string {
   if (!arg0_feat) return ''
   let p = arg0_feat.properties || {}
   return (
@@ -77,9 +80,12 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
     currentYear: current_year,
     inspectData: inspect_data,
     layerId: layer_id = 'professions_percentage',
+    onTogglePlaceholder: on_toggle_placeholder,
     raster,
     selectedCountries: selected_countries = [],
     selectedCountry: selected_country = null,
+    syntheticByDefault: synthetic_by_default = true,
+    usePlaceholder: controlled_use_placeholder,
   } = props
 
   //Declare local instance variables
@@ -87,11 +93,14 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
   let container_ref = useRef<HTMLDivElement>(null)
   let echart_ref = useRef<any>(null)
   let effective_countries: CountryFeature[]
+  let effective_use_placeholder: boolean
   let global_sector_data: Record<string, number>
+  let handle_toggle_placeholder: (arg0_val: boolean) => void
   let has_countries: boolean
   let is_loading: boolean
   let is_percentage_mode = !layer_id.includes('total')
   let is_refining: boolean
+  let is_use_placeholder: boolean
   let option: any
   let refine_duration_estimate_ref = useRef<number>(3.0)
   let refine_start_time_ref = useRef<number>(0)
@@ -99,6 +108,7 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
   let refining_time_remaining: number
   let set_by_country_data: React.Dispatch<React.SetStateAction<Record<string, Record<string, number>>>>
   let set_global_sector_data: React.Dispatch<React.SetStateAction<Record<string, number>>>
+  let set_internal_use_placeholder: React.Dispatch<React.SetStateAction<boolean>>
   let set_is_loading: React.Dispatch<React.SetStateAction<boolean>>
   let set_is_refining: React.Dispatch<React.SetStateAction<boolean>>
   let set_refining_pct: React.Dispatch<React.SetStateAction<number>>
@@ -115,17 +125,28 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
 
   has_countries = effective_countries.length > 0
 
-  ;[global_sector_data, set_global_sector_data] = useState<Record<string, number>>({
-    agriculture: 25.0,
-    informal_labour: 15.0,
-    manufacturing: 35.0,
-    services: 25.0,
-  })
-  ;[by_country_data, set_by_country_data] = useState<Record<string, Record<string, number>>>({})
-  ;[is_loading, set_is_loading] = useState<boolean>(false)
-  ;[is_refining, set_is_refining] = useState<boolean>(false)
-  ;[refining_pct, set_refining_pct] = useState<number>(0)
-  ;[refining_time_remaining, set_refining_time_remaining] = useState<number>(3.0)
+    ;[global_sector_data, set_global_sector_data] = useState<Record<string, number>>({
+      agriculture: 25.0,
+      informal_labour: 15.0,
+      manufacturing: 35.0,
+      services: 25.0,
+    })
+    ;[by_country_data, set_by_country_data] = useState<Record<string, Record<string, number>>>({})
+    ;[is_use_placeholder, set_internal_use_placeholder] = useState<boolean>(
+      controlled_use_placeholder !== undefined ? controlled_use_placeholder : synthetic_by_default
+    )
+    ;[is_loading, set_is_loading] = useState<boolean>(false)
+    ;[is_refining, set_is_refining] = useState<boolean>(false)
+    ;[refining_pct, set_refining_pct] = useState<number>(0)
+    ;[refining_time_remaining, set_refining_time_remaining] = useState<number>(3.0)
+
+  effective_use_placeholder = controlled_use_placeholder !== undefined ? controlled_use_placeholder : is_use_placeholder
+
+  handle_toggle_placeholder = function (arg0_val: boolean) {
+    if (on_toggle_placeholder)
+      on_toggle_placeholder(arg0_val)
+    set_internal_use_placeholder(arg0_val)
+  }
 
   //Fetch breakdown from backend API with instantaneous synthetic responsiveness
   useEffect(() => {
@@ -135,24 +156,33 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
 
     let country_names = effective_countries.map(getFeatureEntityName).filter(Boolean)
 
-    //1. Instantaneous synthetic responsiveness ("fakery"): initialize immediately with synthetic sector model
+    //1. Instantaneous synthetic responsiveness: initialize immediately with synthetic sector model
     let synthetic = computeSyntheticSectorBreakdown(country_names, current_yr)
     set_global_sector_data(synthetic.global)
     if (country_names.length > 0)
       set_by_country_data(synthetic.byCountry)
+
+    //If placeholder is enabled, do not query the backend API
+    if (effective_use_placeholder) {
+      set_is_loading(false)
+      set_is_refining(false)
+      return () => {
+        cancelled = true
+      }
+    }
 
     //2. Indicate that authentic calculations are being refined
     set_is_loading(true)
     set_is_refining(true)
     refine_start_time_ref.current = performance.now()
     set_refining_pct(15)
-    set_refining_time_remaining(Math.max(0.3, Math.round(refine_duration_estimate_ref.current*10)/10))
+    set_refining_time_remaining(Math.max(0.3, Math.round(refine_duration_estimate_ref.current * 10) / 10))
 
     interval = setInterval(() => {
-      let elapsed_sec = (performance.now() - refine_start_time_ref.current)/1000
+      let elapsed_sec = (performance.now() - refine_start_time_ref.current) / 1000
       let est_total = Math.max(1.0, refine_duration_estimate_ref.current)
-      let pct = Math.min(96, Math.round((1 - Math.exp(-elapsed_sec/(est_total*0.65)))*100))
-      let rem = Math.max(0.1, Math.round((est_total - elapsed_sec)*10)/10)
+      let pct = Math.min(96, Math.round((1 - Math.exp(-elapsed_sec / (est_total * 0.65))) * 100))
+      let rem = Math.max(0.1, Math.round((est_total - elapsed_sec) * 10) / 10)
 
       set_refining_pct(Math.max(15, pct))
       set_refining_time_remaining(rem)
@@ -196,9 +226,9 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
         if (interval)
           clearInterval(interval)
 
-        let actual_sec = (performance.now() - refine_start_time_ref.current)/1000
+        let actual_sec = (performance.now() - refine_start_time_ref.current) / 1000
         if (actual_sec > 0.3)
-          refine_duration_estimate_ref.current = Math.min(10.0, Math.max(0.8, refine_duration_estimate_ref.current*0.6 + actual_sec*0.4))
+          refine_duration_estimate_ref.current = Math.min(10.0, Math.max(0.8, refine_duration_estimate_ref.current * 0.6 + actual_sec * 0.4))
 
         if (arg0_json) {
           if (arg0_json.global)
@@ -228,7 +258,7 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
       if (interval)
         clearInterval(interval)
     }
-  }, [current_year, effective_countries, layer_id, inspect_data?.pixelX, inspect_data?.pixelY])
+  }, [current_year, effective_countries, effective_use_placeholder, inspect_data?.pixelX, inspect_data?.pixelY, layer_id])
 
   //Resize observer for responsive panel updates
   useEffect(() => {
@@ -300,7 +330,7 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
       }
 
       return {
-        barWidth: Math.max(16, Math.min(32, Math.floor(140/Math.max(1, entity_labels.length)))),
+        barWidth: Math.max(16, Math.min(32, Math.floor(140 / Math.max(1, entity_labels.length)))),
         data: sector_data_points,
         emphasis: {
           focus: 'series',
@@ -437,6 +467,33 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = fun
               ? active_variable_selectors.profession.map((arg0_p) => arg0_p.replace(/_/g, ' ')).join(', ') || 'Agriculture'
               : active_variable_selectors.profession?.replace(/_/g, ' ') || 'Agriculture'}
           </span>
+        </div>
+      </div>
+
+      {/* Secondary Controls Bar */}
+      <div className="flex items-center justify-between px-2 py-1 bg-muted/35 border-b border-border/40 text-[10px] font-mono shrink-0">
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1.5 cursor-pointer select-none text-foreground/80 hover:text-foreground">
+            <input
+              type="checkbox"
+              checked={effective_use_placeholder}
+              onChange={(arg0_e) => handle_toggle_placeholder(arg0_e.target.checked)}
+              className="h-3 w-3 rounded border-border text-primary accent-primary cursor-pointer"
+            />
+            <span>Use Placeholder</span>
+          </label>
+          {effective_use_placeholder ? (
+            <span
+              className="px-1.5 py-0.2 text-[9px] text-muted-foreground bg-muted/50 border border-border/50 rounded cursor-help"
+              title="Showing instantaneous synthetic sector proxy. Uncheck 'Use Placeholder' to compute from authentic rasters."
+            >
+              Synthetic Proxy
+            </span>
+          ) : (
+            <span className="px-1.5 py-0.2 text-[9px] font-semibold bg-primary/20 text-primary border border-primary/30 rounded">
+              Exact
+            </span>
+          )}
         </div>
       </div>
 

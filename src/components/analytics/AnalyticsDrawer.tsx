@@ -43,6 +43,7 @@ export interface AnalyticsDrawerProps {
   selectedCountries?: CountryFeature[]
   selectedCountry?: CountryFeature | null
   stadesterDataset?: 'stadester_1.1' | 'stadester_1.0'
+  userRole?: 'developer' | 'privileged' | 'default'
 }
 
 /**
@@ -80,6 +81,7 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_pr
     selectedCountries: selected_countries,
     selectedCountry: selected_country,
     stadesterDataset: stadester_dataset = 'stadester_1.1',
+    userRole: user_role = 'developer',
   } = props
 
   //Declare local instance variables
@@ -99,14 +101,19 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_pr
     active_layer?.type === 'raster.age_sex' ||
     active_layer?.id === 'age_sex'
   )
+  let is_dev = user_role === 'developer'
   let right_offset = getAnalyticsPanelRightOffset(is_settings_drawer_open)
   let set_active_tab: React.Dispatch<React.SetStateAction<'cities' | 'pyramid' | 'breakdown' | 'histogram' | 'stats'>>
   let set_stats_progress_pct: React.Dispatch<React.SetStateAction<number>>
   let set_stats_time_remaining: React.Dispatch<React.SetStateAction<number>>
+  let set_use_placeholder_breakdown: React.Dispatch<React.SetStateAction<boolean>>
+  let set_use_placeholder_pyramid: React.Dispatch<React.SetStateAction<boolean>>
   let stats_duration_estimate_ref = useRef<number>(1.5)
   let stats_progress_pct: number
   let stats_start_time_ref = useRef<number>(0)
   let stats_time_remaining: number
+  let use_placeholder_breakdown: boolean
+  let use_placeholder_pyramid: boolean
 
   //Function body
   let initial_tab: 'cities' | 'pyramid' | 'breakdown' | 'histogram' | 'stats' = has_cities_chart
@@ -118,8 +125,22 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_pr
         : 'histogram'
 
   ;[active_tab, set_active_tab] = useState<'cities' | 'pyramid' | 'breakdown' | 'histogram' | 'stats'>(initial_tab)
+  ;[use_placeholder_pyramid, set_use_placeholder_pyramid] = useState<boolean>(
+    is_dev ? false : (active_layer?.synthetic_by_default !== false)
+  )
+  ;[use_placeholder_breakdown, set_use_placeholder_breakdown] = useState<boolean>(
+    is_dev ? false : (active_layer?.synthetic_by_default !== false)
+  )
   ;[stats_progress_pct, set_stats_progress_pct] = useState<number>(0)
   ;[stats_time_remaining, set_stats_time_remaining] = useState<number>(1.5)
+
+  //Synchronise placeholder defaults when user role changes
+  useEffect(() => {
+    if (user_role === 'developer') {
+      set_use_placeholder_pyramid(false)
+      set_use_placeholder_breakdown(false)
+    }
+  }, [user_role])
 
   //Track stats calculation progress and time remaining
   useEffect(() => {
@@ -389,7 +410,7 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_pr
               <>
                 {active_tab === 'pyramid' && (
                   <PopulationPyramidChart
-                    key={`pyramid-${derived_key}-${current_year}`}
+                    key={`pyramid-${derived_key}`}
                     raster={raster}
                     countryStats={country_stats}
                     selectedCountries={effective_countries}
@@ -397,12 +418,15 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_pr
                     currentYear={current_year}
                     activeVariableSelectors={active_variable_selectors}
                     inspectData={inspect_data}
+                    usePlaceholder={use_placeholder_pyramid}
+                    onTogglePlaceholder={set_use_placeholder_pyramid}
+                    syntheticByDefault={active_layer?.synthetic_by_default}
                   />
                 )}
 
                 {active_tab === 'breakdown' && (
                   <CategoryBreakdownChart
-                    key={`breakdown-${derived_key}-${current_year}`}
+                    key={`breakdown-${derived_key}`}
                     raster={raster}
                     countryStats={country_stats}
                     selectedCountries={effective_countries}
@@ -411,6 +435,9 @@ export const AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_pr
                     layerId={active_layer?.id}
                     activeVariableSelectors={active_variable_selectors}
                     inspectData={inspect_data}
+                    usePlaceholder={use_placeholder_breakdown}
+                    onTogglePlaceholder={set_use_placeholder_breakdown}
+                    syntheticByDefault={active_layer?.synthetic_by_default}
                   />
                 )}
 

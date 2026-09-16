@@ -1,5 +1,6 @@
 {
     name: "Velkscala (Demographics)",
+    synthetic_by_default: true,
     root_folders: {
         nwm: "D:/Project 1509 - SVEA/histmap/", //Determines root folder on the server device
         h1: "${nwm}/histmap/1.data_raw/",
@@ -16,6 +17,7 @@
         filepath: "${age_sex}/${gender}_${age}_${year}.png",
         type: "raster.age_sex", //This needs to be displayed as a population pyramid in tooltips/raster analysis somehow
         unit: "Total",
+        synthetic_by_default: true,
         gender: {
             name: "Gender",
             f: {

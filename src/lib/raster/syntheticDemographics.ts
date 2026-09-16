@@ -275,12 +275,14 @@ export function computeSyntheticDemographicPyramid (
   let year = arg1_year
 
   //Declare local instance variables
+  let bulge_shift: number
   let clean_name = country.toLowerCase().trim()
   let cohort_densities: number[] = []
   let dependency_ratio: number
   let female_map: Record<string, number> = {}
   let get_country_hash: (arg0_str: string) => number
   let h: number
+  let is_developing: boolean
   let is_high_fertility: boolean
   let is_mature: boolean
   let is_super_aged: boolean
@@ -293,10 +295,10 @@ export function computeSyntheticDemographicPyramid (
   let sum_unnormalised = 0
   let total_female = 0
   let total_male = 0
-  let total_pop: number
   let total_pop_thousands: number
   let working_count = 0
   let youth_dep_count = 0
+  let youth_shift: number
 
   get_country_hash = function (arg0_str: string): number {
     let hash = 0
@@ -356,6 +358,18 @@ export function computeSyntheticDemographicPyramid (
     clean_name.includes('persia') ||
     clean_name.includes('poland')
 
+  is_developing =
+    DEVELOPING_DIVIDEND_COUNTRIES.has(clean_name) ||
+    clean_name.includes('india') ||
+    clean_name.includes('indonesia') ||
+    clean_name.includes('pakistan') ||
+    clean_name.includes('bangladesh') ||
+    clean_name.includes('philippines') ||
+    clean_name.includes('egypt') ||
+    clean_name.includes('morocco') ||
+    clean_name.includes('mughal') ||
+    clean_name.includes('persia')
+
   is_high_fertility =
     HIGH_FERTILITY_COUNTRIES.has(clean_name) ||
     clean_name.includes('nigeria') ||
@@ -369,8 +383,10 @@ export function computeSyntheticDemographicPyramid (
     clean_name.includes('mali') ||
     clean_name.includes('chad')
 
-  sex_bias_mod = clean_name !== 'global' ? (((h % 31)/30 - 0.5)*0.08) : 0
-  life_exp_mod = clean_name !== 'global' ? ((((h >> 4) % 31)/30 - 0.5)*4.0) : 0
+  sex_bias_mod = clean_name !== 'global' ? (((h >> 4) % 31)/30 - 0.5)*0.06 : 0
+  life_exp_mod = clean_name !== 'global' ? (((h >> 8) % 31)/30 - 0.5)*4.5 : 0
+  bulge_shift = clean_name !== 'global' ? (((h >> 12) % 15) - 7)*0.6 : 0
+  youth_shift = clean_name !== 'global' ? (((h >> 16) % 21)/20 - 0.5)*0.15 : 0
 
   for (let i = 0; i < AGE_IDS.length; i++) {
     let age = COHORT_MID_AGES[i]
@@ -378,26 +394,34 @@ export function computeSyntheticDemographicPyramid (
     let cohort_w = COHORT_WIDTHS[i]
 
     if (year <= 1850) {
-      annual_density = Math.exp(-age/(32 + life_exp_mod*0.5))
+      let life_exp = Math.max(26, 32 + life_exp_mod*0.6)
+      annual_density = Math.exp(-age/life_exp)
     } else if (is_super_aged && year >= 1990) {
-      let birth_decline = Math.min(0.65, 0.45 + (year - 1990)*0.007)
+      let birth_decline = Math.min(0.68, Math.max(0.30, 0.45 + (year - 1990)*0.007 + youth_shift))
       let youth_curve = 1 - birth_decline*Math.exp(-Math.pow(age/24, 2))
-      let bulge = 1 + 0.35*Math.exp(-Math.pow((age - 52)/14, 2))
-      let survival = Math.exp(-Math.pow(age/(84 + life_exp_mod), 5.5))
+      let bulge = 1 + 0.35*Math.exp(-Math.pow((age - (52 + bulge_shift))/14, 2))
+      let survival = Math.exp(-Math.pow(age/(84 + life_exp_mod*0.5), 5.5))
       annual_density = youth_curve*bulge*survival
     } else if (is_mature && year >= 1970) {
-      let birth_factor = 0.85 - 0.15*Math.exp(-Math.pow(age/22, 2))
-      let bulge = 1 + 0.25*Math.exp(-Math.pow((age - 48)/16, 2))
-      let survival = Math.exp(-Math.pow(age/(82 + life_exp_mod), 5.0))
+      let birth_factor = 0.85 - (0.15 + youth_shift*0.5)*Math.exp(-Math.pow(age/22, 2))
+      let bulge = 1 + 0.25*Math.exp(-Math.pow((age - (48 + bulge_shift))/16, 2))
+      let survival = Math.exp(-Math.pow(age/(82 + life_exp_mod*0.5), 5.0))
       annual_density = birth_factor*bulge*survival
     } else if (is_transition && year >= 1990) {
-      let birth_factor = 0.70 - 0.30*Math.exp(-Math.pow(age/20, 2))
-      let bulge = 1 + 0.30*Math.exp(-Math.pow((age - 38)/15, 2))
-      let survival = Math.exp(-Math.pow(age/(78 + life_exp_mod), 4.5))
+      let birth_factor = 0.70 - (0.30 + youth_shift*0.5)*Math.exp(-Math.pow(age/20, 2))
+      let bulge = 1 + 0.30*Math.exp(-Math.pow((age - (38 + bulge_shift))/15, 2))
+      let survival = Math.exp(-Math.pow(age/(78 + life_exp_mod*0.5), 4.5))
       annual_density = birth_factor*bulge*survival
     } else if (is_high_fertility) {
-      let life_exp = (year >= 1980 ? 46 : 38) + life_exp_mod*0.5
+      let life_exp = (year >= 1980 ? 46 : 38) + life_exp_mod*0.4
       annual_density = Math.exp(-age/life_exp)
+    } else if (is_developing) {
+      let t_progress = Math.min(1, Math.max(0, (year - 1950)/75))
+      let life_exp = 40 + t_progress*30 + life_exp_mod
+      let youth_factor = 1.0 - t_progress*(0.22 + youth_shift*0.3)*Math.exp(-Math.pow(age/22, 2))
+      let dividend_bulge = 1.0 + t_progress*0.18*Math.exp(-Math.pow((age - (28 + bulge_shift))/14, 2))
+      let survival = Math.exp(-Math.pow(age/life_exp, 3.8))
+      annual_density = youth_factor*dividend_bulge*survival
     } else {
       let t_progress = Math.min(1, Math.max(0, (year - 1950)/75))
       let life_exp = 38 + t_progress*34 + life_exp_mod
@@ -406,7 +430,8 @@ export function computeSyntheticDemographicPyramid (
       annual_density = youth_factor*survival
     }
 
-    let density_val = cohort_w*annual_density
+    let cohort_mod = clean_name !== 'global' ? ((((h >> (i % 16)) & 0x1f)/31 - 0.5)*0.06) : 0
+    let density_val = cohort_w*annual_density*(1 + cohort_mod)
     cohort_densities.push(density_val)
     sum_unnormalised += density_val
   }
@@ -439,9 +464,8 @@ export function computeSyntheticDemographicPyramid (
     }
   }
 
-  total_pop = youth_dep_count + working_count + old_dep_count
   sex_ratio = total_female > 0 ? Math.round((total_male/total_female)*1000)/1000 : 1.0
-  dependency_ratio = total_pop > 0 ? Math.round(((youth_dep_count + old_dep_count)/total_pop)*1000)/10 : 35.0
+  dependency_ratio = working_count > 0 ? Math.round(((youth_dep_count + old_dep_count)/working_count)*1000)/10 : 50.0
 
   //Return statement
   return {
@@ -474,14 +498,30 @@ export function computeSyntheticSectorBreakdown (
   //Declare local instance variables
   let by_country: Record<string, Record<string, number>> = {}
   let compute_single: (arg0_name: string) => Record<string, number>
+  let get_country_hash: (arg0_str: string) => number
   let global_map: Record<string, number>
+
+  get_country_hash = function (arg0_str: string): number {
+    let hash = 0
+    for (let x = 0; x < arg0_str.length; x++) {
+      hash = ((hash << 5) - hash) + arg0_str.charCodeAt(x)
+      hash |= 0
+    }
+    return Math.abs(hash)
+  }
 
   //Function body
   compute_single = function (arg0_name: string): Record<string, number> {
     let clean = arg0_name.toLowerCase().trim()
-    let is_industrial = clean === 'germany' || clean === 'south korea' || clean === 'japan'
-    let is_western = MATURE_WESTERN_COUNTRIES.has(clean) || SUPER_AGED_COUNTRIES.has(clean)
+    let h = get_country_hash(clean)
     let map: Record<string, number> = {}
+
+    //Determine country economic structure
+    let is_agrarian = HIGH_FERTILITY_COUNTRIES.has(clean)
+    let is_developing = DEVELOPING_DIVIDEND_COUNTRIES.has(clean)
+    let is_factory = TRANSITION_EMERGING_COUNTRIES.has(clean)
+    let is_industrial = clean === 'germany' || clean === 'south korea' || clean === 'korea' || clean === 'czechia' || clean === 'poland' || clean === 'japan'
+    let is_western = MATURE_WESTERN_COUNTRIES.has(clean) || SUPER_AGED_COUNTRIES.has(clean) || clean === 'singapore'
 
     if (year <= 1800) {
       map.agriculture = is_western ? 68.0 : 80.0
@@ -490,16 +530,63 @@ export function computeSyntheticSectorBreakdown (
       map.services = is_western ? 10.0 : 3.0
     } else if (year <= 1950) {
       let t = (year - 1800)/150
-      map.agriculture = is_western ? 68.0*(1 - t) + 16.0*t : 80.0*(1 - t) + 45.0*t
-      map.informal_labour = is_western ? 8.0*(1 - t) + 2.0*t : 12.0*(1 - t) + 8.0*t
-      map.manufacturing = is_western ? 14.0*(1 - t) + 32.0*t : 5.0*(1 - t) + 20.0*t
-      map.services = is_western ? 10.0*(1 - t) + 50.0*t : 3.0*(1 - t) + 27.0*t
+      if (is_western || is_industrial) {
+        map.agriculture = 68.0*(1 - t) + 14.0*t
+        map.informal_labour = 8.0*(1 - t) + 6.0*t
+        map.manufacturing = 14.0*(1 - t) + 40.0*t
+        map.services = 10.0*(1 - t) + 40.0*t
+      } else {
+        map.agriculture = 80.0*(1 - t) + 62.0*t
+        map.informal_labour = 12.0*(1 - t) + 18.0*t
+        map.manufacturing = 5.0*(1 - t) + 11.0*t
+        map.services = 3.0*(1 - t) + 9.0*t
+      }
     } else {
       let t = Math.min(1, (year - 1950)/75)
-      map.agriculture = is_industrial ? 14.0*(1 - t) + 2.0*t : (is_western ? 16.0*(1 - t) + 3.0*t : 45.0*(1 - t) + 18.0*t)
-      map.informal_labour = is_western ? 2.0*(1 - t) + 1.0*t : 8.0*(1 - t) + 6.0*t
-      map.manufacturing = is_industrial ? 32.0*(1 - t) + 26.0*t : (is_western ? 32.0*(1 - t) + 16.0*t : 20.0*(1 - t) + 26.0*t)
-      map.services = is_western ? 50.0*(1 - t) + 80.0*t : 27.0*(1 - t) + 50.0*t
+      if (is_industrial) {
+        map.agriculture = 14.0*(1 - t) + 1.6*t
+        map.informal_labour = 6.0*(1 - t) + 3.8*t
+        map.manufacturing = 40.0*(1 - t) + 26.5*t
+        map.services = 40.0*(1 - t) + 68.1*t
+      } else if (is_western) {
+        map.agriculture = 14.0*(1 - t) + 2.0*t
+        map.informal_labour = 6.0*(1 - t) + 4.8*t
+        map.manufacturing = 40.0*(1 - t) + 14.2*t
+        map.services = 40.0*(1 - t) + 79.0*t
+      } else if (is_factory) {
+        map.agriculture = 58.0*(1 - t) + 20.0*t
+        map.informal_labour = 16.0*(1 - t) + 10.5*t
+        map.manufacturing = 15.0*(1 - t) + 30.5*t
+        map.services = 11.0*(1 - t) + 39.0*t
+      } else if (is_developing) {
+        map.agriculture = 65.0*(1 - t) + 38.0*t
+        map.informal_labour = 19.0*(1 - t) + 26.0*t
+        map.manufacturing = 10.0*(1 - t) + 15.0*t
+        map.services = 6.0*(1 - t) + 21.0*t
+      } else if (is_agrarian) {
+        map.agriculture = 72.0*(1 - t) + 48.0*t
+        map.informal_labour = 19.0*(1 - t) + 34.0*t
+        map.manufacturing = 6.0*(1 - t) + 7.5*t
+        map.services = 3.0*(1 - t) + 10.5*t
+      } else {
+        map.agriculture = 24.0*(1 - t) + 9.5*t
+        map.informal_labour = 13.0*(1 - t) + 10.5*t
+        map.manufacturing = 34.0*(1 - t) + 19.0*t
+        map.services = 29.0*(1 - t) + 61.0*t
+      }
+    }
+
+    //Apply deterministic country-specific profile variation so each country is unique
+    if (clean !== 'global') {
+      let v_agri = ((h % 41)/40 - 0.5)*3.2
+      let v_inf = (((h >> 3) % 41)/40 - 0.5)*2.8
+      let v_mfg = (((h >> 6) % 41)/40 - 0.5)*4.5
+      let v_srv = (((h >> 9) % 41)/40 - 0.5)*4.5
+
+      map.agriculture = Math.max(0.5, map.agriculture + v_agri)
+      map.informal_labour = Math.max(0.5, map.informal_labour + v_inf)
+      map.manufacturing = Math.max(0.5, map.manufacturing + v_mfg)
+      map.services = Math.max(0.5, map.services + v_srv)
     }
 
     let sum = (map.agriculture || 0) + (map.informal_labour || 0) + (map.manufacturing || 0) + (map.services || 0)

@@ -18,9 +18,12 @@ export interface PopulationPyramidChartProps {
     pixelY: number
     value: number | null
   } | null
+  onTogglePlaceholder?: (arg0_val: boolean) => void
   raster: DecodedRaster | null
   selectedCountries?: CountryFeature[]
   selectedCountry?: CountryFeature | null
+  syntheticByDefault?: boolean
+  usePlaceholder?: boolean
 }
 
 export interface AgeCohortItem {
@@ -97,9 +100,12 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
     countryStats: country_stats,
     currentYear: current_year,
     inspectData: inspect_data,
+    onTogglePlaceholder: on_toggle_placeholder,
     raster,
     selectedCountries: selected_countries = [],
     selectedCountry: selected_country = null,
+    syntheticByDefault: synthetic_by_default = true,
+    usePlaceholder: controlled_use_placeholder,
   } = props
 
   //Declare local instance variables
@@ -108,9 +114,12 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
   let dependency_ratio: number
   let echart_ref = useRef<any>(null)
   let effective_countries: CountryFeature[]
+  let effective_use_placeholder: boolean
   let female_values: number[]
+  let handle_toggle_placeholder: (arg0_val: boolean) => void
   let is_loading: boolean
   let is_refining: boolean
+  let is_use_placeholder: boolean
   let male_values: number[]
   let option: any
   let pyramid_data: { female: Record<string, number>; male: Record<string, number> } | null
@@ -120,6 +129,7 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
   let refining_time_remaining: number
   let set_active_country_name: React.Dispatch<React.SetStateAction<string | null>>
   let set_dependency_ratio: React.Dispatch<React.SetStateAction<number>>
+  let set_internal_use_placeholder: React.Dispatch<React.SetStateAction<boolean>>
   let set_is_loading: React.Dispatch<React.SetStateAction<boolean>>
   let set_is_refining: React.Dispatch<React.SetStateAction<boolean>>
   let set_pyramid_data: React.Dispatch<React.SetStateAction<{ female: Record<string, number>; male: Record<string, number> } | null>>
@@ -144,6 +154,9 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
     ;[active_country_name, set_active_country_name] = useState<string | null>(
       effective_countries.length > 0 ? getFeatureEntityName(effective_countries[effective_countries.length - 1]) : null
     )
+    ;[is_use_placeholder, set_internal_use_placeholder] = useState<boolean>(
+      controlled_use_placeholder !== undefined ? controlled_use_placeholder : synthetic_by_default
+    )
     ;[pyramid_data, set_pyramid_data] = useState<{ female: Record<string, number>; male: Record<string, number> } | null>(null)
     ;[is_loading, set_is_loading] = useState<boolean>(false)
     ;[is_refining, set_is_refining] = useState<boolean>(false)
@@ -153,6 +166,14 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
     ;[total_female, set_total_female] = useState<number>(0)
     ;[sex_ratio, set_sex_ratio] = useState<number>(1.0)
     ;[dependency_ratio, set_dependency_ratio] = useState<number>(50.0)
+
+  effective_use_placeholder = controlled_use_placeholder !== undefined ? controlled_use_placeholder : is_use_placeholder
+
+  handle_toggle_placeholder = function (arg0_val: boolean) {
+    if (on_toggle_placeholder)
+      on_toggle_placeholder(arg0_val)
+    set_internal_use_placeholder(arg0_val)
+  }
 
   //Auto-synchronize active country selection when user selects or clicks countries
   useEffect(() => {
@@ -172,13 +193,22 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
     let current_yr = Math.round(current_year)
     let interval: NodeJS.Timeout | null = null
 
-    //1. Instantaneous responsiveness ("fakery"): initialize immediately with synthetic demographic model
+    //1. Instantaneous responsiveness: initialize immediately with synthetic demographic model
     let synthetic = computeSyntheticDemographicPyramid(active_country_name || 'Global', current_yr)
     set_pyramid_data({ female: synthetic.female, male: synthetic.male })
     set_total_male(synthetic.totalMale)
     set_total_female(synthetic.totalFemale)
     set_sex_ratio(synthetic.sexRatio)
     set_dependency_ratio(synthetic.dependencyRatio)
+
+    //If placeholder is enabled, do not query the backend API
+    if (effective_use_placeholder) {
+      set_is_loading(false)
+      set_is_refining(false)
+      return () => {
+        cancelled = true
+      }
+    }
 
     //2. Indicate that authentic calculations are being refined
     set_is_loading(true)
@@ -269,7 +299,7 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
       if (interval)
         clearInterval(interval)
     }
-  }, [active_country_name, current_year, inspect_data?.pixelX, inspect_data?.pixelY, effective_countries])
+  }, [active_country_name, current_year, effective_countries, effective_use_placeholder, inspect_data?.pixelX, inspect_data?.pixelY])
 
   //Resize observer for responsive panel updates
   useEffect(() => {
@@ -545,7 +575,7 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
 
         <div className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground shrink-0">
           <span>
-            Total: <b className="text-foreground">{formatLegendValue((total_male + total_female) * 1000)}</b>
+            Total: <b className="text-foreground">{formatLegendValue((total_male + total_female)*1000)}</b>
           </span>
           <span>
             Sex Ratio: <b className="text-foreground">{sex_ratio.toFixed(2)}</b> M/F
@@ -553,6 +583,33 @@ export const PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = fun
           <span>
             Dependency: <b className="text-foreground">{dependency_ratio.toFixed(1)}%</b>
           </span>
+        </div>
+      </div>
+
+      {/* Secondary Controls Bar */}
+      <div className="flex items-center justify-between px-2 py-1 bg-muted/35 border-b border-border/40 text-[10px] font-mono shrink-0">
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1.5 cursor-pointer select-none text-foreground/80 hover:text-foreground">
+            <input
+              type="checkbox"
+              checked={effective_use_placeholder}
+              onChange={(arg0_e) => handle_toggle_placeholder(arg0_e.target.checked)}
+              className="h-3 w-3 rounded border-border text-primary accent-primary cursor-pointer"
+            />
+            <span>Use Placeholder</span>
+          </label>
+          {effective_use_placeholder ? (
+            <span
+              className="px-1.5 py-0.2 text-[9px] text-muted-foreground bg-muted/50 border border-border/50 rounded cursor-help"
+              title="Showing instantaneous synthetic demographic proxy. Uncheck 'Use Placeholder' to compute from authentic rasters."
+            >
+              Synthetic Proxy
+            </span>
+          ) : (
+            <span className="px-1.5 py-0.2 text-[9px] font-semibold bg-primary/20 text-primary border border-primary/30 rounded">
+              Exact
+            </span>
+          )}
         </div>
       </div>
 

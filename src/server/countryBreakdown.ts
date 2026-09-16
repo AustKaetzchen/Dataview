@@ -364,8 +364,10 @@ export function getCountryDemographicPyramid (
   }
 
   h = get_country_hash(clean_name)
-  sex_bias_mod = clean_name !== 'global' ? (((h >> 4) % 21)/20 - 0.5)*0.05 : 0
-  life_exp_mod = clean_name !== 'global' ? (((h >> 8) % 21)/20 - 0.5)*4.0 : 0
+  sex_bias_mod = clean_name !== 'global' ? (((h >> 4) % 31)/30 - 0.5)*0.06 : 0
+  life_exp_mod = clean_name !== 'global' ? (((h >> 8) % 31)/30 - 0.5)*4.5 : 0
+  let bulge_shift = clean_name !== 'global' ? (((h >> 12) % 15) - 7)*0.6 : 0
+  let youth_shift = clean_name !== 'global' ? (((h >> 16) % 21)/20 - 0.5)*0.15 : 0
 
   //Determine country archetype with historical border and keyword matching
   is_high_fertility = HIGH_FERTILITY_COUNTRIES.has(clean_name) ||
@@ -401,24 +403,31 @@ export function getCountryDemographicPyramid (
       let life_exp = Math.max(26, 32 + life_exp_mod*0.6)
       annual_density = Math.exp(-age/life_exp)
     } else if (is_super_aged && year >= 1990) {
-      let birth_decline = Math.min(0.65, 0.45 + (year - 1990)*0.007)
+      let birth_decline = Math.min(0.68, Math.max(0.30, 0.45 + (year - 1990)*0.007 + youth_shift))
       let youth_curve = 1 - birth_decline*Math.exp(-Math.pow(age/24, 2))
-      let bulge = 1 + 0.35*Math.exp(-Math.pow((age - 52)/14, 2))
+      let bulge = 1 + 0.35*Math.exp(-Math.pow((age - (52 + bulge_shift))/14, 2))
       let survival = Math.exp(-Math.pow(age/(84 + life_exp_mod*0.5), 5.5))
       annual_density = youth_curve*bulge*survival
     } else if (is_mature && year >= 1970) {
-      let birth_factor = 0.85 - 0.15*Math.exp(-Math.pow(age/22, 2))
-      let bulge = 1 + 0.25*Math.exp(-Math.pow((age - 48)/16, 2))
+      let birth_factor = 0.85 - (0.15 + youth_shift*0.5)*Math.exp(-Math.pow(age/22, 2))
+      let bulge = 1 + 0.25*Math.exp(-Math.pow((age - (48 + bulge_shift))/16, 2))
       let survival = Math.exp(-Math.pow(age/(82 + life_exp_mod*0.5), 5.0))
       annual_density = birth_factor*bulge*survival
     } else if (is_transition && year >= 1990) {
-      let birth_factor = 0.70 - 0.30*Math.exp(-Math.pow(age/20, 2))
-      let bulge = 1 + 0.30*Math.exp(-Math.pow((age - 38)/15, 2))
+      let birth_factor = 0.70 - (0.30 + youth_shift*0.5)*Math.exp(-Math.pow(age/20, 2))
+      let bulge = 1 + 0.30*Math.exp(-Math.pow((age - (38 + bulge_shift))/15, 2))
       let survival = Math.exp(-Math.pow(age/(78 + life_exp_mod*0.5), 4.5))
       annual_density = birth_factor*bulge*survival
     } else if (is_high_fertility) {
       let life_exp = (year >= 1980 ? 46 : 38) + life_exp_mod*0.4
       annual_density = Math.exp(-age/life_exp)
+    } else if (is_developing) {
+      let t_progress = Math.min(1, Math.max(0, (year - 1950)/75))
+      let life_exp = 40 + t_progress*30 + life_exp_mod
+      let youth_factor = 1.0 - t_progress*(0.22 + youth_shift*0.3)*Math.exp(-Math.pow(age/22, 2))
+      let dividend_bulge = 1.0 + t_progress*0.18*Math.exp(-Math.pow((age - (28 + bulge_shift))/14, 2))
+      let survival = Math.exp(-Math.pow(age/life_exp, 3.8))
+      annual_density = youth_factor*dividend_bulge*survival
     } else {
       let t_progress = Math.min(1, Math.max(0, (year - 1950)/75))
       let life_exp = 38 + t_progress*34 + life_exp_mod
@@ -427,7 +436,8 @@ export function getCountryDemographicPyramid (
       annual_density = youth_factor*survival
     }
 
-    let density_val = cohort_w*annual_density
+    let cohort_mod = clean_name !== 'global' ? ((((h >> (i % 16)) & 0x1f)/31 - 0.5)*0.06) : 0
+    let density_val = cohort_w*annual_density*(1 + cohort_mod)
     cohort_densities.push(density_val)
     sum_unnormalised += density_val
   }
