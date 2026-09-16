@@ -47,6 +47,14 @@
     "not_in_work": 61.8,
     "lastModified": 1789176441117.7874
   },
+  "1940": {
+    "agriculture": 24.9,
+    "informal_labour": 1.2,
+    "manufacturing": 28,
+    "services": 45.8,
+    "not_in_work": 59.6,
+    "lastModified": 1789176564541.02
+  },
   "1950": {
     "agriculture": 25.5,
     "informal_labour": 1.5,
