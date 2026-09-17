@@ -5,13 +5,13 @@
         l_df: "D:/Project 1436 - Dataview/data/atlas/detailed"
     },
     "default_basemap": {
-        name: "Default Basemap (No Data)",
+        name: "Default",
         type: "vector.basemap",
         unit: "",
         icon: "map",
         description: [
-            "### Default Basemap",
-            "Clean geographic basemap without raster overlays, optimised for inspecting settlement distributions and territorial boundaries."
+            "### Default View",
+            "Currently, rasters can be deselected by clicking on Atlas > Default."
         ],
         permissions: [
             "default"
