@@ -53,9 +53,12 @@
           title: "Overview",
           content: [
             "> [!WARNING]",
-            "> Confoederatio Dataview is currently a **work-in-progress**. This means that you may see placeholder text, misalignment issues, and features that may not display as intended.",
-            "> ",
-            "> In addition, there may be some stale caches with category variables. This is being worked on."
+            "> Confoederatio Dataview is currently a **work-in-progress**.",
+            "This means that you may see placeholder text, misalignment issues, and features that may not display as intended.",
+            "",
+            "In addition, there may be some stale caches with category variables. This is being worked on.",
+            "",
+            "We advise you to not share this URL currently if you have access to it, or to advertise it publicly. Not that we would break your kneecaps, but the website might not always be online in such cases."
           ],
         }
       ],
@@ -67,9 +70,9 @@
       type: "content",
       markdown: [
         {
-          title: "We have no policy!",
+          title: "Otherwise, we have no policy!",
           content: [
-            "We're not big corpo.",
+            "We're not big corpo."
           ],
         }
       ],
