@@ -31,6 +31,7 @@ export interface WorkerProcessedPoint {
   pixelRadius: number
   population: number
   position: [number, number, number]
+  projection?: string
   region?: string
   shortName: string
 }
@@ -41,6 +42,7 @@ export interface WorkerPlacedLabel {
   pixelRadius: number
   population: number
   position: [number, number, number]
+  projection?: string
   shortName: string
 }
 
@@ -283,6 +285,10 @@ function processViewportLayout (arg0_msg: WorkerInMessage & { type: 'LAYOUT_VIEW
           py = projected[1]
         }
 
+        // Validate finite coordinates
+        if (!Number.isFinite(px) || !Number.isFinite(py))
+          continue
+
         let min_radius = 3.25 * b_scale * Math.min(1.4, zoom_factor)
         let pop_scaled = Math.pow(Math.max(0, c.population) / 100000, 0.5 * contrast) * 3.6 * b_scale
         let pixel_radius = Math.max(min_radius, Math.min(65.0, (min_radius + pop_scaled) * zoom_factor))
@@ -308,6 +314,7 @@ function processViewportLayout (arg0_msg: WorkerInMessage & { type: 'LAYOUT_VIEW
           pixelRadius: pixel_radius,
           population: c.population,
           position: [px, py, 0],
+          projection: projection,
           region: c.region,
           shortName: pickBestCityDisplayName(c.name, c.other_names, display_options),
         }
@@ -403,6 +410,7 @@ function processViewportLayout (arg0_msg: WorkerInMessage & { type: 'LAYOUT_VIEW
             pixelRadius: cand.pixelRadius,
             population: cand.population,
             position: cand.position,
+            projection: projection,
             shortName: cand.shortName,
           })
 

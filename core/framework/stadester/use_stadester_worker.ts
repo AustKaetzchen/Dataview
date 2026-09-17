@@ -41,6 +41,7 @@ export function useStadesterWorker (arg0_options: UseStadesterWorkerParams): Use
   let debounce_timer_ref = useRef<any>(null)
   let is_calculating: boolean
   let labels: WorkerPlacedLabel[]
+  let last_projection_ref = useRef<ProjectionType>(projection)
   let points: WorkerProcessedPoint[]
   let req_id_ref = useRef<number>(0)
   let set_is_calculating: React.Dispatch<React.SetStateAction<boolean>>
@@ -113,6 +114,12 @@ export function useStadesterWorker (arg0_options: UseStadesterWorkerParams): Use
 
   //3. Dispatch layout computation on camera/viewport change
   useEffect(() => {
+    if (last_projection_ref.current !== projection) {
+      last_projection_ref.current = projection
+      set_points([])
+      set_labels([])
+    }
+
     if (!config?.enabled || cities.length === 0) {
       set_points([])
       set_labels([])

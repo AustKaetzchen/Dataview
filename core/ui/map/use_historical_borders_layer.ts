@@ -97,9 +97,13 @@ export function createHistoricalBordersDeckLayer (
     layer_data = borders_data.features.map((arg0_f) => ({
       ...arg0_f,
       geometry: transformGeometryToEqualEarth(arg0_f.geometry),
+      raw_feature: arg0_f,
     }))
   } else {
-    layer_data = borders_data.features
+    layer_data = borders_data.features.map((arg0_f) => ({
+      ...arg0_f,
+      raw_feature: arg0_f,
+    }))
   }
 
   //Return statement
@@ -113,8 +117,26 @@ export function createHistoricalBordersDeckLayer (
     lineWidthUnits: 'pixels',
     lineWidthMinPixels: 1,
     getLineWidth: (arg0_d: any) => {
-      let is_selected = Boolean(selected_id && (arg0_d.id === selected_id || arg0_d.properties?.id === selected_id || arg0_d.properties?.gwcode === selected_id))
-      let is_hovered = Boolean(hovered_id && (arg0_d.id === hovered_id || arg0_d.properties?.id === hovered_id || arg0_d.properties?.gwcode === hovered_id))
+      let is_selected = Boolean(
+        selected_id && (
+          arg0_d.id === selected_id ||
+          arg0_d.properties?.id === selected_id ||
+          arg0_d.properties?.gwcode === selected_id ||
+          arg0_d.raw_feature?.id === selected_id ||
+          arg0_d.raw_feature?.properties?.id === selected_id ||
+          arg0_d.raw_feature?.properties?.gwcode === selected_id
+        )
+      )
+      let is_hovered = Boolean(
+        hovered_id && (
+          arg0_d.id === hovered_id ||
+          arg0_d.properties?.id === hovered_id ||
+          arg0_d.properties?.gwcode === hovered_id ||
+          arg0_d.raw_feature?.id === hovered_id ||
+          arg0_d.raw_feature?.properties?.id === hovered_id ||
+          arg0_d.raw_feature?.properties?.gwcode === hovered_id
+        )
+      )
 
       if (is_selected)
         return Math.max(stroke_width * 2.0, 2.5)
@@ -123,8 +145,26 @@ export function createHistoricalBordersDeckLayer (
       return stroke_width
     },
     getLineColor: (arg0_d: any) => {
-      let is_selected = Boolean(selected_id && (arg0_d.id === selected_id || arg0_d.properties?.id === selected_id || arg0_d.properties?.gwcode === selected_id))
-      let is_hovered = Boolean(hovered_id && (arg0_d.id === hovered_id || arg0_d.properties?.id === hovered_id || arg0_d.properties?.gwcode === hovered_id))
+      let is_selected = Boolean(
+        selected_id && (
+          arg0_d.id === selected_id ||
+          arg0_d.properties?.id === selected_id ||
+          arg0_d.properties?.gwcode === selected_id ||
+          arg0_d.raw_feature?.id === selected_id ||
+          arg0_d.raw_feature?.properties?.id === selected_id ||
+          arg0_d.raw_feature?.properties?.gwcode === selected_id
+        )
+      )
+      let is_hovered = Boolean(
+        hovered_id && (
+          arg0_d.id === hovered_id ||
+          arg0_d.properties?.id === hovered_id ||
+          arg0_d.properties?.gwcode === hovered_id ||
+          arg0_d.raw_feature?.id === hovered_id ||
+          arg0_d.raw_feature?.properties?.id === hovered_id ||
+          arg0_d.raw_feature?.properties?.gwcode === hovered_id
+        )
+      )
 
       if (is_selected)
         return [220, 38, 38, 255]
@@ -133,8 +173,26 @@ export function createHistoricalBordersDeckLayer (
       return base_rgba
     },
     getFillColor: (arg0_d: any) => {
-      let is_selected = Boolean(selected_id && (arg0_d.id === selected_id || arg0_d.properties?.id === selected_id || arg0_d.properties?.gwcode === selected_id))
-      let is_hovered = Boolean(hovered_id && (arg0_d.id === hovered_id || arg0_d.properties?.id === hovered_id || arg0_d.properties?.gwcode === hovered_id))
+      let is_selected = Boolean(
+        selected_id && (
+          arg0_d.id === selected_id ||
+          arg0_d.properties?.id === selected_id ||
+          arg0_d.properties?.gwcode === selected_id ||
+          arg0_d.raw_feature?.id === selected_id ||
+          arg0_d.raw_feature?.properties?.id === selected_id ||
+          arg0_d.raw_feature?.properties?.gwcode === selected_id
+        )
+      )
+      let is_hovered = Boolean(
+        hovered_id && (
+          arg0_d.id === hovered_id ||
+          arg0_d.properties?.id === hovered_id ||
+          arg0_d.properties?.gwcode === hovered_id ||
+          arg0_d.raw_feature?.id === hovered_id ||
+          arg0_d.raw_feature?.properties?.id === hovered_id ||
+          arg0_d.raw_feature?.properties?.gwcode === hovered_id
+        )
+      )
 
       if (is_selected)
         return [220, 38, 38, Math.max(fill_alpha, 55)]
@@ -159,14 +217,17 @@ export function createHistoricalBordersDeckLayer (
         let coord: [number, number] | undefined = arg0_info.coordinate
           ? [arg0_info.coordinate[0], arg0_info.coordinate[1]]
           : undefined
-        on_select(arg0_info.object, coord, arg0_info.x, arg0_info.y)
+        let raw_feat = arg0_info.object.raw_feature || arg0_info.object
+        on_select(raw_feat, coord, arg0_info.x, arg0_info.y)
         return true
       }
       return false
     },
     onHover: (arg0_info: any) => {
-      if (on_hover)
-        on_hover(arg0_info.object || null, arg0_info.x, arg0_info.y)
+      if (on_hover) {
+        let raw_feat = arg0_info.object?.raw_feature || arg0_info.object || null
+        on_hover(raw_feat, arg0_info.x, arg0_info.y)
+      }
     },
     extensions: (projection === 'Globe') ? [new GlobeAntipodeCullExtension({ cullThreshold: -0.005 })] : [],
     parameters: {

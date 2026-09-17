@@ -244,6 +244,7 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
         color: fill_color,
         pixelRadius: pixel_radius,
         position: [px, py, 0] as [number, number, number],
+        projection: projection,
         shortName: short_name,
       }
     })
@@ -557,15 +558,29 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
     }
 
     //6. Selected Countries Highlight
-    if (effective_selected_array.length > 0) {
+    let non_historical_selected_array = effective_selected_array.filter((arg0_c: any) => {
+      let is_historical = Boolean(
+        options.historicalBordersConfig?.enabled &&
+        (arg0_c.properties?.gwcode !== undefined ||
+         arg0_c.raw_feature !== undefined ||
+         (options.selectedHistoricalFeature && (
+           arg0_c.id === options.selectedHistoricalFeature.id ||
+           arg0_c.properties?.id === options.selectedHistoricalFeature.properties?.id ||
+           arg0_c.properties?.gwcode === options.selectedHistoricalFeature.properties?.gwcode
+         )))
+      )
+      return !is_historical
+    })
+
+    if (non_historical_selected_array.length > 0) {
       selected_data = (projection === 'EqualEarth')
-        ? effective_selected_array.map((c) => ({
+        ? non_historical_selected_array.map((c) => ({
             ...c,
             geometry: transformGeometryToEqualEarth(c.geometry),
           }))
-        : effective_selected_array.map((c) => ({ ...c, geometry: { ...c.geometry } }))
+        : non_historical_selected_array.map((c) => ({ ...c, geometry: { ...c.geometry } }))
 
-      selected_key = effective_selected_array
+      selected_key = non_historical_selected_array
         .map((c) => (c.properties.iso_a3 && c.properties.iso_a3 !== '-99' ? c.properties.iso_a3 : c.properties.name))
         .join('_')
 
@@ -638,8 +653,13 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
       layers_array.push(historical_borders_layer)
 
     //9. Stadestér Historical Cities
-    let effective_points = (options.stadesterPoints && options.stadesterPoints.length > 0)
-      ? options.stadesterPoints
+    let is_worker_points_matching_proj = Boolean(
+      options.stadesterPoints &&
+      options.stadesterPoints.length > 0 &&
+      (!options.stadesterPoints[0]?.projection || options.stadesterPoints[0]?.projection === projection)
+    )
+    let effective_points = is_worker_points_matching_proj
+      ? options.stadesterPoints!
       : stadester_points_data
 
     //In Globe mode, filter effective_points to ensure no antipodal cities are rendered through the globe
@@ -706,6 +726,7 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
           radiusMinPixels: 3.25,
           radiusMaxPixels: 65.0,
           coordinateSystem: (is_cartesian) ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
+          billboard: true,
           pickable: true,
           autoHighlight: true,
           highlightColor: [255, 255, 255, 100],
@@ -720,6 +741,7 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
           },
           parameters: {
             cullMode: 'none',
+            depthMask: false,
             depthTest: false,
           },
         })
@@ -746,8 +768,10 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
               lineWidthUnits: 'pixels',
               radiusUnits: 'pixels',
               coordinateSystem: (is_cartesian) ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
+              billboard: true,
               parameters: {
                 cullMode: 'none',
+                depthMask: false,
                 depthTest: false,
               },
               pickable: false,
@@ -759,6 +783,11 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
       // City text labels
       if (is_labels_visible) {
         let visible_label_cities = options.stadesterLabels
+
+        if (visible_label_cities && visible_label_cities.length > 0) {
+          if (visible_label_cities[0]?.projection && visible_label_cities[0].projection !== projection)
+            visible_label_cities = undefined
+        }
 
         // Fallback local placement if worker labels have not yet arrived
         if (!visible_label_cities || visible_label_cities.length === 0) {
@@ -841,6 +870,15 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
         }
 
         if (visible_label_cities && visible_label_cities.length > 0) {
+          visible_label_cities = visible_label_cities.filter((arg0_c: any) =>
+            arg0_c &&
+            arg0_c.position &&
+            Number.isFinite(arg0_c.position[0]) &&
+            Number.isFinite(arg0_c.position[1]) &&
+            typeof arg0_c.shortName === 'string' &&
+            arg0_c.shortName.trim().length > 0
+          )
+
           if (projection === 'Globe') {
             visible_label_cities = visible_label_cities.filter((arg0_c: any) =>
               isGlobePointVisible(arg0_c.position[0], arg0_c.position[1], options.viewState, -0.15)
@@ -857,6 +895,8 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
               getText: (d: any) => d.shortName,
               getSize: (d: any) => Math.max(10, Math.min(15, 9 + Math.log10(Math.max(1000, d.population))*0.9)),
               sizeUnits: 'pixels',
+              sizeMinPixels: 9,
+              sizeMaxPixels: 20,
               getColor: [255, 255, 255, 255],
               getTextAnchor: 'start',
               getAlignmentBaseline: 'center',
@@ -864,14 +904,16 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
               background: true,
               getBackgroundColor: [10, 15, 25, 220],
               backgroundPadding: [4, 2],
-              borderRadius: 2,
+              backgroundBorderRadius: 2,
               fontFamily: 'Karla, sans-serif',
               fontWeight: 600,
+              billboard: true,
               coordinateSystem: (is_cartesian) ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
               characterSet: 'auto',
               pickable: false,
               parameters: {
                 cullMode: 'none',
+                depthMask: false,
                 depthTest: false,
               },
             })

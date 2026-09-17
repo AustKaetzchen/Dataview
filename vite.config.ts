@@ -23,6 +23,19 @@ function dataviewBackendPlugin(): Plugin {
         })
       )
     },
+    handleHotUpdate({ file }) {
+      let normalized_file = file.replace(/\\/g, '/')
+      if (
+        normalized_file.includes('/common/') ||
+        normalized_file.includes('/data/') ||
+        normalized_file.includes('/exports/') ||
+        normalized_file.includes('/.agents/') ||
+        normalized_file.includes('/docs/') ||
+        normalized_file.includes('/tests/')
+      ) {
+        return []
+      }
+    },
   }
 }
 
@@ -33,6 +46,16 @@ export default defineConfig({
     strictPort: true,
     host: true,
     allowedHosts: true,
+    watch: {
+      ignored: [
+        '**/common/**',
+        '**/data/**',
+        '**/exports/**',
+        '**/.agents/**',
+        '**/docs/**',
+        '**/tests/**',
+      ],
+    },
   },
   preview: {
     port: 15000,
