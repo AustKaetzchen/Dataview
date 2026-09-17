@@ -80,7 +80,10 @@
 
 html, head, body {
   height: 100%;
+  height: var(--app-height, 100dvh);
+  max-height: var(--app-height, 100dvh);
   margin: 0px;
+  overflow: hidden;
   width: 100%;
 }
 
@@ -113,6 +116,13 @@ b, strong {
 button, input, select, textarea {
   font-size: inherit;
 } /* -- Rem fix -- */
+
+button, [role="button"] {
+  cursor: pointer;
+}
+button:disabled, [role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
+}
 
 canvas, iframe {
   user-select: none;
@@ -147,7 +157,7 @@ code, pre {
   left: 0;
   right: 0;
   top: 0;
-  height: 100dvh;
+  height: var(--app-height, 100dvh);
   width: 100dvw;
   > div {
     pointer-events: auto;
@@ -156,7 +166,7 @@ code, pre {
 
 .ve.scene {
   position: fixed;
-  height: 100dvh;
+  height: var(--app-height, 100dvh);
   width: 100dvw;
 }
 

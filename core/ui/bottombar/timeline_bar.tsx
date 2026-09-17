@@ -344,6 +344,7 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
         width: 'calc(100vw - 16px)',
         ...style,
       } : {
+        bottom: '12px',
         left: 0,
         marginLeft: 'auto',
         marginRight: 'auto',
@@ -351,206 +352,400 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
         width: 'min(1100px, calc(100vw - 64px))',
         ...style,
       }}
-      className="absolute bottom-3 z-30 pointer-events-auto select-none font-sans"
+      className={`${is_mobile ? 'fixed' : 'absolute'} z-30 pointer-events-auto select-none font-sans`}
     >
       <div className="bg-card/95 backdrop-blur-md border border-border shadow-2xl p-2.5 transition-all">
         {/* Top Header Row: Date Badge, Controls, & Settings */}
-        <div className="relative flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 pb-2 border-b border-border/60 min-h-[36px]">
-          <div className="flex items-center gap-2">
-            {/* Play/Pause Button */}
-            <button
-              type="button"
-              onClick={on_toggle_play}
-              className="h-7 w-7 flex items-center justify-center bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm cursor-pointer"
-              title={is_playing ? t.timeline.pause : t.timeline.play}
-            >
-              <Icon name={is_playing ? 'pause' : 'play_arrow'} />
-            </button>
+        {is_mobile ? (
+          <div className="flex flex-col gap-2 pb-2 border-b border-border/60">
+            {/* Row 1: Play/Timelapse controls on the left, Chevron & Close on the right */}
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-1.5 min-w-0">
+                {/* Play/Pause Button */}
+                <button
+                  type="button"
+                  onClick={on_toggle_play}
+                  className="h-7 w-7 flex items-center justify-center bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm cursor-pointer shrink-0"
+                  title={is_playing ? t.timeline.pause : t.timeline.play}
+                >
+                  <Icon name={is_playing ? 'pause' : 'play_arrow'} />
+                </button>
 
-            {/* Step Backward */}
-            <button
-              type="button"
-              onClick={handle_step_backward}
-              className="h-7 w-7 flex items-center justify-center bg-muted/60 hover:bg-muted text-foreground border border-border transition-colors cursor-pointer"
-              title={t.timeline.stepBackward}
-            >
-              <Icon name="skip_previous" />
-            </button>
+                {/* Step Backward */}
+                <button
+                  type="button"
+                  onClick={handle_step_backward}
+                  className="h-7 w-7 flex items-center justify-center bg-muted/60 hover:bg-muted text-foreground border border-border transition-colors cursor-pointer shrink-0"
+                  title={t.timeline.stepBackward}
+                >
+                  <Icon name="skip_previous" />
+                </button>
 
-            {/* Step Forward */}
-            <button
-              type="button"
-              onClick={handle_step_forward}
-              className="h-7 w-7 flex items-center justify-center bg-muted/60 hover:bg-muted text-foreground border border-border transition-colors cursor-pointer"
-              title={t.timeline.stepForward}
-            >
-              <Icon name="skip_next" />
-            </button>
+                {/* Step Forward */}
+                <button
+                  type="button"
+                  onClick={handle_step_forward}
+                  className="h-7 w-7 flex items-center justify-center bg-muted/60 hover:bg-muted text-foreground border border-border transition-colors cursor-pointer shrink-0"
+                  title={t.timeline.stepForward}
+                >
+                  <Icon name="skip_next" />
+                </button>
 
-            {/* Settings Pop-out Toggle */}
-            <div className="relative" ref={settings_popover_ref}>
+                {/* Settings Pop-out Toggle */}
+                <div className="relative shrink-0" ref={settings_popover_ref}>
+                  <button
+                    type="button"
+                    onClick={() => set_is_settings_open((arg0_prev) => !arg0_prev)}
+                    className={`h-7 w-7 flex items-center justify-center border transition-colors cursor-pointer ${
+                      is_settings_open
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-muted/60 hover:bg-muted text-foreground border border-border'
+                    }`}
+                    title={t.timeline.settings}
+                  >
+                    <Icon name="settings" className="text-sm" />
+                  </button>
+
+                  {/* Settings Pop-out Dialog */}
+                  {is_settings_open && (
+                    <div className="absolute bottom-9 left-0 z-50 w-72 bg-card/95 backdrop-blur-md border border-border p-3 shadow-2xl space-y-3">
+                      <div className="flex items-center justify-between border-b border-border/60 pb-1.5">
+                        <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                          <Icon name="settings" className="text-sm text-primary" />
+                          {t.timeline.settings}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => set_is_settings_open(false)}
+                          className="text-muted-foreground hover:text-foreground text-xs cursor-pointer"
+                        >
+                          <Icon name="close" className="text-xs" />
+                        </button>
+                      </div>
+
+                      {/* Playback Speed */}
+                      <div>
+                        <label className="text-[11px] text-muted-foreground block mb-1">{t.timeline.speed}</label>
+                        <div className="grid grid-cols-5 gap-1 border border-border bg-muted/30 p-0.5 text-xs font-mono">
+                          {speed_options.map((arg0_spd) => (
+                            <button
+                              key={arg0_spd}
+                              type="button"
+                              onClick={() => on_change_playback_speed && on_change_playback_speed(arg0_spd)}
+                              className={`py-1 text-center transition-colors cursor-pointer ${
+                                playback_speed === arg0_spd
+                                  ? 'bg-primary text-primary-foreground font-bold shadow-xs'
+                                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                              }`}
+                            >
+                              {arg0_spd}×
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Keyframe Snapping */}
+                      <div className="pt-2 border-t border-border/40">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-xs font-medium text-foreground">{t.timeline.snap}</div>
+                            <div className="text-[10px] text-muted-foreground">Scrub only genuine raster dates</div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => on_toggle_snap_to_keyframes && on_toggle_snap_to_keyframes(!snap_to_keyframes)}
+                            className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors cursor-pointer ${
+                              snap_to_keyframes ? 'bg-primary justify-end' : 'bg-muted justify-start border border-border'
+                            }`}
+                          >
+                            <div className="w-4 h-4 rounded-full bg-card shadow-xs transition-all" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Loop Playback */}
+                      <div className="pt-2 border-t border-border/40">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-xs font-medium text-foreground">{t.timeline.loop}</div>
+                            <div className="text-[10px] text-muted-foreground">Restart from beginning at end</div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => set_is_looping((arg0_prev) => !arg0_prev)}
+                            className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors cursor-pointer ${
+                              is_looping ? 'bg-primary justify-end' : 'bg-muted justify-start border border-border'
+                            }`}
+                          >
+                            <div className="w-4 h-4 rounded-full bg-card shadow-xs transition-all" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Loading Indicator */}
+                {loading_visible && (
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 bg-primary/15 border border-primary/40 text-primary text-[10px] font-mono shadow-xs truncate">
+                    <Icon name="sync" className={`text-xs ${is_loading ? 'animate-spin' : ''}`} />
+                    <span>{loading_pct >= 100 ? t.timeline.rasterReady : `${loading_pct}%`}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Right Controls: Chevron and Close */}
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => set_is_collapsed((arg0_prev) => !arg0_prev)}
+                  className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
+                  title={is_collapsed ? 'Expand scrubber track' : 'Collapse scrubber track'}
+                >
+                  <Icon name={is_collapsed ? 'expand_less' : 'expand_more'} />
+                </button>
+                {on_close && (
+                  <button
+                    type="button"
+                    onClick={on_close}
+                    className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer touch-manipulation"
+                    title="Close timeline"
+                    aria-label="Close timeline"
+                  >
+                    <Icon name="close" size="1.1rem" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Row 2: Date Picker full-width underneath */}
+            <div className="relative flex items-center justify-center w-full">
               <button
                 type="button"
-                onClick={() => set_is_settings_open((arg0_prev) => !arg0_prev)}
-                className={`h-7 w-7 flex items-center justify-center border transition-colors cursor-pointer ${
-                  is_settings_open
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'bg-muted/60 hover:bg-muted text-foreground border border-border'
+                onClick={() => set_is_date_picker_open((arg0_prev) => !arg0_prev)}
+                className={`w-full flex items-center justify-center gap-2 bg-background/90 hover:bg-background border px-4 py-1 shadow-inner pointer-events-auto cursor-pointer transition-colors group ${
+                  is_date_picker_open ? 'border-primary ring-1 ring-primary/40' : 'border-border hover:border-primary/50'
                 }`}
-                title={t.timeline.settings}
+                title="Click to select exact historical date"
               >
-                <Icon name="settings" className="text-sm" />
+                <Icon name="event" className="text-primary text-sm group-hover:scale-105 transition-transform" />
+                <span className="text-sm font-bold tracking-tight text-foreground font-mono">
+                  {formatted_date}
+                </span>
+                <Icon
+                  name={is_date_picker_open ? 'expand_less' : 'expand_more'}
+                  className="text-muted-foreground text-xs group-hover:text-primary transition-colors ml-0.5"
+                />
               </button>
 
-              {/* Settings Pop-out Dialog */}
-              {is_settings_open && (
-                <div className="absolute bottom-9 left-0 z-50 w-72 bg-card/95 backdrop-blur-md border border-border p-3 shadow-2xl space-y-3">
-                  <div className="flex items-center justify-between border-b border-border/60 pb-1.5">
-                    <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                      <Icon name="settings" className="text-sm text-primary" />
-                      {t.timeline.settings}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => set_is_settings_open(false)}
-                      className="text-muted-foreground hover:text-foreground text-xs cursor-pointer"
-                    >
-                      <Icon name="close" className="text-xs" />
-                    </button>
-                  </div>
+              <HistoricalDatePicker
+                currentYear={current_year}
+                isOpen={is_date_picker_open}
+                maxYear={max_year}
+                minYear={min_year}
+                onClose={() => set_is_date_picker_open(false)}
+                onSelectDate={handle_select_exact_date}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="relative flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 pb-2 border-b border-border/60 min-h-[36px]">
+            <div className="flex items-center gap-2">
+              {/* Play/Pause Button */}
+              <button
+                type="button"
+                onClick={on_toggle_play}
+                className="h-7 w-7 flex items-center justify-center bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm cursor-pointer"
+                title={is_playing ? t.timeline.pause : t.timeline.play}
+              >
+                <Icon name={is_playing ? 'pause' : 'play_arrow'} />
+              </button>
 
-                  {/* Playback Speed */}
-                  <div>
-                    <label className="text-[11px] text-muted-foreground block mb-1">{t.timeline.speed}</label>
-                    <div className="grid grid-cols-5 gap-1 border border-border bg-muted/30 p-0.5 text-xs font-mono">
-                      {speed_options.map((arg0_spd) => (
+              {/* Step Backward */}
+              <button
+                type="button"
+                onClick={handle_step_backward}
+                className="h-7 w-7 flex items-center justify-center bg-muted/60 hover:bg-muted text-foreground border border-border transition-colors cursor-pointer"
+                title={t.timeline.stepBackward}
+              >
+                <Icon name="skip_previous" />
+              </button>
+
+              {/* Step Forward */}
+              <button
+                type="button"
+                onClick={handle_step_forward}
+                className="h-7 w-7 flex items-center justify-center bg-muted/60 hover:bg-muted text-foreground border border-border transition-colors cursor-pointer"
+                title={t.timeline.stepForward}
+              >
+                <Icon name="skip_next" />
+              </button>
+
+              {/* Settings Pop-out Toggle */}
+              <div className="relative" ref={settings_popover_ref}>
+                <button
+                  type="button"
+                  onClick={() => set_is_settings_open((arg0_prev) => !arg0_prev)}
+                  className={`h-7 w-7 flex items-center justify-center border transition-colors cursor-pointer ${
+                    is_settings_open
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-muted/60 hover:bg-muted text-foreground border border-border'
+                  }`}
+                  title={t.timeline.settings}
+                >
+                  <Icon name="settings" className="text-sm" />
+                </button>
+
+                {/* Settings Pop-out Dialog */}
+                {is_settings_open && (
+                  <div className="absolute bottom-9 left-0 z-50 w-72 bg-card/95 backdrop-blur-md border border-border p-3 shadow-2xl space-y-3">
+                    <div className="flex items-center justify-between border-b border-border/60 pb-1.5">
+                      <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        <Icon name="settings" className="text-sm text-primary" />
+                        {t.timeline.settings}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => set_is_settings_open(false)}
+                        className="text-muted-foreground hover:text-foreground text-xs cursor-pointer"
+                      >
+                        <Icon name="close" className="text-xs" />
+                      </button>
+                    </div>
+
+                    {/* Playback Speed */}
+                    <div>
+                      <label className="text-[11px] text-muted-foreground block mb-1">{t.timeline.speed}</label>
+                      <div className="grid grid-cols-5 gap-1 border border-border bg-muted/30 p-0.5 text-xs font-mono">
+                        {speed_options.map((arg0_spd) => (
+                          <button
+                            key={arg0_spd}
+                            type="button"
+                            onClick={() => on_change_playback_speed && on_change_playback_speed(arg0_spd)}
+                            className={`py-1 text-center transition-colors cursor-pointer ${
+                              playback_speed === arg0_spd
+                                ? 'bg-primary text-primary-foreground font-bold shadow-xs'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                            }`}
+                          >
+                            {arg0_spd}×
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Keyframe Snapping */}
+                    <div className="pt-2 border-t border-border/40">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-xs font-medium text-foreground">{t.timeline.snap}</div>
+                          <div className="text-[10px] text-muted-foreground">Scrub only genuine raster dates</div>
+                        </div>
                         <button
-                          key={arg0_spd}
                           type="button"
-                          onClick={() => on_change_playback_speed && on_change_playback_speed(arg0_spd)}
-                          className={`py-1 text-center transition-colors cursor-pointer ${
-                            playback_speed === arg0_spd
-                              ? 'bg-primary text-primary-foreground font-bold shadow-xs'
-                              : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                          onClick={() => on_toggle_snap_to_keyframes && on_toggle_snap_to_keyframes(!snap_to_keyframes)}
+                          className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors cursor-pointer ${
+                            snap_to_keyframes ? 'bg-primary justify-end' : 'bg-muted justify-start border border-border'
                           }`}
                         >
-                          {arg0_spd}×
+                          <div className="w-4 h-4 rounded-full bg-card shadow-xs transition-all" />
                         </button>
-                      ))}
+                      </div>
+                    </div>
+
+                    {/* Loop Playback */}
+                    <div className="pt-2 border-t border-border/40">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-xs font-medium text-foreground">{t.timeline.loop}</div>
+                          <div className="text-[10px] text-muted-foreground">Restart from beginning at end</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => set_is_looping((arg0_prev) => !arg0_prev)}
+                          className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors cursor-pointer ${
+                            is_looping ? 'bg-primary justify-end' : 'bg-muted justify-start border border-border'
+                          }`}
+                        >
+                          <div className="w-4 h-4 rounded-full bg-card shadow-xs transition-all" />
+                        </button>
+                      </div>
                     </div>
                   </div>
+                )}
+              </div>
 
-                  {/* Keyframe Snapping */}
-                  <div className="pt-2 border-t border-border/40">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-xs font-medium text-foreground">{t.timeline.snap}</div>
-                        <div className="text-[10px] text-muted-foreground">Scrub only genuine raster dates</div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => on_toggle_snap_to_keyframes && on_toggle_snap_to_keyframes(!snap_to_keyframes)}
-                        className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors cursor-pointer ${
-                          snap_to_keyframes ? 'bg-primary justify-end' : 'bg-muted justify-start border border-border'
-                        }`}
-                      >
-                        <div className="w-4 h-4 rounded-full bg-card shadow-xs transition-all" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Loop Playback */}
-                  <div className="pt-2 border-t border-border/40">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-xs font-medium text-foreground">{t.timeline.loop}</div>
-                        <div className="text-[10px] text-muted-foreground">Restart from beginning at end</div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => set_is_looping((arg0_prev) => !arg0_prev)}
-                        className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors cursor-pointer ${
-                          is_looping ? 'bg-primary justify-end' : 'bg-muted justify-start border border-border'
-                        }`}
-                      >
-                        <div className="w-4 h-4 rounded-full bg-card shadow-xs transition-all" />
-                      </button>
-                    </div>
+              {/* Loading Indicator with Percentage and Estimated Remaining Time */}
+              {loading_visible && (
+                <div className="flex items-center gap-2 px-2.5 py-0.5 bg-primary/15 border border-primary/40 text-primary text-[11px] font-mono shadow-xs transition-opacity duration-200">
+                  <Icon name="sync" className={`text-xs ${is_loading ? 'animate-spin' : ''}`} />
+                  <span>
+                    {loading_pct >= 100 ? t.timeline.rasterReady : format_string(t.timeline.loadingRaster, loading_pct, loading_time_remaining.toFixed(1))}
+                  </span>
+                  <div className="w-14 h-1.5 bg-primary/20 border border-primary/30 overflow-hidden shrink-0">
+                    <div
+                      className="h-full bg-primary transition-all duration-100 ease-out"
+                      style={{ width: `${loading_pct}%` }}
+                    />
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Loading Indicator with Percentage and Estimated Remaining Time */}
-            {loading_visible && (
-              <div className="flex items-center gap-2 px-2.5 py-0.5 bg-primary/15 border border-primary/40 text-primary text-[11px] font-mono shadow-xs transition-opacity duration-200">
-                <Icon name="sync" className={`text-xs ${is_loading ? 'animate-spin' : ''}`} />
-                <span>
-                  {loading_pct >= 100 ? t.timeline.rasterReady : format_string(t.timeline.loadingRaster, loading_pct, loading_time_remaining.toFixed(1))}
-                </span>
-                <div className="w-14 h-1.5 bg-primary/20 border border-primary/30 overflow-hidden shrink-0">
-                  <div
-                    className="h-full bg-primary transition-all duration-100 ease-out"
-                    style={{ width: `${loading_pct}%` }}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Centre Date Badge with Interactive Historical Date Picker */}
-          <div className="sm:absolute sm:left-1/2 sm:-translate-x-1/2 flex items-center justify-center">
-            <button
-              type="button"
-              onClick={() => set_is_date_picker_open((arg0_prev) => !arg0_prev)}
-              className={`flex items-center gap-2 bg-background/90 hover:bg-background border px-4 py-1 shadow-inner pointer-events-auto cursor-pointer transition-colors group ${
-                is_date_picker_open ? 'border-primary ring-1 ring-primary/40' : 'border-border hover:border-primary/50'
-              }`}
-              title="Click to select exact historical date"
-            >
-              <Icon name="event" className="text-primary text-sm group-hover:scale-105 transition-transform" />
-              <span className="text-sm font-bold tracking-tight text-foreground font-mono">
-                {formatted_date}
-              </span>
-              <Icon
-                name={is_date_picker_open ? 'expand_less' : 'expand_more'}
-                className="text-muted-foreground text-xs group-hover:text-primary transition-colors ml-0.5"
-              />
-            </button>
-
-            <HistoricalDatePicker
-              currentYear={current_year}
-              isOpen={is_date_picker_open}
-              maxYear={max_year}
-              minYear={min_year}
-              onClose={() => set_is_date_picker_open(false)}
-              onSelectDate={handle_select_exact_date}
-            />
-          </div>
-
-          {/* Right Controls: Collapse Toggle */}
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => set_is_collapsed((arg0_prev) => !arg0_prev)}
-              className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
-              title={is_collapsed ? 'Expand scrubber track' : 'Collapse scrubber track'}
-            >
-              <Icon name={is_collapsed ? 'expand_less' : 'expand_more'} />
-            </button>
-            {is_mobile && on_close && (
+            {/* Centre Date Badge with Interactive Historical Date Picker */}
+            <div className="sm:absolute sm:left-1/2 sm:-translate-x-1/2 flex items-center justify-center">
               <button
                 type="button"
-                onClick={on_close}
-                className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer touch-manipulation"
-                title="Close timeline"
-                aria-label="Close timeline"
+                onClick={() => set_is_date_picker_open((arg0_prev) => !arg0_prev)}
+                className={`flex items-center gap-2 bg-background/90 hover:bg-background border px-4 py-1 shadow-inner pointer-events-auto cursor-pointer transition-colors group ${
+                  is_date_picker_open ? 'border-primary ring-1 ring-primary/40' : 'border-border hover:border-primary/50'
+                }`}
+                title="Click to select exact historical date"
               >
-                <Icon name="close" size="1.1rem" />
+                <Icon name="event" className="text-primary text-sm group-hover:scale-105 transition-transform" />
+                <span className="text-sm font-bold tracking-tight text-foreground font-mono">
+                  {formatted_date}
+                </span>
+                <Icon
+                  name={is_date_picker_open ? 'expand_less' : 'expand_more'}
+                  className="text-muted-foreground text-xs group-hover:text-primary transition-colors ml-0.5"
+                />
               </button>
-            )}
+
+              <HistoricalDatePicker
+                currentYear={current_year}
+                isOpen={is_date_picker_open}
+                maxYear={max_year}
+                minYear={min_year}
+                onClose={() => set_is_date_picker_open(false)}
+                onSelectDate={handle_select_exact_date}
+              />
+            </div>
+
+            {/* Right Controls: Collapse Toggle */}
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => set_is_collapsed((arg0_prev) => !arg0_prev)}
+                className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
+                title={is_collapsed ? 'Expand scrubber track' : 'Collapse scrubber track'}
+              >
+                <Icon name={is_collapsed ? 'expand_less' : 'expand_more'} />
+              </button>
+              {is_mobile && on_close && (
+                <button
+                  type="button"
+                  onClick={on_close}
+                  className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer touch-manipulation"
+                  title="Close timeline"
+                  aria-label="Close timeline"
+                >
+                  <Icon name="close" size="1.1rem" />
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Scrubber Track and Keyframe Ticks */}
         {!is_collapsed && (

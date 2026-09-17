@@ -216,10 +216,13 @@ export let HistoricalDatePicker: React.FC<HistoricalDatePickerProps> = function 
     <div
       ref={popover_ref}
       id="dataview-historical-date-picker"
-      className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-[360px] bg-card/95 backdrop-blur-md border border-border shadow-2xl p-3.5 select-none font-sans z-50 text-foreground animate-in fade-in-0 zoom-in-95 duration-150"
+      style={{
+        maxHeight: 'calc(var(--app-height, 100dvh) - 180px)',
+      }}
+      className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-[min(360px,calc(100vw-24px))] max-w-[calc(100vw-24px)] flex flex-col bg-card/98 backdrop-blur-md border border-border shadow-2xl select-none font-sans z-50 text-foreground animate-in fade-in-0 zoom-in-95 duration-150 overflow-hidden"
     >
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-border/70 pb-2 mb-3">
+      {/* Header (Pinned) */}
+      <div className="flex items-center justify-between border-b border-border/70 p-3 pb-2.5 shrink-0 bg-card/90">
         <div className="flex items-center gap-2">
           <Icon name="event" className="text-primary text-sm" />
           <span className="font-mono text-xs font-bold uppercase tracking-wider text-foreground">
@@ -236,157 +239,160 @@ export let HistoricalDatePicker: React.FC<HistoricalDatePickerProps> = function 
         </button>
       </div>
 
-      {/* Year & Era Input Section */}
-      <div className="space-y-2 mb-3">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Year & Era</span>
-          <div className="flex items-center gap-1">
+      {/* Scrollable Body with Vertical Scrollbar System */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-3 min-h-0">
+        {/* Year & Era Input Section */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Year & Era</span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => handle_era_toggle('BC')}
+                className={`px-2 py-0.5 text-xs font-mono font-bold cursor-pointer transition-colors border ${
+                  selected_era === 'BC'
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-muted/40 text-muted-foreground hover:text-foreground border-border/60'
+                }`}
+              >
+                BC
+              </button>
+              <button
+                type="button"
+                onClick={() => handle_era_toggle('AD')}
+                className={`px-2 py-0.5 text-xs font-mono font-bold cursor-pointer transition-colors border ${
+                  selected_era === 'AD'
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-muted/40 text-muted-foreground hover:text-foreground border-border/60'
+                }`}
+              >
+                AD
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
-              onClick={() => handle_era_toggle('BC')}
-              className={`px-2 py-0.5 text-xs font-mono font-bold cursor-pointer transition-colors border ${
-                selected_era === 'BC'
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'bg-muted/40 text-muted-foreground hover:text-foreground border-border/60'
-              }`}
+              onClick={() => handle_year_step(-100)}
+              className="px-1.5 py-1 text-[10px] font-mono bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60 cursor-pointer"
+              title="Subtract 100 years"
             >
-              BC
+              -100
             </button>
             <button
               type="button"
-              onClick={() => handle_era_toggle('AD')}
-              className={`px-2 py-0.5 text-xs font-mono font-bold cursor-pointer transition-colors border ${
-                selected_era === 'AD'
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'bg-muted/40 text-muted-foreground hover:text-foreground border-border/60'
-              }`}
+              onClick={() => handle_year_step(-10)}
+              className="px-1.5 py-1 text-[10px] font-mono bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60 cursor-pointer"
+              title="Subtract 10 years"
             >
-              AD
+              -10
+            </button>
+
+            <input
+              type="text"
+              value={year_text}
+              onChange={(arg0_e) => handle_year_change(arg0_e.target.value)}
+              onKeyDown={(arg0_e) => {
+                if (arg0_e.key === 'Enter')
+                  handle_apply()
+              }}
+              className="flex-1 text-center font-mono font-bold text-sm bg-background border border-border px-2 py-1 text-foreground focus:outline-hidden focus:border-primary"
+              placeholder="Year"
+            />
+
+            <button
+              type="button"
+              onClick={() => handle_year_step(10)}
+              className="px-1.5 py-1 text-[10px] font-mono bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60 cursor-pointer"
+              title="Add 10 years"
+            >
+              +10
+            </button>
+            <button
+              type="button"
+              onClick={() => handle_year_step(100)}
+              className="px-1.5 py-1 text-[10px] font-mono bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60 cursor-pointer"
+              title="Add 100 years"
+            >
+              +100
             </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => handle_year_step(-100)}
-            className="px-1.5 py-1 text-[10px] font-mono bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60 cursor-pointer"
-            title="Subtract 100 years"
-          >
-            -100
-          </button>
-          <button
-            type="button"
-            onClick={() => handle_year_step(-10)}
-            className="px-1.5 py-1 text-[10px] font-mono bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60 cursor-pointer"
-            title="Subtract 10 years"
-          >
-            -10
-          </button>
-
-          <input
-            type="text"
-            value={year_text}
-            onChange={(arg0_e) => handle_year_change(arg0_e.target.value)}
-            onKeyDown={(arg0_e) => {
-              if (arg0_e.key === 'Enter')
-                handle_apply()
-            }}
-            className="flex-1 text-center font-mono font-bold text-sm bg-background border border-border px-2 py-1 text-foreground focus:outline-hidden focus:border-primary"
-            placeholder="Year"
-          />
-
-          <button
-            type="button"
-            onClick={() => handle_year_step(10)}
-            className="px-1.5 py-1 text-[10px] font-mono bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60 cursor-pointer"
-            title="Add 10 years"
-          >
-            +10
-          </button>
-          <button
-            type="button"
-            onClick={() => handle_year_step(100)}
-            className="px-1.5 py-1 text-[10px] font-mono bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60 cursor-pointer"
-            title="Add 100 years"
-          >
-            +100
-          </button>
+        {/* Month Selection Grid */}
+        <div className="space-y-1">
+          <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Month</div>
+          <div className="grid grid-cols-6 gap-1">
+            {month_short_names.map((arg0_name, arg1_idx) => {
+              let m_num = arg1_idx + 1
+              let is_sel = selected_month === m_num
+              return (
+                <button
+                  key={arg0_name}
+                  type="button"
+                  onClick={() => handle_month_select(m_num)}
+                  className={`py-1 text-center font-mono text-[11px] cursor-pointer transition-colors border ${
+                    is_sel
+                      ? 'bg-primary text-primary-foreground border-primary font-bold'
+                      : 'bg-muted/30 hover:bg-muted/60 text-muted-foreground hover:text-foreground border-border/40'
+                  }`}
+                >
+                  {arg0_name}
+                </button>
+              )
+            })}
+          </div>
         </div>
-      </div>
 
-      {/* Month Selection Grid */}
-      <div className="space-y-1 mb-3">
-        <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Month</div>
-        <div className="grid grid-cols-6 gap-1">
-          {month_short_names.map((arg0_name, arg1_idx) => {
-            let m_num = arg1_idx + 1
-            let is_sel = selected_month === m_num
-            return (
+        {/* Day Selection Grid */}
+        <div className="space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Day</span>
+            <span className="text-[10px] text-muted-foreground font-mono">{days_in_current_month} days in month</span>
+          </div>
+          <div className="grid grid-cols-7 gap-1 pr-0.5">
+            {days_array.map((arg0_d) => {
+              let is_sel = selected_day === arg0_d
+              return (
+                <button
+                  key={arg0_d}
+                  type="button"
+                  onClick={() => handle_day_select(arg0_d)}
+                  className={`py-1 text-center font-mono text-[11px] cursor-pointer transition-colors border ${
+                    is_sel
+                      ? 'bg-primary text-primary-foreground border-primary font-bold shadow-xs'
+                      : 'bg-muted/20 hover:bg-muted/50 text-muted-foreground hover:text-foreground border-border/40'
+                  }`}
+                >
+                  {arg0_d}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Historical Presets */}
+        <div className="space-y-1">
+          <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Landmarks</div>
+          <div className="grid grid-cols-2 gap-1">
+            {HISTORICAL_PRESETS.map((arg0_preset) => (
               <button
-                key={arg0_name}
+                key={arg0_preset.label}
                 type="button"
-                onClick={() => handle_month_select(m_num)}
-                className={`py-1 text-center font-mono text-[11px] cursor-pointer transition-colors border ${
-                  is_sel
-                    ? 'bg-primary text-primary-foreground border-primary font-bold'
-                    : 'bg-muted/30 hover:bg-muted/60 text-muted-foreground hover:text-foreground border-border/40'
-                }`}
+                onClick={() => handle_preset_select(arg0_preset)}
+                className="text-left px-2 py-1 text-[10px] font-mono bg-muted/20 hover:bg-primary/20 hover:border-primary/50 text-muted-foreground hover:text-foreground border border-border/40 truncate cursor-pointer transition-colors"
+                title={`Jump to ${arg0_preset.label}`}
               >
-                {arg0_name}
+                {arg0_preset.label}
               </button>
-            )
-          })}
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Day Selection Grid */}
-      <div className="space-y-1 mb-3">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Day</span>
-          <span className="text-[10px] text-muted-foreground font-mono">{days_in_current_month} days in month</span>
-        </div>
-        <div className="grid grid-cols-7 gap-1 max-h-28 overflow-y-auto custom-scrollbar pr-0.5">
-          {days_array.map((arg0_d) => {
-            let is_sel = selected_day === arg0_d
-            return (
-              <button
-                key={arg0_d}
-                type="button"
-                onClick={() => handle_day_select(arg0_d)}
-                className={`py-1 text-center font-mono text-[11px] cursor-pointer transition-colors border ${
-                  is_sel
-                    ? 'bg-primary text-primary-foreground border-primary font-bold shadow-xs'
-                    : 'bg-muted/20 hover:bg-muted/50 text-muted-foreground hover:text-foreground border-border/40'
-                }`}
-              >
-                {arg0_d}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Historical Presets */}
-      <div className="space-y-1 mb-3">
-        <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Landmarks</div>
-        <div className="grid grid-cols-2 gap-1">
-          {HISTORICAL_PRESETS.map((arg0_preset) => (
-            <button
-              key={arg0_preset.label}
-              type="button"
-              onClick={() => handle_preset_select(arg0_preset)}
-              className="text-left px-2 py-1 text-[10px] font-mono bg-muted/20 hover:bg-primary/20 hover:border-primary/50 text-muted-foreground hover:text-foreground border border-border/40 truncate cursor-pointer transition-colors"
-              title={`Jump to ${arg0_preset.label}`}
-            >
-              {arg0_preset.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Bottom Bar: Preview and Apply Action */}
-      <div className="flex items-center justify-between pt-2 border-t border-border/70">
+      {/* Bottom Bar: Preview and Apply Action (Pinned) */}
+      <div className="flex items-center justify-between p-3 pt-2.5 shrink-0 border-t border-border/70 bg-card/90">
         <div className="flex items-center gap-1.5 min-w-0 pr-2">
           <Icon name="schedule" className="text-xs text-white shrink-0" />
           <span className="text-xs font-bold font-mono text-primary truncate" title={preview_date_str}>

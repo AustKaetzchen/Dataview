@@ -370,15 +370,17 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
                 style={is_mobile ? {
                   bottom: '0px',
                   left: '0px',
+                  maxHeight: 'calc(var(--app-height, 100dvh) - 54px)',
                   right: '0px',
                 } : {
+                  maxHeight: 'calc(100dvh - 60px)',
                   right: `${UI_LAYOUT.settingsDrawerRight}px`,
                   top: `${UI_LAYOUT.margin}px`,
                   width: `${UI_LAYOUT.settingsDrawerWidth}px`,
                 }}
                 className={is_mobile
-                  ? 'fixed z-50 bg-card/98 backdrop-blur-md border-t border-border rounded-t-lg p-[var(--padding)] shadow-2xl text-[var(--body-font-size)] text-card-foreground animate-in fade-in-0 slide-in-from-bottom-5 duration-150 font-sans space-y-[var(--padding)] max-h-[75vh] overflow-y-auto custom-scrollbar'
-                  : 'absolute z-35 bg-card/98 backdrop-blur-md border border-border rounded-none p-[var(--padding)] shadow-2xl text-[var(--body-font-size)] text-card-foreground animate-in fade-in-0 zoom-in-95 duration-100 font-sans space-y-[var(--padding)] max-h-[360px] overflow-y-auto custom-scrollbar'
+                  ? 'fixed z-50 bg-card/98 backdrop-blur-md border-t border-border rounded-t-lg p-[var(--padding)] pb-3 shadow-2xl text-[var(--body-font-size)] text-card-foreground font-sans space-y-[var(--padding)] overflow-y-auto custom-scrollbar'
+                  : 'absolute z-35 bg-card/98 backdrop-blur-md border border-border rounded-none p-[var(--padding)] shadow-2xl text-[var(--body-font-size)] text-card-foreground font-sans space-y-[var(--padding)] overflow-y-auto custom-scrollbar'
                 }
               >
               <div className="flex items-center justify-between pb-1.5 border-b border-border">
@@ -389,9 +391,11 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
                 <button
                   type="button"
                   onClick={() => set_flyout_open(false)}
-                  className="text-muted-foreground hover:text-foreground text-[var(--body-font-size)] cursor-pointer"
+                  className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer flex items-center justify-center"
+                  title="Close settings"
+                  aria-label="Close settings"
                 >
-                  ✕
+                  <Icon name="close" size="1.2rem" />
                 </button>
               </div>
 

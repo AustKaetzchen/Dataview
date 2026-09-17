@@ -158,6 +158,8 @@
     mean: "Mean",
     stdDev: "Std Dev",
     median: "Median",
+    noRasterLoaded: "No raster loaded.",
+    noRasterDesc: "Select a mapmode or upload a GeoPNG file in the sidebar to inspect statistics & distributions.",
   },
   mobile: {
     sidebar: "Sidebar",

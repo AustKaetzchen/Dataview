@@ -155,6 +155,8 @@ export interface LocalisationConfig {
     mean: string
     median: string
     minValue: string
+    noRasterDesc: string
+    noRasterLoaded: string
     pyramid: string
     refresh: string
     resolution: string

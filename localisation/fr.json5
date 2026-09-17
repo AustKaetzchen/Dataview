@@ -158,6 +158,8 @@
     mean: "Moyenne",
     stdDev: "Écart-type",
     median: "Médiane",
+    noRasterLoaded: "Aucun raster chargé.",
+    noRasterDesc: "Sélectionnez un mode de carte ou importez un fichier GeoPNG dans le panneau latéral pour inspecter les statistiques.",
   },
   mobile: {
     sidebar: "Sidebar",

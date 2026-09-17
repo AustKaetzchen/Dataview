@@ -158,6 +158,8 @@
     mean: "Mittelwert",
     stdDev: "Std-Abweichung",
     median: "Median",
+    noRasterLoaded: "Kein Raster geladen.",
+    noRasterDesc: "Wählen Sie einen Kartenmodus oder laden Sie eine GeoPNG-Datei in der Sidebar hoch, um Statistiken anzuzeigen.",
   },
   mobile: {
     sidebar: "Sidebar",

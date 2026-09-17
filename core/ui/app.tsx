@@ -230,6 +230,33 @@ export let App: React.FC = function () {
       set_projection(url_proj)
   }, [])
 
+  useEffect(() => {
+    let updateAppHeight = () => {
+      let h = (typeof window !== 'undefined' && window.visualViewport)
+        ? window.visualViewport.height
+        : (typeof window !== 'undefined' ? window.innerHeight : 800)
+      if (typeof document !== 'undefined')
+        document.documentElement.style.setProperty('--app-height', `${h}px`)
+    }
+
+    updateAppHeight()
+    window.addEventListener('resize', updateAppHeight)
+    window.addEventListener('orientationchange', updateAppHeight)
+    if (typeof window !== 'undefined' && window.visualViewport) {
+      window.visualViewport.addEventListener('resize', updateAppHeight)
+      window.visualViewport.addEventListener('scroll', updateAppHeight)
+    }
+
+    return () => {
+      window.removeEventListener('resize', updateAppHeight)
+      window.removeEventListener('orientationchange', updateAppHeight)
+      if (typeof window !== 'undefined' && window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', updateAppHeight)
+        window.visualViewport.removeEventListener('scroll', updateAppHeight)
+      }
+    }
+  }, [])
+
   let active_layer = useMemo<ParsedDataLayer | null>(() => {
     if (!active_layer_id)
       return null
@@ -803,7 +830,14 @@ export let App: React.FC = function () {
 
   //Return statement
   return (
-    <div id="dataview-app-root" className="relative h-screen w-screen overflow-hidden bg-background text-foreground font-sans">
+    <div
+      id="dataview-app-root"
+      style={{
+        height: 'var(--app-height, 100dvh)',
+        maxHeight: 'var(--app-height, 100dvh)',
+      }}
+      className="relative w-screen w-[100dvw] overflow-hidden bg-background text-foreground font-sans"
+    >
       {/* Live Timelapse Recording HUD */}
       {!is_headless_export && is_timelapse_exporting && (
         <div id="timelapse-recording-hud" className="fixed top-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3.5 px-5 py-2.5 rounded-full bg-card/95 backdrop-blur-md border border-red-500/50 shadow-2xl text-foreground select-none">
@@ -905,12 +939,11 @@ export let App: React.FC = function () {
           onToggleCountriesMode={handle_toggle_countries_mode}
           hoveredCountry={hovered_country}
           onHoverCountry={set_hovered_country}
-          countryStats={country_stats}
-          settingsDrawerOpen={is_mobile ? active_mobile_tab === 'settings' : settings_drawer_open}
+          settingsDrawerOpen={is_mobile ? (active_mobile_tab === 'settings' || settings_drawer_open) : settings_drawer_open}
           onToggleSettingsDrawer={(arg0_open) => {
             set_settings_drawer_open(arg0_open)
-            if (!arg0_open && is_mobile)
-              set_active_mobile_tab(null)
+            if (is_mobile)
+              set_active_mobile_tab(arg0_open ? 'settings' : null)
           }}
           sidebarWidth={sidebar_width}
           colourbarWidth={colourbar_width}
@@ -998,8 +1031,13 @@ export let App: React.FC = function () {
           onTogglePlay={() => set_is_playing((arg0_prev) => !arg0_prev)}
           onToggleSnapToKeyframes={set_snap_to_keyframes}
           playbackSpeed={playback_speed}
-          snapToKeyframes={snap_to_keyframes}
-          style={{
+          style={is_mobile ? {
+            bottom: '12px',
+            left: '8px',
+            right: '8px',
+            width: 'calc(100vw - 16px)',
+          } : {
+            bottom: '12px',
             left: 0,
             marginLeft: 'auto',
             marginRight: 'auto',
@@ -1105,8 +1143,13 @@ export let App: React.FC = function () {
             set_active_mobile_tab(arg0_tab)
             if (arg0_tab === 'analytics') {
               set_analytics_open(true)
+              set_settings_drawer_open(false)
             } else if (arg0_tab === 'settings') {
               set_settings_drawer_open(true)
+              set_analytics_open(false)
+            } else {
+              set_analytics_open(false)
+              set_settings_drawer_open(false)
             }
           }}
         />

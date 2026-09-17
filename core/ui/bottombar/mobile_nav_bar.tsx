@@ -82,7 +82,7 @@ export function MobileNavBar (arg0_props: MobileNavBarProps) {
   return (
     <nav
       id="dataview-mobile-navbar"
-      className="fixed top-0 inset-x-0 h-12 bg-black/90 backdrop-blur-md border-b border-white/10 z-40 flex items-stretch justify-around px-1 pt-[env(safe-area-inset-top)] select-none pointer-events-auto"
+      className="fixed top-0 inset-x-0 h-12 bg-black/90 backdrop-blur-md border-b border-white/10 z-40 flex items-stretch justify-around px-1 select-none pointer-events-auto"
       aria-label="Mobile Navigation"
     >
       {items.map((arg0_item) => {
@@ -92,7 +92,7 @@ export function MobileNavBar (arg0_props: MobileNavBarProps) {
           <button
             key={arg0_item.id ?? 'map'}
             type="button"
-            className={`flex flex-col items-center justify-center flex-1 py-1 h-full touch-manipulation transition-colors ${
+            className={`flex flex-col items-center justify-center flex-1 py-1 h-full touch-manipulation cursor-pointer transition-colors ${
               is_active
                 ? 'text-[rgb(200,40,40)] font-semibold border-b-2 border-[rgb(200,40,40)]'
                 : 'text-white/70 hover:text-white active:text-[rgb(200,40,40)]'

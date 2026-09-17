@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/gfx/interface/logos/confoederatio_icon_32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="/gfx/interface/logos/confoederatio_icon_16x16.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/gfx/interface/logos/confoederatio_icon_128x128.png" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Confoederatio Dataview</title>
 
   <!-- Preconnect to Google Fonts -->
@@ -20,6 +20,17 @@
     rel="stylesheet">
   <script>
     (function () {
+      function updateAppHeight() {
+        var h = (window.visualViewport ? window.visualViewport.height : window.innerHeight);
+        document.documentElement.style.setProperty('--app-height', h + 'px');
+      }
+      updateAppHeight();
+      window.addEventListener('resize', updateAppHeight);
+      window.addEventListener('orientationchange', updateAppHeight);
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', updateAppHeight);
+        window.visualViewport.addEventListener('scroll', updateAppHeight);
+      }
       if (typeof console !== 'undefined') {
         var noop = function () { };
         if (typeof console.timeStamp === 'function') {
@@ -41,6 +52,8 @@
       padding: 0;
       width: 100%;
       height: 100%;
+      height: var(--app-height, 100dvh);
+      max-height: var(--app-height, 100dvh);
       overflow: hidden;
       background-color: #09090b;
     }
@@ -50,6 +63,8 @@
       padding: 0;
       width: 100%;
       height: 100%;
+      height: var(--app-height, 100dvh);
+      max-height: var(--app-height, 100dvh);
     }
 
     @keyframes spin {

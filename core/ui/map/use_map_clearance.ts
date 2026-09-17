@@ -50,7 +50,10 @@ export function useMapClearance (arg0_options?: MapClearanceOptions): MapClearan
       let timeline_el = document.getElementById('dataview-timelinebar-container')
       if (timeline_el) {
         let rect = timeline_el.getBoundingClientRect()
-        let from_bottom = window.innerHeight - rect.top
+        let vp_height = (typeof window !== 'undefined' && window.visualViewport)
+          ? window.visualViewport.height
+          : (typeof window !== 'undefined' ? window.innerHeight : 800)
+        let from_bottom = vp_height - rect.top
         let next_clearance = Math.max(from_bottom, 0) + UI_LAYOUT.margin
         set_timeline_clearance((arg0_prev) => (arg0_prev === next_clearance ? arg0_prev : next_clearance))
         set_timeline_bounds((arg0_prev) => {
@@ -110,6 +113,8 @@ export function useMapClearance (arg0_options?: MapClearanceOptions): MapClearan
 
     updateClearance()
     window.addEventListener('resize', updateClearance)
+    if (typeof window !== 'undefined' && window.visualViewport)
+      window.visualViewport.addEventListener('resize', updateClearance)
     let ro = new ResizeObserver(updateClearance)
     let timeline_el = document.getElementById('dataview-timelinebar-container')
     let mapmodes_el = document.getElementById('dataview-mapmodes-tray')
@@ -121,6 +126,8 @@ export function useMapClearance (arg0_options?: MapClearanceOptions): MapClearan
     return () => {
       ro.disconnect()
       window.removeEventListener('resize', updateClearance)
+      if (typeof window !== 'undefined' && window.visualViewport)
+        window.visualViewport.removeEventListener('resize', updateClearance)
     }
   }, [flyout_open, analytics_open, ui_visible, map_modes])
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import {
   AppMode,
   DataFormat,
@@ -15,7 +15,6 @@ import {
   StadesterConfig,
 } from '@framework/geopng/types.ts'
 import { CountryFeature } from '@framework/geopng/polygon_binning'
-import { D3_COLOR_SCHEMES, getPaletteCssGradient } from '@framework/geopng/palettes.ts'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@ui/components/select'
 import { Slider } from '@ui/components/slider'
 import { Input } from '@ui/components/input'
@@ -164,20 +163,41 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
   ]
   let current_width = (width !== undefined) ? width : 336
   let handle_resize_mouse_down: (arg0_e: React.MouseEvent) => void
+  let is_full_width: boolean
   let is_sidebar_collapsed: boolean
   let open_folders: Record<string, boolean>
   let set_is_sidebar_collapsed: React.Dispatch<React.SetStateAction<boolean>>
   let set_open_folders: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
+  let set_viewport_width: React.Dispatch<React.SetStateAction<number>>
   let toggle_folder: (arg0_folder_key: string) => void
+  let viewport_width: number
 
-    //Function body
-    ;[is_sidebar_collapsed, set_is_sidebar_collapsed] = useState<boolean>(false)
-    ;[open_folders, set_open_folders] = useState<Record<string, boolean>>({
-      binning: false,
-      description: true,
-      manual: false,
-      visual: true,
-    })
+  //Function body
+  ;[is_sidebar_collapsed, set_is_sidebar_collapsed] = useState<boolean>(false)
+  ;[open_folders, set_open_folders] = useState<Record<string, boolean>>({
+    binning: false,
+    description: true,
+    manual: false,
+    visual: true,
+  })
+  ;[viewport_width, set_viewport_width] = useState<number>(() => {
+    if (typeof window !== 'undefined')
+      return window.innerWidth
+    return 1024
+  })
+
+  useEffect(() => {
+    let handle_resize = function () {
+      set_viewport_width(window.innerWidth)
+    }
+
+    window.addEventListener('resize', handle_resize)
+    return () => {
+      window.removeEventListener('resize', handle_resize)
+    }
+  }, [set_viewport_width])
+
+  is_full_width = is_mobile || (current_width >= viewport_width * 0.8)
 
   active_layer = useMemo(() => {
     if (!active_layer_id || !layers)
@@ -230,7 +250,7 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
 
     let on_mouse_move = function (arg0_move_event: MouseEvent) {
       let delta = arg0_move_event.clientX - start_x
-      let next_w = Math.max(260, Math.min(650, start_w + delta))
+      let next_w = Math.max(260, Math.min(window.innerWidth, start_w + delta))
       if (on_width_change)
         on_width_change(next_w)
     }
@@ -250,24 +270,37 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
       <div
         style={is_mobile ? {
           bottom: is_sidebar_collapsed ? 'auto' : '0px',
-          maxWidth: 'min(100vw, 360px)',
+          left: '0px',
+          maxWidth: '100vw',
+          right: '0px',
           top: '48px',
-          width: '100%',
+          width: '100vw',
+        } : is_full_width ? {
+          bottom: is_sidebar_collapsed ? 'auto' : ((bottom_clearance !== undefined) ? `${bottom_clearance}px` : '12px'),
+          left: '0px',
+          maxWidth: '100vw',
+          right: '0px',
+          top: '0px',
+          width: '100vw',
         } : {
           bottom: is_sidebar_collapsed ? 'auto' : ((bottom_clearance !== undefined) ? `${bottom_clearance}px` : '12px'),
+          left: '12px',
           maxWidth: 'calc(100vw - 24px)',
+          top: '12px',
           width: `${current_width}px`,
         }}
         className={is_mobile
-          ? `fixed left-0 z-50 flex flex-col bg-card/95 backdrop-blur-md border-r ${is_sidebar_collapsed ? 'border-b' : ''} border-border text-card-foreground overflow-hidden select-none font-sans shadow-2xl transition-transform duration-200 ease-out`
-          : 'absolute top-3 left-3 z-20 flex flex-col bg-card/95 backdrop-blur-md border border-border text-card-foreground overflow-hidden select-none font-sans shadow-2xl transition-all duration-150 ease-out'
+          ? `fixed left-0 z-50 flex flex-col bg-card/95 backdrop-blur-md ${is_sidebar_collapsed ? 'border-b' : ''} border-border text-card-foreground overflow-hidden select-none font-sans shadow-2xl transition-transform duration-200 ease-out pb-2 max-h-[calc(var(--app-height,100dvh)-48px)]`
+          : is_full_width
+          ? `fixed left-0 top-0 z-40 flex flex-col bg-card/95 backdrop-blur-md border-b ${is_sidebar_collapsed ? 'border-b' : ''} border-border text-card-foreground overflow-hidden select-none font-sans shadow-2xl transition-all duration-150 ease-out max-h-[100dvh]`
+          : 'absolute top-3 left-3 z-20 flex flex-col bg-card/95 backdrop-blur-md border border-border text-card-foreground overflow-hidden select-none font-sans shadow-2xl transition-all duration-150 ease-out max-h-[calc(100dvh-24px)]'
         }
       >
         {/* Draggable Right Border Resize Handle */}
         {!is_mobile && !is_sidebar_collapsed && (
           <div
             onMouseDown={handle_resize_mouse_down}
-            className="absolute top-0 right-0 bottom-0 w-2 cursor-col-resize hover:bg-primary/50 active:bg-primary transition-colors z-30 group"
+            className="absolute top-0 right-0 bottom-0 w-3 cursor-col-resize hover:bg-primary/50 active:bg-primary transition-colors z-30 group"
             title="Drag right border to resize sidebar"
           >
             <div className="w-[2px] h-8 bg-border group-hover:bg-primary absolute top-1/2 -translate-y-1/2 right-0.5" />

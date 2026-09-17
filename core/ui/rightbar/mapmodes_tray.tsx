@@ -265,10 +265,10 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
 
   max_height_style = useMemo(() => {
     if (analytics_open)
-      return 'calc(100vh - 376px - 24px)'
+      return 'calc(100dvh - 376px - 24px)'
     if (settings_open)
-      return 'calc(100vh - 300px - 24px)'
-    return 'calc(100vh - 200px - 24px)'
+      return 'calc(100dvh - 300px - 24px)'
+    return 'calc(100dvh - 200px - 24px)'
   }, [analytics_open, settings_open])
 
   //Filter layers by search
@@ -360,12 +360,14 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
         <div
           id="dataview-mapmodes-tray"
           style={{
-            bottom: (bottom_clearance !== undefined) ? `${bottom_clearance}px` : '12px',
+            bottom: (bottom_clearance !== undefined)
+              ? `${bottom_clearance}px`
+              : '12px',
             maxWidth: is_mobile ? 'calc(100vw - 24px)' : 'calc(100vw - 40px)',
             right: '12px',
             width: is_mobile ? 'min(340px, calc(100vw - 24px))' : `${tray_width}px`,
           }}
-          className="absolute z-20"
+          className={is_mobile ? 'fixed z-30' : 'absolute z-20'}
         >
           <button
             type="button"
@@ -396,14 +398,20 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
       <div
         id="dataview-mapmodes-tray"
         style={{
-          bottom: (bottom_clearance !== undefined) ? `${bottom_clearance}px` : '12px',
-          height: `${tray_height}px`,
-          maxHeight: is_mobile ? '50vh' : (bottom_clearance !== undefined ? `calc(100vh - ${bottom_clearance + 28}px)` : 'calc(100vh - 40px)'),
+          bottom: (bottom_clearance !== undefined)
+            ? `${bottom_clearance}px`
+            : '12px',
+          height: is_mobile ? 'auto' : `${tray_height}px`,
+          maxHeight: is_mobile
+            ? 'calc(var(--app-height, 100dvh) * 0.5)'
+            : (bottom_clearance !== undefined ? `calc(100dvh - ${bottom_clearance + 28}px)` : 'calc(100dvh - 40px)'),
           maxWidth: is_mobile ? 'calc(100vw - 24px)' : 'calc(100vw - 40px)',
           right: '12px',
           width: is_mobile ? 'min(340px, calc(100vw - 24px))' : `${tray_width}px`,
         }}
-        className="absolute z-20 flex flex-col bg-card/95 backdrop-blur-md border border-border shadow-2xl p-2.5 space-y-2 text-[var(--body-font-size)] select-none font-sans overflow-hidden transition-all duration-150 ease-out"
+        className={`${
+          is_mobile ? 'fixed z-30' : 'absolute z-20'
+        } flex flex-col bg-card/95 backdrop-blur-md border border-border shadow-2xl p-2.5 space-y-2 text-[var(--body-font-size)] select-none font-sans overflow-hidden transition-all duration-150 ease-out`}
       >
         {/* Resize Handles (Active when tray is not collapsed and not mobile) */}
         {!is_mobile && (
