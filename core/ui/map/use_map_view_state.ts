@@ -131,8 +131,21 @@ export function useMapViewState (arg0_options: MapViewStateOptions): MapViewStat
         },
       }))
     }
+    ;(window as any).__setMapCenter = (arg0_lng: number, arg0_lat: number, arg0_zoom?: number) => {
+      set_proj_view_states((arg0_prev) => ({
+        ...arg0_prev,
+        [projection]: {
+          ...arg0_prev[projection],
+          latitude: arg0_lat,
+          longitude: arg0_lng,
+          target: [arg0_lng, arg0_lat, 0],
+          zoom: (arg0_zoom !== undefined) ? arg0_zoom : arg0_prev[projection]?.zoom,
+        },
+      }))
+    }
     return () => {
       delete (window as any).__setMapZoom
+      delete (window as any).__setMapCenter
     }
   }, [projection, set_proj_view_states])
 
