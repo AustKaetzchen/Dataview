@@ -4,7 +4,7 @@
   // Format des nombres européen (58,88), délimiteurs £1£
   // =========================================================================
   app: {
-    title: "Confoederatio Dataview",
+    title: "DATAVIEW",
     subtitle: "Outils internes pour les statistiques historiques",
     badge: "BÊTA",
   },

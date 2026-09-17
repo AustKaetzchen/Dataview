@@ -259,8 +259,12 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
       <div className="p-[var(--padding)] border-b border-border bg-card/60 shrink-0">
         <div className="flex items-center justify-between">
           <h1 className="text-[var(--header-font-size)] font-bold tracking-tight text-foreground flex items-center gap-2">
-            <Icon name="layers" />
-            <span>{t.app.title}</span>
+            <img
+              src="/gfx/interface/logos/confoederatio_icon_256x256.png"
+              alt="Confoederatio Icon"
+              className="w-8 h-8 object-contain"
+            />
+            <span className="text-xl tracking-[1px]">{t.app.title}</span>
           </h1>
           <span className="text-[var(--body-font-size)] px-2 py-0.5 rounded-none bg-muted text-muted-foreground border border-border font-medium tracking-wider">
             {t.app.badge}

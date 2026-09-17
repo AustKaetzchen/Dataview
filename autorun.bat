@@ -64,9 +64,10 @@ echo ===================================================
 echo      Starting Development Server (vite dev)        
 echo ===================================================
 echo [INFO] Live reloading and HMR active.
+echo [INFO] Port locked to 15000 for Cloudflare tunnel.
 echo [INFO] Press Ctrl+C in this window to stop the server.
 echo.
-call npm run dev -- --host --open
+call npm run dev -- --host --port 15000 --open
 goto handle_exit
 
 :start_preview
@@ -80,9 +81,10 @@ echo ===================================================
 echo   Starting Production Build Server (vite preview)  
 echo ===================================================
 echo [INFO] Serving optimized production bundle from dist\
+echo [INFO] Port locked to 15000 for Cloudflare tunnel.
 echo [INFO] Press Ctrl+C in this window to stop the server.
 echo.
-call npm run preview -- --host --open
+call npm run preview -- --host --port 15000 --open
 goto handle_exit
 
 :do_rebuild

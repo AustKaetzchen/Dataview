@@ -359,7 +359,7 @@ export let expandLayersToCyclingTargets = function (
  *
  * @param {TimelapseRenderOptions} arg0_options
  * @param {string} arg0_exports_dir
- * @param {string} [arg0_client_url='http://localhost:5174']
+ * @param {string} [arg0_client_url='http://localhost:15000']
  * @param {Record<string, ParsedDataLayer>} [arg0_registry_layers]
  *
  * @returns {Promise<TimelapseJobStatus>}
@@ -371,7 +371,7 @@ export let startTimelapseRenderJob = async function (
   arg0_registry_layers?: Record<string, ParsedDataLayer>
 ) {
   //Convert from parameters
-  let client_url = arg0_client_url || 'http://localhost:5174'
+  let client_url = arg0_client_url || 'http://localhost:15000'
   let exports_dir = path.resolve(arg0_exports_dir)
   let options = arg0_options
   let registry_layers = (arg0_registry_layers) ? arg0_registry_layers : {}

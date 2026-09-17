@@ -4,7 +4,7 @@
   // Europäisches Zahlenformat (58,88), £1£-Trennzeichen
   // =========================================================================
   app: {
-    title: "Confoederatio Dataview",
+    title: "DATAVIEW",
     subtitle: "Interne Werkzeuge für historische Statistiken",
     badge: "BETA",
   },

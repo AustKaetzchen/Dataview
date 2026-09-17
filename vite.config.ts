@@ -28,6 +28,18 @@ function dataviewBackendPlugin(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    port: 15000,
+    strictPort: true,
+    host: true,
+    allowedHosts: true,
+  },
+  preview: {
+    port: 15000,
+    strictPort: true,
+    host: true,
+    allowedHosts: true,
+  },
   plugins: [react(), tailwindcss(), dataviewBackendPlugin()],
   resolve: {
     alias: {
