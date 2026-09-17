@@ -597,7 +597,6 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
       set_hovered_historical_feature(feat)
     },
     timelineYear: timeline_year || 1950,
-    viewState: proj_view_states[projection],
   })
 
   if (props.activeLayerId && props.dataLayers) {
@@ -637,8 +636,7 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
     } catch (e) {
       // Ignore projection errors
     }
-    return null
-  }, [selected_city, projection, proj_view_states[projection]])
+  }, [selected_city, projection, proj_view_states])
 
   //Compute screen anchor coordinates for selected historical borders panel
   let selected_historical_anchor = useMemo(() => {
@@ -668,14 +666,13 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
       // Ignore projection errors
     }
     return selected_historical_anchor_screen || null
-  }, [selected_historical_feature, selected_historical_anchor_coord, selected_historical_anchor_screen, projection, proj_view_states[projection]])
+  }, [selected_historical_feature, selected_historical_anchor_coord, selected_historical_anchor_screen, projection, proj_view_states])
 
   //Return statement
   return (
     <div
       className="relative w-full h-full overflow-hidden select-none bg-background font-sans"
-      style={{ imageRendering: 'pixelated' }}
-      onDoubleClick={handle_double_click}
+      style={{ imageRendering: 'pixelated', touchAction: 'none' }}
       onContextMenu={(e) => e.preventDefault()}
       onPointerLeave={() => {
         set_hovered_city(null)
@@ -685,8 +682,9 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
       <DeckGL
         ref={deck_ref}
         id="deckgl-overlay"
+        style={{ touchAction: 'none' }}
         views={views}
-        viewState={proj_view_states[projection]}
+        viewState={effective_view_state}
         onViewStateChange={handle_view_state_change}
         onInteractionStateChange={(arg0_state: any) => {
           let state = arg0_state
@@ -727,8 +725,8 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
         />
       )}
 
-      {/* Stadestér City Details Panel */}
-      {ui_visible && selected_city && (
+      {/* Stadestér City Details Panel (Floating on desktop) */}
+      {ui_visible && !is_mobile && selected_city && (
         <CityDetailsPanel
           anchorPos={selected_city_anchor}
           city={selected_city}
@@ -737,8 +735,8 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
         />
       )}
 
-      {/* Historical Country Details Panel */}
-      {ui_visible && selected_historical_feature && (
+      {/* Historical Country Details Panel (Floating on desktop) */}
+      {ui_visible && !is_mobile && selected_historical_feature && (
         <HistoricalBorderDetailsPanel
           anchorPos={selected_historical_anchor}
           countryStats={country_stats}
@@ -823,7 +821,6 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
               mapmodesTakenRight={mapmodes_taken_right}
               onChangeLegendPosition={on_change_legend_position}
               onCloseInfoPanel={on_close_info_panel}
-              onDoubleClick={handle_double_click}
               onResizeColourbarWidth={on_resize_colourbar_width}
               onToggleAnalytics={on_toggle_analytics}
               onTogglePerformantMode={on_toggle_performant_mode}
@@ -875,18 +872,36 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
           mapModes={map_modes}
           onChangeVariableSelector={props.onChangeVariableSelector}
           onClearCountries={on_clear_countries || NOOP_FN}
+          onCloseCity={on_close_city_details || NOOP_FN}
+          onCloseHistoricalFeature={() => {
+            set_selected_historical_feature(null)
+            set_selected_historical_anchor_coord(null)
+            set_selected_historical_anchor_screen(null)
+            if (on_clear_countries) {
+              on_clear_countries()
+            } else if (on_select_country) {
+              on_select_country(null)
+            }
+          }}
+          onJumpToYear={(yr) => {
+            if (props.onChangeYear)
+              props.onChangeYear(yr)
+          }}
           onReorderMapModes={on_reorder_map_modes}
           onSelectLayer={props.onSelectLayer}
           onToggleCountriesMode={on_toggle_countries_mode}
           onToggleCountry={on_toggle_country || NOOP_FN}
           onToggleMapMode={on_toggle_map_mode}
+          selectedCity={selected_city}
           selectedCountries={selected_countries || EMPTY_ARRAY}
+          selectedHistoricalFeature={selected_historical_feature}
           setCircleOverlayConfig={set_circle_overlay_config || NOOP_FN}
           setHeightmapConfig={set_heightmap_config || NOOP_FN}
           setStadesterConfig={set_stadester_config}
           settingsOpen={flyout_open}
           stadesterCityCount={stadester_cities?.length || 0}
           stadesterConfig={stadester_config}
+          timelineYear={timeline_year || 1950}
           userRole={props.userRole}
           isMobile={is_mobile}
         />

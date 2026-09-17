@@ -8,6 +8,7 @@ export interface CityDetailsPanelProps {
   anchorPos?: { x: number; y: number } | null
   city: CityFullRecord | CityPoint | null
   currentYear: number
+  embedded?: boolean
   onClose: () => void
 }
 
@@ -58,6 +59,7 @@ export let CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_pr
   let anchor_pos = props.anchorPos
   let city = props.city
   let current_year = props.currentYear
+  let embedded = Boolean(props.embedded)
   let on_close = props.onClose
 
   //Declare local instance variables
@@ -383,7 +385,7 @@ export let CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_pr
 
   //Anchored positioning calculations
   panel_style = {}
-  if (anchor_pos && anchor_pos.x !== undefined && anchor_pos.y !== undefined) {
+  if (!embedded && anchor_pos && anchor_pos.x !== undefined && anchor_pos.y !== undefined) {
     let panel_w = 384
     let panel_h = 390
     let target_x = anchor_pos.x + 24
@@ -407,6 +409,11 @@ export let CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_pr
       position: 'fixed',
       top: `${Math.round(target_y)}px`,
     }
+  } else if (embedded) {
+    panel_style = {
+      position: 'relative',
+      width: '100%',
+    }
   }
 
   //Return statement
@@ -414,33 +421,45 @@ export let CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_pr
     <div
       id="dataview-city-details-panel"
       style={panel_style}
-      className={`z-15 w-96 max-w-[calc(100vw-32px)] bg-card/95 backdrop-blur-md border border-border shadow-2xl p-3 text-foreground select-none font-sans ${
-        !anchor_pos ? 'absolute bottom-20 left-4' : ''
-      }`}
+      className={embedded
+        ? 'w-full text-foreground select-none font-sans space-y-2'
+        : `z-15 w-96 max-w-[calc(100vw-32px)] bg-card/95 backdrop-blur-md border border-border shadow-2xl p-3 text-foreground select-none font-sans ${
+            !anchor_pos ? 'absolute bottom-20 left-4' : ''
+          }`
+      }
     >
       {/* Panel Header */}
-      <div className="flex items-start justify-between pb-2 border-b border-border/60">
-        <div className="min-w-0 pr-2">
-          <div className="flex items-center gap-1.5">
-            <Icon name="location_city" className="text-primary text-base shrink-0" />
-            <span className="font-bold text-sm truncate text-white" title={city.name}>
-              {display_city_name}
-            </span>
+      {!embedded && (
+        <div className="flex items-start justify-between pb-2 border-b border-border/60">
+          <div className="min-w-0 pr-2">
+            <div className="flex items-center gap-1.5">
+              <Icon name="location_city" className="text-primary text-base shrink-0" />
+              <span className="font-bold text-sm truncate text-white" title={city.name}>
+                {display_city_name}
+              </span>
+            </div>
+            <div className="text-[11px] text-muted-foreground truncate mt-0.5">
+              {[city.country, city.region].filter(Boolean).join(' • ') || 'Urban Settlement'}
+              {city.coords && ` [${city.coords[0].toFixed(2)}°, ${city.coords[1].toFixed(2)}°]`}
+            </div>
           </div>
-          <div className="text-[11px] text-muted-foreground truncate mt-0.5">
-            {[city.country, city.region].filter(Boolean).join(' • ') || 'Urban Settlement'}
-            {city.coords && ` [${city.coords[0].toFixed(2)}°, ${city.coords[1].toFixed(2)}°]`}
-          </div>
+          <button
+            type="button"
+            onClick={on_close}
+            className="p-1 text-muted-foreground hover:text-primary transition-colors cursor-pointer shrink-0"
+            title="Close city details"
+          >
+            <Icon name="close" className="text-sm" />
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={on_close}
-          className="p-1 text-muted-foreground hover:text-primary transition-colors cursor-pointer shrink-0"
-          title="Close city details"
-        >
-          <Icon name="close" className="text-sm" />
-        </button>
-      </div>
+      )}
+
+      {embedded && (
+        <div className="pb-1 text-[11px] text-muted-foreground border-b border-border/60">
+          {[city.country, city.region].filter(Boolean).join(' • ') || 'Urban Settlement'}
+          {city.coords && ` [${city.coords[0].toFixed(2)}°, ${city.coords[1].toFixed(2)}°]`}
+        </div>
+      )}
 
       {/* Other Recorded / Native Names */}
       {other_names_list.length > 0 && (

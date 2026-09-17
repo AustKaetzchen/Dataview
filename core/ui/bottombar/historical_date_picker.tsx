@@ -73,10 +73,10 @@ export let HistoricalDatePicker: React.FC<HistoricalDatePickerProps> = function 
     return UfDate.fromFractionalYear(current_year)
   }, [current_year])
 
-  ;[selected_day, set_selected_day] = useState<number>(parsed_date.day)
-  ;[selected_month, set_selected_month] = useState<number>(parsed_date.month)
-  ;[selected_era, set_selected_era] = useState<'AD' | 'BC'>(parsed_date.year < 0 ? 'BC' : 'AD')
-  ;[year_text, set_year_text] = useState<string>(String(Math.abs(parsed_date.year || 1)))
+    ;[selected_day, set_selected_day] = useState<number>(parsed_date.day)
+    ;[selected_month, set_selected_month] = useState<number>(parsed_date.month)
+    ;[selected_era, set_selected_era] = useState<'AD' | 'BC'>(parsed_date.year < 0 ? 'BC' : 'AD')
+    ;[year_text, set_year_text] = useState<string>(String(Math.abs(parsed_date.year || 1)))
 
   //Synchronise local state when popover opens or current_year changes externally
   useEffect(() => {
@@ -226,7 +226,7 @@ export let HistoricalDatePicker: React.FC<HistoricalDatePickerProps> = function 
         <div className="flex items-center gap-2">
           <Icon name="event" className="text-primary text-sm" />
           <span className="font-mono text-xs font-bold uppercase tracking-wider text-foreground">
-            Historical Date Picker
+            Date Picker
           </span>
         </div>
         <button
@@ -249,22 +249,20 @@ export let HistoricalDatePicker: React.FC<HistoricalDatePickerProps> = function 
               <button
                 type="button"
                 onClick={() => handle_era_toggle('BC')}
-                className={`px-2 py-0.5 text-xs font-mono font-bold cursor-pointer transition-colors border ${
-                  selected_era === 'BC'
+                className={`px-2 py-0.5 text-xs font-mono font-bold cursor-pointer transition-colors border ${selected_era === 'BC'
                     ? 'bg-primary text-primary-foreground border-primary'
                     : 'bg-muted/40 text-muted-foreground hover:text-foreground border-border/60'
-                }`}
+                  }`}
               >
                 BC
               </button>
               <button
                 type="button"
                 onClick={() => handle_era_toggle('AD')}
-                className={`px-2 py-0.5 text-xs font-mono font-bold cursor-pointer transition-colors border ${
-                  selected_era === 'AD'
+                className={`px-2 py-0.5 text-xs font-mono font-bold cursor-pointer transition-colors border ${selected_era === 'AD'
                     ? 'bg-primary text-primary-foreground border-primary'
                     : 'bg-muted/40 text-muted-foreground hover:text-foreground border-border/60'
-                }`}
+                  }`}
               >
                 AD
               </button>
@@ -332,11 +330,10 @@ export let HistoricalDatePicker: React.FC<HistoricalDatePickerProps> = function 
                   key={arg0_name}
                   type="button"
                   onClick={() => handle_month_select(m_num)}
-                  className={`py-1 text-center font-mono text-[11px] cursor-pointer transition-colors border ${
-                    is_sel
+                  className={`py-1 text-center font-mono text-[11px] cursor-pointer transition-colors border ${is_sel
                       ? 'bg-primary text-primary-foreground border-primary font-bold'
                       : 'bg-muted/30 hover:bg-muted/60 text-muted-foreground hover:text-foreground border-border/40'
-                  }`}
+                    }`}
                 >
                   {arg0_name}
                 </button>
@@ -359,11 +356,10 @@ export let HistoricalDatePicker: React.FC<HistoricalDatePickerProps> = function 
                   key={arg0_d}
                   type="button"
                   onClick={() => handle_day_select(arg0_d)}
-                  className={`py-1 text-center font-mono text-[11px] cursor-pointer transition-colors border ${
-                    is_sel
+                  className={`py-1 text-center font-mono text-[11px] cursor-pointer transition-colors border ${is_sel
                       ? 'bg-primary text-primary-foreground border-primary font-bold shadow-xs'
                       : 'bg-muted/20 hover:bg-muted/50 text-muted-foreground hover:text-foreground border-border/40'
-                  }`}
+                    }`}
                 >
                   {arg0_d}
                 </button>

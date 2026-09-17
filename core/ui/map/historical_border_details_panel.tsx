@@ -8,6 +8,7 @@ export interface HistoricalBorderDetailsPanelProps {
   anchorPos?: { x: number; y: number } | null
   countryStats?: CountryStats | null
   currentYear: number
+  embedded?: boolean
   feature: HistoricalBorderFeature | null
   isCalculatingStats?: boolean
   onClose: () => void
@@ -31,6 +32,7 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
   let anchor_pos = props.anchorPos
   let country_stats = props.countryStats
   let current_year = props.currentYear
+  let embedded = Boolean(props.embedded)
   let feature = props.feature
   let is_calculating_stats = props.isCalculatingStats
   let on_close = props.onClose
@@ -147,22 +149,29 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
   max_x = (typeof window !== 'undefined') ? window.innerWidth - panel_w - 16 : 800
   max_y = (typeof window !== 'undefined') ? window.innerHeight - panel_h - 70 : 600
 
-  if (anchor_pos) {
-    if (target_x > max_x)
-      target_x = anchor_pos.x - panel_w - 24
-    if (target_x < min_x)
-      target_x = min_x
+  if (!embedded) {
+    if (anchor_pos) {
+      if (target_x > max_x)
+        target_x = anchor_pos.x - panel_w - 24
+      if (target_x < min_x)
+        target_x = min_x
 
-    if (target_y > max_y)
-      target_y = max_y
-    if (target_y < 16)
-      target_y = 16
-  }
+      if (target_y > max_y)
+        target_y = max_y
+      if (target_y < 16)
+        target_y = 16
+    }
 
-  panel_style = {
-    left: `${Math.round(target_x)}px`,
-    position: 'fixed',
-    top: `${Math.round(target_y)}px`,
+    panel_style = {
+      left: `${Math.round(target_x)}px`,
+      position: 'fixed',
+      top: `${Math.round(target_y)}px`,
+    }
+  } else {
+    panel_style = {
+      position: 'relative',
+      width: '100%',
+    }
   }
 
   //Return statement
@@ -170,35 +179,48 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
     <div
       id="dataview-historical-border-panel"
       style={panel_style}
-      className="z-15 w-96 max-w-[calc(100vw-32px)] bg-card/95 backdrop-blur-md border border-border shadow-2xl p-3 text-foreground select-none font-sans animate-in fade-in-0 zoom-in-95 duration-150"
+      className={embedded
+        ? 'w-full text-foreground select-none font-sans animate-in fade-in-0 duration-150 space-y-2'
+        : 'z-15 w-96 max-w-[calc(100vw-32px)] bg-card/95 backdrop-blur-md border border-border shadow-2xl p-3 text-foreground select-none font-sans animate-in fade-in-0 zoom-in-95 duration-150'
+      }
     >
       {/* Header */}
-      <div className="flex items-start justify-between border-b border-border/70 pb-2 mb-2.5">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-8 h-8 rounded-none bg-muted/40 border border-border flex items-center justify-center shrink-0">
-            <Icon name="flag" className="text-white text-base" />
-          </div>
-          <div className="min-w-0">
-            <h3 className="text-sm font-bold text-foreground truncate" title={country_name}>
-              {country_name}
-            </h3>
-            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-mono">
-              <span className="text-foreground font-semibold">{source_label}</span>
-              <span>•</span>
-              <span className="truncate">{validity_str}</span>
+      {!embedded && (
+        <div className="flex items-start justify-between border-b border-border/70 pb-2 mb-2.5">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-8 h-8 rounded-none bg-muted/40 border border-border flex items-center justify-center shrink-0">
+              <Icon name="flag" className="text-white text-base" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-foreground truncate" title={country_name}>
+                {country_name}
+              </h3>
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-mono">
+                <span className="text-foreground font-semibold">{source_label}</span>
+                <span>•</span>
+                <span className="truncate">{validity_str}</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        <button
-          type="button"
-          onClick={on_close}
-          className="p-1 text-muted-foreground hover:text-foreground cursor-pointer shrink-0 transition-colors"
-          title="Close historical details panel"
-        >
-          <Icon name="close" className="text-sm" />
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={on_close}
+            className="p-1 text-muted-foreground hover:text-foreground cursor-pointer shrink-0 transition-colors"
+            title="Close historical details panel"
+          >
+            <Icon name="close" className="text-sm" />
+          </button>
+        </div>
+      )}
+
+      {embedded && (
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-mono border-b border-border/70 pb-1.5">
+          <span className="text-foreground font-semibold">{source_label}</span>
+          <span>•</span>
+          <span className="truncate">{validity_str}</span>
+        </div>
+      )}
 
       {/* Alternate names & Capital info */}
       {(alt_names_str || cap_name) && (

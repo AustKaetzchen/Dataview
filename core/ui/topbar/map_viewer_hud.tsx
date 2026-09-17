@@ -54,7 +54,7 @@ export interface MapViewerHUDProps {
   mapmodesTakenRight?: number
   onChangeLegendPosition?: (arg0_pos: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right') => void
   onCloseInfoPanel?: () => void
-  onDoubleClick: () => void
+  onDoubleClick?: () => void
   onResizeColourbarWidth?: (arg0_w: number) => void
   onToggleAnalytics: () => void
   onTogglePerformantMode?: (arg0_enabled: boolean) => void

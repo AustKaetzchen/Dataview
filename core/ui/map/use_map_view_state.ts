@@ -2,7 +2,7 @@
  * View state and camera projection management hook for Deck.gl MapViewer.
  */
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { MapView, OrbitView } from '@deck.gl/core'
 import { MAP_CONFIG } from '@common'
 import type { HeightmapConfig, ProjectionType } from '@framework/geopng/types.ts'
@@ -54,7 +54,6 @@ export function useMapViewState (arg0_options: MapViewStateOptions): MapViewStat
   let handle_view_state_change: (arg0_e: any) => void
   let handle_zoom_in: () => void
   let handle_zoom_out: () => void
-  let pending_view_state_ref = useRef<any>(null)
   let [proj_view_states, set_proj_view_states] = useState<Record<ProjectionType, any>>({
     EqualEarth: {
       maxRotationX: 0,
@@ -103,7 +102,6 @@ export function useMapViewState (arg0_options: MapViewStateOptions): MapViewStat
       zoom: 1.2,
     },
   })
-  let view_state_raf_ref = useRef<number | null>(null)
   let views: any
 
   //Function body
@@ -242,20 +240,11 @@ export function useMapViewState (arg0_options: MapViewStateOptions): MapViewStat
           latitude: clamped_lat,
         }
       }
-      pending_view_state_ref.current = next_view_state
 
-      if (view_state_raf_ref.current !== null)
-        return
-
-      view_state_raf_ref.current = requestAnimationFrame(() => {
-        view_state_raf_ref.current = null
-        if (pending_view_state_ref.current) {
-          set_proj_view_states((arg0_prev) => ({
-            ...arg0_prev,
-            [projection]: pending_view_state_ref.current,
-          }))
-        }
-      })
+      set_proj_view_states((arg0_prev) => ({
+        ...arg0_prev,
+        [projection]: next_view_state,
+      }))
     },
     [projection, set_proj_view_states]
   )

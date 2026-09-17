@@ -732,13 +732,6 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
       ? options.stadesterPoints!
       : stadester_points_data
 
-    //In Globe mode, filter effective_points to ensure no antipodal cities are rendered through the globe
-    if (projection === 'Globe' && effective_points.length > 0) {
-      effective_points = effective_points.filter((arg0_pt: any) =>
-        isGlobePointVisible(arg0_pt.position[0], arg0_pt.position[1], options.viewState, -0.20)
-      )
-    }
-
     if (options.stadesterConfig?.enabled && effective_points.length > 0) {
       let is_collision_active = (options.stadesterConfig.labelCollision !== undefined) ? options.stadesterConfig.labelCollision : true
       let is_firefox = typeof navigator !== 'undefined' && /firefox|fxios/i.test(navigator.userAgent)
@@ -803,6 +796,7 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
               depthMask: false,
               depthTest: false,
             },
+            extensions: (projection === 'Globe') ? [new GlobeAntipodeCullExtension()] : [],
           })
         )
       } else {
@@ -871,6 +865,7 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
               depthMask: false,
               depthTest: false,
             },
+            extensions: (projection === 'Globe') ? [new GlobeAntipodeCullExtension()] : [],
           })
         )
       }
@@ -878,10 +873,6 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
       // City selection highlight ring
       if (options.selectedCityKey) {
         let selected_city_item = effective_points.find((c: any) => c.key === options.selectedCityKey)
-        if (selected_city_item && projection === 'Globe') {
-          if (!isGlobePointVisible(selected_city_item.position[0], selected_city_item.position[1], options.viewState, -0.20))
-            selected_city_item = null
-        }
         if (selected_city_item) {
           if (is_firefox) {
             layers_array.push(
@@ -907,6 +898,7 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
                   depthMask: false,
                   depthTest: false,
                 },
+                extensions: (projection === 'Globe') ? [new GlobeAntipodeCullExtension()] : [],
                 pickable: false,
               })
             )
@@ -930,6 +922,7 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
                   depthMask: false,
                   depthTest: false,
                 },
+                extensions: (projection === 'Globe') ? [new GlobeAntipodeCullExtension()] : [],
                 pickable: false,
               })
             )
@@ -946,86 +939,6 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
             visible_label_cities = undefined
         }
 
-        // Fallback local placement if worker labels have not yet arrived
-        if (!visible_label_cities || visible_label_cities.length === 0) {
-          let sorted_cities = [...effective_points].sort((arg0_a, arg0_b) => arg0_b.population - arg0_a.population)
-          let placed_label_boxes: Array<[number, number, number, number]> = []
-          visible_label_cities = []
-          let window_w = (typeof window !== 'undefined') ? window.innerWidth : 1920
-          let window_h = (typeof window !== 'undefined') ? window.innerHeight : 1080
-
-          for (let i = 0; i < sorted_cities.length; i++) {
-            let c = sorted_cities[i]
-            let label_text = c.shortName || ''
-            if (!label_text)
-              continue
-
-            let text_w = label_text.length * 7.5 + 12
-            let text_h = 16
-            let sx: number
-            let sy: number
-
-            if (projection === 'Globe') {
-              let proj = projectGlobeCoordinates(c.position[0], c.position[1], options.viewState, window_w, window_h)
-              if (!proj.is_visible || proj.dot < -0.15)
-                continue
-
-              sx = proj.sx
-              sy = proj.sy
-            } else if (is_cartesian) {
-              let target = options.viewState?.target || [0, 0, 0]
-              let scale = Math.pow(2, options.viewState?.zoom ?? 2.8)
-              sx = window_w / 2 + (c.position[0] - target[0]) * scale
-              sy = window_h / 2 - (c.position[1] - target[1]) * scale
-            } else {
-              let center_lat = options.viewState?.latitude ?? 20
-              let center_lng = options.viewState?.longitude ?? 0
-              let scale = Math.pow(2, options.viewState?.zoom ?? 1.2)
-              let rad_factor = Math.PI / 180
-
-              let x_norm = (c.position[0] + 180) / 360
-              let c_norm = (center_lng + 180) / 360
-              sx = window_w / 2 + (x_norm - c_norm) * 512 * scale
-
-              let lat_rad = Math.max(-85, Math.min(85, c.position[1])) * rad_factor
-              let c_lat_rad = Math.max(-85, Math.min(85, center_lat)) * rad_factor
-              let y_proj = (1 - Math.log(Math.tan(Math.PI / 4 + lat_rad / 2)) / Math.PI) / 2
-              let c_y_proj = (1 - Math.log(Math.tan(Math.PI / 4 + c_lat_rad / 2)) / Math.PI) / 2
-              sy = window_h / 2 + (y_proj - c_y_proj) * 512 * scale
-            }
-
-            let r = c.pixelRadius
-            let box_x1 = sx + r + 8
-            let box_y1 = sy - text_h / 2
-            let box_x2 = box_x1 + text_w
-            let box_y2 = box_y1 + text_h
-
-            if (is_collision_active) {
-              let collides = false
-              for (let b = 0; b < placed_label_boxes.length; b++) {
-                let pb = placed_label_boxes[b]
-                if (
-                  box_x1 < pb[2] + 4 &&
-                  box_x2 > pb[0] - 4 &&
-                  box_y1 < pb[3] + 2 &&
-                  box_y2 > pb[1] - 2
-                ) {
-                  collides = true
-                  break
-                }
-              }
-              if (collides)
-                continue
-            }
-
-            placed_label_boxes.push([box_x1, box_y1, box_x2, box_y2])
-            visible_label_cities.push(c)
-
-            if (visible_label_cities.length >= 300)
-              break
-          }
-        }
-
         if (visible_label_cities && visible_label_cities.length > 0) {
           visible_label_cities = visible_label_cities.filter((arg0_c: any) =>
             arg0_c &&
@@ -1035,12 +948,6 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
             typeof arg0_c.shortName === 'string' &&
             arg0_c.shortName.trim().length > 0
           )
-
-          if (projection === 'Globe') {
-            visible_label_cities = visible_label_cities.filter((arg0_c: any) =>
-              isGlobePointVisible(arg0_c.position[0], arg0_c.position[1], options.viewState, -0.15)
-            )
-          }
         }
 
         if (visible_label_cities && visible_label_cities.length > 0) {
@@ -1073,6 +980,7 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
                 depthMask: false,
                 depthTest: false,
               },
+              extensions: (projection === 'Globe') ? [new GlobeAntipodeCullExtension()] : [],
             })
           )
         }
@@ -1118,7 +1026,6 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
     options.onSelectHistoricalFeature,
     options.onHoverHistoricalFeature,
     options.timelineYear,
-    options.viewState,
     options.activeLayerId,
     options.rasterVersion,
   ])

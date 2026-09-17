@@ -51,7 +51,7 @@ export class SmoothOrbitState extends BaseOrbitState {
     //Return statement
     return this._getUpdatedState({
       rotationOrbit: start_rotation_orbit + delta_angle_x,
-      rotationX: Math.max(min_rotation_x, Math.min(max_rotation_x, start_rotation_x + delta_angle_y)),
+      rotationX: Math.max(min_rotation_x, Math.min(max_rotation_x, start_rotation_x - delta_angle_y)),
     })
   }
 }

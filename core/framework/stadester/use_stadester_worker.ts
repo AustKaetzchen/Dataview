@@ -131,12 +131,12 @@ export function useStadesterWorker (arg0_options: UseStadesterWorkerParams): Use
       return
 
     let current_req_id = ++req_id_ref.current
-    set_is_calculating(true)
 
     if (debounce_timer_ref.current)
       clearTimeout(debounce_timer_ref.current)
 
     debounce_timer_ref.current = setTimeout(() => {
+      set_is_calculating(true)
       let window_h = (typeof window !== 'undefined') ? window.innerHeight : 1080
       let window_w = (typeof window !== 'undefined') ? window.innerWidth : 1920
 

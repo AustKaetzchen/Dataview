@@ -1,10 +1,12 @@
 import React, { useState, useMemo, useCallback } from 'react'
 import {
-  MapModeItem,
-  MapModeId,
-  HeightmapConfig,
   CircleOverlayConfig,
+  CityFullRecord,
+  CityPoint,
+  HeightmapConfig,
   HistoricalBordersConfig,
+  MapModeId,
+  MapModeItem,
   StadesterConfig,
 } from '@framework/geopng/types.ts'
 import { CountryFeature, CountryStats } from '@framework/geopng/polygon_binning.ts'
@@ -12,6 +14,7 @@ import { Icon } from '@ui/components/icon'
 import { TooltipProvider } from '@ui/components/tooltip'
 import { UserRole, isPublicBuild } from '@common'
 import { useLocalisation } from '@localisation'
+import { CityDetailsPanel } from '@ui/map/city_details_panel'
 import { CountryModeSettings } from './mapmodes/country_mode_settings'
 import {
   SpikeMapSettings,
@@ -22,8 +25,10 @@ import {
 } from './mapmodes/spike_map_settings'
 import { CircleOverlaySettings } from './mapmodes/circle_overlay_settings'
 import { DatasetFolderNode } from './mapmodes/dataset_folder_node'
+import { HistoricalBorderDetailsPanel } from '@ui/map/historical_border_details_panel'
 import { HistoricalBordersSettings } from './mapmodes/historical_borders_settings'
 import { MapmodeTooltip } from './mapmodes/mapmode_tooltip'
+import type { HistoricalBorderFeature } from '@server/AtlasBordersService'
 import { ParsedDataLayer } from '@server/layer_parser'
 
 export {
@@ -52,13 +57,18 @@ export interface MapmodesTrayProps {
   mapModes: MapModeItem[]
   onChangeVariableSelector?: (arg0_key: string, arg1_option: string | string[]) => void
   onClearCountries: () => void
+  onCloseCity?: () => void
+  onCloseHistoricalFeature?: () => void
+  onJumpToYear?: (arg0_year: number) => void
   onReorderMapModes: (newModes: MapModeItem[]) => void
   onSelectLayer?: (arg0_layer_id: string) => void
   onSetCameraTilt?: (tilt: number) => void
   onToggleCountriesMode?: (enabled: boolean) => void
   onToggleCountry: (country: CountryFeature) => void
   onToggleMapMode: (id: MapModeId) => void
+  selectedCity?: CityFullRecord | CityPoint | null
   selectedCountries: CountryFeature[]
+  selectedHistoricalFeature?: HistoricalBorderFeature | null
   setCircleOverlayConfig: React.Dispatch<React.SetStateAction<CircleOverlayConfig>>
   setHeightmapConfig: React.Dispatch<React.SetStateAction<HeightmapConfig>>
   setHistoricalBordersConfig?: React.Dispatch<React.SetStateAction<HistoricalBordersConfig>>
@@ -66,6 +76,7 @@ export interface MapmodesTrayProps {
   settingsOpen?: boolean
   stadesterCityCount?: number
   stadesterConfig?: StadesterConfig
+  timelineYear?: number
   userRole?: UserRole
 }
 
@@ -98,13 +109,18 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
     mapModes: map_modes,
     onChangeVariableSelector: on_change_variable_selector,
     onClearCountries: on_clear_countries,
+    onCloseCity: on_close_city,
+    onCloseHistoricalFeature: on_close_historical_feature,
+    onJumpToYear: on_jump_to_year,
     onReorderMapModes: on_reorder_map_modes,
     onSelectLayer: on_select_layer,
     onSetCameraTilt: on_set_camera_tilt,
     onToggleCountriesMode: on_toggle_countries_mode,
     onToggleCountry: on_toggle_country,
     onToggleMapMode: on_toggle_map_mode,
+    selectedCity: selected_city = null,
     selectedCountries: selected_countries,
+    selectedHistoricalFeature: selected_historical_feature = null,
     setCircleOverlayConfig: set_circle_overlay_config,
     setHeightmapConfig: set_heightmap_config,
     setHistoricalBordersConfig: set_historical_borders_config,
@@ -112,6 +128,7 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
     settingsOpen: settings_open = false,
     stadesterCityCount: stadester_city_count = 0,
     stadesterConfig: stadester_config,
+    timelineYear: timeline_year = 2025,
     userRole: user_role = 'default',
   } = props
 
@@ -127,6 +144,7 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
   let handle_resize_top: (e: React.MouseEvent) => void
   let handle_resize_top_left: (e: React.MouseEvent) => void
   let is_layer_accessible: (arg0_layer: ParsedDataLayer) => boolean
+  let is_mobile_details_active: boolean
   let is_tray_collapsed: boolean
   let localisation: ReturnType<typeof useLocalisation>
   let max_height_style: string
@@ -144,6 +162,7 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
     localisation = useLocalisation()
     format_string = localisation.formatString
     t = localisation.t
+    is_mobile_details_active = Boolean(is_mobile && (selected_city || selected_historical_feature))
     ;[is_tray_collapsed, set_is_tray_collapsed] = useState<boolean>(false)
     ;[search_query, set_search_query] = useState<string>('')
     ;[expanded_nodes, set_expanded_nodes] = useState<Record<string, boolean>>({
@@ -354,7 +373,7 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
   }, [active_layer_id, historical_borders_config?.enabled, map_modes, stadester_config?.enabled])
 
   //Return statement
-  if (is_tray_collapsed) {
+  if (is_tray_collapsed && !is_mobile_details_active) {
     return (
       <TooltipProvider delayDuration={150}>
         <div
@@ -403,11 +422,13 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
             : '12px',
           height: is_mobile ? 'auto' : `${tray_height}px`,
           maxHeight: is_mobile
-            ? 'calc(var(--app-height, 100dvh) * 0.5)'
+            ? (is_mobile_details_active ? 'calc(var(--app-height, 100dvh) * 0.65)' : 'calc(var(--app-height, 100dvh) * 0.5)')
             : (bottom_clearance !== undefined ? `calc(100dvh - ${bottom_clearance + 28}px)` : 'calc(100dvh - 40px)'),
           maxWidth: is_mobile ? 'calc(100vw - 24px)' : 'calc(100vw - 40px)',
           right: '12px',
-          width: is_mobile ? 'min(340px, calc(100vw - 24px))' : `${tray_width}px`,
+          width: is_mobile
+            ? (is_mobile_details_active ? 'min(360px, calc(100vw - 24px))' : 'min(340px, calc(100vw - 24px))')
+            : `${tray_width}px`,
         }}
         className={`${
           is_mobile ? 'fixed z-30' : 'absolute z-20'
@@ -439,29 +460,92 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
           </>
         )}
         {/* Tray Header */}
-        <div className="flex items-center justify-between border-b border-border pb-1.5 shrink-0">
-          <div className="flex items-center gap-2">
-            <Icon name="layers" className="text-primary text-sm" />
-            <span className="font-bold text-foreground text-xs uppercase tracking-wider">
-              {t.mapmodes.title}
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] px-1.5 py-0.5 bg-primary/20 text-primary border border-primary/40 font-mono font-medium">
-              {format_string(t.mapmodes.activeCount, active_layers_count)}
+        {is_mobile_details_active ? (
+          <div className="flex items-center justify-between border-b border-border pb-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                if (selected_city && on_close_city) {
+                  on_close_city()
+                } else if (selected_historical_feature && on_close_historical_feature) {
+                  on_close_historical_feature()
+                }
+              }}
+              className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors cursor-pointer px-1 py-0.5"
+            >
+              <Icon name="arrow_back" className="text-sm" />
+              <span>Back</span>
+            </button>
+            <span
+              className="font-bold text-foreground text-xs uppercase tracking-wider truncate max-w-[170px]"
+              title={selected_city ? (selected_city.name || 'City Details') : (selected_historical_feature?.properties?.name || 'Border Details')}
+            >
+              {selected_city ? (selected_city.name || 'City Details') : (selected_historical_feature?.properties?.name || 'Border Details')}
             </span>
             <button
               type="button"
-              onClick={() => set_is_tray_collapsed(true)}
+              onClick={() => {
+                if (selected_city && on_close_city) {
+                  on_close_city()
+                } else if (selected_historical_feature && on_close_historical_feature) {
+                  on_close_historical_feature()
+                }
+              }}
               className="p-1 text-muted-foreground hover:text-foreground cursor-pointer"
-              title={t.mapmodes.collapse}
+              title="Close details"
             >
-              <Icon name={is_mobile ? 'close' : 'expand_more'} className="text-sm" />
+              <Icon name="close" className="text-sm" />
             </button>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-center justify-between border-b border-border pb-1.5 shrink-0">
+            <div className="flex items-center gap-2">
+              <Icon name="layers" className="text-primary text-sm" />
+              <span className="font-bold text-foreground text-xs uppercase tracking-wider">
+                {t.mapmodes.title}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] px-1.5 py-0.5 bg-primary/20 text-primary border border-primary/40 font-mono font-medium">
+                {format_string(t.mapmodes.activeCount, active_layers_count)}
+              </span>
+              <button
+                type="button"
+                onClick={() => set_is_tray_collapsed(true)}
+                className="p-1 text-muted-foreground hover:text-foreground cursor-pointer"
+                title={t.mapmodes.collapse}
+              >
+                <Icon name={is_mobile ? 'close' : 'expand_more'} className="text-sm" />
+              </button>
+            </div>
+          </div>
+        )}
 
-        {!is_tray_collapsed && (
+        {is_mobile_details_active && (
+          <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+            {selected_city && (
+              <CityDetailsPanel
+                city={selected_city}
+                currentYear={timeline_year}
+                embedded={true}
+                onClose={on_close_city || (() => {})}
+              />
+            )}
+            {selected_historical_feature && (
+              <HistoricalBorderDetailsPanel
+                countryStats={country_stats}
+                currentYear={timeline_year}
+                embedded={true}
+                feature={selected_historical_feature}
+                isCalculatingStats={is_calculating_stats}
+                onClose={on_close_historical_feature || (() => {})}
+                onJumpToYear={on_jump_to_year}
+              />
+            )}
+          </div>
+        )}
+
+        {!is_mobile_details_active && !is_tray_collapsed && (
           <div className="flex-1 flex flex-col min-h-0 space-y-2">
             {/* Unified Searchbar */}
             <div className="relative shrink-0">
