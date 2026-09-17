@@ -11,6 +11,7 @@ import { ParsedDataLayer } from '@server/layer_parser'
 import { Button } from '@ui/components/button'
 import { Icon } from '@ui/components/icon'
 import { useLocalisation } from '@localisation'
+import { UserRole, isPublicBuild } from '@common'
 
 export interface AnalyticsDrawerProps {
   activeLayer?: ParsedDataLayer | null
@@ -44,7 +45,7 @@ export interface AnalyticsDrawerProps {
   selectedCountries?: CountryFeature[]
   selectedCountry?: CountryFeature | null
   stadesterDataset?: 'stadester_1.1' | 'stadester_1.0'
-  userRole?: 'developer' | 'privileged' | 'default'
+  userRole?: UserRole
 }
 
 /**
@@ -82,7 +83,7 @@ export let AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_prop
     selectedCountries: selected_countries,
     selectedCountry: selected_country,
     stadesterDataset: stadester_dataset = 'stadester_1.1',
-    userRole: user_role = 'developer',
+    userRole: user_role = 'default',
   } = props
 
   //Declare local instance variables
@@ -103,7 +104,7 @@ export let AnalyticsDrawer: React.FC<AnalyticsDrawerProps> = function (arg0_prop
     active_layer?.type === 'raster.age_sex' ||
     active_layer?.id === 'age_sex'
   )
-  let is_dev = user_role === 'developer'
+  let is_dev = user_role === 'developer' && !isPublicBuild()
   let localisation: ReturnType<typeof useLocalisation>
   let right_offset = getAnalyticsPanelRightOffset(is_settings_drawer_open)
   let set_active_tab: React.Dispatch<React.SetStateAction<'cities' | 'pyramid' | 'breakdown' | 'histogram' | 'stats'>>

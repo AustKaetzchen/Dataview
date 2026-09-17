@@ -10,7 +10,7 @@ import {
 import { CountryFeature, CountryStats } from '@framework/geopng/polygon_binning.ts'
 import { Icon } from '@ui/components/icon'
 import { TooltipProvider } from '@ui/components/tooltip'
-import { UserRole } from '@common'
+import { UserRole, isPublicBuild } from '@common'
 import { useLocalisation } from '@localisation'
 import { CountryModeSettings } from './mapmodes/country_mode_settings'
 import {
@@ -110,7 +110,7 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
     settingsOpen: settings_open = false,
     stadesterCityCount: stadester_city_count = 0,
     stadesterConfig: stadester_config,
-    userRole: user_role = 'developer',
+    userRole: user_role = 'default',
   } = props
 
   //Declare local instance variables
@@ -248,9 +248,9 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
   is_layer_accessible = useCallback(
     function (arg0_layer: ParsedDataLayer) {
       let layer = arg0_layer
-      if (user_role === 'developer')
+      if (user_role === 'developer' && !isPublicBuild())
         return true
-      if (user_role === 'privileged')
+      if (user_role === 'privileged' && !isPublicBuild())
         return !layer.permissions?.includes('developer')
       return layer.permissions?.includes('default') || !layer.permissions || layer.permissions.length === 0
     },

@@ -39,12 +39,37 @@ export let createApiMiddleware = function (arg0_options: ApiMiddlewareOptions) {
   let breakdown_cache = new Map<string, { mtime: number; payload: any }>()
   let config_dir = path.resolve(options.configDir)
   let exports_dir = path.resolve(options.exportsDir)
+  let is_public_instance: () => boolean
   let permissions_path = fs.existsSync(path.join(config_dir, 'permissions', 'permissions.json5'))
     ? path.join(config_dir, 'permissions', 'permissions.json5')
     : path.join(config_dir, 'permissions.json5')
   let registry: LayerRegistryCache
 
   //Function body
+  is_public_instance = function () {
+    //Convert from parameters
+
+    //Declare local instance variables
+    let is_public = process.env.VITE_PUBLIC_BUILD === 'true'
+    let parsed: any
+    let raw: string
+
+    //Function body
+    if (fs.existsSync(permissions_path)) {
+      try {
+        raw = fs.readFileSync(permissions_path, 'utf-8')
+        parsed = JSON5.parse(raw)
+        if (parsed.is_public_build)
+          is_public = true
+      } catch {
+        //Ignore
+      }
+    }
+
+    //Return statement
+    return is_public
+  }
+
   //Check fallback for config_dir
   if (!fs.existsSync(path.join(config_dir, 'layers')) && fs.existsSync(path.resolve(process.cwd(), 'common/layers'))) {
     config_dir = path.resolve(process.cwd(), 'common')
@@ -410,6 +435,16 @@ export let createApiMiddleware = function (arg0_options: ApiMiddlewareOptions) {
         })
       }
       return
+    }
+
+    //Guard Clause: Block developer export endpoints on public instances
+    if (pathname.startsWith('/export/') || pathname.startsWith('/api/export/')) {
+      if (is_public_instance()) {
+        res.statusCode = 403
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ error: 'Developer export tools are disabled on public instances.' }))
+        return
+      }
     }
 
     //Route 6: POST /api/export/video

@@ -47,9 +47,9 @@
       video: "Vidéo",
       videoTooltip: "Ouvrir l'exportation vidéo en timelapse",
       roles: {
-        guest: "Rôle : Invité",
-        privileged: "Rôle : Privilégié",
+        default: "Rôle : Par défaut",
         developer: "Rôle : Développeur",
+        privileged: "Rôle : Privilégié",
       },
     },
     visualisation: {

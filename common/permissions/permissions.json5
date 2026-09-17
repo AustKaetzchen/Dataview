@@ -41,5 +41,9 @@
       allowed_layers: ["default"]
     }
   },
-  default_role: "default"
+  default_role: "default",
+  is_public_build: true,
+  allowed_roles_in_public: [
+    "default"
+  ]
 }

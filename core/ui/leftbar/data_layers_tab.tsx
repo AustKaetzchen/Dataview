@@ -5,7 +5,8 @@ import { HistoricalBordersConfig, StadesterConfig } from '@framework/geopng/type
 import { HistoricalBordersSettings } from '@ui/rightbar/mapmodes/historical_borders_settings'
 import { StadesterSettings } from '@ui/rightbar/mapmodes/stadester_settings'
 
-export type UserRole = 'developer' | 'privileged' | 'default'
+import { UserRole, isPublicBuild, isRoleAllowed } from '@common'
+export type { UserRole }
 
 export interface DataLayersTabProps {
   activeLayerId: string | null
@@ -48,7 +49,7 @@ export let DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props) {
     onSelectLayer: on_select_layer,
     stadesterCityCount: stadester_city_count = 0,
     stadesterConfig: stadester_config,
-    userRole: user_role = 'developer',
+    userRole: user_role = 'default',
   } = props
 
   //Declare local instance variables
@@ -59,11 +60,12 @@ export let DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props) {
   let handle_role_change: (arg0_role: UserRole) => void
   let is_layer_accessible: (arg0_layer: ParsedDataLayer) => boolean
   let layer_search: string
-  let roles_list: { description: string; id: UserRole; name: string }[] = [
+  let all_roles: { description: string; id: UserRole; name: string }[] = [
     { description: 'Open access to default data layers', id: 'default', name: 'Default' },
     { description: 'Access to privileged research layers', id: 'privileged', name: 'Privileged' },
     { description: 'Full access + Video Export tools', id: 'developer', name: 'Developer' },
   ]
+  let roles_list = all_roles.filter((arg0_r) => isRoleAllowed(arg0_r.id))
   let selected_category: string
   let set_enable_all_selectors: React.Dispatch<React.SetStateAction<boolean>>
   let set_layer_search: React.Dispatch<React.SetStateAction<string>>
@@ -77,7 +79,7 @@ export let DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props) {
   handle_role_change = useCallback(
     function (arg0_role: UserRole) {
       let r = arg0_role
-      if (on_change_user_role)
+      if (isRoleAllowed(r) && on_change_user_role)
         on_change_user_role(r)
     },
     [on_change_user_role]
@@ -86,9 +88,9 @@ export let DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props) {
   is_layer_accessible = useCallback(
     function (arg0_layer: ParsedDataLayer) {
       let layer = arg0_layer
-      if (user_role === 'developer')
+      if (user_role === 'developer' && !isPublicBuild())
         return true
-      if (user_role === 'privileged')
+      if (user_role === 'privileged' && !isPublicBuild())
         return !layer.permissions.includes('developer')
       //Default role only accesses default layers
       return layer.permissions.includes('default') || layer.permissions.length === 0
@@ -161,7 +163,7 @@ export let DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props) {
             <Icon name="verified_user" className="text-primary text-xs" />
             <span>Active Permissions Role</span>
           </span>
-          {user_role === 'developer' && on_open_video_export && (
+          {!isPublicBuild() && user_role === 'developer' && on_open_video_export && (
             <button
               type="button"
               onClick={on_open_video_export}
@@ -174,25 +176,32 @@ export let DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props) {
           )}
         </div>
 
-        <div className="grid grid-cols-3 gap-1 bg-muted/40 p-0.5 border border-border">
-          {roles_list.map((arg0_r) => {
-            let active = user_role === arg0_r.id
-            return (
-              <button
-                key={arg0_r.id}
-                type="button"
-                onClick={() => handle_role_change(arg0_r.id)}
-                className={`py-1 px-1.5 text-center text-[11px] font-medium transition-colors cursor-pointer ${active
-                    ? 'bg-primary text-primary-foreground font-bold shadow-xs'
-                    : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                title={arg0_r.description}
-              >
-                {arg0_r.name}
-              </button>
-            )
-          })}
-        </div>
+        {roles_list.length > 1 && !isPublicBuild() ? (
+          <div className="grid grid-cols-3 gap-1 bg-muted/40 p-0.5 border border-border">
+            {roles_list.map((arg0_r) => {
+              let active = user_role === arg0_r.id
+              return (
+                <button
+                  key={arg0_r.id}
+                  type="button"
+                  onClick={() => handle_role_change(arg0_r.id)}
+                  className={`py-1 px-1.5 text-center text-[11px] font-medium transition-colors cursor-pointer ${active
+                      ? 'bg-primary text-primary-foreground font-bold shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  title={arg0_r.description}
+                >
+                  {arg0_r.name}
+                </button>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="text-[11px] px-2 py-1 bg-muted/30 border border-border text-muted-foreground flex items-center gap-1.5">
+            <Icon name="lock" className="text-xs text-muted-foreground" />
+            <span>Role: <strong className="text-foreground capitalize">{user_role}</strong> (Public Instance Locked)</span>
+          </div>
+        )}
       </div>
 
       {/* Layer Search & Category Filter */}

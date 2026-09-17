@@ -61,8 +61,8 @@ export interface LocalisationConfig {
       info: string
       infoTooltip: string
       roles: {
+        default: string
         developer: string
-        guest: string
         privileged: string
       }
       video: string

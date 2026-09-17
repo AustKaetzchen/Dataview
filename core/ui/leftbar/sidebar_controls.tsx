@@ -22,7 +22,7 @@ import { Input } from '@ui/components/input'
 import { NumberInput } from '@ui/components/number_input'
 import { Label } from '@ui/components/label'
 import { Icon } from '@ui/components/icon'
-import { UserRole } from '@common'
+import { UserRole, isPublicBuild, isRoleAllowed } from '@common'
 import { useLocalisation } from '@localisation'
 import { ParsedDataLayer } from '@server/layer_parser'
 import { D3ColorPaletteSelector } from './d3_color_palette_selector'
@@ -142,7 +142,7 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
     setPercentileList: set_percentile_list,
     setScaleType: set_scale_type,
     stadesterConfig: stadester_config,
-    userRole: user_role = 'developer',
+    userRole: user_role = 'default',
     width,
   } = props
 
@@ -286,23 +286,39 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
           </button>
 
           <div className="flex items-center gap-1">
-            {/* Role Switcher */}
-            <Select
-              value={user_role}
-              onValueChange={(arg0_v) => on_change_user_role && on_change_user_role(arg0_v as UserRole)}
-            >
-              <SelectTrigger className="h-6 text-[11px] rounded-none bg-muted/40 border-border px-1.5">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="rounded-none">
-                <SelectItem value="guest" className="rounded-none text-xs">{t.sidebar.toolbar.roles.guest}</SelectItem>
-                <SelectItem value="privileged" className="rounded-none text-xs">{t.sidebar.toolbar.roles.privileged}</SelectItem>
-                <SelectItem value="developer" className="rounded-none text-xs">{t.sidebar.toolbar.roles.developer}</SelectItem>
-              </SelectContent>
-            </Select>
+            {/* Role Switcher or Public Locked Badge */}
+            {isPublicBuild() ? (
+              <div
+                className="h-6 text-[11px] bg-muted/40 border border-border px-2 flex items-center gap-1 text-muted-foreground select-none"
+                title="Current instance role locked to Default"
+              >
+                <Icon name="lock" className="text-[10px] text-muted-foreground" />
+                <span>{t.sidebar.toolbar.roles.default}</span>
+              </div>
+            ) : (
+              <Select
+                value={user_role}
+                onValueChange={(arg0_v) => on_change_user_role && on_change_user_role(arg0_v as UserRole)}
+              >
+                <SelectTrigger className="h-6 text-[11px] rounded-none bg-muted/40 border-border px-1.5">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="rounded-none">
+                  {isRoleAllowed('default') && (
+                    <SelectItem value="default" className="rounded-none text-xs">{t.sidebar.toolbar.roles.default}</SelectItem>
+                  )}
+                  {isRoleAllowed('privileged') && (
+                    <SelectItem value="privileged" className="rounded-none text-xs">{t.sidebar.toolbar.roles.privileged}</SelectItem>
+                  )}
+                  {isRoleAllowed('developer') && (
+                    <SelectItem value="developer" className="rounded-none text-xs">{t.sidebar.toolbar.roles.developer}</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            )}
 
             {/* Developer Video Export Button */}
-            {user_role === 'developer' && on_open_video_export && (
+            {!isPublicBuild() && user_role === 'developer' && on_open_video_export && (
               <button
                 type="button"
                 onClick={on_open_video_export}

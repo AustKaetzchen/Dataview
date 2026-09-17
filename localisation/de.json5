@@ -47,9 +47,9 @@
       video: "Video",
       videoTooltip: "Zeitraffer-Videoexport öffnen",
       roles: {
-        guest: "Rolle: Gast",
-        privileged: "Rolle: Privilegiert",
+        default: "Rolle: Standard",
         developer: "Rolle: Entwickler",
+        privileged: "Rolle: Privilegiert",
       },
     },
     visualisation: {

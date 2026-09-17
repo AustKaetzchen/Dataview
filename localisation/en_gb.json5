@@ -47,9 +47,9 @@
       video: "Video",
       videoTooltip: "Open Timelapse Video Export Modal",
       roles: {
-        guest: "Role: Guest",
-        privileged: "Role: Privileged",
+        default: "Role: Default",
         developer: "Role: Developer",
+        privileged: "Role: Privileged",
       },
     },
     visualisation: {

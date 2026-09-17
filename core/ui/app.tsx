@@ -23,14 +23,13 @@ import { computeQuantiles } from '@framework/geopng/scales.ts'
 import { createBinnedRaster } from '@framework/geopng/downsampling.ts'
 import { CountryFeature } from '@framework/geopng/polygon_binning.ts'
 import { useCountryStatsAsync } from '@framework/geopng/use_country_stats_async.ts'
-import { MAP_CONFIG, MAPMODES_CONFIG } from '@common'
+import { MAP_CONFIG, MAPMODES_CONFIG, PERMISSIONS_CONFIG, UserRole, isPublicBuild, isRoleAllowed } from '@common'
 import { SidebarControls } from '@ui/leftbar/sidebar_controls'
 import { MapViewer } from '@ui/map/map_viewer'
 import { AnalyticsDrawer } from '@ui/rightbar/analytics_drawer'
 import { TimelineBar } from '@ui/bottombar/timeline_bar'
 import { VideoExportModal, type StartTimelapseExportOptions } from '@ui/export/video_export_modal'
 import { ParsedDataLayer } from '@server/layer_parser.ts'
-import { UserRole } from '@ui/leftbar/data_layers_tab'
 import { Icon } from '@ui/components/icon'
 import { useStadesterCities, fetchStadesterCitiesAsync } from '@ui/map/use_stadester_cities'
 import { useRasterPipeline, fetchRasterKeyframe, fetchInterpolatedRasterAsync } from '@framework/raster/use_raster_pipeline.ts'
@@ -144,12 +143,28 @@ export let App: React.FC = function () {
     profession: ['agriculture'],
   })
   let [is_loading_layers, set_is_loading_layers] = useState<boolean>(false)
-  let [user_role, set_user_role] = useState<UserRole>('developer')
+  let default_app_role: UserRole = (PERMISSIONS_CONFIG.default_role as UserRole) || 'default'
+  let [user_role, set_user_role] = useState<UserRole>(() => {
+    if (isPublicBuild())
+      return 'default'
+    return isRoleAllowed(default_app_role) ? default_app_role : 'default'
+  })
   let [timeline_year, set_timeline_year] = useState<number>(1950)
   let [is_playing, set_is_playing] = useState<boolean>(false)
   let [playback_speed, set_playback_speed] = useState<number>(1)
   let [snap_to_keyframes, set_snap_to_keyframes] = useState<boolean>(false)
   let [video_export_open, set_video_export_open] = useState<boolean>(false)
+
+  let handle_change_user_role = useCallback(
+    function (arg0_role: UserRole) {
+      let role = arg0_role
+      if (isRoleAllowed(role))
+        set_user_role(role)
+      else
+        console.warn(`[Permissions] Role switch to '${role}' not permitted in current instance.`)
+    },
+    []
+  )
   useEffect(() => {
     let search_params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
     let url_proj = search_params?.get('projection') as ProjectionType | null
@@ -883,10 +898,13 @@ export let App: React.FC = function () {
           mapModes={map_modes}
           maxValOverride={max_val_override}
           minValOverride={min_val_override}
-          onChangeUserRole={set_user_role}
+          onChangeUserRole={handle_change_user_role}
           onChangeVariableSelector={handle_change_variable_selector}
           onFileUpload={handle_file_upload}
-          onOpenVideoExport={() => set_video_export_open(true)}
+          onOpenVideoExport={() => {
+            if (!isPublicBuild() && user_role === 'developer')
+              set_video_export_open(true)
+          }}
           onSelectLayer={handle_select_layer}
           onToggleInfoPanel={() => set_info_panel_open((arg0_prev) => !arg0_prev)}
           onToggleMapMode={handle_toggle_map_mode}
@@ -918,24 +936,26 @@ export let App: React.FC = function () {
       )}
 
       {/* Developer Video Export Modal */}
-      <VideoExportModal
-        activeLayerId={active_layer_id}
-        availableKeyframes={available_keyframes}
-        availableLayers={layers}
-        colorPalette={color_palette}
-        currentProjection={projection}
-        isOpen={video_export_open}
-        legendSubtitle={legend_subtitle}
-        legendTitle={legend_title}
-        maxVal={max_val}
-        maxYear={available_keyframes.length > 0 ? available_keyframes[available_keyframes.length - 1] : 2025}
-        minVal={min_val}
-        minYear={available_keyframes.length > 0 ? available_keyframes[0] : -10000}
-        onClose={() => set_video_export_open(false)}
-        onStartTimelapseExport={handle_start_timelapse_export}
-        renderedCanvas={rendered_canvas}
-        timelineYear={timeline_year}
-      />
+      {!isPublicBuild() && user_role === 'developer' && (
+        <VideoExportModal
+          activeLayerId={active_layer_id}
+          availableKeyframes={available_keyframes}
+          availableLayers={layers}
+          colorPalette={color_palette}
+          currentProjection={projection}
+          isOpen={video_export_open}
+          legendSubtitle={legend_subtitle}
+          legendTitle={legend_title}
+          maxVal={max_val}
+          maxYear={available_keyframes.length > 0 ? available_keyframes[available_keyframes.length - 1] : 2025}
+          minVal={min_val}
+          minYear={available_keyframes.length > 0 ? available_keyframes[0] : -10000}
+          onClose={() => set_video_export_open(false)}
+          onStartTimelapseExport={handle_start_timelapse_export}
+          renderedCanvas={rendered_canvas}
+          timelineYear={timeline_year}
+        />
+      )}
     </div>
   )
 }
