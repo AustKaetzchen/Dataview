@@ -56,7 +56,6 @@ export let data_layer_node: React.FC<data_layer_nodeProps> = function (arg0_prop
   let is_active = active_layer_id === layer.id
   let is_border_dataset_match: boolean
   let is_borders = layer.id === 'statistical_borders' || layer.id === 'detailed_borders' || layer.type === 'vector.polygon' || layer.id.includes('borders')
-  let is_dataset_match: boolean
   let is_node_expanded = Boolean(search_query.trim()) || (expanded_nodes[layer.id] ?? true)
   let is_overlay_active: boolean
   let is_searching = Boolean(search_query.trim())
@@ -71,7 +70,6 @@ export let data_layer_node: React.FC<data_layer_nodeProps> = function (arg0_prop
   is_stadester_dataset_match = is_stadester
     ? (layer.id === 'stadester' || stadester_config?.dataset === layer.id || (!stadester_config?.dataset && layer.id === 'stadester_1.1'))
     : false
-  is_dataset_match = is_borders ? is_border_dataset_match : is_stadester_dataset_match
   is_overlay_active = is_borders
     ? (Boolean(historical_borders_config?.enabled) && is_border_dataset_match)
     : is_stadester
@@ -293,11 +291,14 @@ export let data_layer_node: React.FC<data_layer_nodeProps> = function (arg0_prop
                 if (opts.length > 0 && opts.every(([arg0_k]) => !Number.isNaN(parseInt(arg0_k, 10))))
                   opts.sort((arg0_a, arg0_b) => parseInt(arg0_a[0], 10) - parseInt(arg0_b[0], 10))
 
+                let valid_keys = opts.map(([k]) => k)
                 if (Array.isArray(raw_val)) {
-                  selected_vals = raw_val
+                  selected_vals = raw_val.filter((arg0_v) => valid_keys.includes(arg0_v))
                 } else if (typeof raw_val === 'string' && raw_val.length > 0) {
-                  selected_vals = [raw_val]
-                } else if (opts[0]?.[0]) {
+                  if (valid_keys.includes(raw_val))
+                    selected_vals = [raw_val]
+                }
+                if (selected_vals.length === 0 && opts[0]?.[0]) {
                   selected_vals = [opts[0][0]]
                 }
 
@@ -361,9 +362,27 @@ export let data_layer_node: React.FC<data_layer_nodeProps> = function (arg0_prop
                                 if (!is_active && on_select_layer)
                                   on_select_layer(layer.id)
                                 if (on_change_variable_selector) {
-                                  let next = is_opt_selected
-                                    ? selected_vals.filter((arg0_k) => arg0_k !== arg0_opt_key)
-                                    : [...selected_vals, arg0_opt_key]
+                                  let is_shift = Boolean(arg0_e.shiftKey)
+                                  let next: string[]
+                                  if (is_shift && selected_vals.length > 0) {
+                                    let all_keys = opts.map(([k]) => k)
+                                    let last_selected_idx = all_keys.indexOf(selected_vals[selected_vals.length - 1])
+                                    let target_idx = all_keys.indexOf(arg0_opt_key)
+                                    if (last_selected_idx !== -1 && target_idx !== -1) {
+                                      let min_idx = Math.min(last_selected_idx, target_idx)
+                                      let max_idx = Math.max(last_selected_idx, target_idx)
+                                      let range_keys = all_keys.slice(min_idx, max_idx + 1)
+                                      next = Array.from(new Set([...selected_vals, ...range_keys]))
+                                    } else {
+                                      next = is_opt_selected
+                                        ? selected_vals.filter((arg0_k) => arg0_k !== arg0_opt_key)
+                                        : [...selected_vals, arg0_opt_key]
+                                    }
+                                  } else {
+                                    next = is_opt_selected
+                                      ? selected_vals.filter((arg0_k) => arg0_k !== arg0_opt_key)
+                                      : [...selected_vals, arg0_opt_key]
+                                  }
                                   if (next.length === 0)
                                     next = [arg0_opt_key]
                                   on_change_variable_selector(arg0_var_key, next)

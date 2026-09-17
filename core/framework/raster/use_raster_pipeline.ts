@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import {
   AppMode,
   DataFormat,
@@ -85,6 +85,7 @@ export function useRasterPipeline (arg0_params: UseRasterPipelineParams): UseRas
   let abort_controller_ref = useRef<AbortController | null>(null)
   let active_file_name: string
   let active_layer_id_ref = useRef<string | null>(active_layer_id)
+  let clear_cache: () => void
   let diff_name_a: string
   let diff_name_b: string
   let display_raster: DecodedRaster | null
@@ -123,6 +124,12 @@ export function useRasterPipeline (arg0_params: UseRasterPipelineParams): UseRas
   ;[raw_bytes_b, set_raw_bytes_b] = useState<Uint8Array | null>(null)
 
   active_layer_id_ref.current = active_layer_id
+
+  clear_cache = useCallback(() => {
+    raster_cache_ref.current.clear()
+    last_interp_pair_ref.current = null
+    last_interp_raster_ref.current = null
+  }, [])
 
   //Clear cache when performant mode is toggled
   useEffect(() => {
@@ -192,8 +199,23 @@ export function useRasterPipeline (arg0_params: UseRasterPipelineParams): UseRas
     let is_interpolating = !snap_to_keyframes && prev_year !== next_year && timeline_year > prev_year && timeline_year < next_year
 
     let effective_format: DataFormat = (active_layer.encoding as DataFormat) || (active_layer as any).format || data_format
-    let effective_selectors = active_variable_selectors
-    let has_selectors = Boolean(active_layer.variable_selectors && Object.keys(active_layer.variable_selectors).length > 0) || Boolean((active_layer as any).has_selectors)
+    let effective_selectors: Record<string, string | string[]> = {}
+    let has_selectors = Boolean(active_layer.variable_selectors && Object.keys(active_layer.variable_selectors).length > 0)
+
+    if (has_selectors && active_layer.variable_selectors) {
+      let valid_keys = Object.keys(active_layer.variable_selectors)
+      for (let i = 0; i < valid_keys.length; i++) {
+        let sk = valid_keys[i]
+        let sel_def = active_layer.variable_selectors[sk]
+        let opt_keys = Object.keys(sel_def.options || {})
+        let raw_val = active_variable_selectors[sk]
+        let chosen_vals = Array.isArray(raw_val) ? raw_val : [raw_val || opt_keys[0] || '']
+        let valid_chosen_vals = chosen_vals.filter((arg0_val) => sel_def.options[arg0_val])
+        if (valid_chosen_vals.length === 0 && opt_keys.length > 0)
+          valid_chosen_vals = [opt_keys[0]]
+        effective_selectors[sk] = valid_chosen_vals
+      }
+    }
 
     let po_key = typeof layer_pixel_offset === 'number'
       ? `po${layer_pixel_offset}`
@@ -409,7 +431,7 @@ export function useRasterPipeline (arg0_params: UseRasterPipelineParams): UseRas
   //Return statement
   return {
     activeFileName: active_file_name,
-    clearCache: () => raster_cache_ref.current.clear(),
+    clearCache: clear_cache,
     diffNameA: diff_name_a,
     diffNameB: diff_name_b,
     displayRaster: display_raster,

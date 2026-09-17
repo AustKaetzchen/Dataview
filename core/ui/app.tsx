@@ -40,6 +40,57 @@ import { useAppLayoutState } from './use_app_layout_state'
 import { useHeadlessExport } from './export/use_headless_export'
 
 /**
+ * Resolves the default variable selectors for a given data layer, preserving valid existing options.
+ *
+ * @param {ParsedDataLayer | null} arg0_layer
+ * @param {Record<string, string | string[]>} [arg1_existing_selectors={}]
+ *
+ * @returns {Record<string, string[]>}
+ */
+export let getDefaultSelectorsForLayer = function (
+  arg0_layer: ParsedDataLayer | null,
+  arg1_existing_selectors?: Record<string, string | string[]>
+): Record<string, string[]> {
+  //Convert from parameters
+  let existing_selectors = (arg1_existing_selectors) ? arg1_existing_selectors : {}
+  let layer = arg0_layer
+
+  //Declare local instance variables
+  let all_selector_keys: string[]
+  let default_selectors: Record<string, string[]> = {}
+
+  //Guard clauses
+  if (!layer || !layer.variable_selectors)
+    return default_selectors
+
+  //Function body
+  all_selector_keys = Object.keys(layer.variable_selectors)
+  for (let i = 0; i < all_selector_keys.length; i++) {
+    let local_curr: string | string[]
+    let local_def = layer.variable_selectors[all_selector_keys[i]]
+    let local_key = all_selector_keys[i]
+    let local_valid_options = (local_def && local_def.options) ? Object.keys(local_def.options) : []
+
+    local_curr = existing_selectors[local_key]
+    if (local_curr) {
+      let local_values = Array.isArray(local_curr) ? local_curr : [local_curr]
+      let local_valid_values = local_values.filter((arg0_val) => local_valid_options.includes(arg0_val))
+
+      if (local_valid_values.length > 0) {
+        default_selectors[local_key] = local_valid_values
+        continue
+      }
+    }
+
+    if (local_valid_options.length > 0)
+      default_selectors[local_key] = [local_valid_options[0]]
+  }
+
+  //Return statement
+  return default_selectors
+}
+
+/**
  * Main application root component managing raster datasets, map layers, and reactive view state.
  *
  * @returns {React.ReactElement}
@@ -319,16 +370,25 @@ export let App: React.FC = function () {
   let deferred_selected_countries = useDeferredValue(selected_countries)
 
   let handle_change_variable_selector = useCallback((arg0_key: string, arg1_option: string | string[]) => {
+    //Convert from parameters
     let key = arg0_key
     let option = arg1_option
+
+    //Function body
     set_active_variable_selectors((arg0_prev) => ({
       ...arg0_prev,
       [key]: option,
     }))
-  }, [])
+    set_max_val_override('')
+    set_min_val_override('')
+    set_raster_version((arg0_v: number) => arg0_v + 1)
+  }, [set_max_val_override, set_min_val_override, set_raster_version])
 
   let handle_select_layer = useCallback((arg0_layer_id: string) => {
+    //Convert from parameters
     let layer_id = arg0_layer_id
+
+    //Function body
     if (layer_id === 'lfpr')
       layer_id = 'lfpr.lfpr_female'
     if (layer_id === 'statistical_borders') {
@@ -338,15 +398,60 @@ export let App: React.FC = function () {
       }))
       return
     }
+
+    let target_layer = layers[layer_id]
+    if (layer_id.includes('.') && (!target_layer || !target_layer.variable_selectors)) {
+      let parent_id = layer_id.split('.')[0]
+      let parent = layers[parent_id]
+      if (parent && parent.sub_layers) {
+        let sub = parent.sub_layers.find((arg0_s) => arg0_s.id === layer_id)
+        if (sub)
+          target_layer = sub
+      }
+    }
+
+    let next_selectors = getDefaultSelectorsForLayer(target_layer, active_variable_selectors)
+
     set_active_layer_id(layer_id)
-    let target = layers[layer_id]
-    if (target?.encoding)
-      set_data_format(target.encoding)
-    if (target?.type === 'vector.basemap' || layer_id === 'default_basemap' || layer_id === 'basemap_only')
+    set_active_variable_selectors(next_selectors)
+
+    if (target_layer) {
+      applyLayerLegend(
+        target_layer,
+        next_selectors,
+        set_color_palette,
+        set_invert_palette,
+        set_scale_type,
+        set_legend_title,
+        set_legend_subtitle,
+        set_log_sigma
+      )
+      if (target_layer.encoding)
+        set_data_format(target_layer.encoding)
+    }
+
+    if (target_layer?.type === 'vector.basemap' || layer_id === 'default_basemap' || layer_id === 'basemap_only')
       set_raster_a(null)
+
     set_max_val_override('')
     set_min_val_override('')
-  }, [layers, set_raster_a])
+    set_raster_version((arg0_v: number) => arg0_v + 1)
+  }, [
+    active_variable_selectors,
+    layers,
+    set_color_palette,
+    set_data_format,
+    set_historical_borders_config,
+    set_invert_palette,
+    set_legend_subtitle,
+    set_legend_title,
+    set_log_sigma,
+    set_max_val_override,
+    set_min_val_override,
+    set_raster_a,
+    set_raster_version,
+    set_scale_type,
+  ])
 
   useEffect(() => {
     if (active_layer) {
@@ -375,8 +480,13 @@ export let App: React.FC = function () {
           let sk = sel_keys[i]
           let curr = updated[sk]
           let is_empty = curr === undefined || curr === null || (Array.isArray(curr) && curr.length === 0) || curr === ''
-          if (is_empty) {
-            let opt_keys = Object.keys(active_layer!.variable_selectors![sk].options)
+          let opt_keys = Object.keys(active_layer!.variable_selectors![sk].options)
+          let is_valid = false
+          if (!is_empty) {
+            let curr_arr = Array.isArray(curr) ? curr : [curr]
+            is_valid = curr_arr.some((arg0_val) => opt_keys.includes(arg0_val))
+          }
+          if (is_empty || !is_valid) {
             if (opt_keys.length > 0) {
               updated[sk] = [opt_keys[0]]
               changed = true
@@ -669,6 +779,7 @@ export let App: React.FC = function () {
   //Raster GPU-backed Canvas renderer hook with explicit texture release
   let { rasterBounds: raster_bounds, renderedCanvas: rendered_canvas } = useRasterRenderer({
     activeCountries: active_countries,
+    activeLayerId: active_layer_id,
     activeRaster: display_raster || active_raster,
     breaks: breaks,
     colorPalette: color_palette,
@@ -679,6 +790,7 @@ export let App: React.FC = function () {
     maxVal: max_val,
     minVal: min_val,
     projection: projection,
+    rasterVersion: raster_version,
     scaleType: scale_type,
   })
 
@@ -795,6 +907,7 @@ export let App: React.FC = function () {
           onChangeVariableSelector={handle_change_variable_selector}
           onInspect={handle_app_inspect}
           onSelectLayer={handle_select_layer}
+          rasterVersion={raster_version}
           onToggleUi={() => set_ui_visible((arg0_prev) => !arg0_prev)}
           uiVisible={!is_headless_export && ui_visible && !is_timelapse_exporting}
           isTimelapseExporting={is_timelapse_exporting || is_headless_export}

@@ -11,6 +11,7 @@ import { getPixelOffset } from '@config'
 
 export interface UseRasterRendererParams {
   activeCountries: CountryFeature[]
+  activeLayerId?: string | null
   activeRaster: DecodedRaster | null
   breaks?: number[]
   colorPalette: ColorPalette
@@ -21,6 +22,7 @@ export interface UseRasterRendererParams {
   maxVal: number
   minVal: number
   projection: ProjectionType
+  rasterVersion?: number
   scaleType: ScaleType
 }
 
@@ -39,6 +41,7 @@ export interface UseRasterRendererResult {
 export function useRasterRenderer (arg0_params: UseRasterRendererParams): UseRasterRendererResult {
   //Convert from parameters
   let active_countries = arg0_params.activeCountries
+  let active_layer_id = arg0_params.activeLayerId
   let active_raster = arg0_params.activeRaster
   let breaks = arg0_params.breaks
   let color_palette = arg0_params.colorPalette
@@ -49,6 +52,7 @@ export function useRasterRenderer (arg0_params: UseRasterRendererParams): UseRas
   let max_val = arg0_params.maxVal
   let min_val = arg0_params.minVal
   let projection = arg0_params.projection
+  let raster_version = arg0_params.rasterVersion
   let scale_type = arg0_params.scaleType
 
   //Declare local instance variables
@@ -158,8 +162,9 @@ export function useRasterRenderer (arg0_params: UseRasterRendererParams): UseRas
 
     return { rasterBounds: final_bounds, renderedCanvas: canvas }
   }, [
-    active_raster,
     active_countries,
+    active_layer_id,
+    active_raster,
     breaks,
     color_palette,
     countries_mode,
@@ -169,6 +174,7 @@ export function useRasterRenderer (arg0_params: UseRasterRendererParams): UseRas
     max_val,
     min_val,
     projection,
+    raster_version,
     scale_type,
   ])
 

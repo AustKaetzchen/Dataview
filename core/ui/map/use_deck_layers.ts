@@ -136,7 +136,9 @@ for (let i = 0; i < MAP_CONFIG.basemapLayers.length; i++) {
 }
 
 export interface UseDeckLayersParams {
+  activeLayerId?: string | null
   projection: ProjectionType
+  rasterVersion?: number
   basemap: string
   landGeoJson: any
   equalEarthLandGeoJson: any
@@ -450,7 +452,7 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
     if (rendered_canvas) {
       layers_array.push(
         new TesselatedBitmapLayer({
-          id: `geopng-raster-${projection}-${heightmap_config.enabled ? '3d' : '2d'}-${heightmap_config.elevationScale}`,
+          id: `geopng-raster-${projection}-${options.activeLayerId ?? 'default'}-${options.rasterVersion ?? 0}-${heightmap_config.enabled ? '3d' : '2d'}-${heightmap_config.elevationScale}`,
           bounds: raster_bounds,
           image: rendered_canvas,
           opacity: opacity,
@@ -918,5 +920,7 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
     options.onHoverHistoricalFeature,
     options.timelineYear,
     options.viewState,
+    options.activeLayerId,
+    options.rasterVersion,
   ])
 }

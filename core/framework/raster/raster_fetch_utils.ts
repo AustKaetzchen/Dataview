@@ -7,7 +7,6 @@ import {
   buildDecodedRasterResult,
 } from '@/framework/geopng/decoder'
 import { interpolateRasters } from '@/framework/geopng/interpolate'
-import { getPixelOffset } from '@common'
 
 /**
  * Computes Cartesian product of selector choices.
@@ -247,8 +246,16 @@ export async function fetchSingleDecodedRasterAsync (
   if (cache.has(cache_key))
     return cache.get(cache_key)!
 
+  if (signal?.aborted) {
+    in_flight_fetches.delete(cache_key)
+    return null
+  }
+
   if (in_flight_fetches.has(cache_key))
     return in_flight_fetches.get(cache_key)!
+
+  if (signal)
+    signal.addEventListener('abort', () => in_flight_fetches.delete(cache_key), { once: true })
 
   pending_promise = (async () => {
     try {
@@ -461,8 +468,16 @@ export async function fetchRasterKeyframe (
   if (cache.has(composite_cache_key))
     return cache.get(composite_cache_key)!
 
+  if (signal?.aborted) {
+    in_flight_fetches.delete(composite_cache_key)
+    return null
+  }
+
   if (in_flight_fetches.has(composite_cache_key))
     return in_flight_fetches.get(composite_cache_key)!
+
+  if (signal)
+    signal.addEventListener('abort', () => in_flight_fetches.delete(composite_cache_key), { once: true })
 
   if (combinations.length <= 1) {
     let single_sel = combinations[0] || {}

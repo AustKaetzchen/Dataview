@@ -24,6 +24,7 @@ import {
 } from '@ui/components/tooltip'
 
 export interface MapViewerHUDProps {
+  activeLayerId?: string | null
   analyticsOpen: boolean
   basemap: string
   cameraTilt: number
@@ -61,6 +62,7 @@ export interface MapViewerHUDProps {
   performantMode: boolean
   projection: ProjectionType
   raster?: any
+  rasterVersion?: number
   scaleType: string
   selectedCountries?: CountryFeature[]
   setBasemap: (arg0_id: string) => void
@@ -88,6 +90,7 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
 ) {
   //Convert from parameters
   let props = arg0_props
+  let active_layer_id = props.activeLayerId
   let analytics_open = props.analyticsOpen
   let basemap = props.basemap
   let camera_tilt = props.cameraTilt
@@ -125,6 +128,7 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
   let performant_mode = props.performantMode
   let projection = props.projection
   let raster = props.raster
+  let raster_version = props.rasterVersion ?? 0
   let scale_type = props.scaleType
   let selected_countries = props.selectedCountries
   let set_basemap = props.setBasemap
@@ -205,6 +209,7 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
           {!hide_colourbar && legend_title !== 'None' && (Boolean(raster) || Boolean(has_canvas)) && (
             <div className="pointer-events-auto">
               <ColorBarLegend
+                key={`colorbar-${active_layer_id ?? 'layer'}-${raster_version}-${legend_title}-${legend_subtitle}-${color_palette}`}
                 palette={color_palette}
                 invertPalette={invert_palette}
                 minVal={legend_min}

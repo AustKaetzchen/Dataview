@@ -235,6 +235,11 @@ export let createApiMiddleware = function (arg0_options: ApiMiddlewareOptions) {
         (arg0_k) => arg0_k !== 'layer' && arg0_k !== 'year' && typeof query[arg0_k] === 'string'
       ).sort()
 
+      if (target_layer?.variable_selectors) {
+        let valid_keys = Object.keys(target_layer.variable_selectors)
+        selector_param_keys = selector_param_keys.filter((arg0_k) => valid_keys.includes(arg0_k))
+      }
+
       //Strategy 1: Canonical sorted key (e.g. layer:indicator=net_wealth:1950)
       if (selector_param_keys.length > 0) {
         let combo_str = selector_param_keys.map((arg0_k) => `${arg0_k}=${query[arg0_k]}`).join(':')

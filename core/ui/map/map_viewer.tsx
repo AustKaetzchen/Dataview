@@ -114,6 +114,7 @@ export interface MapViewerProps {
   onTogglePerformantMode?: (enabled: boolean) => void
   onToggleUi?: () => void
   performantMode?: boolean
+  rasterVersion?: number
   selectedCity?: CityFullRecord | null
   selectedCityKey?: string | null
   setStadesterConfig?: React.Dispatch<React.SetStateAction<StadesterConfig>>
@@ -181,6 +182,7 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
   let projection = props.projection
   let raster = props.raster
   let raster_bounds = props.rasterBounds
+  let raster_version = props.rasterVersion
   let rendered_canvas = props.renderedCanvas
   let scale_type = props.scaleType
   let selected_city = props.selectedCity
@@ -528,7 +530,9 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
   })
 
   layers = useDeckLayers({
+    activeLayerId: props.activeLayerId,
     projection,
+    rasterVersion: raster_version,
     basemap,
     landGeoJson: land_geo_json,
     equalEarthLandGeoJson: equal_earth_land_geo_json,
@@ -833,6 +837,8 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
               timelineClearance={timeline_clearance}
               topRightTaken={top_right_taken}
               uiVisible={ui_visible}
+              activeLayerId={props.activeLayerId}
+              rasterVersion={raster_version}
             />
           )
         })()}

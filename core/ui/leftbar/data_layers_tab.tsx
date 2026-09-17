@@ -54,27 +54,24 @@ export let DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props) {
 
   //Declare local instance variables
   let active_layer: ParsedDataLayer | null
-  let enable_all_selectors: boolean
-  let filtered_layers: ParsedDataLayer[]
-  let grouped_categories: Record<string, ParsedDataLayer[]>
-  let handle_role_change: (arg0_role: UserRole) => void
-  let is_layer_accessible: (arg0_layer: ParsedDataLayer) => boolean
-  let layer_search: string
   let all_roles: { description: string; id: UserRole; name: string }[] = [
     { description: 'Open access to default data layers', id: 'default', name: 'Default' },
     { description: 'Access to privileged research layers', id: 'privileged', name: 'Privileged' },
     { description: 'Full access + Video Export tools', id: 'developer', name: 'Developer' },
   ]
+  let filtered_layers: ParsedDataLayer[]
+  let grouped_categories: Record<string, ParsedDataLayer[]>
+  let handle_role_change: (arg0_role: UserRole) => void
+  let is_layer_accessible: (arg0_layer: ParsedDataLayer) => boolean
+  let layer_search: string
   let roles_list = all_roles.filter((arg0_r) => isRoleAllowed(arg0_r.id))
   let selected_category: string
-  let set_enable_all_selectors: React.Dispatch<React.SetStateAction<boolean>>
   let set_layer_search: React.Dispatch<React.SetStateAction<string>>
   let set_selected_category: React.Dispatch<React.SetStateAction<string>>
 
     //Function body
     ;[layer_search, set_layer_search] = useState('')
     ;[selected_category, set_selected_category] = useState('all')
-    ;[enable_all_selectors, set_enable_all_selectors] = useState(false)
 
   handle_role_change = useCallback(
     function (arg0_role: UserRole) {
@@ -470,42 +467,96 @@ export let DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props) {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-semibold text-foreground">Variable Selectors</span>
-                <button
-                  type="button"
-                  onClick={() => set_enable_all_selectors((arg0_prev) => !arg0_prev)}
-                  className={`text-[10px] px-1.5 py-0.5 border transition-colors cursor-pointer ${enable_all_selectors
-                      ? 'bg-primary text-primary-foreground border-primary font-bold'
-                      : 'bg-muted/40 text-muted-foreground border-border hover:text-foreground'
-                    }`}
-                  title="Toggle all variable selectors"
-                >
-                  Enable All Selectors
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (active_layer?.variable_selectors && on_change_variable_selector) {
+                        let sel_keys = Object.keys(active_layer.variable_selectors)
+                        for (let i = 0; i < sel_keys.length; i++) {
+                          let s_key = sel_keys[i]
+                          let all_opts = Object.keys(active_layer.variable_selectors[s_key].options)
+                          on_change_variable_selector(s_key, all_opts)
+                        }
+                      }
+                    }}
+                    className="text-[10px] px-1.5 py-0.5 border border-border bg-muted/40 text-muted-foreground hover:text-foreground hover:border-primary transition-colors cursor-pointer"
+                    title="Select all options in all variable selectors"
+                  >
+                    Select All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (active_layer?.variable_selectors && on_change_variable_selector) {
+                        let sel_keys = Object.keys(active_layer.variable_selectors)
+                        for (let i = 0; i < sel_keys.length; i++) {
+                          let s_key = sel_keys[i]
+                          let first_opt = Object.keys(active_layer.variable_selectors[s_key].options)[0]
+                          on_change_variable_selector(s_key, first_opt ? [first_opt] : [])
+                        }
+                      }
+                    }}
+                    className="text-[10px] px-1.5 py-0.5 border border-border bg-muted/40 text-muted-foreground hover:text-foreground hover:border-primary transition-colors cursor-pointer"
+                    title="Reset all variable selectors to default"
+                  >
+                    Reset All
+                  </button>
+                </div>
               </div>
 
               {Object.keys(active_layer.variable_selectors).map((arg0_sel_key) => {
-                let sel = active_layer.variable_selectors![arg0_sel_key]
                 let raw_val = active_variable_selectors[arg0_sel_key]
+                let sel = active_layer.variable_selectors![arg0_sel_key]
                 let selected_vals: string[] = []
+                let valid_opt_keys = Object.keys(sel.options)
+                if (valid_opt_keys.length > 0 && valid_opt_keys.every((arg0_k) => !Number.isNaN(parseInt(arg0_k, 10))))
+                  valid_opt_keys.sort((arg0_a, arg0_b) => parseInt(arg0_a, 10) - parseInt(arg0_b, 10))
+
                 if (Array.isArray(raw_val)) {
-                  selected_vals = raw_val
+                  selected_vals = raw_val.filter((arg0_v: string) => valid_opt_keys.includes(arg0_v))
                 } else if (typeof raw_val === 'string' && raw_val.length > 0) {
-                  selected_vals = [raw_val]
-                } else if (Object.keys(sel.options)[0]) {
-                  selected_vals = [Object.keys(sel.options)[0]]
+                  if (valid_opt_keys.includes(raw_val))
+                    selected_vals = [raw_val]
                 }
+                if (selected_vals.length === 0 && valid_opt_keys[0])
+                  selected_vals = [valid_opt_keys[0]]
 
                 let display_label = selected_vals.map((arg0_k) => sel.options[arg0_k]?.name || arg0_k).join(', ')
 
                 return (
                   <div key={arg0_sel_key} className="space-y-1 bg-muted/20 p-1.5 border border-border">
-                    <div className="flex justify-between text-[11px]">
+                    <div className="flex items-center justify-between text-[11px]">
                       <span className="font-medium text-foreground">{sel.name}</span>
-                      <span className="text-primary font-mono font-bold truncate max-w-[150px]">{display_label}</span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-primary font-mono font-bold truncate max-w-[120px]">{display_label}</span>
+                        <span className="text-muted-foreground/40">•</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (on_change_variable_selector)
+                              on_change_variable_selector(arg0_sel_key, valid_opt_keys)
+                          }}
+                          className="text-[10px] text-primary hover:underline font-mono cursor-pointer"
+                        >
+                          All
+                        </button>
+                        <span className="text-muted-foreground/40">•</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (on_change_variable_selector)
+                              on_change_variable_selector(arg0_sel_key, valid_opt_keys[0] ? [valid_opt_keys[0]] : [])
+                          }}
+                          className="text-[10px] text-muted-foreground hover:underline font-mono cursor-pointer"
+                        >
+                          Reset
+                        </button>
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-1 flex-wrap">
-                      {Object.keys(sel.options).map((arg0_opt_key) => {
+                      {valid_opt_keys.map((arg0_opt_key) => {
                         let opt = sel.options[arg0_opt_key]
                         let is_opt_active = selected_vals.includes(arg0_opt_key)
 
@@ -514,21 +565,30 @@ export let DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props) {
                             key={arg0_opt_key}
                             type="button"
                             onClick={(arg0_e) => {
-                              let is_modifier = Boolean(arg0_e.ctrlKey || arg0_e.metaKey || arg0_e.shiftKey)
+                              let is_shift = Boolean(arg0_e.shiftKey)
                               let next_vals: string[]
-                              if (is_modifier) {
-                                if (is_opt_active) {
-                                  next_vals = selected_vals.filter((arg0_v) => arg0_v !== arg0_opt_key)
-                                  if (next_vals.length === 0)
-                                    next_vals = [arg0_opt_key]
+                              if (is_shift && selected_vals.length > 0) {
+                                let last_selected_idx = valid_opt_keys.indexOf(selected_vals[selected_vals.length - 1])
+                                let target_idx = valid_opt_keys.indexOf(arg0_opt_key)
+                                if (last_selected_idx !== -1 && target_idx !== -1) {
+                                  let min_idx = Math.min(last_selected_idx, target_idx)
+                                  let max_idx = Math.max(last_selected_idx, target_idx)
+                                  let range_keys = valid_opt_keys.slice(min_idx, max_idx + 1)
+                                  next_vals = Array.from(new Set([...selected_vals, ...range_keys]))
                                 } else {
-                                  next_vals = [...selected_vals, arg0_opt_key]
+                                  next_vals = is_opt_active
+                                    ? selected_vals.filter((arg0_v) => arg0_v !== arg0_opt_key)
+                                    : [...selected_vals, arg0_opt_key]
                                 }
                               } else {
-                                //Single-select: switch directly to clicked category
-                                next_vals = [arg0_opt_key]
+                                next_vals = is_opt_active
+                                  ? selected_vals.filter((arg0_v) => arg0_v !== arg0_opt_key)
+                                  : [...selected_vals, arg0_opt_key]
                               }
-                              on_change_variable_selector(arg0_sel_key, next_vals)
+                              if (next_vals.length === 0)
+                                next_vals = [arg0_opt_key]
+                              if (on_change_variable_selector)
+                                on_change_variable_selector(arg0_sel_key, next_vals)
                             }}
                             className={`px-2 py-0.5 text-[10px] border transition-colors cursor-pointer flex items-center gap-1 ${is_opt_active
                                 ? 'bg-primary text-primary-foreground border-primary font-bold shadow-xs'

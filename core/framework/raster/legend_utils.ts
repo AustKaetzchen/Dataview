@@ -2,6 +2,47 @@ import { ColorPalette, ScaleType } from '@framework/geopng/types'
 import { ParsedDataLayer } from '@server/layer_parser.ts'
 import { formatCohortDisplay } from '@ui/map/click_info_panel'
 
+let COLOURSCHEME_MAP: Record<string, ColorPalette> = {
+  blues: 'Blues',
+  brbg: 'BrBG',
+  bugn: 'BuGn',
+  bupu: 'BuPu',
+  cividis: 'Cividis',
+  cool: 'Cool',
+  cubehelixdefault: 'CubehelixDefault',
+  gnbu: 'GnBu',
+  greens: 'Greens',
+  greys: 'Greys',
+  inferno: 'Inferno',
+  magma: 'Magma',
+  oranges: 'Oranges',
+  orrd: 'OrRd',
+  piyg: 'PiYG',
+  plasma: 'Plasma',
+  prgn: 'PRGn',
+  pubu: 'PuBu',
+  pubugn: 'PuBuGn',
+  puor: 'PuOr',
+  purd: 'PuRd',
+  purples: 'Purples',
+  rainbow: 'Rainbow',
+  rdbu: 'RdBu',
+  rdgy: 'RdGy',
+  rdpu: 'RdPu',
+  rdylbu: 'RdYlBu',
+  rdylgn: 'RdYlGn',
+  reds: 'Reds',
+  sinebow: 'Sinebow',
+  spectral: 'Spectral',
+  turbo: 'Turbo',
+  viridis: 'Viridis',
+  warm: 'Warm',
+  ylgn: 'YlGn',
+  ylgnbu: 'YlGnBu',
+  ylorbr: 'YlOrBr',
+  ylorrd: 'YlOrRd',
+}
+
 /**
  * Maps raw JSON5 colourscheme strings to the corresponding D3 ColorPalette enum name.
  *
@@ -17,29 +58,7 @@ export let mapColourschemeToPalette = function (arg0_scheme?: string): ColorPale
   let s = raw.toLowerCase().replace(/[^a-z]/g, '')
 
   //Return statement
-  if (s === 'rdylgn')
-    return 'RdYlGn'
-  if (s === 'turbo')
-    return 'Turbo'
-  if (s === 'cividis')
-    return 'Cividis'
-  if (s === 'plasma')
-    return 'Plasma'
-  if (s === 'reds')
-    return 'Reds'
-  if (s === 'blues')
-    return 'Blues'
-  if (s === 'ylorrd')
-    return 'YlOrRd'
-  if (s === 'ylgnbu')
-    return 'YlGnBu'
-  if (s === 'brbg')
-    return 'BrBG'
-  if (s === 'greens')
-    return 'Greens'
-  if (s === 'viridis')
-    return 'Viridis'
-  return null
+  return COLOURSCHEME_MAP[s] || null
 }
 
 /**
@@ -97,14 +116,22 @@ export let applyLayerLegend = function (
       let opt_keys = Object.keys(layer.variable_selectors[sk]?.options || {})
       let raw_val = selectors[sk]
       let chosen_vals = Array.isArray(raw_val) ? raw_val : [raw_val || opt_keys[0] || '']
-      let primary_val = chosen_vals[0] || ''
+      let valid_chosen_vals = chosen_vals.filter((arg0_val) => layer.variable_selectors![sk]?.options[arg0_val])
+      if (valid_chosen_vals.length === 0 && opt_keys.length > 0)
+        valid_chosen_vals = [opt_keys[0]]
+      let primary_val = valid_chosen_vals[0] || ''
       if (primary_val && layer.variable_selectors[sk]?.options[primary_val]) {
         let opt = layer.variable_selectors[sk].options[primary_val]
         if (opt.legend)
           candidate_legend = opt.legend
         if (opt.name) {
-          if (chosen_vals.length > 1) {
-            selected_option_names.push(`${chosen_vals.length} selected`)
+          if (valid_chosen_vals.length > 1) {
+            let names = valid_chosen_vals.map((arg0_val) => layer.variable_selectors![sk].options[arg0_val]?.name || arg0_val)
+            if (names.length <= 3) {
+              selected_option_names.push(names.join(', '))
+            } else {
+              selected_option_names.push(`${names.slice(0, 2).join(', ')} +${names.length - 2}`)
+            }
           } else if (opt.name === 'Total' && sel_keys.length > 1) {
             //Skip redundant Total when other specific cohort option is present
           } else {
@@ -124,12 +151,21 @@ export let applyLayerLegend = function (
       }
     } else if (layer.variable_selectors?.profession) {
       //2. Professions / occupations breakdown
-      let prof_key = Array.isArray(selectors.profession) ? selectors.profession[0] : selectors.profession
-      let prof_name = layer.variable_selectors.profession?.options?.[prof_key]?.name || prof_key
-      let gender_key = Array.isArray(selectors.gender) ? selectors.gender[0] : selectors.gender
-      let gender_name = (gender_key && gender_key !== 't' && layer.variable_selectors.gender?.options?.[gender_key]?.name)
-        ? layer.variable_selectors.gender.options[gender_key].name
-        : null
+      let prof_keys = Array.isArray(selectors.profession)
+        ? selectors.profession
+        : (selectors.profession ? [selectors.profession] : [])
+      let prof_names = prof_keys.map((arg0_k) => layer.variable_selectors?.profession?.options?.[arg0_k]?.name || arg0_k)
+      let prof_name = prof_names.length > 3
+        ? `${prof_names.slice(0, 3).join(', ')} (+${prof_names.length - 3})`
+        : prof_names.join(', ')
+
+      let gender_keys = Array.isArray(selectors.gender)
+        ? selectors.gender
+        : (selectors.gender ? [selectors.gender] : [])
+      let gender_names = gender_keys
+        .filter((arg0_k) => arg0_k !== 't')
+        .map((arg0_k) => layer.variable_selectors?.gender?.options?.[arg0_k]?.name || arg0_k)
+      let gender_name = gender_names.length > 0 ? gender_names.join(', ') : null
 
       let prof_label = (gender_name && gender_name !== 'Total') ? `${prof_name} (${gender_name})` : prof_name
       if (prof_label) {
@@ -150,6 +186,8 @@ export let applyLayerLegend = function (
     mapped_palette = mapColourschemeToPalette(candidate_legend.colourscheme)
     if (mapped_palette)
       set_palette(mapped_palette)
+  } else {
+    set_palette('Plasma')
   }
 
   if (candidate_legend?.inverted !== undefined)
