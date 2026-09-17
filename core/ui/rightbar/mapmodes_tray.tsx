@@ -361,24 +361,30 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
           id="dataview-mapmodes-tray"
           style={{
             bottom: (bottom_clearance !== undefined) ? `${bottom_clearance}px` : '12px',
+            maxWidth: is_mobile ? 'calc(100vw - 24px)' : 'calc(100vw - 40px)',
             right: '12px',
+            width: is_mobile ? 'min(340px, calc(100vw - 24px))' : `${tray_width}px`,
           }}
           className="absolute z-20"
         >
           <button
             type="button"
             onClick={() => set_is_tray_collapsed(false)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-card/95 backdrop-blur-md border border-border hover:border-primary text-card-foreground shadow-2xl rounded-none cursor-pointer transition-colors select-none font-sans group"
+            className="w-full flex items-center justify-between px-2.5 py-1.5 bg-card/95 border border-border hover:border-primary text-card-foreground shadow-2xl rounded-none cursor-pointer transition-colors select-none font-sans group"
             title={t.mapmodes.expand}
           >
-            <Icon name="layers" className="text-primary text-sm group-hover:scale-105 transition-transform" />
-            <span className="font-bold text-foreground text-xs uppercase tracking-wider">
-              {t.mapmodes.title}
-            </span>
-            <span className="text-[10px] px-1.5 py-0.5 bg-primary/20 text-primary border border-primary/40 font-mono font-medium">
-              {format_string(t.mapmodes.activeCount, active_layers_count)}
-            </span>
-            <Icon name="expand_less" className="text-sm text-muted-foreground group-hover:text-foreground transition-colors ml-0.5" />
+            <div className="flex items-center gap-2">
+              <Icon name="layers" className="text-primary text-sm group-hover:scale-105 transition-transform" />
+              <span className="font-bold text-foreground text-xs uppercase tracking-wider">
+                {t.mapmodes.title}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] px-1.5 py-0.5 bg-primary/20 text-primary border border-primary/40 font-mono font-medium">
+                {format_string(t.mapmodes.activeCount, active_layers_count)}
+              </span>
+              <Icon name="expand_less" className="text-sm text-muted-foreground group-hover:text-foreground transition-colors ml-0.5" />
+            </div>
           </button>
         </div>
       </TooltipProvider>

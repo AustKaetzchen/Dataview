@@ -164,11 +164,14 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
   ]
   let current_width = (width !== undefined) ? width : 336
   let handle_resize_mouse_down: (arg0_e: React.MouseEvent) => void
+  let is_sidebar_collapsed: boolean
   let open_folders: Record<string, boolean>
+  let set_is_sidebar_collapsed: React.Dispatch<React.SetStateAction<boolean>>
   let set_open_folders: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
   let toggle_folder: (arg0_folder_key: string) => void
 
     //Function body
+    ;[is_sidebar_collapsed, set_is_sidebar_collapsed] = useState<boolean>(false)
     ;[open_folders, set_open_folders] = useState<Record<string, boolean>>({
       binning: false,
       description: true,
@@ -246,22 +249,22 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
     <>
       <div
         style={is_mobile ? {
-          bottom: '0px',
+          bottom: is_sidebar_collapsed ? 'auto' : '0px',
           maxWidth: 'min(100vw, 360px)',
           top: '48px',
           width: '100%',
         } : {
-          bottom: (bottom_clearance !== undefined) ? `${bottom_clearance}px` : '12px',
+          bottom: is_sidebar_collapsed ? 'auto' : ((bottom_clearance !== undefined) ? `${bottom_clearance}px` : '12px'),
           maxWidth: 'calc(100vw - 24px)',
           width: `${current_width}px`,
         }}
         className={is_mobile
-          ? 'fixed left-0 z-50 flex flex-col bg-card/95 backdrop-blur-md border-r border-border text-card-foreground overflow-hidden select-none font-sans shadow-2xl transition-transform duration-200 ease-out'
+          ? `fixed left-0 z-50 flex flex-col bg-card/95 backdrop-blur-md border-r ${is_sidebar_collapsed ? 'border-b' : ''} border-border text-card-foreground overflow-hidden select-none font-sans shadow-2xl transition-transform duration-200 ease-out`
           : 'absolute top-3 left-3 z-20 flex flex-col bg-card/95 backdrop-blur-md border border-border text-card-foreground overflow-hidden select-none font-sans shadow-2xl transition-all duration-150 ease-out'
         }
       >
         {/* Draggable Right Border Resize Handle */}
-        {!is_mobile && (
+        {!is_mobile && !is_sidebar_collapsed && (
           <div
             onMouseDown={handle_resize_mouse_down}
             className="absolute top-0 right-0 bottom-0 w-2 cursor-col-resize hover:bg-primary/50 active:bg-primary transition-colors z-30 group"
@@ -272,7 +275,7 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
         )}
 
         {/* App Header */}
-        <div className="p-[var(--padding)] border-b border-border bg-card/60 shrink-0">
+        <div className={`p-[var(--padding)] ${is_sidebar_collapsed ? '' : 'border-b border-border'} bg-card/60 shrink-0`}>
           <div className="flex items-center justify-between">
             <h1 className="text-[var(--header-font-size)] font-bold tracking-tight text-foreground flex items-center gap-2">
               <img
@@ -282,10 +285,19 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
               />
               <span className="text-xl tracking-[1px]">{t.app.title}</span>
             </h1>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <span className="text-[var(--body-font-size)] px-2 py-0.5 rounded-none bg-muted text-muted-foreground border border-border font-medium tracking-wider">
                 {t.app.badge}
               </span>
+              <button
+                type="button"
+                onClick={() => set_is_sidebar_collapsed((arg0_prev) => !arg0_prev)}
+                className="p-1 rounded-none hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                title={is_sidebar_collapsed ? t.sidebar.toolbar.expandSidebar : t.sidebar.toolbar.collapseSidebar}
+                aria-label={is_sidebar_collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              >
+                <Icon name={is_sidebar_collapsed ? 'expand_less' : 'expand_more'} className="text-base" />
+              </button>
               {is_mobile && on_close && (
                 <button
                   type="button"
@@ -367,7 +379,8 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
       </div>
 
       {/* Main Scrollable Controls */}
-      <div className="flex-1 p-[var(--padding)] space-y-[var(--padding)] overflow-y-auto">
+      {!is_sidebar_collapsed && (
+        <div className="flex-1 p-[var(--padding)] space-y-[var(--padding)] overflow-y-auto">
         {/* ========================================================================= */}
         {/* SECTION 0: MAPMODE DESCRIPTION */}
         {/* ========================================================================= */}
@@ -909,8 +922,9 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
           )}
         </div>
       </div>
-    </div>
-  </>
+    )}
+  </div>
+</>
   )
 }
 

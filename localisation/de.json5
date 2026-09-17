@@ -42,6 +42,8 @@
       dataLayers: "Datenebenen",
     },
     toolbar: {
+      collapseSidebar: "Seitenleisten-Inhalt einklappen",
+      expandSidebar: "Seitenleisten-Inhalt ausklappen",
       info: "Info",
       infoTooltip: "Info- und Steuerungsfenster umschalten",
       video: "Video",

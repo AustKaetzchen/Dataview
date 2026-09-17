@@ -42,6 +42,8 @@
       dataLayers: "Data Layers",
     },
     toolbar: {
+      collapseSidebar: "Collapse sidebar content",
+      expandSidebar: "Expand sidebar content",
       info: "Info",
       infoTooltip: "Toggle Information & Controls flyout",
       video: "Video",

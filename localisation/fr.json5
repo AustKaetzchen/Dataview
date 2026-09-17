@@ -42,6 +42,8 @@
       dataLayers: "Couches de données",
     },
     toolbar: {
+      collapseSidebar: "Réduire le contenu de la barre latérale",
+      expandSidebar: "Agrandir le contenu de la barre latérale",
       info: "Info",
       infoTooltip: "Basculer le volet d'informations et contrôles",
       video: "Vidéo",

@@ -58,6 +58,8 @@ export interface LocalisationConfig {
       visualisation: string
     }
     toolbar: {
+      collapseSidebar: string
+      expandSidebar: string
       info: string
       infoTooltip: string
       roles: {
