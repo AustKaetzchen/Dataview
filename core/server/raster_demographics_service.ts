@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import { getOptimisationConfig } from '../../common/optimisation/optimisation.ts'
 import { AtlasBordersService } from './AtlasBordersService.ts'
 import {
   AGE_COHORTS,
@@ -387,7 +388,8 @@ function getDemographicYearRasters (
 
   current_mtime = getDemographicSourceMaxMtime(keyframe_year)
   cached_mtime = demographic_cache_mtimes.get(keyframe_year) ?? 0
-  if (current_mtime > cached_mtime) {
+  let opt_info_demo = getOptimisationConfig()
+  if (current_mtime > cached_mtime || opt_info_demo.mtimeMs > cached_mtime) {
     demographic_year_cache.delete(keyframe_year)
     demographic_cache_mtimes.delete(keyframe_year)
   }
@@ -450,7 +452,8 @@ function getSectorYearRasters (arg0_year: number): Record<string, Float32Array> 
 
   current_mtime = getSectorSourceMaxMtime(keyframe_year)
   cached_mtime = sector_cache_mtimes.get(keyframe_year) ?? 0
-  if (current_mtime > cached_mtime) {
+  let opt_info_sec = getOptimisationConfig()
+  if (current_mtime > cached_mtime || opt_info_sec.mtimeMs > cached_mtime) {
     sector_year_cache.delete(keyframe_year)
     sector_cache_mtimes.delete(keyframe_year)
   }
@@ -657,9 +660,10 @@ export function calculateDemographicPyramid (arg0_options: {
 
   //Check if source files were modified after cache
   source_max_mtime = getDemographicSourceMaxMtime(keyframe_year)
+  let opt_info_pyr = getOptimisationConfig()
   if (baked_global_demographics[yr_str]) {
     let baked_mtime = baked_global_demographics[yr_str].lastModified || 0
-    if (source_max_mtime > 0 && source_max_mtime > baked_mtime)
+    if ((source_max_mtime > 0 && source_max_mtime > baked_mtime) || (opt_info_pyr.mtimeMs > 0 && opt_info_pyr.mtimeMs > baked_mtime))
       delete baked_global_demographics[yr_str]
   }
 
@@ -829,9 +833,10 @@ export function calculateSectorBreakdown (arg0_options: {
 
   //Check if source files were modified after cache
   source_max_mtime = getSectorSourceMaxMtime(keyframe_year)
+  let opt_info_sec_calc = getOptimisationConfig()
   if (baked_global_sectors[yr_str]) {
     let baked_mtime = (baked_global_sectors[yr_str] as any).lastModified || 0
-    if (source_max_mtime > 0 && source_max_mtime > baked_mtime)
+    if ((source_max_mtime > 0 && source_max_mtime > baked_mtime) || (opt_info_sec_calc.mtimeMs > 0 && opt_info_sec_calc.mtimeMs > baked_mtime))
       delete baked_global_sectors[yr_str]
   }
 

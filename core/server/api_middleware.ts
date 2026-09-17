@@ -9,6 +9,7 @@ import {
   calculateSectorBreakdown,
   getLayerYearSourceMtime,
 } from './raster_demographics_service.ts'
+import { getOptimisationConfig } from '../../common/optimisation/optimisation.ts'
 import {
   startTimelapseRenderJob,
   getTimelapseJobStatus,
@@ -137,6 +138,15 @@ export let createApiMiddleware = function (arg0_options: ApiMiddlewareOptions) {
       }
       res.statusCode = 200
       res.end(JSON.stringify({ roles: {}, default_role: 'default' }))
+      return
+    }
+
+    //Route 2b: GET /api/optimisation
+    if (pathname === '/optimisation' || pathname === '/api/optimisation') {
+      let opt_info = getOptimisationConfig()
+      res.setHeader('Content-Type', 'application/json')
+      res.statusCode = 200
+      res.end(JSON.stringify(opt_info))
       return
     }
 
@@ -340,11 +350,13 @@ export let createApiMiddleware = function (arg0_options: ApiMiddlewareOptions) {
         let year = params.year || 1950
 
         let current_source_mtime = getLayerYearSourceMtime(layer, year)
+        let opt_info = getOptimisationConfig()
+        let effective_mtime = Math.max(current_source_mtime, opt_info.mtimeMs)
         let geom_key = geometry ? (geometry.coordinates?.[0]?.[0]?.[0] ?? 'custom') : 'none'
         let cache_key = `${layer}:${year}:${country}:${countries_str}:${geom_key}:${raw_x ?? 'all'}:${raw_y ?? 'all'}`
         let cached = breakdown_cache.get(cache_key)
         if (cached) {
-          if (current_source_mtime > 0 && current_source_mtime > cached.mtime) {
+          if (effective_mtime > 0 && effective_mtime > cached.mtime) {
             breakdown_cache.delete(cache_key)
           } else {
             res.statusCode = 200
@@ -370,7 +382,7 @@ export let createApiMiddleware = function (arg0_options: ApiMiddlewareOptions) {
             y: raw_y,
             year,
           }
-          breakdown_cache.set(cache_key, { mtime: current_source_mtime, payload: result })
+          breakdown_cache.set(cache_key, { mtime: effective_mtime, payload: result })
           res.statusCode = 200
           res.setHeader('Content-Type', 'application/json')
           res.end(JSON.stringify(result))
@@ -400,7 +412,7 @@ export let createApiMiddleware = function (arg0_options: ApiMiddlewareOptions) {
             y: raw_y,
             year,
           }
-          breakdown_cache.set(cache_key, { mtime: current_source_mtime, payload: result })
+          breakdown_cache.set(cache_key, { mtime: effective_mtime, payload: result })
           res.statusCode = 200
           res.setHeader('Content-Type', 'application/json')
           res.end(JSON.stringify(result))

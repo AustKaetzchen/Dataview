@@ -9,9 +9,8 @@
 #include <windows.h>
 #include <omp.h>
 
-#define RASTER_WIDTH 4320
-#define RASTER_HEIGHT 2160
-#define RASTER_PIXELS (4320ULL * 2160ULL)
+#define DEFAULT_RASTER_WIDTH 4320
+#define DEFAULT_RASTER_HEIGHT 2160
 
 static const char* AGE_COHORTS[18] = {
     "00", "01", "05", "10", "15", "20", "25", "30", "35",
@@ -33,6 +32,8 @@ typedef struct {
     HANDLE hMapping;
     void* base_ptr;
     const float* data;
+    int width;
+    int height;
 } MappedBmp;
 
 static MappedBmp map_bmp_file(const char* filepath) {
@@ -41,6 +42,8 @@ static MappedBmp map_bmp_file(const char* filepath) {
     mb.hMapping = NULL;
     mb.base_ptr = NULL;
     mb.data = NULL;
+    mb.width = 0;
+    mb.height = 0;
 
     mb.hFile = CreateFileA(
         filepath,
@@ -91,6 +94,10 @@ static MappedBmp map_bmp_file(const char* filepath) {
     }
 
     mb.data = (const float*)(bytes + offset);
+    mb.width = *(const int*)(bytes + 18);
+    mb.height = abs(*(const int*)(bytes + 22));
+    if (mb.width <= 0) mb.width = DEFAULT_RASTER_WIDTH;
+    if (mb.height <= 0) mb.height = DEFAULT_RASTER_HEIGHT;
     return mb;
 }
 
@@ -107,21 +114,26 @@ static void unmap_bmp_file(MappedBmp* mb) {
         CloseHandle(mb->hFile);
         mb->hFile = INVALID_HANDLE_VALUE;
         mb->data = NULL;
+        mb->width = 0;
+        mb->height = 0;
     }
 }
 
 static double accumulate_raster(
     const float* data,
+    int width,
+    int height,
     int is_global,
     const ScanlineSpan* spans,
     int num_spans
 ) {
-    if (!data) return 0.0;
+    if (!data || width <= 0 || height <= 0) return 0.0;
 
     double sum = 0.0;
 
     if (is_global) {
-        for (size_t p = 0; p < RASTER_PIXELS; p++) {
+        size_t total_pixels = (size_t)width * (size_t)height;
+        for (size_t p = 0; p < total_pixels; p++) {
             float v = data[p];
             if (v > 0.0f && v < 1e12f) {
                 sum += (double)v;
@@ -132,14 +144,14 @@ static double accumulate_raster(
 
     for (int s = 0; s < num_spans; s++) {
         int r = spans[s].row;
-        if (r < 0 || r >= RASTER_HEIGHT) continue;
+        if (r < 0 || r >= height) continue;
         int c_start = spans[s].c_start;
         int c_end = spans[s].c_end;
         if (c_start < 0) c_start = 0;
-        if (c_end >= RASTER_WIDTH) c_end = RASTER_WIDTH - 1;
+        if (c_end >= width) c_end = width - 1;
         if (c_start > c_end) continue;
 
-        const float* row_ptr = data + ((size_t)r * RASTER_WIDTH);
+        const float* row_ptr = data + ((size_t)r * width);
         for (int c = c_start; c <= c_end; c++) {
             float v = row_ptr[c];
             if (v > 0.0f && v < 1e12f) {
@@ -243,7 +255,7 @@ int main(int argc, char* argv[]) {
 
             MappedBmp mb = map_bmp_file(filepath);
             if (mb.data) {
-                sums[tid] = accumulate_raster(mb.data, is_global, spans, num_spans);
+                sums[tid] = accumulate_raster(mb.data, mb.width, mb.height, is_global, spans, num_spans);
                 unmap_bmp_file(&mb);
             }
         }
@@ -313,7 +325,7 @@ int main(int argc, char* argv[]) {
 
             MappedBmp mb = map_bmp_file(filepath);
             if (mb.data) {
-                sums[tid] = accumulate_raster(mb.data, is_global, spans, num_spans);
+                sums[tid] = accumulate_raster(mb.data, mb.width, mb.height, is_global, spans, num_spans);
                 unmap_bmp_file(&mb);
             }
         }

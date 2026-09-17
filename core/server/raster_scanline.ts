@@ -1,6 +1,4 @@
-/**
- * Scanline rasterisation and polygon bounding span calculations for GeoJSON geometries.
- */
+import { getOptimisationConfig } from '../../common/optimisation/optimisation.ts'
 
 export interface ScanlineSpan {
   c_end: number
@@ -8,28 +6,29 @@ export interface ScanlineSpan {
   row: number
 }
 
-let RASTER_HEIGHT = 2160
-let RASTER_WIDTH = 4320
+export let RASTER_HEIGHT = 1080
+export let RASTER_WIDTH = 1920
 
 /**
  * Computes scanline bounding spans for a GeoJSON Polygon or MultiPolygon.
  * Uses the Jordan curve even-odd rule across all exterior and hole rings.
  *
  * @param {any} arg0_geometry
- * @param {number} [arg1_w=RASTER_WIDTH]
- * @param {number} [arg2_h=RASTER_HEIGHT]
+ * @param {number} [arg1_w]
+ * @param {number} [arg2_h]
  *
  * @returns {ScanlineSpan[]}
  */
 export function computeScanlineSpans (
   arg0_geometry: any,
-  arg1_w = RASTER_WIDTH,
-  arg2_h = RASTER_HEIGHT
+  arg1_w?: number,
+  arg2_h?: number
 ): ScanlineSpan[] {
   //Convert from parameters
   let geometry = arg0_geometry
-  let h = arg2_h
-  let w = arg1_w
+  let opt_info = getOptimisationConfig()
+  let h = arg2_h !== undefined ? arg2_h : opt_info.height
+  let w = arg1_w !== undefined ? arg1_w : opt_info.width
 
   //Guard clauses
   if (!geometry || !geometry.coordinates)
@@ -134,12 +133,13 @@ export function sumGlobalRaster (arg0_data: Float32Array): number {
 export function sumRasterSpans (
   arg0_spans: ScanlineSpan[],
   arg1_data: Float32Array,
-  arg2_w = RASTER_WIDTH
+  arg2_w?: number
 ): number {
   //Convert from parameters
   let data = arg1_data
+  let opt_info = getOptimisationConfig()
   let spans = arg0_spans
-  let w = arg2_w
+  let w = arg2_w !== undefined ? arg2_w : opt_info.width
 
   //Declare local instance variables
   let sum = 0

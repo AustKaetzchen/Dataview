@@ -28,8 +28,8 @@ if errorlevel 1 (
 
 if not exist bin mkdir bin
 
-echo [build_native] Compiling src\native\raster_reader.c with /O2 /openmp /arch:AVX2 ...
-cl /nologo /O2 /arch:AVX2 /openmp /W3 /Fe:bin\raster_reader.exe /Fo:bin\raster_reader.obj src\native\raster_reader.c
+echo [build_native] Compiling core\framework\native\raster_reader.c with /O2 /openmp /arch:AVX2 ...
+cl /nologo /O2 /arch:AVX2 /openmp /W3 /Fe:bin\raster_reader.exe /Fo:bin\raster_reader.obj core\framework\native\raster_reader.c
 
 if errorlevel 1 (
   echo [build_native] ERROR: Compilation failed!
