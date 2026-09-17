@@ -1,7 +1,7 @@
 {
   // Target downsampling resolution for raster caching and demographic/sectoral breakdown calculations: [width, height]
   downsampling_resolution: [
-    1920,
+    2160,
     1080
   ],
   // Downsampling aggregation method to preserve true totals: "sum" (area aggregation), "average", etc.

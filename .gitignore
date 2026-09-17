@@ -16,6 +16,7 @@ dist-ssr
 docs
 exports
 scratch
+tests
 *.local
 
 # Editor directories and files
