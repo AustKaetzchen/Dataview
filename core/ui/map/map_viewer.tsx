@@ -59,6 +59,7 @@ export interface MapViewerProps {
   invertPalette?: boolean
   minVal: number
   maxVal: number
+  isMobile?: boolean
   isTimelapseExporting?: boolean
   legendSubtitle?: string
   legendTitle: string
@@ -149,6 +150,7 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
   let info_panel_open = props.infoPanelOpen ?? false
   let invert_palette = props.invertPalette
   let is_calculating_stats = props.isCalculatingStats
+  let is_mobile = props.isMobile ?? false
   let is_timelapse_exporting = props.isTimelapseExporting ?? false
   let legend_position = ((props.legendPosition || 'top-left') as string).replace('centre', 'center') as 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'
   let legend_subtitle = props.legendSubtitle
@@ -298,7 +300,12 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
     cameraTilt: camera_tilt,
     effectiveViewState: effective_view_state,
     handleDoubleClick: handle_double_click,
+    handleResetNorth: handle_reset_north,
+    handleResetView: handle_reset_view,
+    handleToggleTilt: handle_toggle_tilt,
     handleViewStateChange: handle_view_state_change,
+    handleZoomIn: handle_zoom_in,
+    handleZoomOut: handle_zoom_out,
     projViewStates: proj_view_states,
     setProjViewStates: set_proj_view_states,
     views,
@@ -802,6 +809,7 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
               infoPanelOpen={info_panel_open}
               inspectData={inspect_data}
               invertPalette={invert_palette}
+              isMobile={is_mobile}
               isTimelapseExporting={is_timelapse_exporting}
               legendBreaks={legend_breaks}
               legendCountryName={legend_country_name || undefined}
@@ -880,6 +888,7 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
           stadesterCityCount={stadester_cities?.length || 0}
           stadesterConfig={stadester_config}
           userRole={props.userRole}
+          isMobile={is_mobile}
         />
       )}
     </div>

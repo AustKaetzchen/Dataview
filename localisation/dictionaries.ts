@@ -112,6 +112,7 @@ export interface LocalisationConfig {
   }
   mapmodes: {
     analyticalTools: string
+    activeCount: string
     collapse: string
     expand: string
     haloDescription: string
@@ -161,6 +162,13 @@ export interface LocalisationConfig {
     title: string
     totalCells: string
     validCells: string
+  }
+  mobile: {
+    analytics: string
+    map: string
+    settings: string
+    sidebar: string
+    timeline: string
   }
   videoExport: {
     close: string

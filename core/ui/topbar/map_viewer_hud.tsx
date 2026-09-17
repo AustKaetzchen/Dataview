@@ -40,6 +40,7 @@ export interface MapViewerHUDProps {
   infoPanelOpen?: boolean
   inspectData?: any
   invertPalette?: boolean
+  isMobile?: boolean
   isTimelapseExporting?: boolean
   legendBreaks?: number[]
   legendCountryName?: string
@@ -97,7 +98,10 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
   let circle_overlay_config = props.circleOverlayConfig
   let color_palette = props.colorPalette
   let colourbar_left = props.colourbarLeft ?? 24
-  let current_colourbar_width = props.colourbarWidth ?? 336
+  let is_mobile = props.isMobile ?? false
+  let current_colourbar_width = is_mobile
+    ? Math.min(props.colourbarWidth ?? 336, typeof window !== 'undefined' ? window.innerWidth - 32 : 320)
+    : (props.colourbarWidth ?? 336)
   let flyout_open = props.flyoutOpen
   let has_canvas = Boolean(props.hasCanvas)
   let heightmap_config = props.heightmapConfig
@@ -264,7 +268,7 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
         <TooltipProvider delayDuration={150}>
           <div
             id="dataview-top-right-toolbar"
-            style={{ right: `${UI_LAYOUT.margin}px`, top: `${UI_LAYOUT.margin}px` }}
+            style={{ right: `${UI_LAYOUT.margin}px`, top: is_mobile ? '54px' : `${UI_LAYOUT.margin}px` }}
             className="absolute z-30 flex flex-col gap-[var(--cell-padding)] bg-card/95 backdrop-blur-md p-[var(--cell-padding)] rounded-none border border-border shadow-md"
           >
             {/* Map Display Settings Toggle */}
@@ -360,15 +364,23 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
 
           {/* Map Display Settings Flyout Panel */}
           {flyout_open && ui_visible && (
-            <div
-              id="dataview-settings-drawer"
-              style={{
-                right: `${UI_LAYOUT.settingsDrawerRight}px`,
-                top: `${UI_LAYOUT.margin}px`,
-                width: `${UI_LAYOUT.settingsDrawerWidth}px`,
-              }}
-              className="absolute z-35 bg-card/98 backdrop-blur-md border border-border rounded-none p-[var(--padding)] shadow-2xl text-[var(--body-font-size)] text-card-foreground animate-in fade-in-0 zoom-in-95 duration-100 font-sans space-y-[var(--padding)] max-h-[360px] overflow-y-auto custom-scrollbar"
-            >
+            <>
+              <div
+                id="dataview-settings-drawer"
+                style={is_mobile ? {
+                  bottom: '0px',
+                  left: '0px',
+                  right: '0px',
+                } : {
+                  right: `${UI_LAYOUT.settingsDrawerRight}px`,
+                  top: `${UI_LAYOUT.margin}px`,
+                  width: `${UI_LAYOUT.settingsDrawerWidth}px`,
+                }}
+                className={is_mobile
+                  ? 'fixed z-50 bg-card/98 backdrop-blur-md border-t border-border rounded-t-lg p-[var(--padding)] shadow-2xl text-[var(--body-font-size)] text-card-foreground animate-in fade-in-0 slide-in-from-bottom-5 duration-150 font-sans space-y-[var(--padding)] max-h-[75vh] overflow-y-auto custom-scrollbar'
+                  : 'absolute z-35 bg-card/98 backdrop-blur-md border border-border rounded-none p-[var(--padding)] shadow-2xl text-[var(--body-font-size)] text-card-foreground animate-in fade-in-0 zoom-in-95 duration-100 font-sans space-y-[var(--padding)] max-h-[360px] overflow-y-auto custom-scrollbar'
+                }
+              >
               <div className="flex items-center justify-between pb-1.5 border-b border-border">
                 <span className="text-[var(--body-font-size)] font-bold text-foreground flex items-center gap-1.5">
                   <Icon name="settings" />
@@ -498,6 +510,7 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
                 </span>
               </div>
             </div>
+          </>
           )}
         </TooltipProvider>
       )}

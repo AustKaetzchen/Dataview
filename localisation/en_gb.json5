@@ -107,6 +107,7 @@
   },
   mapmodes: {
     title: "Mapmodes",
+    activeCount: "£1£ Active",
     layersCount: "£1£ Layers",
     searchPlaceholder: "Search mapmodes ...",
     noResults: "No matching layers found.",
@@ -155,6 +156,13 @@
     mean: "Mean",
     stdDev: "Std Dev",
     median: "Median",
+  },
+  mobile: {
+    sidebar: "Sidebar",
+    timeline: "Timeline",
+    analytics: "Analytics",
+    settings: "Settings",
+    map: "Map",
   },
   videoExport: {
     title: "Timelapse Video Export",

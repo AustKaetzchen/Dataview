@@ -107,6 +107,7 @@
   },
   mapmodes: {
     title: "Kartenmodi",
+    activeCount: "£1£ Aktiv",
     layersCount: "£1£ Ebenen",
     searchPlaceholder: "Kartenmodi & Ebenen suchen...",
     noResults: "Keine passenden Ebenen gefunden.",
@@ -155,6 +156,13 @@
     mean: "Mittelwert",
     stdDev: "Std-Abweichung",
     median: "Median",
+  },
+  mobile: {
+    sidebar: "Sidebar",
+    timeline: "Zeitleiste",
+    analytics: "Analytik",
+    settings: "Optionen",
+    map: "Karte",
   },
   videoExport: {
     title: "Zeitraffer-Videoexport",

@@ -47,6 +47,7 @@ export interface MapmodesTrayProps {
   historicalBordersConfig?: HistoricalBordersConfig
   isCalculatingStats?: boolean
   isLoadingLayers?: boolean
+  isMobile?: boolean
   layers?: Record<string, ParsedDataLayer>
   mapModes: MapModeItem[]
   onChangeVariableSelector?: (arg0_key: string, arg1_option: string | string[]) => void
@@ -92,6 +93,7 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
     historicalBordersConfig: historical_borders_config,
     isCalculatingStats: is_calculating_stats,
     isLoadingLayers: is_loading_layers = false,
+    isMobile: is_mobile = false,
     layers = {},
     mapModes: map_modes,
     onChangeVariableSelector: on_change_variable_selector,
@@ -114,6 +116,7 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
   } = props
 
   //Declare local instance variables
+  let active_layers_count: number
   let all_layer_entries: ParsedDataLayer[]
   let dataset_folders: Record<string, ParsedDataLayer[]>
   let expanded_nodes: Record<string, boolean>
@@ -138,7 +141,6 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
   let tray_height: number
   let tray_width: number
 
-    //Function body
     localisation = useLocalisation()
     format_string = localisation.formatString
     t = localisation.t
@@ -329,23 +331,76 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
     return list.filter((arg0_m) => arg0_m.label.toLowerCase().includes(q))
   }, [map_modes, search_query])
 
+  //Compute active layers and overlays count
+  active_layers_count = useMemo(() => {
+    let count = 0
+
+    if (active_layer_id)
+      count++
+
+    if (historical_borders_config?.enabled)
+      count++
+
+    if (stadester_config?.enabled)
+      count++
+
+    for (let i = 0; i < map_modes.length; i++) {
+      let mode = map_modes[i]
+      if (mode.id !== 'default' && mode.id !== 'historical_borders' && mode.active)
+        count++
+    }
+
+    return count
+  }, [active_layer_id, historical_borders_config?.enabled, map_modes, stadester_config?.enabled])
+
   //Return statement
+  if (is_tray_collapsed) {
+    return (
+      <TooltipProvider delayDuration={150}>
+        <div
+          id="dataview-mapmodes-tray"
+          style={{
+            bottom: (bottom_clearance !== undefined) ? `${bottom_clearance}px` : '12px',
+            right: '12px',
+          }}
+          className="absolute z-20"
+        >
+          <button
+            type="button"
+            onClick={() => set_is_tray_collapsed(false)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-card/95 backdrop-blur-md border border-border hover:border-primary text-card-foreground shadow-2xl rounded-none cursor-pointer transition-colors select-none font-sans group"
+            title={t.mapmodes.expand}
+          >
+            <Icon name="layers" className="text-primary text-sm group-hover:scale-105 transition-transform" />
+            <span className="font-bold text-foreground text-xs uppercase tracking-wider">
+              {t.mapmodes.title}
+            </span>
+            <span className="text-[10px] px-1.5 py-0.5 bg-primary/20 text-primary border border-primary/40 font-mono font-medium">
+              {format_string(t.mapmodes.activeCount, active_layers_count)}
+            </span>
+            <Icon name="expand_less" className="text-sm text-muted-foreground group-hover:text-foreground transition-colors ml-0.5" />
+          </button>
+        </div>
+      </TooltipProvider>
+    )
+  }
+
   return (
     <TooltipProvider delayDuration={150}>
       <div
         id="dataview-mapmodes-tray"
         style={{
           bottom: (bottom_clearance !== undefined) ? `${bottom_clearance}px` : '12px',
-          height: is_tray_collapsed ? 'auto' : `${tray_height}px`,
-          maxHeight: is_tray_collapsed ? 'auto' : (bottom_clearance !== undefined ? `calc(100vh - ${bottom_clearance + 28}px)` : 'calc(100vh - 40px)'),
-          maxWidth: 'calc(100vw - 40px)',
+          height: `${tray_height}px`,
+          maxHeight: is_mobile ? '50vh' : (bottom_clearance !== undefined ? `calc(100vh - ${bottom_clearance + 28}px)` : 'calc(100vh - 40px)'),
+          maxWidth: is_mobile ? 'calc(100vw - 24px)' : 'calc(100vw - 40px)',
           right: '12px',
-          width: `${tray_width}px`,
+          width: is_mobile ? 'min(340px, calc(100vw - 24px))' : `${tray_width}px`,
         }}
         className="absolute z-20 flex flex-col bg-card/95 backdrop-blur-md border border-border shadow-2xl p-2.5 space-y-2 text-[var(--body-font-size)] select-none font-sans overflow-hidden transition-all duration-150 ease-out"
       >
-        {/* Resize Handles (Active when tray is not collapsed) */}
-        {!is_tray_collapsed && (
+        {/* Resize Handles (Active when tray is not collapsed and not mobile) */}
+        {!is_mobile && (
           <>
             {/* Left Border Drag Handle */}
             <div
@@ -379,15 +434,15 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] px-1.5 py-0.5 bg-primary/20 text-primary border border-primary/40 font-mono font-medium">
-              {format_string(t.mapmodes.layersCount, filtered_layers.length + filtered_overlays.length)}
+              {format_string(t.mapmodes.activeCount, active_layers_count)}
             </span>
             <button
               type="button"
-              onClick={() => set_is_tray_collapsed((arg0_prev) => !arg0_prev)}
+              onClick={() => set_is_tray_collapsed(true)}
               className="p-1 text-muted-foreground hover:text-foreground cursor-pointer"
-              title={is_tray_collapsed ? t.mapmodes.expand : t.mapmodes.collapse}
+              title={t.mapmodes.collapse}
             >
-              <Icon name={is_tray_collapsed ? 'expand_less' : 'expand_more'} className="text-sm" />
+              <Icon name={is_mobile ? 'close' : 'expand_more'} className="text-sm" />
             </button>
           </div>
         </div>

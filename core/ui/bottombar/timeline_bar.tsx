@@ -9,11 +9,13 @@ export interface TimelineBarProps {
   availableKeyframes?: number[]
   currentYear: number
   isLoading?: boolean
+  isMobile?: boolean
   isPlaying: boolean
   maxYear?: number
   minYear?: number
   onChangePlaybackSpeed?: (arg0_speed: number) => void
   onChangeYear: (arg0_year: number) => void
+  onClose?: () => void
   onTogglePlay: () => void
   onToggleSnapToKeyframes?: (arg0_snap: boolean) => void
   playbackSpeed?: number
@@ -35,11 +37,13 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
     availableKeyframes: available_keyframes = [],
     currentYear: current_year,
     isLoading: is_loading = false,
+    isMobile: is_mobile = false,
     isPlaying: is_playing,
     maxYear: max_year = 2025,
     minYear: min_year = -10000,
     onChangePlaybackSpeed: on_change_playback_speed,
     onChangeYear: on_change_year,
+    onClose: on_close,
     onTogglePlay: on_toggle_play,
     onToggleSnapToKeyframes: on_toggle_snap_to_keyframes,
     playbackSpeed: playback_speed = 1,
@@ -333,7 +337,13 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
   return (
     <div
       id="dataview-timelinebar-container"
-      style={{
+      style={is_mobile ? {
+        bottom: '12px',
+        left: '8px',
+        right: '8px',
+        width: 'calc(100vw - 16px)',
+        ...style,
+      } : {
         left: 0,
         marginLeft: 'auto',
         marginRight: 'auto',
@@ -345,7 +355,7 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
     >
       <div className="bg-card/95 backdrop-blur-md border border-border shadow-2xl p-2.5 transition-all">
         {/* Top Header Row: Date Badge, Controls, & Settings */}
-        <div className="relative flex items-center justify-between gap-3 pb-2 border-b border-border/60 min-h-[36px]">
+        <div className="relative flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 pb-2 border-b border-border/60 min-h-[36px]">
           <div className="flex items-center gap-2">
             {/* Play/Pause Button */}
             <button
@@ -489,7 +499,7 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
           </div>
 
           {/* Centre Date Badge with Interactive Historical Date Picker */}
-          <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center">
+          <div className="sm:absolute sm:left-1/2 sm:-translate-x-1/2 flex items-center justify-center">
             <button
               type="button"
               onClick={() => set_is_date_picker_open((arg0_prev) => !arg0_prev)}
@@ -528,6 +538,17 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
             >
               <Icon name={is_collapsed ? 'expand_less' : 'expand_more'} />
             </button>
+            {is_mobile && on_close && (
+              <button
+                type="button"
+                onClick={on_close}
+                className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer touch-manipulation"
+                title="Close timeline"
+                aria-label="Close timeline"
+              >
+                <Icon name="close" size="1.1rem" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -574,7 +595,9 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
                         ? { left: `${arg0_m.pos*100}%` }
                         : undefined
                     }
-                    className={`absolute top-0 cursor-pointer hover:text-foreground transition-colors ${align_class}`}
+                    className={`absolute top-0 cursor-pointer hover:text-foreground transition-colors ${align_class} ${
+                      arg0_idx > 0 && arg0_idx < TIMELINE_MILESTONES.length - 1 ? 'hidden sm:inline-block' : ''
+                    }`}
                     onClick={() => handle_jump_year(arg0_m.year)}
                     title={`Jump to ${arg0_m.label}`}
                   >

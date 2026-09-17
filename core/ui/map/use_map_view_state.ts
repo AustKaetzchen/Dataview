@@ -22,7 +22,12 @@ export interface MapViewStateResult {
   cameraTilt: number
   effectiveViewState: any
   handleDoubleClick: () => void
+  handleResetNorth: () => void
+  handleResetView: () => void
+  handleToggleTilt: () => void
   handleViewStateChange: (arg0_e: any) => void
+  handleZoomIn: () => void
+  handleZoomOut: () => void
   projViewStates: Record<ProjectionType, any>
   setProjViewStates: React.Dispatch<React.SetStateAction<Record<ProjectionType, any>>>
   views: any
@@ -44,7 +49,11 @@ export function useMapViewState (arg0_options: MapViewStateOptions): MapViewStat
   let camera_tilt: number
   let effective_view_state: any
   let handle_double_click: () => void
+  let handle_reset_north: () => void
+  let handle_toggle_tilt: () => void
   let handle_view_state_change: (arg0_e: any) => void
+  let handle_zoom_in: () => void
+  let handle_zoom_out: () => void
   let pending_view_state_ref = useRef<any>(null)
   let [proj_view_states, set_proj_view_states] = useState<Record<ProjectionType, any>>({
     EqualEarth: {
@@ -170,6 +179,52 @@ export function useMapViewState (arg0_options: MapViewStateOptions): MapViewStat
     }))
   }, [projection, set_proj_view_states])
 
+  handle_reset_north = useCallback(() => {
+    set_proj_view_states((arg0_prev) => {
+      let current = arg0_prev[projection] || {}
+      if (projection === 'Mercator' || projection === 'Globe') {
+        return {
+          ...arg0_prev,
+          [projection]: {
+            ...current,
+            bearing: 0,
+          },
+        }
+      }
+      return {
+        ...arg0_prev,
+        [projection]: {
+          ...current,
+          rotationOrbit: 0,
+        },
+      }
+    })
+  }, [projection, set_proj_view_states])
+
+  handle_toggle_tilt = useCallback(() => {
+    set_proj_view_states((arg0_prev) => {
+      let current = arg0_prev[projection] || {}
+      if (projection === 'Mercator' || projection === 'Globe') {
+        let is_tilted = (current.pitch || 0) > 10
+        return {
+          ...arg0_prev,
+          [projection]: {
+            ...current,
+            pitch: is_tilted ? 0 : 45,
+          },
+        }
+      }
+      let is_tilted = Math.abs(current.rotationX || 0) > 10
+      return {
+        ...arg0_prev,
+        [projection]: {
+          ...current,
+          rotationX: is_tilted ? 0 : -45,
+        },
+      }
+    })
+  }, [projection, set_proj_view_states])
+
   handle_view_state_change = useCallback(
     (arg0_e: any) => {
       //Convert from parameters
@@ -205,13 +260,47 @@ export function useMapViewState (arg0_options: MapViewStateOptions): MapViewStat
     [projection, set_proj_view_states]
   )
 
+  handle_zoom_in = useCallback(() => {
+    set_proj_view_states((arg0_prev) => {
+      let current = arg0_prev[projection] || {}
+      let max_zoom = current.maxZoom ?? 18
+      let new_zoom = Math.min(max_zoom, (current.zoom ?? 1) + 0.6)
+      return {
+        ...arg0_prev,
+        [projection]: {
+          ...current,
+          zoom: new_zoom,
+        },
+      }
+    })
+  }, [projection, set_proj_view_states])
+
+  handle_zoom_out = useCallback(() => {
+    set_proj_view_states((arg0_prev) => {
+      let current = arg0_prev[projection] || {}
+      let min_zoom = current.minZoom ?? 0
+      let new_zoom = Math.max(min_zoom, (current.zoom ?? 1) - 0.6)
+      return {
+        ...arg0_prev,
+        [projection]: {
+          ...current,
+          zoom: new_zoom,
+        },
+      }
+    })
+  }, [projection, set_proj_view_states])
+
   views = useMemo(() => {
     if (projection === 'Globe') {
       return new SmoothGlobeView({
         controller: {
           doubleClickZoom: false,
           dragMode: 'pan',
+          dragPan: true,
           dragRotate: true,
+          inertia: true,
+          touchRotate: true,
+          touchZoom: true,
           type: SmoothGlobeController,
         },
         id: 'globe-view',
@@ -224,7 +313,11 @@ export function useMapViewState (arg0_options: MapViewStateOptions): MapViewStat
         controller: {
           doubleClickZoom: false,
           dragMode: 'pan',
+          dragPan: true,
           dragRotate: true,
+          inertia: true,
+          touchRotate: true,
+          touchZoom: true,
           type: SmoothOrbitController,
         },
         id: 'equirectangular-view',
@@ -236,7 +329,11 @@ export function useMapViewState (arg0_options: MapViewStateOptions): MapViewStat
         controller: {
           doubleClickZoom: false,
           dragMode: 'pan',
+          dragPan: true,
           dragRotate: true,
+          inertia: true,
+          touchRotate: true,
+          touchZoom: true,
           type: SmoothOrbitController,
         },
         id: 'equal-earth-view',
@@ -247,7 +344,11 @@ export function useMapViewState (arg0_options: MapViewStateOptions): MapViewStat
       controller: {
         doubleClickZoom: false,
         dragMode: 'pan',
+        dragPan: true,
         dragRotate: true,
+        inertia: true,
+        touchRotate: true,
+        touchZoom: true,
         type: SmoothMapController,
       },
       id: 'map-view',
@@ -266,7 +367,12 @@ export function useMapViewState (arg0_options: MapViewStateOptions): MapViewStat
     cameraTilt: camera_tilt,
     effectiveViewState: effective_view_state,
     handleDoubleClick: handle_double_click,
+    handleResetNorth: handle_reset_north,
+    handleResetView: handle_double_click,
+    handleToggleTilt: handle_toggle_tilt,
     handleViewStateChange: handle_view_state_change,
+    handleZoomIn: handle_zoom_in,
+    handleZoomOut: handle_zoom_out,
     projViewStates: proj_view_states,
     setProjViewStates: set_proj_view_states,
     views,

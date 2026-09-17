@@ -28,6 +28,7 @@ import { SidebarControls } from '@ui/leftbar/sidebar_controls'
 import { MapViewer } from '@ui/map/map_viewer'
 import { AnalyticsDrawer } from '@ui/rightbar/analytics_drawer'
 import { TimelineBar } from '@ui/bottombar/timeline_bar'
+import { MobileNavBar } from '@ui/bottombar/mobile_nav_bar'
 import { VideoExportModal, type StartTimelapseExportOptions } from '@ui/export/video_export_modal'
 import { ParsedDataLayer } from '@server/layer_parser.ts'
 import { Icon } from '@ui/components/icon'
@@ -99,9 +100,15 @@ export let App: React.FC = function () {
   //Function body
   let layout_state = useAppLayoutState()
   let {
+    activeMobileTab: active_mobile_tab,
     colourbarWidth: colourbar_width,
     isHeadlessExport: is_headless_export,
+    isMobile: is_mobile,
+    isSmallScreen: is_small_screen,
+    isTablet: is_tablet,
+    isTouch: is_touch,
     legendPosition: legend_position,
+    setActiveMobileTab: set_active_mobile_tab,
     setColourbarWidth: set_colourbar_width,
     setLegendPosition: set_legend_position,
     setSidebarBottomClearance: set_sidebar_bottom_clearance,
@@ -878,8 +885,15 @@ export let App: React.FC = function () {
           setCircleOverlayConfig={set_circle_overlay_config}
           historicalBordersConfig={historical_borders_config}
           setHistoricalBordersConfig={set_historical_borders_config}
-          analyticsOpen={analytics_open}
-          onToggleAnalytics={() => set_analytics_open((arg0_prev) => !arg0_prev)}
+          isMobile={is_mobile}
+          analyticsOpen={is_mobile ? active_mobile_tab === 'analytics' : analytics_open}
+          onToggleAnalytics={() => {
+            if (is_mobile) {
+              set_active_mobile_tab((arg0_prev) => arg0_prev === 'analytics' ? null : 'analytics')
+            } else {
+              set_analytics_open((arg0_prev) => !arg0_prev)
+            }
+          }}
           selectedCountry={selected_countries[0] || null}
           selectedCountries={selected_countries}
           deferredSelectedCountries={deferred_selected_countries}
@@ -892,8 +906,12 @@ export let App: React.FC = function () {
           hoveredCountry={hovered_country}
           onHoverCountry={set_hovered_country}
           countryStats={country_stats}
-          settingsDrawerOpen={settings_drawer_open}
-          onToggleSettingsDrawer={set_settings_drawer_open}
+          settingsDrawerOpen={is_mobile ? active_mobile_tab === 'settings' : settings_drawer_open}
+          onToggleSettingsDrawer={(arg0_open) => {
+            set_settings_drawer_open(arg0_open)
+            if (!arg0_open && is_mobile)
+              set_active_mobile_tab(null)
+          }}
           sidebarWidth={sidebar_width}
           colourbarWidth={colourbar_width}
           onResizeColourbarWidth={set_colourbar_width}
@@ -929,8 +947,13 @@ export let App: React.FC = function () {
 
         {/* ECharts Analytical View Panel (Top Right) */}
         <AnalyticsDrawer
-          isOpen={!is_headless_export && ui_visible && analytics_open && !is_timelapse_exporting}
-          onToggleOpen={() => set_analytics_open(false)}
+          isOpen={!is_headless_export && ui_visible && !is_timelapse_exporting && (is_mobile ? active_mobile_tab === 'analytics' : analytics_open)}
+          isMobile={is_mobile}
+          onToggleOpen={() => {
+            set_analytics_open(false)
+            if (is_mobile)
+              set_active_mobile_tab(null)
+          }}
           raster={display_raster || active_raster}
           scaleType={scale_type}
           logSigma={log_sigma}
@@ -960,16 +983,18 @@ export let App: React.FC = function () {
       </div>
 
       {/* Historical Timeline Scrubber Bar */}
-      {(ui_visible || is_timelapse_exporting || is_headless_export) && (
+      {(ui_visible || is_timelapse_exporting || is_headless_export) && (!is_mobile || active_mobile_tab === 'timeline' || is_timelapse_exporting || is_headless_export) && (
         <TimelineBar
           availableKeyframes={available_keyframes}
           currentYear={timeline_year}
           isLoading={is_loading_raster || (stadester_config.enabled && stadester_result.isLoading)}
+          isMobile={is_mobile}
           isPlaying={is_playing}
           maxYear={available_keyframes.length > 0 ? available_keyframes[available_keyframes.length - 1] : 2025}
           minYear={available_keyframes.length > 0 ? available_keyframes[0] : -10000}
           onChangePlaybackSpeed={set_playback_speed}
           onChangeYear={set_timeline_year}
+          onClose={() => set_active_mobile_tab(null)}
           onTogglePlay={() => set_is_playing((arg0_prev) => !arg0_prev)}
           onToggleSnapToKeyframes={set_snap_to_keyframes}
           playbackSpeed={playback_speed}
@@ -985,7 +1010,7 @@ export let App: React.FC = function () {
       )}
 
       {/* Floating Sidebar Controls Dock */}
-      {!is_headless_export && ui_visible && !is_timelapse_exporting && (
+      {!is_headless_export && ui_visible && !is_timelapse_exporting && (!is_mobile || active_mobile_tab === 'sidebar') && (
         <SidebarControls
           activeFileName={active_file_name}
           activeLayerId={active_layer_id}
@@ -1003,6 +1028,7 @@ export let App: React.FC = function () {
           historicalBordersConfig={historical_borders_config}
           infoPanelOpen={info_panel_open}
           invertPalette={invert_palette}
+          isMobile={is_mobile}
           isLoadingLayers={is_loading_layers || is_loading_raster}
           layers={layers}
           legendSubtitle={legend_subtitle}
@@ -1013,6 +1039,7 @@ export let App: React.FC = function () {
           minValOverride={min_val_override}
           onChangeUserRole={handle_change_user_role}
           onChangeVariableSelector={handle_change_variable_selector}
+          onClose={() => set_active_mobile_tab(null)}
           onFileUpload={handle_file_upload}
           onOpenVideoExport={() => {
             if (!isPublicBuild() && user_role === 'developer')
@@ -1067,6 +1094,21 @@ export let App: React.FC = function () {
           onStartTimelapseExport={handle_start_timelapse_export}
           renderedCanvas={rendered_canvas}
           timelineYear={timeline_year}
+        />
+      )}
+
+      {/* Mobile Bottom Navigation Bar */}
+      {is_mobile && ui_visible && !is_headless_export && !is_timelapse_exporting && (
+        <MobileNavBar
+          activeTab={active_mobile_tab}
+          onSelectTab={(arg0_tab) => {
+            set_active_mobile_tab(arg0_tab)
+            if (arg0_tab === 'analytics') {
+              set_analytics_open(true)
+            } else if (arg0_tab === 'settings') {
+              set_settings_drawer_open(true)
+            }
+          }}
         />
       )}
     </div>

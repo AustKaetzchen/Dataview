@@ -45,6 +45,7 @@ export interface SidebarControlsProps {
   historicalBordersConfig?: HistoricalBordersConfig
   infoPanelOpen?: boolean
   invertPalette: boolean
+  isMobile?: boolean
   isLoadingLayers?: boolean
   layers?: Record<string, ParsedDataLayer>
   legendSubtitle?: string
@@ -55,6 +56,7 @@ export interface SidebarControlsProps {
   minValOverride: string
   onChangeUserRole?: (role: UserRole) => void
   onChangeVariableSelector?: (key: string, option: string | string[]) => void
+  onClose?: () => void
   onFileUpload: (file: File, target: 'single' | 'diff_a' | 'diff_b') => void
   onOpenVideoExport?: () => void
   onSelectLayer?: (layerId: string) => void
@@ -111,6 +113,7 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
     historicalBordersConfig: historical_borders_config,
     infoPanelOpen: info_panel_open,
     invertPalette: invert_palette,
+    isMobile: is_mobile = false,
     layers = {},
     legendSubtitle: legend_subtitle = '',
     legendTitle: legend_title,
@@ -119,6 +122,7 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
     maxValOverride: max_val_override,
     minValOverride: min_val_override,
     onChangeUserRole: on_change_user_role,
+    onClose: on_close,
     onFileUpload: on_file_upload,
     onOpenVideoExport: on_open_video_export,
     onToggleInfoPanel: on_toggle_info_panel,
@@ -239,37 +243,62 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
 
   //Return statement
   return (
-    <div
-      style={{
-        bottom: (bottom_clearance !== undefined) ? `${bottom_clearance}px` : '12px',
-        width: `${current_width}px`,
-      }}
-      className="absolute top-3 left-3 z-20 flex flex-col bg-card/95 backdrop-blur-md border border-border text-card-foreground overflow-hidden select-none font-sans shadow-2xl transition-all duration-150 ease-out"
-    >
-      {/* Draggable Right Border Resize Handle */}
+    <>
       <div
-        onMouseDown={handle_resize_mouse_down}
-        className="absolute top-0 right-0 bottom-0 w-2 cursor-col-resize hover:bg-primary/50 active:bg-primary transition-colors z-30 group"
-        title="Drag right border to resize sidebar"
+        style={is_mobile ? {
+          bottom: '0px',
+          maxWidth: 'min(100vw, 360px)',
+          top: '48px',
+          width: '100%',
+        } : {
+          bottom: (bottom_clearance !== undefined) ? `${bottom_clearance}px` : '12px',
+          maxWidth: 'calc(100vw - 24px)',
+          width: `${current_width}px`,
+        }}
+        className={is_mobile
+          ? 'fixed left-0 z-50 flex flex-col bg-card/95 backdrop-blur-md border-r border-border text-card-foreground overflow-hidden select-none font-sans shadow-2xl transition-transform duration-200 ease-out'
+          : 'absolute top-3 left-3 z-20 flex flex-col bg-card/95 backdrop-blur-md border border-border text-card-foreground overflow-hidden select-none font-sans shadow-2xl transition-all duration-150 ease-out'
+        }
       >
-        <div className="w-[2px] h-8 bg-border group-hover:bg-primary absolute top-1/2 -translate-y-1/2 right-0.5" />
-      </div>
+        {/* Draggable Right Border Resize Handle */}
+        {!is_mobile && (
+          <div
+            onMouseDown={handle_resize_mouse_down}
+            className="absolute top-0 right-0 bottom-0 w-2 cursor-col-resize hover:bg-primary/50 active:bg-primary transition-colors z-30 group"
+            title="Drag right border to resize sidebar"
+          >
+            <div className="w-[2px] h-8 bg-border group-hover:bg-primary absolute top-1/2 -translate-y-1/2 right-0.5" />
+          </div>
+        )}
 
-      {/* App Header */}
-      <div className="p-[var(--padding)] border-b border-border bg-card/60 shrink-0">
-        <div className="flex items-center justify-between">
-          <h1 className="text-[var(--header-font-size)] font-bold tracking-tight text-foreground flex items-center gap-2">
-            <img
-              src="/gfx/interface/logos/confoederatio_icon_256x256.png"
-              alt="Confoederatio Icon"
-              className="w-8 h-8 object-contain"
-            />
-            <span className="text-xl tracking-[1px]">{t.app.title}</span>
-          </h1>
-          <span className="text-[var(--body-font-size)] px-2 py-0.5 rounded-none bg-muted text-muted-foreground border border-border font-medium tracking-wider">
-            {t.app.badge}
-          </span>
-        </div>
+        {/* App Header */}
+        <div className="p-[var(--padding)] border-b border-border bg-card/60 shrink-0">
+          <div className="flex items-center justify-between">
+            <h1 className="text-[var(--header-font-size)] font-bold tracking-tight text-foreground flex items-center gap-2">
+              <img
+                src="/gfx/interface/logos/confoederatio_icon_256x256.png"
+                alt="Confoederatio Icon"
+                className="w-8 h-8 object-contain"
+              />
+              <span className="text-xl tracking-[1px]">{t.app.title}</span>
+            </h1>
+            <div className="flex items-center gap-2">
+              <span className="text-[var(--body-font-size)] px-2 py-0.5 rounded-none bg-muted text-muted-foreground border border-border font-medium tracking-wider">
+                {t.app.badge}
+              </span>
+              {is_mobile && on_close && (
+                <button
+                  type="button"
+                  onClick={on_close}
+                  className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground touch-manipulation"
+                  title="Close sidebar"
+                  aria-label="Close sidebar"
+                >
+                  <Icon name="close" size="1.25rem" />
+                </button>
+              )}
+            </div>
+          </div>
         <p className="text-[var(--body-font-size)] text-muted-foreground font-light mt-1">
           {t.app.subtitle}
         </p>
@@ -881,6 +910,7 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
         </div>
       </div>
     </div>
+  </>
   )
 }
 

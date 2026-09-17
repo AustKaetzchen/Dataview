@@ -107,6 +107,7 @@
   },
   mapmodes: {
     title: "Modes de carte",
+    activeCount: "£1£ active(s)",
     layersCount: "£1£ couches",
     searchPlaceholder: "Rechercher des modes et des couches...",
     noResults: "Aucune couche correspondante trouvée.",
@@ -155,6 +156,13 @@
     mean: "Moyenne",
     stdDev: "Écart-type",
     median: "Médiane",
+  },
+  mobile: {
+    sidebar: "Sidebar",
+    timeline: "Chronologie",
+    analytics: "Analytique",
+    settings: "Réglages",
+    map: "Carte",
   },
   videoExport: {
     title: "Exportation vidéo en timelapse",

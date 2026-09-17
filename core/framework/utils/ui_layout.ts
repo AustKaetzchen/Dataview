@@ -4,18 +4,32 @@
  * Centralises layout tracking for docked bars and floating panels.
  */
 
+export interface UIBreakpoints {
+  mobile: number
+  smallScreen: number
+  tablet: number
+}
+
 export interface UILayoutMetrics {
   gap: number
   margin: number
+  mobileNavBarHeight: number
   settingsDrawerRight: number
   settingsDrawerWidth: number
   sidebarWidth: number
   toolbarWidth: number
 }
 
+export let UI_BREAKPOINTS: UIBreakpoints = {
+  mobile: 768,
+  smallScreen: 1280,
+  tablet: 1024,
+}
+
 export let UI_LAYOUT: UILayoutMetrics = {
   gap: 12,
   margin: 12,
+  mobileNavBarHeight: 56,
   settingsDrawerRight: 62,
   settingsDrawerWidth: 288,
   sidebarWidth: 336,
