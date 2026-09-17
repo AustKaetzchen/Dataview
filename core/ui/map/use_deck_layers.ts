@@ -734,6 +734,7 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
 
     if (options.stadesterConfig?.enabled && effective_points.length > 0) {
       let is_collision_active = (options.stadesterConfig.labelCollision !== undefined) ? options.stadesterConfig.labelCollision : true
+      let is_firefox = typeof navigator !== 'undefined' && /firefox|fxios/i.test(navigator.userAgent)
       let is_halo = options.stadesterConfig.halo !== false && !options.stadesterConfig.filled
       let is_labels_visible = (options.stadesterConfig.showLabels !== undefined) ? options.stadesterConfig.showLabels : true
 
@@ -741,60 +742,131 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
       let fill_alpha = Math.round(255 * circle_opacity)
       let stroke_alpha = Math.min(255, Math.round(255 * Math.min(1.0, circle_opacity * 1.25)))
 
-      // City circles layer (TextLayer rendered in screen pixels)
-      layers_array.push(
-        new TextLayer({
-          id: `stadester-cities-${projection}`,
-          data: effective_points,
-          getText: () => (is_halo) ? '○' : '●',
-          characterSet: ['●', '○'],
-          fontFamily: 'Segoe UI Symbol, Arial, sans-serif',
-          getPosition: (d: any) => d.position,
-          getSize: (d: any) => d.pixelRadius * 2,
-          getColor: (d: any) => {
-            let is_region_highlighted = Boolean(
-              options.hoveredCity?.region &&
-              d.region &&
-              (d.region === options.hoveredCity.region ||
-               d.region.toLowerCase().includes(options.hoveredCity.region.toLowerCase()) ||
-               options.hoveredCity.region.toLowerCase().includes(d.region.toLowerCase()))
-            )
-            if (is_region_highlighted) {
-              let r = Math.round(d.color[0] * 0.7 + 255 * 0.3)
-              let g = Math.round(d.color[1] * 0.7 + 255 * 0.3)
-              let b = Math.round(d.color[2] * 0.7 + 255 * 0.3)
-              return [r, g, b, Math.min(255, fill_alpha + 35)]
-            }
-            return [d.color[0], d.color[1], d.color[2], (is_halo) ? stroke_alpha : fill_alpha]
-          },
-          getTextAnchor: 'middle',
-          getAlignmentBaseline: 'center',
-          sizeUnits: 'pixels',
-          sizeScale: 1,
-          sizeMinPixels: 6.5,
-          sizeMaxPixels: 130.0,
-          coordinateSystem: (is_cartesian) ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
-          billboard: true,
-          pickable: true,
-          autoHighlight: true,
-          highlightColor: [255, 255, 255, 100],
-          background: false,
-          onClick: (info: any) => {
-            if (info.object && options.onSelectCity)
-              options.onSelectCity(info.object)
-            return true
-          },
-          onHover: (info: any) => {
-            if (options.onHoverCity)
-              options.onHoverCity(info.object || null, info.x, info.y)
-          },
-          parameters: {
-            cullMode: 'none',
-            depthMask: false,
-            depthTest: false,
-          },
-        })
-      )
+      // City circles layer (ScatterplotLayer for Chrome/WebKit, TextLayer for Firefox)
+      if (is_firefox) {
+        layers_array.push(
+          new TextLayer({
+            id: `stadester-cities-${projection}`,
+            data: effective_points,
+            getText: () => (is_halo) ? '○' : '●',
+            characterSet: ['●', '○'],
+            fontFamily: 'Segoe UI Symbol, Arial, sans-serif',
+            fontSettings: { buffer: 8, fontSize: 128, sdf: true },
+            getPosition: (d: any) => d.position,
+            getSize: (d: any) => d.pixelRadius * 2,
+            getColor: (d: any) => {
+              let is_region_highlighted = Boolean(
+                options.hoveredCity?.region &&
+                d.region &&
+                (d.region === options.hoveredCity.region ||
+                 d.region.toLowerCase().includes(options.hoveredCity.region.toLowerCase()) ||
+                 options.hoveredCity.region.toLowerCase().includes(d.region.toLowerCase()))
+              )
+              if (is_region_highlighted) {
+                let r = Math.round(d.color[0] * 0.7 + 255 * 0.3)
+                let g = Math.round(d.color[1] * 0.7 + 255 * 0.3)
+                let b = Math.round(d.color[2] * 0.7 + 255 * 0.3)
+                return [r, g, b, Math.min(255, fill_alpha + 35)]
+              }
+              return [d.color[0], d.color[1], d.color[2], (is_halo) ? stroke_alpha : fill_alpha]
+            },
+            getTextAnchor: 'middle',
+            getAlignmentBaseline: 'center',
+            sizeUnits: 'pixels',
+            sizeScale: 1,
+            sizeMinPixels: 6.5,
+            sizeMaxPixels: 130.0,
+            coordinateSystem: (is_cartesian) ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
+            billboard: true,
+            pickable: true,
+            autoHighlight: true,
+            highlightColor: [255, 255, 255, 100],
+            background: false,
+            onClick: (info: any) => {
+              if (info.object && options.onSelectCity)
+                options.onSelectCity(info.object)
+              return true
+            },
+            onHover: (info: any) => {
+              if (options.onHoverCity)
+                options.onHoverCity(info.object || null, info.x, info.y)
+            },
+            parameters: {
+              cullMode: 'none',
+              depthMask: false,
+              depthTest: false,
+            },
+          })
+        )
+      } else {
+        layers_array.push(
+          new ScatterplotLayer({
+            id: `stadester-cities-${projection}`,
+            data: effective_points,
+            getPosition: (d: any) => d.position,
+            getRadius: (d: any) => d.pixelRadius,
+            getFillColor: (d: any) => {
+              let is_region_highlighted = Boolean(
+                options.hoveredCity?.region &&
+                d.region &&
+                (d.region === options.hoveredCity.region ||
+                 d.region.toLowerCase().includes(options.hoveredCity.region.toLowerCase()) ||
+                 options.hoveredCity.region.toLowerCase().includes(d.region.toLowerCase()))
+              )
+              if (is_region_highlighted) {
+                let r = Math.round(d.color[0] * 0.7 + 255 * 0.3)
+                let g = Math.round(d.color[1] * 0.7 + 255 * 0.3)
+                let b = Math.round(d.color[2] * 0.7 + 255 * 0.3)
+                return [r, g, b, Math.min(255, fill_alpha + 35)]
+              }
+              return [d.color[0], d.color[1], d.color[2], fill_alpha]
+            },
+            getLineColor: (d: any) => {
+              let is_region_highlighted = Boolean(
+                options.hoveredCity?.region &&
+                d.region &&
+                (d.region === options.hoveredCity.region ||
+                 d.region.toLowerCase().includes(options.hoveredCity.region.toLowerCase()) ||
+                 options.hoveredCity.region.toLowerCase().includes(d.region.toLowerCase()))
+              )
+              if (is_region_highlighted) {
+                let r = Math.round(d.color[0] * 0.7 + 255 * 0.3)
+                let g = Math.round(d.color[1] * 0.7 + 255 * 0.3)
+                let b = Math.round(d.color[2] * 0.7 + 255 * 0.3)
+                return [r, g, b, 255]
+              }
+              return [d.color[0], d.color[1], d.color[2], stroke_alpha]
+            },
+            getLineWidth: 1.5,
+            lineWidthUnits: 'pixels',
+            lineWidthMinPixels: 1.5,
+            stroked: is_halo,
+            filled: !is_halo,
+            radiusUnits: 'pixels',
+            radiusMinPixels: 3.25,
+            radiusMaxPixels: 65.0,
+            coordinateSystem: (is_cartesian) ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
+            billboard: true,
+            pickable: true,
+            autoHighlight: true,
+            highlightColor: [255, 255, 255, 100],
+            onClick: (info: any) => {
+              if (info.object && options.onSelectCity)
+                options.onSelectCity(info.object)
+              return true
+            },
+            onHover: (info: any) => {
+              if (options.onHoverCity)
+                options.onHoverCity(info.object || null, info.x, info.y)
+            },
+            parameters: {
+              cullMode: 'none',
+              depthMask: false,
+              depthTest: false,
+            },
+          })
+        )
+      }
 
       // City selection highlight ring
       if (options.selectedCityKey) {
@@ -804,31 +876,57 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
             selected_city_item = null
         }
         if (selected_city_item) {
-          layers_array.push(
-            new TextLayer({
-              id: `stadester-selected-ring-${projection}`,
-              data: [selected_city_item],
-              getText: () => '○',
-              characterSet: ['○'],
-              fontFamily: 'Segoe UI Symbol, Arial, sans-serif',
-              getPosition: (d: any) => d.position,
-              getSize: (d: any) => (d.pixelRadius + 4) * 2,
-              getColor: [239, 68, 68, 255],
-              getTextAnchor: 'middle',
-              getAlignmentBaseline: 'center',
-              sizeUnits: 'pixels',
-              sizeScale: 1,
-              coordinateSystem: (is_cartesian) ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
-              billboard: true,
-              background: false,
-              parameters: {
-                cullMode: 'none',
-                depthMask: false,
-                depthTest: false,
-              },
-              pickable: false,
-            })
-          )
+          if (is_firefox) {
+            layers_array.push(
+              new TextLayer({
+                id: `stadester-selected-ring-${projection}`,
+                data: [selected_city_item],
+                getText: () => '○',
+                characterSet: ['○'],
+                fontFamily: 'Segoe UI Symbol, Arial, sans-serif',
+                fontSettings: { buffer: 8, fontSize: 128, sdf: true },
+                getPosition: (d: any) => d.position,
+                getSize: (d: any) => (d.pixelRadius + 4) * 2,
+                getColor: [239, 68, 68, 255],
+                getTextAnchor: 'middle',
+                getAlignmentBaseline: 'center',
+                sizeUnits: 'pixels',
+                sizeScale: 1,
+                coordinateSystem: (is_cartesian) ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
+                billboard: true,
+                background: false,
+                parameters: {
+                  cullMode: 'none',
+                  depthMask: false,
+                  depthTest: false,
+                },
+                pickable: false,
+              })
+            )
+          } else {
+            layers_array.push(
+              new ScatterplotLayer({
+                id: `stadester-selected-ring-${projection}`,
+                data: [selected_city_item],
+                getPosition: (d: any) => d.position,
+                getRadius: (d: any) => d.pixelRadius + 4,
+                stroked: true,
+                filled: false,
+                getLineColor: [239, 68, 68, 255],
+                getLineWidth: 2.5,
+                lineWidthUnits: 'pixels',
+                radiusUnits: 'pixels',
+                coordinateSystem: (is_cartesian) ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
+                billboard: true,
+                parameters: {
+                  cullMode: 'none',
+                  depthMask: false,
+                  depthTest: false,
+                },
+                pickable: false,
+              })
+            )
+          }
         }
       }
 
