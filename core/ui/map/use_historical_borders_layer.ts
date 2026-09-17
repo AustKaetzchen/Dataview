@@ -44,16 +44,19 @@ function parseHexToRgba (arg0_hex: string, arg1_alpha: number = 255): [number, n
   return [(num >> 16) & 255, (num >> 8) & 255, num & 255, alpha]
 }
 
+let cached_layer_data_map: WeakMap<object, Map<string, any[]>> = new WeakMap()
+
 /**
- * Builds a deck.gl GeoJsonLayer rendering temporally sliced historical borders from CShapes-2.0 and atlas.naissance.
+ * Builds deck.gl GeoJsonLayers rendering temporally sliced historical borders from CShapes-2.0 and atlas.naissance.
+ * Memoises transformed geometries and isolates hover and selection into lightweight overlay layers for optimal FPS.
  *
  * @param {HistoricalBordersLayerOptions} arg0_options
  *
- * @returns {GeoJsonLayer | null}
+ * @returns {GeoJsonLayer[] | null}
  */
 export function createHistoricalBordersDeckLayer (
   arg0_options: HistoricalBordersLayerOptions
-): GeoJsonLayer | null {
+): GeoJsonLayer[] | null {
   //Convert from parameters
   let options = (arg0_options) ? arg0_options : ({} as HistoricalBordersLayerOptions)
   let borders_data = options.historicalBordersData
@@ -66,14 +69,19 @@ export function createHistoricalBordersDeckLayer (
   let timeline_year = options.timelineYear
 
   //Declare local instance variables
+  let base_layer: GeoJsonLayer
   let base_rgba: [number, number, number, number]
   let date_tag: string | number
   let feature_count: number
   let fill_alpha: number
   let fill_opacity: number
+  let hovered_feat: any
   let is_cartesian: boolean
-  let layer_data: any
+  let layer_data: any[]
   let layer_id: string
+  let layers_array: GeoJsonLayer[] = []
+  let proj_map: Map<string, any[]>
+  let selected_feat: any
   let stroke_color: string
   let stroke_width: number
 
@@ -93,124 +101,54 @@ export function createHistoricalBordersDeckLayer (
   date_tag = borders_data.features[0]?.properties?.date || timeline_year
   layer_id = `historical-borders-${projection}-${timeline_year}-${date_tag}-${feature_count}`
 
-  if (projection === 'EqualEarth') {
-    layer_data = borders_data.features.map((arg0_f) => ({
-      ...arg0_f,
-      geometry: transformGeometryToEqualEarth(arg0_f.geometry),
-      raw_feature: arg0_f,
-    }))
+  //Retrieve or create memoised layer data with stable reference across renders
+  if (!cached_layer_data_map.has(borders_data))
+    cached_layer_data_map.set(borders_data, new Map())
+
+  proj_map = cached_layer_data_map.get(borders_data)!
+  if (proj_map.has(projection)) {
+    layer_data = proj_map.get(projection)!
   } else {
-    layer_data = borders_data.features.map((arg0_f) => ({
-      ...arg0_f,
-      raw_feature: arg0_f,
-    }))
+    if (projection === 'EqualEarth') {
+      layer_data = borders_data.features.map((arg0_f) => ({
+        ...arg0_f,
+        geometry: transformGeometryToEqualEarth(arg0_f.geometry),
+        raw_feature: arg0_f,
+      }))
+    } else {
+      layer_data = borders_data.features.map((arg0_f) => ({
+        ...arg0_f,
+        raw_feature: arg0_f,
+      }))
+    }
+    proj_map.set(projection, layer_data)
   }
 
-  //Return statement
-  return new GeoJsonLayer({
+  //1. Base historical borders layer (static GPU buffers, no per-hover attribute updates)
+  base_layer = new GeoJsonLayer({
     id: layer_id,
     data: layer_data,
     coordinateSystem: (is_cartesian) ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
     pickable: true,
+    autoHighlight: true,
+    highlightColor: [255, 255, 255, 50],
     stroked: true,
-    filled: true,
+    filled: fill_alpha > 0,
     lineWidthUnits: 'pixels',
     lineWidthMinPixels: 1,
-    getLineWidth: (arg0_d: any) => {
-      let is_selected = Boolean(
-        selected_id && (
-          arg0_d.id === selected_id ||
-          arg0_d.properties?.id === selected_id ||
-          arg0_d.properties?.gwcode === selected_id ||
-          arg0_d.raw_feature?.id === selected_id ||
-          arg0_d.raw_feature?.properties?.id === selected_id ||
-          arg0_d.raw_feature?.properties?.gwcode === selected_id
-        )
-      )
-      let is_hovered = Boolean(
-        hovered_id && (
-          arg0_d.id === hovered_id ||
-          arg0_d.properties?.id === hovered_id ||
-          arg0_d.properties?.gwcode === hovered_id ||
-          arg0_d.raw_feature?.id === hovered_id ||
-          arg0_d.raw_feature?.properties?.id === hovered_id ||
-          arg0_d.raw_feature?.properties?.gwcode === hovered_id
-        )
-      )
-
-      if (is_selected)
-        return Math.max(stroke_width * 2.0, 2.5)
-      if (is_hovered)
-        return Math.max(stroke_width * 1.5, 2.0)
-      return stroke_width
-    },
-    getLineColor: (arg0_d: any) => {
-      let is_selected = Boolean(
-        selected_id && (
-          arg0_d.id === selected_id ||
-          arg0_d.properties?.id === selected_id ||
-          arg0_d.properties?.gwcode === selected_id ||
-          arg0_d.raw_feature?.id === selected_id ||
-          arg0_d.raw_feature?.properties?.id === selected_id ||
-          arg0_d.raw_feature?.properties?.gwcode === selected_id
-        )
-      )
-      let is_hovered = Boolean(
-        hovered_id && (
-          arg0_d.id === hovered_id ||
-          arg0_d.properties?.id === hovered_id ||
-          arg0_d.properties?.gwcode === hovered_id ||
-          arg0_d.raw_feature?.id === hovered_id ||
-          arg0_d.raw_feature?.properties?.id === hovered_id ||
-          arg0_d.raw_feature?.properties?.gwcode === hovered_id
-        )
-      )
-
-      if (is_selected)
-        return [220, 38, 38, 255]
-      if (is_hovered)
-        return [255, 255, 255, 240]
-      return base_rgba
-    },
+    getLineWidth: stroke_width,
+    getLineColor: base_rgba,
     getFillColor: (arg0_d: any) => {
-      let is_selected = Boolean(
-        selected_id && (
-          arg0_d.id === selected_id ||
-          arg0_d.properties?.id === selected_id ||
-          arg0_d.properties?.gwcode === selected_id ||
-          arg0_d.raw_feature?.id === selected_id ||
-          arg0_d.raw_feature?.properties?.id === selected_id ||
-          arg0_d.raw_feature?.properties?.gwcode === selected_id
-        )
-      )
-      let is_hovered = Boolean(
-        hovered_id && (
-          arg0_d.id === hovered_id ||
-          arg0_d.properties?.id === hovered_id ||
-          arg0_d.properties?.gwcode === hovered_id ||
-          arg0_d.raw_feature?.id === hovered_id ||
-          arg0_d.raw_feature?.properties?.id === hovered_id ||
-          arg0_d.raw_feature?.properties?.gwcode === hovered_id
-        )
-      )
-
-      if (is_selected)
-        return [220, 38, 38, Math.max(fill_alpha, 55)]
-      if (is_hovered)
-        return [255, 255, 255, Math.max(fill_alpha, 30)]
-
-      //Use polity symbol polygonFill if defined in entity metadata
       let polity_color = arg0_d.properties?.symbol?.polygonFill || arg0_d.properties?.symbol?.fillColor || arg0_d.properties?.fillColor || arg0_d.properties?.color
       if (polity_color && fill_alpha > 0)
         return parseHexToRgba(polity_color, fill_alpha)
 
-      //Default: clean black/white stroke, no random fill
       return [0, 0, 0, 0]
     },
     updateTriggers: {
-      getFillColor: [selected_id, hovered_id, stroke_color, fill_opacity],
-      getLineColor: [selected_id, hovered_id, stroke_color],
-      getLineWidth: [selected_id, hovered_id, stroke_width],
+      getFillColor: [stroke_color, fill_opacity],
+      getLineColor: [stroke_color],
+      getLineWidth: [stroke_width],
     },
     onClick: (arg0_info: any) => {
       if (arg0_info.object && on_select) {
@@ -234,5 +172,76 @@ export function createHistoricalBordersDeckLayer (
       depthTest: false,
     },
   })
+  layers_array.push(base_layer)
+
+  //2. Selected historical feature overlay (single feature, zero impact on base layer)
+  if (selected_id) {
+    selected_feat = layer_data.find((arg0_d: any) =>
+      arg0_d.id === selected_id ||
+      arg0_d.properties?.id === selected_id ||
+      arg0_d.properties?.gwcode === selected_id ||
+      arg0_d.raw_feature?.id === selected_id ||
+      arg0_d.raw_feature?.properties?.id === selected_id ||
+      arg0_d.raw_feature?.properties?.gwcode === selected_id
+    )
+
+    if (selected_feat) {
+      layers_array.push(
+        new GeoJsonLayer({
+          id: `historical-borders-selected-${projection}-${selected_id}`,
+          data: [selected_feat],
+          coordinateSystem: (is_cartesian) ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
+          pickable: false,
+          stroked: true,
+          filled: true,
+          getLineWidth: Math.max(stroke_width * 2.0, 2.5),
+          getLineColor: [220, 38, 38, 255],
+          getFillColor: [220, 38, 38, Math.max(fill_alpha, 55)],
+          lineWidthUnits: 'pixels',
+          lineWidthMinPixels: 2,
+          extensions: (projection === 'Globe') ? [new GlobeAntipodeCullExtension({ cullThreshold: -0.005 })] : [],
+          parameters: {
+            depthTest: false,
+          },
+        })
+      )
+    }
+  }
+
+  //3. Hovered historical feature outline overlay (single feature stroke outline)
+  if (hovered_id && hovered_id !== selected_id) {
+    hovered_feat = layer_data.find((arg0_d: any) =>
+      arg0_d.id === hovered_id ||
+      arg0_d.properties?.id === hovered_id ||
+      arg0_d.properties?.gwcode === hovered_id ||
+      arg0_d.raw_feature?.id === hovered_id ||
+      arg0_d.raw_feature?.properties?.id === hovered_id ||
+      arg0_d.raw_feature?.properties?.gwcode === hovered_id
+    )
+
+    if (hovered_feat) {
+      layers_array.push(
+        new GeoJsonLayer({
+          id: `historical-borders-hovered-${projection}-${hovered_id}`,
+          data: [hovered_feat],
+          coordinateSystem: (is_cartesian) ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
+          pickable: false,
+          stroked: true,
+          filled: false,
+          getLineWidth: Math.max(stroke_width * 1.5, 2.0),
+          getLineColor: [255, 255, 255, 240],
+          lineWidthUnits: 'pixels',
+          lineWidthMinPixels: 1.5,
+          extensions: (projection === 'Globe') ? [new GlobeAntipodeCullExtension({ cullThreshold: -0.005 })] : [],
+          parameters: {
+            depthTest: false,
+          },
+        })
+      )
+    }
+  }
+
+  //Return statement
+  return layers_array
 }
 

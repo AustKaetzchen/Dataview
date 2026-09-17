@@ -712,8 +712,15 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
       selectedHistoricalId: options.selectedHistoricalFeature?.id || options.selectedHistoricalFeature?.properties?.id,
       timelineYear: options.timelineYear || 1950,
     })
-    if (historical_borders_layer)
-      layers_array.push(historical_borders_layer)
+    if (historical_borders_layer) {
+      if (Array.isArray(historical_borders_layer)) {
+        for (let i = 0; i < historical_borders_layer.length; i++)
+          if (historical_borders_layer[i])
+            layers_array.push(historical_borders_layer[i])
+      } else {
+        layers_array.push(historical_borders_layer)
+      }
+    }
 
     //9. Stadestér Historical Cities
     let is_worker_points_matching_proj = Boolean(
