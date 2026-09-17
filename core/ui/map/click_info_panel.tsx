@@ -23,7 +23,7 @@ export interface ClickInfoPanelProps {
  *
  * @returns {string}
  */
-export function formatCohortDisplay (arg0_gender: string | string[] | undefined, arg1_age: string | string[] | undefined, arg2_active_layer?: ParsedDataLayer | null): string {
+export function formatCohortDisplay(arg0_gender: string | string[] | undefined, arg1_age: string | string[] | undefined, arg2_active_layer?: ParsedDataLayer | null): string {
   //Convert from parameters
   let active_layer = arg2_active_layer
   let age_param = arg1_age
@@ -124,7 +124,7 @@ export function formatCohortDisplay (arg0_gender: string | string[] | undefined,
 
   merged_age_str = [...age_ranges, ...fallback_labels].join(', ')
   if (sorted_keys.length === ordered_keys.length && age_ranges.length === 1 && age_ranges[0] === '0+')
-    merged_age_str = 'All Ages'
+    merged_age_str = ' All Ages'
 
   //Format gender prefixes
   has_f = gender_list.some((arg0_g) => arg0_g.toLowerCase() === 'f' || arg0_g.toLowerCase() === 'female')
@@ -200,7 +200,7 @@ export let ClickInfoPanel: React.FC<ClickInfoPanelProps> = React.memo(function (
   if (has_raster && info) {
     if (info.value !== null && Number.isFinite(info.value)) {
       if (is_percentage_unit) {
-        let pct_num = Math.abs(info.value) <= 1.0 ? info.value*100 : info.value
+        let pct_num = Math.abs(info.value) <= 1.0 ? info.value * 100 : info.value
         formatted_val = `${pct_num.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}%`
       } else {
         formatted_val = info.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -274,13 +274,12 @@ export let ClickInfoPanel: React.FC<ClickInfoPanelProps> = React.memo(function (
             {is_age_sex && (
               <div className="flex items-baseline gap-1.5 whitespace-nowrap leading-snug pt-1 border-t border-border/40">
                 <span className="text-muted-foreground font-bold shrink-0">Cohort:</span>
-                <span className={`font-bold ${
-                  cohort_label.startsWith('M')
+                <span className={`font-bold ${cohort_label.startsWith('M')
                     ? 'text-blue-400'
                     : cohort_label.startsWith('F')
                       ? 'text-rose-400'
                       : 'text-primary'
-                }`}>
+                  }`}>
                   {cohort_label}
                 </span>
               </div>
@@ -312,7 +311,7 @@ export let ClickInfoPanel: React.FC<ClickInfoPanelProps> = React.memo(function (
             <span>Pop: <strong className="text-white">{Math.round(hovered_city.population).toLocaleString('de-DE')}</strong></span>
             {hovered_city.growthRate !== undefined && (
               <span className="text-white">
-                {(hovered_city.growthRate >= 0) ? '+' : ''}{(hovered_city.growthRate*100).toFixed(2)}%/yr
+                {(hovered_city.growthRate >= 0) ? '+' : ''}{(hovered_city.growthRate * 100).toFixed(2)}%/yr
               </span>
             )}
           </div>
