@@ -52,27 +52,12 @@
         {
           title: "Overview",
           content: [
-            "GeoPNG Dataview is a high-performance geospatial raster visualiser powered by deck.gl and WebGL. It delivers real-time 2D/3D rendering of high-resolution single-band and multi-temporal geospatial datasets directly in the browser with zero server latency.",
-          ],
-        },
-        {
-          title: "Projections & 3D Terrain",
-          content: [
             "> [!WARNING]",
-            "We need support for warnings/notes and the like.",
-            "- **Web Mercator**: Standard tiled and planar projection.",
-            "- **3D Interactive Globe**: Full spherical rendering with altitude displacement.",
-            "- **Equirectangular & Equal Earth**: True equal-area cylindrical and pseudocylindrical projections.",
-            "- **3D Needle Spikes**: Extruded terrain columns with dynamic exponential scaling.",
-            "- **Equal-Area Circles**: High-value proportional circle overlays.",
+            "> Confoederatio Dataview is currently a **work-in-progress**. This means that you may see placeholder text, misalignment issues, and features that may not display as intended.",
+            "> ",
+            "> In addition, there may be some stale caches with category variables. This is being worked on."
           ],
-        },
-        {
-          title: "Analytical Engine",
-          content: [
-            "Integrated ECharts analytical distributions, interactive percentile breakpoint adjustment, and instant multi-country statistical mask calculations.",
-          ],
-        },
+        }
       ],
     },
     {

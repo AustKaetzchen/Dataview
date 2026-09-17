@@ -108,10 +108,10 @@
   mapmodes: {
     title: "Mapmodes",
     layersCount: "£1£ Layers",
-    searchPlaceholder: "Search mapmodes & layers...",
+    searchPlaceholder: "Search mapmodes ...",
     noResults: "No matching layers found.",
-    loadingRaster: "Loading raster layers...",
-    analyticalTools: "Analytical Tools",
+    loadingRaster: "Loading data layers ...",
+    analyticalTools: "Analysis",
     on: "ON",
     off: "OFF",
     expand: "Expand Mapmodes Tray",

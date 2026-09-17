@@ -18,8 +18,8 @@
         ],
         hide_colourbar: true
     },
-    "statistical_borders": {
-        name: "Statistical Borders",
+    "simplified_borders": {
+        name: "Simplified Borders",
         description: "Temporally sliced statistical and historical borders from CShapes-2.0 and Svea atlas.naissance.",
         filepaths: [
             {

@@ -13,18 +13,18 @@
       controlDescription: "Base full-resolution 2D/3D raster layer display",
     },
     {
-      id: "country_analysis",
-      label: "Modern Countries",
-      description: "Country polygon masking and relative quantile binning",
-      active: false,
-      controlDescription: "Isolate countries and calculate polygon-relative statistics",
-    },
-    {
       id: "spike_map",
       label: "3D Elevation",
       description: "Parent-pixel extruded 3D terrain needle columns",
       active: false,
       controlDescription: "3D needle terrain spikes with altitude scaling",
+    },
+    {
+      id: "country_analysis",
+      label: "Country Statistics",
+      description: "Country polygon masking and relative quantile binning",
+      active: false,
+      controlDescription: "Isolate countries and calculate polygon-relative statistics",
     },
     {
       id: "circle_sizing",

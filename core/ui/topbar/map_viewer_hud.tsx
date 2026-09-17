@@ -378,34 +378,6 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
                 </button>
               </div>
 
-              {/* Language Selector */}
-              <div className="space-y-1.5">
-                <span className="text-[var(--body-font-size)] font-bold text-foreground flex items-center gap-1.5">
-                  <Icon name="translate" className="text-xs" />
-                  <span>{t.settings.language}</span>
-                </span>
-                <div className="grid grid-cols-3 gap-1 bg-background/60 p-[var(--cell-padding)] rounded-none border border-border">
-                  {[
-                    { id: 'en-GB' as SupportedLocale, label: 'EN-GB' },
-                    { id: 'fr' as SupportedLocale, label: 'FR' },
-                    { id: 'de' as SupportedLocale, label: 'DE' },
-                  ].map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setLocale(item.id)}
-                      className={`px-2 py-1 rounded-none text-[var(--body-font-size)] transition-colors cursor-pointer text-center ${
-                        locale === item.id
-                          ? 'bg-primary text-primary-foreground font-bold shadow-xs'
-                          : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground font-light'
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {/* Projection Mode */}
               <div className="space-y-1.5">
                 <span className="text-[var(--body-font-size)] font-bold text-foreground">{t.settings.projectionMode}</span>
@@ -469,6 +441,33 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
                         }`}
                     >
                       {pos.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Language Selector */}
+              <div className="space-y-1.5">
+                <span className="text-[var(--body-font-size)] font-bold text-foreground flex items-center gap-1.5">
+                  <Icon name="translate" className="text-xs" />
+                  <span>{t.settings.language}</span>
+                </span>
+                <div className="grid grid-cols-3 gap-1 bg-background/60 p-[var(--cell-padding)] rounded-none border border-border">
+                  {[
+                    { id: 'en-GB' as SupportedLocale, label: 'EN-GB' },
+                    { id: 'fr' as SupportedLocale, label: 'FR' },
+                    { id: 'de' as SupportedLocale, label: 'DE' },
+                  ].map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setLocale(item.id)}
+                      className={`px-2 py-1 rounded-none text-[var(--body-font-size)] transition-colors cursor-pointer text-center ${locale === item.id
+                          ? 'bg-primary text-primary-foreground font-bold shadow-xs'
+                          : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground font-light'
+                        }`}
+                    >
+                      {item.label}
                     </button>
                   ))}
                 </div>
