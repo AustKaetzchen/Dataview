@@ -138,6 +138,9 @@
     resizeColourbar: "Drag right border to resize Value colourbar",
     clickToSetBreak: "Click to set break value by typing number",
     enterAbsoluteBreak: "Enter absolute break number",
+    hideTooltips: "Disable Tooltips",
+    showTooltips: "Enable Tooltips",
+    tooltips: "Tooltips",
   },
   infoPanel: {
     activeRenderingModes: "Active Rendering Modes",

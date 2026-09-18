@@ -14,19 +14,20 @@ import { INFO_PANEL_CONFIG, MAPMODES_CONFIG } from '@common'
 import { useLocalisation } from '@localisation'
 
 export interface InfoFlyoutPanelProps {
-  isOpen: boolean
-  onClose: () => void
-  isPinned?: boolean
-  defaultPinned?: boolean
-  onTogglePin?: (pinned: boolean) => void
-  mapModes: MapModeItem[]
-  heightmapConfig: HeightmapConfig
-  circleOverlayConfig: CircleOverlayConfig
-  selectedCountries: CountryFeature[]
-  projection: ProjectionType
   cameraTilt?: number
-  width?: number
+  circleOverlayConfig: CircleOverlayConfig
   className?: string
+  defaultPinned?: boolean
+  embedded?: boolean
+  heightmapConfig: HeightmapConfig
+  isOpen: boolean
+  isPinned?: boolean
+  mapModes: MapModeItem[]
+  onClose: () => void
+  onTogglePin?: (pinned: boolean) => void
+  projection: ProjectionType
+  selectedCountries: CountryFeature[]
+  width?: number
 }
 
 /**
@@ -46,6 +47,7 @@ export let InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = function (arg0_prop
   let circle_overlay_config = props.circleOverlayConfig
   let class_name = props.className
   let default_pinned = props.defaultPinned ?? true
+  let embedded = Boolean(props.embedded)
   let heightmap_config = props.heightmapConfig
   let is_open = props.isOpen
   let is_pinned = props.isPinned
@@ -57,6 +59,7 @@ export let InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = function (arg0_prop
   let selected_countries = props.selectedCountries
   let set_active_tab: React.Dispatch<React.SetStateAction<string>>
   let t: ReturnType<typeof useLocalisation>['t']
+  let tabs_element: React.ReactElement
   let width = props.width ?? 336
 
   //Function body
@@ -75,26 +78,12 @@ export let InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = function (arg0_prop
 
   active_modes_array = map_modes.filter((m) => m.active)
 
-  //Return statement
-  return (
-    <Window
-      id="info-and-controls"
-      title={INFO_PANEL_CONFIG.title || 'Information & Controls'}
-      icon="info"
-      isOpen={is_open}
-      onClose={on_close}
-      isPinned={is_pinned}
-      defaultPinned={default_pinned}
-      onTogglePin={on_toggle_pin}
-      defaultWidth={width}
-      className={class_name}
+  tabs_element = (
+    <Tabs
+      value={active_tab}
+      onValueChange={set_active_tab}
+      className="flex flex-col flex-1 min-h-0 overflow-hidden"
     >
-      {/* Tabs Container */}
-      <Tabs
-        value={active_tab}
-        onValueChange={set_active_tab}
-        className="flex flex-col flex-1 min-h-0 overflow-hidden"
-      >
         <TabsList className="w-full flex h-8 bg-muted/60 border border-border rounded-none p-0.5 shrink-0">
           {INFO_PANEL_CONFIG.tabs.map((tab) => (
             <TabsTrigger
@@ -283,6 +272,31 @@ export let InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = function (arg0_prop
           ))}
         </div>
       </Tabs>
+  )
+
+  if (embedded) {
+    return (
+      <div className={`flex flex-col flex-1 min-h-0 w-full ${class_name || ''}`}>
+        {tabs_element}
+      </div>
+    )
+  }
+
+  //Return statement
+  return (
+    <Window
+      id="info-and-controls"
+      title={INFO_PANEL_CONFIG.title || 'Information & Controls'}
+      icon="info"
+      isOpen={is_open}
+      onClose={on_close}
+      isPinned={is_pinned}
+      defaultPinned={default_pinned}
+      onTogglePin={on_toggle_pin}
+      defaultWidth={width}
+      className={class_name}
+    >
+      {tabs_element}
     </Window>
   )
 }

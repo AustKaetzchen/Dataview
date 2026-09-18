@@ -65,6 +65,7 @@ export interface MapViewerHUDProps {
   onResizeColourbarWidth?: (arg0_w: number) => void
   onToggleAnalytics: () => void
   onTogglePerformantMode?: (arg0_enabled: boolean) => void
+  onToggleTooltips?: () => void
   onToggleUi?: () => void
   onUpdateBreaks?: (arg0_breaks: number[]) => void
   performantMode: boolean
@@ -78,6 +79,7 @@ export interface MapViewerHUDProps {
   setProjection: (arg0_p: ProjectionType) => void
   setShowGraticule: React.Dispatch<React.SetStateAction<boolean>>
   showGraticule: boolean
+  showTooltips?: boolean
   stadesterCities?: CityPoint[]
   stadesterConfig?: StadesterConfig
   timelineBounds?: { left: number; right: number; top: number } | null
@@ -134,6 +136,7 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
   let on_resize_colourbar_width = props.onResizeColourbarWidth
   let on_toggle_analytics = props.onToggleAnalytics
   let on_toggle_performant_mode = props.onTogglePerformantMode
+  let on_toggle_tooltips = props.onToggleTooltips
   let on_toggle_ui = props.onToggleUi
   let on_update_breaks = props.onUpdateBreaks
   let performant_mode = props.performantMode
@@ -147,6 +150,7 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
   let set_projection = props.setProjection
   let set_show_graticule = props.setShowGraticule
   let show_graticule = props.showGraticule
+  let show_tooltips = props.showTooltips ?? true
   let stadester_cities = props.stadesterCities
   let stadester_config = props.stadesterConfig
   let timeline_bounds = props.timelineBounds
@@ -252,7 +256,7 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
           )}
 
           {/* Information & Controls Flyout Panel */}
-          {info_panel_open && (
+          {info_panel_open && !is_mobile && (
             <div className="pointer-events-auto">
               <InfoFlyoutPanel
                 isOpen={info_panel_open}
@@ -347,6 +351,27 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
               </TooltipTrigger>
               <TooltipContent side="left">
                 <span>{t.hud.resetView}</span>
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Toggle On-Map Inspection Tooltips */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={show_tooltips ? 'secondary' : 'ghost'}
+                  size="icon"
+                  onClick={on_toggle_tooltips}
+                  className="h-7 w-7 rounded-none text-white cursor-pointer"
+                  aria-label={show_tooltips ? (t.hud.hideTooltips || 'Disable Tooltips') : (t.hud.showTooltips || 'Enable Tooltips')}
+                >
+                  <Icon
+                    name={show_tooltips ? 'chat_bubble' : 'chat_bubble_outline'}
+                    className={show_tooltips ? 'text-white' : 'text-muted-foreground'}
+                  />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="left">
+                <span>{show_tooltips ? (t.hud.hideTooltips || 'Disable Tooltips') : (t.hud.showTooltips || 'Enable Tooltips')}</span>
               </TooltipContent>
             </Tooltip>
 

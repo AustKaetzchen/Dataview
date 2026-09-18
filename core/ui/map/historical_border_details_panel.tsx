@@ -2,6 +2,7 @@ import React, { useMemo } from 'react'
 import type { HistoricalBorderFeature } from '@server/AtlasBordersService'
 import type { CountryFeature, CountryStats } from '@framework/geopng/polygon_binning.ts'
 import { binRasterByCountryMemoized } from '@framework/geopng/polygon_binning.ts'
+import { calculateFeatureArea } from '@framework/geopng/polygon_area.ts'
 import type { DecodedRaster } from '@framework/geopng/types.ts'
 import { Icon } from '@ui/components/icon'
 import { UfDate } from '@framework/utils/uf_date'
@@ -49,6 +50,7 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
   let active_kf_index = -1
   let alt_names_str: string | undefined
   let area_val_str: string
+  let calculated_geom_area: number | null
   let cap_name: string | undefined
   let country_name: string
   let current_date: { day: number; month: number; year: number }
@@ -149,8 +151,25 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
     return null
   }, [country_stats, raster, feature])
 
+  //Calculate geodesic area clientside from geometry
+  calculated_geom_area = useMemo(() => {
+    if (!feature?.geometry)
+      return null
+    let area_km2 = calculateFeatureArea(feature)
+    if (area_km2 > 0) {
+      if (feature.properties) {
+        feature.properties.calculated_area = Math.round(area_km2)
+        feature.properties.area = Math.round(area_km2)
+      }
+      return area_km2
+    }
+    return null
+  }, [feature])
+
   //Format area value
-  if (feature.properties?.area && typeof feature.properties.area === 'number') {
+  if (calculated_geom_area !== null && calculated_geom_area > 0) {
+    area_val_str = `${Math.round(calculated_geom_area).toLocaleString('de-DE')} km²`
+  } else if (feature.properties?.area && typeof feature.properties.area === 'number') {
     area_val_str = `${Math.round(feature.properties.area).toLocaleString('de-DE')} km²`
   } else if (effective_stats?.validCount) {
     area_val_str = `${effective_stats.validCount.toLocaleString('de-DE')} ${t.mapPanels.historicalBorders.cells}`
@@ -300,7 +319,9 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
             {area_val_str}
           </div>
           <div className="text-[9px] text-muted-foreground/70 truncate mt-0.5">
-            {feature.properties?.area ? t.mapPanels.historicalBorders.territorial : t.mapPanels.historicalBorders.calculated}
+            {(calculated_geom_area !== null && calculated_geom_area > 0)
+              ? t.mapPanels.historicalBorders.calculated
+              : (feature.properties?.area ? t.mapPanels.historicalBorders.territorial : t.mapPanels.historicalBorders.calculated)}
           </div>
         </div>
 

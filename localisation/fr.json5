@@ -138,6 +138,9 @@
     resizeColourbar: "Glisser la bordure droite pour redimensionner la barre",
     clickToSetBreak: "Cliquer pour modifier la valeur de rupture",
     enterAbsoluteBreak: "Saisir un nombre de rupture absolu",
+    hideTooltips: "Désactiver les infobulles",
+    showTooltips: "Activer les infobulles",
+    tooltips: "Infobulles",
   },
   infoPanel: {
     activeRenderingModes: "Modes de rendu actifs",

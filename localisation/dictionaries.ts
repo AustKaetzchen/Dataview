@@ -136,12 +136,15 @@ export interface LocalisationConfig {
     coordinate: string
     enterAbsoluteBreak: string
     graticule: string
+    hideTooltips: string
     hideUi: string
     inspect: string
     resetView: string
     resizeColourbar: string
     settings: string
+    showTooltips: string
     showUi: string
+    tooltips: string
     value: string
   }
   infoPanel: {

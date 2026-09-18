@@ -45,6 +45,7 @@ import { useStadesterWorker } from '@framework/stadester/use_stadester_worker'
 import { useHistoricalBorders } from './use_historical_borders'
 import { HistoricalBorderDetailsPanel } from './historical_border_details_panel'
 import type { HistoricalBorderFeature } from '@server/AtlasBordersService'
+import { calculateFeatureArea } from '@framework/geopng/polygon_area.ts'
 
 let EMPTY_ARRAY: any[] = [], NOOP_FN = () => { }
 
@@ -205,6 +206,7 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
   //Declare local instance variables
   let active_layer: any = null
   let circle_pixel_data: any
+  let container_ref = useRef<HTMLDivElement>(null)
   let deck_ref = useRef<any>(null)
   let elevation_spikes_data: any
   let equal_earth_land_geo_json: any
@@ -274,6 +276,15 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
           (current_name && arg0_f.properties?.name === current_name)
       )
       if (updated_feat && updated_feat !== selected_historical_feature) {
+        if (updated_feat.geometry) {
+          let calc_area = calculateFeatureArea(updated_feat)
+          if (calc_area > 0) {
+            if (!updated_feat.properties)
+              updated_feat.properties = {} as any
+            updated_feat.properties.calculated_area = Math.round(calc_area)
+            updated_feat.properties.area = Math.round(calc_area)
+          }
+        }
         set_selected_historical_feature(updated_feat)
         if (on_select_country) {
           on_select_country(updated_feat as unknown as CountryFeature)
@@ -320,6 +331,7 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
 
   let [basemap, set_basemap] = useState<string>(MAP_CONFIG.basemapLayers[0]?.id || 'dark')
   let [show_graticule, set_show_graticule] = useState(true)
+  let [show_tooltips, set_show_tooltips] = useState(true)
   let [inspect_data, set_inspect_data] = useState<InspectionData | null>(null)
   let [cursor_pos, set_cursor_pos] = useState<{ x: number; y: number } | null>(null)
 
@@ -405,6 +417,15 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
 
       if (info.layer?.id?.includes('historical-borders') || (info.object && (info.object.properties?.gwcode !== undefined || info.object.properties?.keyframes !== undefined))) {
         let hist_feat = info.object as HistoricalBorderFeature
+        if (hist_feat?.geometry) {
+          let calc_area = calculateFeatureArea(hist_feat)
+          if (calc_area > 0) {
+            if (!hist_feat.properties)
+              hist_feat.properties = {} as any
+            hist_feat.properties.calculated_area = Math.round(calc_area)
+            hist_feat.properties.area = Math.round(calc_area)
+          }
+        }
         set_selected_historical_feature(hist_feat)
         if (info.coordinate) {
           set_selected_historical_anchor_coord([info.coordinate[0], info.coordinate[1]])
@@ -586,6 +607,15 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
     selectedHistoricalFeature: selected_historical_feature,
     hoveredHistoricalFeature: hovered_historical_feature,
     onSelectHistoricalFeature: (feat, coord, x, y) => {
+      if (feat?.geometry) {
+        let calc_area = calculateFeatureArea(feat)
+        if (calc_area > 0) {
+          if (!feat.properties)
+            feat.properties = {} as any
+          feat.properties.calculated_area = Math.round(calc_area)
+          feat.properties.area = Math.round(calc_area)
+        }
+      }
       set_selected_historical_feature(feat)
       if (coord) {
         set_selected_historical_anchor_coord([coord[0], coord[1]])
@@ -677,6 +707,8 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
   //Return statement
   return (
     <div
+      ref={container_ref}
+      id="dataview-map-container"
       className="relative w-full h-full overflow-hidden select-none bg-background font-sans"
       style={{ imageRendering: 'pixelated', touchAction: 'none' }}
       onContextMenu={(e) => e.preventDefault()}
@@ -691,6 +723,56 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
         set_cursor_pos({ x, y })
         if (hovered_city_pos)
           set_hovered_city_pos({ x, y })
+      }}
+      onTouchStart={(e) => {
+        if (!show_tooltips)
+          return
+        let touch = e.touches[0]
+        if (!touch)
+          return
+        let rect = e.currentTarget.getBoundingClientRect()
+        let x = touch.clientX - rect.left
+        let y = touch.clientY - rect.top
+        set_cursor_pos({ x, y })
+        if (hovered_city_pos)
+          set_hovered_city_pos({ x, y })
+
+        if (deck_ref.current) {
+          let pick_info = deck_ref.current.pickObject({ x, y })
+          if (pick_info && pick_info.coordinate) {
+            let insp = sample_raster_at(pick_info.coordinate[0], pick_info.coordinate[1])
+            set_inspect_data(insp)
+            if (pick_info.layer?.id?.includes('historical-borders') || (pick_info.object && (pick_info.object.properties?.gwcode !== undefined || pick_info.object.properties?.keyframes !== undefined))) {
+              set_hovered_historical_feature(pick_info.object || null)
+            }
+          }
+        }
+      }}
+      onTouchMove={(e) => {
+        if (!show_tooltips)
+          return
+        let touch = e.touches[0]
+        if (!touch)
+          return
+        let rect = e.currentTarget.getBoundingClientRect()
+        let x = touch.clientX - rect.left
+        let y = touch.clientY - rect.top
+        set_cursor_pos({ x, y })
+        if (hovered_city_pos)
+          set_hovered_city_pos({ x, y })
+
+        if (deck_ref.current) {
+          let pick_info = deck_ref.current.pickObject({ x, y })
+          if (pick_info && pick_info.coordinate) {
+            let insp = sample_raster_at(pick_info.coordinate[0], pick_info.coordinate[1])
+            set_inspect_data(insp)
+            if (pick_info.layer?.id?.includes('historical-borders') || (pick_info.object && (pick_info.object.properties?.gwcode !== undefined || pick_info.object.properties?.keyframes !== undefined))) {
+              set_hovered_historical_feature(pick_info.object || null)
+            } else if (hovered_historical_feature) {
+              set_hovered_historical_feature(null)
+            }
+          }
+        }
       }}
     >
       <DeckGL
@@ -725,7 +807,7 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
       />
 
       {/* Unified Floating Tooltip Container (HUD Inspector & Stadestér City) */}
-      {ui_visible && !selected_city && (
+      {ui_visible && show_tooltips && !selected_city && (
         <ClickInfoPanel
           activeLayer={active_layer}
           activeVariableSelectors={props.activeVariableSelectors}
@@ -849,6 +931,8 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
               setProjection={set_projection}
               setShowGraticule={set_show_graticule}
               showGraticule={show_graticule}
+              showTooltips={show_tooltips}
+              onToggleTooltips={() => set_show_tooltips((arg0_prev) => !arg0_prev)}
               stadesterCities={stadester_cities}
               stadesterConfig={stadester_config}
               timelineBounds={timeline_bounds}

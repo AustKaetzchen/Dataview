@@ -138,6 +138,9 @@
     resizeColourbar: "Rechten Rand ziehen, um Farbleiste anzupassen",
     clickToSetBreak: "Klicken, um Umbruchwert per Zahl einzugeben",
     enterAbsoluteBreak: "Absoluten Umbruchwert eingeben",
+    hideTooltips: "Tooltips deaktivieren",
+    showTooltips: "Tooltips aktivieren",
+    tooltips: "Tooltips",
   },
   infoPanel: {
     activeRenderingModes: "Aktive Rendering-Modi",
