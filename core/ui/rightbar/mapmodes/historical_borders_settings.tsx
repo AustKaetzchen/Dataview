@@ -11,12 +11,12 @@ export interface HistoricalBordersSettingsProps {
 let PRESET_COLOURS = [
   { colour: '#ffffff', label: 'White' },
   { colour: '#000000', label: 'Black' },
-  { colour: '#d4af37', label: 'Antique Gold' },
-  { colour: '#f59e0b', label: 'Amber' },
-  { colour: '#ef4444', label: 'Vermilion' },
+  { colour: '#d4af37', label: 'Yellow' },
+  { colour: '#f59e0b', label: 'Orange' },
+  { colour: '#ef4444', label: 'Red' },
   { colour: '#06b6d4', label: 'Cyan' },
-  { colour: '#a855f7', label: 'Purple' },
-  { colour: '#10b981', label: 'Emerald' },
+  { colour: '#a08db1', label: 'Mauve' },
+  { colour: '#10b981', label: 'Green' },
 ]
 
 /**
@@ -88,11 +88,10 @@ export let HistoricalBordersSettings: React.FC<HistoricalBordersSettingsProps> =
                     strokeColor: arg0_item.colour,
                   }))
                 }}
-                className={`flex items-center gap-1.5 px-1.5 py-1 border text-[10px] cursor-pointer transition-colors ${
-                  is_active
-                    ? 'border-primary bg-primary/20 font-bold text-foreground shadow-xs'
-                    : 'border-border/60 bg-muted/20 hover:bg-muted/60 text-muted-foreground hover:text-foreground'
-                }`}
+                className={`flex items-center gap-1.5 px-1.5 py-1 border text-[10px] cursor-pointer transition-colors ${is_active
+                  ? 'border-primary bg-primary/20 font-bold text-foreground shadow-xs'
+                  : 'border-border/60 bg-muted/20 hover:bg-muted/60 text-muted-foreground hover:text-foreground'
+                  }`}
                 title={arg0_item.label}
               >
                 <span

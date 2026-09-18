@@ -7,17 +7,8 @@
     "simplified_borders": {
         name: "Simplified Borders",
         description: [
-            "### Simplified Statistical Borders",
-            "Temporally sliced statistical and historical borders from CShapes-2.0 and Svea atlas.naissance.",
-            "",
-            "<details>",
-            "<summary>Methodology & Temporal Slicing</summary>",
-            "",
-            "Historical sovereign boundaries are harmonised across two primary cartographic intervals:",
-            "- **1886 – 2026**: CShapes-2.0 dataset with geopolitical territory modifications mapped to sovereign states.",
-            "- **3500BC – 1886**: Svea atlas.naissance historical reconstructions of state control and tributary domains.",
-            "- **Geodetic Generalisation**: Douglas-Peucker topological polygon reduction preserves spatial accuracy while maintaining 60fps rendering performance.",
-            "</details>"
+            "### Simplified Borders",
+            "Temporally sliced statistical and historical borders from CShapes-2.0 and Atlas 0.6b.",
         ],
         filepaths: [
             {
@@ -41,18 +32,8 @@
     "detailed_borders": {
         name: "Detailed Borders",
         description: [
-            "### Detailed De Facto Borders",
-            "High-precision territorial frontiers and sovereignty boundaries from 3500BC to 2025AD.",
-            "",
-            "<details>",
-            "<summary>Methodology & Epoch Delineation</summary>",
-            "",
-            "Detailed boundaries incorporate multi-epoch territorial data based on the Svea atlas.naissance historical series:",
-            "- **Antiquity (3500BC – 476AD)**: Early civilisational heartlands, Persian, Hellenistic, and Roman provincial borders.",
-            "- **Middle Ages (476AD – 1356AD)**: Feudal subdivisions, Caliphates, and East Asian dynastic realms.",
-            "- **Early Modern (1356AD – 1815AD)**: Golden Bull boundaries, Westphalian sovereignty, and Napoleonic redistributions.",
-            "- **Modern (1815AD – 2025AD)**: Post-Congress Europe, decolonisation frontiers, and contemporary international recognition.",
-            "</details>"
+            "### De Facto Borders",
+            "Territorial frontiers from 3500BC to 2025AD."
         ],
         filepaths: [
             {
