@@ -59,6 +59,8 @@ export function useRasterRenderer (arg0_params: UseRasterRendererParams): UseRas
   let buffer_flip_ref = useRef<boolean>(false)
   let canvas_a_ref = useRef<HTMLCanvasElement | null>(null)
   let canvas_b_ref = useRef<HTMLCanvasElement | null>(null)
+  let effective_active_countries = countries_mode ? active_countries : null
+  let effective_country_stats = countries_mode ? country_stats : null
   let prev_bounds_ref = useRef<[number, number, number, number] | null>(null)
 
   //Function body
@@ -99,15 +101,16 @@ export function useRasterRenderer (arg0_params: UseRasterRendererParams): UseRas
     //Function body
     is_country_isolated = Boolean(
       countries_mode &&
-        active_countries.length > 0 &&
-        country_stats &&
-        country_stats.validCount > 0 &&
-        Number.isFinite(country_stats.min) &&
-        Number.isFinite(country_stats.max)
+        effective_active_countries &&
+        effective_active_countries.length > 0 &&
+        effective_country_stats &&
+        effective_country_stats.validCount > 0 &&
+        Number.isFinite(effective_country_stats.min) &&
+        Number.isFinite(effective_country_stats.max)
     )
 
-    effective_max = is_country_isolated ? country_stats!.max : max_val
-    effective_min = is_country_isolated ? country_stats!.min : min_val
+    effective_max = is_country_isolated ? effective_country_stats!.max : max_val
+    effective_min = is_country_isolated ? effective_country_stats!.min : min_val
 
     //Select double-buffered canvas to notify Deck.gl of image updates without allocations
     target_canvas = buffer_flip_ref.current ? canvas_b_ref.current : canvas_a_ref.current
@@ -126,7 +129,7 @@ export function useRasterRenderer (arg0_params: UseRasterRendererParams): UseRas
       r.width,
       r.height,
       {
-        activeCountries: is_country_isolated ? active_countries : null,
+        activeCountries: is_country_isolated ? effective_active_countries : null,
         breaks,
         invertPalette: invert_palette,
         logSigma: log_sigma,
@@ -162,13 +165,13 @@ export function useRasterRenderer (arg0_params: UseRasterRendererParams): UseRas
 
     return { rasterBounds: final_bounds, renderedCanvas: canvas }
   }, [
-    active_countries,
     active_layer_id,
     active_raster,
     breaks,
     color_palette,
     countries_mode,
-    country_stats,
+    effective_active_countries,
+    effective_country_stats,
     invert_palette,
     log_sigma,
     max_val,

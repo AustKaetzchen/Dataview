@@ -61,12 +61,14 @@ export function binRasterByCountry (
   let raster = arg0_raster
 
   //Declare local instance variables
+  let approx_cells: number
   let bin_count = 60
   let bin_counts: number[] = new Array(bin_count).fill(0)
   let bin_edges: number[] = []
   let bin_width: number
   let geometry = feature.geometry
   let h = raster.height
+  let hole_bboxes: [number, number, number, number][]
   let iso_a3 = feature.properties.iso_a3 || feature.properties.adm0_a3 || feature.properties.sov_a3 || ''
   let max = -Infinity
   let mean: number
@@ -82,6 +84,7 @@ export function binRasterByCountry (
   let safe_min: number
   let sample_values: number[]
   let std_dev: number
+  let stride: number
   let sum = 0
   let total_cells = 0
   let valid_count = 0
@@ -93,6 +96,27 @@ export function binRasterByCountry (
   for (let i = 0; i < polygons.length; i++) {
     let exterior_ring = polygons[i][0]
     let hole_rings = polygons[i].slice(1)
+
+    hole_bboxes = []
+    for (let x = 0; x < hole_rings.length; x++) {
+      let hr = hole_rings[x]
+      let h_max_x = -Infinity
+      let h_max_y = -Infinity
+      let h_min_x = Infinity
+      let h_min_y = Infinity
+      for (let y = 0; y < hr.length; y++) {
+        let pt = hr[y]
+        if (pt[0] < h_min_x)
+          h_min_x = pt[0]
+        if (pt[1] < h_min_y)
+          h_min_y = pt[1]
+        if (pt[0] > h_max_x)
+          h_max_x = pt[0]
+        if (pt[1] > h_max_y)
+          h_max_y = pt[1]
+      }
+      hole_bboxes.push([h_min_x, h_min_y, h_max_x, h_max_y])
+    }
 
     let p_max_x = -Infinity
     let p_max_y = -Infinity
@@ -116,7 +140,10 @@ export function binRasterByCountry (
     let min_col = Math.max(0, Math.floor(((p_min_x + 180)/360)*w))
     let min_row = Math.max(0, Math.floor(((90 - p_max_y)/180)*h))
 
-    for (let r = min_row; r <= max_row; r++) {
+    approx_cells = (max_col - min_col + 1)*(max_row - min_row + 1)
+    stride = approx_cells > 25000 ? Math.max(1, Math.floor(Math.sqrt(approx_cells/20000))) : 1
+
+    for (let r = min_row; r <= max_row; r += stride) {
       let lat = 90 - ((r + 0.5)/h)*180
       let intersections: number[] = []
 
@@ -139,28 +166,33 @@ export function binRasterByCountry (
         let c_start = Math.max(min_col, Math.floor(((intersections[k] + 180)/360)*w))
         let row_offset = r*w
 
-        for (let c = c_start; c <= c_end; c++) {
+        for (let c = c_start; c <= c_end; c += stride) {
           let in_hole = false
           let lng = -180 + ((c + 0.5)/w)*360
 
-          for (let z = 0; z < hole_rings.length; z++) {
-            if (pointInRing(lng, lat, hole_rings[z])) {
-              in_hole = true
-              break
+          if (hole_bboxes.length > 0) {
+            for (let z = 0; z < hole_rings.length; z++) {
+              let hb = hole_bboxes[z]
+              if (lng >= hb[0] && lng <= hb[2] && lat >= hb[1] && lat <= hb[3]) {
+                if (pointInRing(lng, lat, hole_rings[z])) {
+                  in_hole = true
+                  break
+                }
+              }
             }
           }
           if (in_hole)
             continue
 
-          total_cells++
+          total_cells += stride*stride
           let val = raster.data[row_offset + c]
           if (!Number.isNaN(val) && Number.isFinite(val)) {
             if (val < min)
               min = val
             if (val > max)
               max = val
-            sum += val
-            valid_count++
+            sum += val*stride*stride
+            valid_count += stride*stride
             values.push(val)
           }
         }

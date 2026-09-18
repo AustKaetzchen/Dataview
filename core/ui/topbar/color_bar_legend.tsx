@@ -5,20 +5,21 @@ import { transformValue } from '@framework/geopng/scales'
 import { useLocalisation } from '@localisation'
 
 export interface ColorBarLegendProps {
-  palette: ColorPalette
-  invertPalette?: boolean
-  minVal: number
-  maxVal: number
-  legendTitle: string
-  legendSubtitle?: string
-  scaleType: string
-  logSigma: number
-  currentVal?: number | null
   breaks?: number[]
   countryName?: string | null
-  onUpdateBreaks?: (breaks: number[]) => void
-  width?: number | string
+  currentVal?: number | null
+  invertPalette?: boolean
+  isMobile?: boolean
+  legendSubtitle?: string
+  legendTitle: string
+  logSigma: number
+  maxVal: number
+  minVal: number
   onResizeWidth?: (width: number) => void
+  onUpdateBreaks?: (breaks: number[]) => void
+  palette: ColorPalette
+  scaleType: string
+  width?: number | string
 }
 
 /**
@@ -148,6 +149,7 @@ export let ColorBarLegend: React.FC<ColorBarLegendProps> = React.memo(function (
   let handle_resize_mouse_down: (e: React.MouseEvent) => void
   let indicator_pct: number | null
   let invert_palette = props.invertPalette ?? false
+  let is_mobile = Boolean(props.isMobile)
   let legend_subtitle = props.legendSubtitle
   let legend_title = props.legendTitle
   let localisation: ReturnType<typeof useLocalisation>
@@ -285,10 +287,10 @@ export let ColorBarLegend: React.FC<ColorBarLegendProps> = React.memo(function (
   return (
     <div
       style={{ width: (typeof current_width === 'number') ? `${current_width}px` : current_width }}
-      className="relative rounded-none border border-border bg-card/95 backdrop-blur-md p-[var(--padding)] pb-3 shadow-lg text-[var(--body-font-size)] text-card-foreground select-none font-sans"
+      className={`relative rounded-none border border-border bg-card/95 backdrop-blur-md ${is_mobile ? 'p-1.5 px-2 pb-1.5 shadow-md' : 'p-[var(--padding)] pb-3 shadow-lg'} text-[var(--body-font-size)] text-card-foreground select-none font-sans`}
     >
       {/* Draggable Right Border Resize Handle */}
-      {(on_resize_width && typeof current_width === 'number') && (
+      {(!is_mobile && on_resize_width && typeof current_width === 'number') && (
         <div
           onMouseDown={handle_resize_mouse_down}
           className="absolute top-0 right-0 bottom-0 w-2 cursor-col-resize hover:bg-primary/50 active:bg-primary transition-colors z-30 group"
@@ -299,46 +301,77 @@ export let ColorBarLegend: React.FC<ColorBarLegendProps> = React.memo(function (
       )}
 
       {/* Legend Title, Subtitle & Hover Value Readout */}
-      <div className="flex items-start justify-between mb-2 gap-[var(--padding)]">
-        <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="font-bold text-foreground text-[var(--header-font-size)] whitespace-pre-line leading-tight">
+      {is_mobile ? (
+        <div className="flex items-center justify-between mb-1 gap-1.5 text-[11px] leading-none">
+          <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
+            <span className="font-bold text-foreground truncate max-w-[150px]">
               {legend_title}
             </span>
-            <span className="text-[var(--body-font-size)] text-muted-foreground capitalize bg-muted px-2 py-0.5 rounded-none shrink-0">
+            <span className="text-[10px] text-muted-foreground capitalize bg-muted px-1.5 py-0.5 shrink-0">
               {scale_type}
             </span>
             {country_name && (
-              <span className="text-[var(--body-font-size)] font-bold text-white bg-primary/20 border border-primary/40 px-2 py-0.5 rounded-none flex items-center gap-1 shrink-0">
-                <span className="w-1.5 h-1.5 rounded-none bg-primary animate-pulse" />
-                {country_name}
+              <span className="text-[10px] font-bold text-white bg-primary/20 border border-primary/40 px-1.5 py-0.5 flex items-center gap-1 shrink-0 truncate max-w-[100px]">
+                <span className="w-1 h-1 bg-primary shrink-0" />
+                <span className="truncate">{country_name}</span>
               </span>
             )}
           </div>
-          {legend_subtitle && legend_subtitle.trim().length > 0 && (
-            <p className="text-[11px] text-muted-foreground font-light whitespace-pre-line leading-tight mt-0.5">
-              {legend_subtitle}
-            </p>
-          )}
-        </div>
 
-        <div className="shrink-0 pt-0.5">
-          {current_val !== null && current_val !== undefined && Number.isFinite(current_val) ? (
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-none bg-primary text-primary-foreground font-bold text-[var(--body-font-size)] shadow-sm animate-in fade-in-0 duration-100">
-              <span>{formatLegendValue(current_val)}</span>
-            </div>
-          ) : (
-            <span className="text-[var(--body-font-size)] text-muted-foreground font-light">
-              {formatLegendValue(min_val)} → {formatLegendValue(max_val)}
-            </span>
-          )}
+          <div className="shrink-0 text-right">
+            {current_val !== null && current_val !== undefined && Number.isFinite(current_val) ? (
+              <span className="font-bold text-primary bg-primary/10 px-1.5 py-0.5 text-[11px]">
+                {formatLegendValue(current_val)}
+              </span>
+            ) : (
+              <span className="text-[10px] text-muted-foreground font-light">
+                {formatLegendValue(min_val)} → {formatLegendValue(max_val)}
+              </span>
+            )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="flex items-start justify-between mb-2 gap-[var(--padding)]">
+          <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="font-bold text-foreground text-[var(--header-font-size)] whitespace-pre-line leading-tight">
+                {legend_title}
+              </span>
+              <span className="text-[var(--body-font-size)] text-muted-foreground capitalize bg-muted px-2 py-0.5 rounded-none shrink-0">
+                {scale_type}
+              </span>
+              {country_name && (
+                <span className="text-[var(--body-font-size)] font-bold text-white bg-primary/20 border border-primary/40 px-2 py-0.5 rounded-none flex items-center gap-1 shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-none bg-primary animate-pulse" />
+                  {country_name}
+                </span>
+              )}
+            </div>
+            {legend_subtitle && legend_subtitle.trim().length > 0 && (
+              <p className="text-[11px] text-muted-foreground font-light whitespace-pre-line leading-tight mt-0.5">
+                {legend_subtitle}
+              </p>
+            )}
+          </div>
+
+          <div className="shrink-0 pt-0.5">
+            {current_val !== null && current_val !== undefined && Number.isFinite(current_val) ? (
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-none bg-primary text-primary-foreground font-bold text-[var(--body-font-size)] shadow-sm animate-in fade-in-0 duration-100">
+                <span>{formatLegendValue(current_val)}</span>
+              </div>
+            ) : (
+              <span className="text-[var(--body-font-size)] text-muted-foreground font-light">
+                {formatLegendValue(min_val)} → {formatLegendValue(max_val)}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Gradient Bar with Breaks & Active Value Needle */}
-      <div className="relative w-full my-1.5">
+      <div className={`relative w-full ${is_mobile ? 'my-1' : 'my-1.5'}`}>
         <div
-          className="relative h-4.5 w-full rounded-none border border-border/80 shadow-inner overflow-hidden"
+          className={`relative ${is_mobile ? 'h-2.5' : 'h-4.5'} w-full rounded-none border border-border/80 shadow-inner overflow-hidden`}
           style={{ background: gradient }}
         >
           {break_points.map((bp, i) => {
@@ -356,22 +389,24 @@ export let ColorBarLegend: React.FC<ColorBarLegendProps> = React.memo(function (
 
         {indicator_pct !== null && (
           <div
-            className="absolute top-[-4px] bottom-[-4px] pointer-events-none transition-all duration-75 ease-out z-20 flex flex-col items-center justify-between"
+            className={`absolute ${is_mobile ? '-top-1 -bottom-1' : 'top-[-4px] bottom-[-4px]'} pointer-events-none transition-all duration-75 ease-out z-20 flex flex-col items-center justify-between`}
             style={{ left: `${indicator_pct}%` }}
           >
-            <div className="w-0 h-0 border-l-[4.5px] border-l-transparent border-r-[4.5px] border-r-transparent border-t-[6px] border-t-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]" />
-            <div className="w-[2.5px] flex-1 bg-white rounded-none shadow-[0_0_6px_rgba(0,0,0,0.9)] border border-black/30" />
-            <div className="w-0 h-0 border-l-[4.5px] border-l-transparent border-r-[4.5px] border-r-transparent border-b-[6px] border-b-white drop-shadow-[0_-1px_2px_rgba(0,0,0,0.9)]" />
+            <div className={`w-0 h-0 ${is_mobile ? 'border-l-[3.5px] border-r-[3.5px] border-t-[4px]' : 'border-l-[4.5px] border-r-[4.5px] border-t-[6px]'} border-l-transparent border-r-transparent border-t-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]`} />
+            <div className={`${is_mobile ? 'w-[2px]' : 'w-[2.5px]'} flex-1 bg-white rounded-none shadow-[0_0_6px_rgba(0,0,0,0.9)] border border-black/30`} />
+            <div className={`w-0 h-0 ${is_mobile ? 'border-l-[3.5px] border-r-[3.5px] border-b-[4px]' : 'border-l-[4.5px] border-r-[4.5px] border-b-[6px]'} border-l-transparent border-r-transparent border-b-white drop-shadow-[0_-1px_2px_rgba(0,0,0,0.9)]`} />
           </div>
         )}
       </div>
 
       {/* Ticks and aligned break values with click-to-edit */}
-      <div className="relative w-full h-7 mt-1">
+      <div className={`relative w-full ${is_mobile ? 'h-4 mt-0.5' : 'h-7 mt-1'}`}>
         {break_points.map((bp, i) => {
           let is_editing = (editing_index === i)
           let is_first = (i === 0)
           let is_last = (i === break_points.length - 1)
+          if (is_mobile && !is_first && !is_last && i !== Math.floor(break_points.length / 2))
+            return null
           let alignment = (is_first)
             ? 'items-start -translate-x-0'
             : (is_last)
@@ -381,10 +416,10 @@ export let ColorBarLegend: React.FC<ColorBarLegendProps> = React.memo(function (
           return (
             <div
               key={i}
-              className={`absolute top-0 flex flex-col text-[var(--body-font-size)] text-muted-foreground font-light ${alignment}`}
+              className={`absolute top-0 flex flex-col ${is_mobile ? 'text-[9px]' : 'text-[var(--body-font-size)]'} text-muted-foreground font-light ${alignment}`}
               style={{ left: `${bp.pct}%` }}
             >
-              <div className="w-[1px] h-1 bg-border/80 mb-0.5" />
+              <div className={`w-[1px] ${is_mobile ? 'h-0.5 mb-0' : 'h-1 mb-0.5'} bg-border/80`} />
               {is_editing ? (
                 <input
                   type="text"
@@ -416,7 +451,7 @@ export let ColorBarLegend: React.FC<ColorBarLegendProps> = React.memo(function (
                     }
                     set_editing_index(null)
                   }}
-                  className="w-16 h-6 px-1 text-[var(--body-font-size)] font-bold bg-background border border-primary text-foreground text-center rounded-none z-30 shadow-lg focus:outline-none"
+                  className={`${is_mobile ? 'w-12 h-4 text-[9px]' : 'w-16 h-6 text-[var(--body-font-size)]'} px-1 font-bold bg-background border border-primary text-foreground text-center rounded-none z-30 shadow-lg focus:outline-none`}
                   title={t.hud.enterAbsoluteBreak}
                 />
               ) : (
@@ -426,7 +461,7 @@ export let ColorBarLegend: React.FC<ColorBarLegendProps> = React.memo(function (
                     set_editing_index(i)
                     set_editing_value(bp.val.toString())
                   }}
-                  className="whitespace-nowrap px-1 py-0.2 cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted rounded-none transition-colors underline decoration-dotted decoration-muted-foreground/60 underline-offset-2"
+                  className={`whitespace-nowrap ${is_mobile ? 'px-0.5 text-[9px]' : 'px-1 py-0.2 text-[var(--body-font-size)]'} cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted rounded-none transition-colors underline decoration-dotted decoration-muted-foreground/60 underline-offset-2`}
                   title={t.hud.clickToSetBreak}
                 >
                   {bp.label}

@@ -217,6 +217,7 @@ export interface UseDeckLayersParams {
   raster: DecodedRaster | null
   palette: any
   invertPalette?: boolean
+  isMobile?: boolean
   minVal: number
   maxVal: number
   selectedCountries?: CountryFeature[]
@@ -339,6 +340,7 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
     let invert_palette = options.invertPalette
     let is_cartesian: boolean
     let is_hovered_already_selected: boolean
+    let is_mobile = Boolean(options.isMobile)
     let land_data: any
     let land_geo_json = options.landGeoJson
     let layers_array: any[] = []
@@ -774,7 +776,7 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
             getAlignmentBaseline: 'center',
             sizeUnits: 'pixels',
             sizeScale: 1,
-            sizeMinPixels: 6.5,
+            sizeMinPixels: is_mobile ? 12.0 : 6.5,
             sizeMaxPixels: 130.0,
             coordinateSystem: (is_cartesian) ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
             billboard: true,
@@ -844,7 +846,7 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
             stroked: is_halo,
             filled: !is_halo,
             radiusUnits: 'pixels',
-            radiusMinPixels: 3.25,
+            radiusMinPixels: is_mobile ? 6.5 : 3.25,
             radiusMaxPixels: 65.0,
             coordinateSystem: (is_cartesian) ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
             billboard: true,
@@ -974,7 +976,18 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
               billboard: true,
               coordinateSystem: (is_cartesian) ? COORDINATE_SYSTEM.CARTESIAN : COORDINATE_SYSTEM.LNGLAT,
               characterSet: 'auto',
-              pickable: false,
+              pickable: true,
+              autoHighlight: true,
+              highlightColor: [255, 255, 255, 60],
+              onClick: (info: any) => {
+                if (info.object && options.onSelectCity)
+                  options.onSelectCity(info.object)
+                return true
+              },
+              onHover: (info: any) => {
+                if (options.onHoverCity)
+                  options.onHoverCity(info.object || null, info.x, info.y)
+              },
               parameters: {
                 cullMode: 'none',
                 depthMask: false,
@@ -1006,6 +1019,7 @@ export let useDeckLayers = function (arg0_options: UseDeckLayersParams): any[] {
     options.raster,
     options.palette,
     options.invertPalette,
+    options.isMobile,
     options.minVal,
     options.maxVal,
     options.selectedCountry,

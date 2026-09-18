@@ -6,6 +6,9 @@
   // Default percentile breaks for quantile scale calculation (comma-separated).
   // Can also be edited live by the user in the sidebar controls.
   defaultPercentileBreaks: "0, 1, 5, 25, 50, 75, 95, 99, 100",
+  // Touch & interaction picking radius in pixels (used for DeckGL layer hit testing)
+  touchPickRadius: 18,
+  desktopPickRadius: 2,
   // Camera viewport definitions, graticule settings, and projection pixel offsets.
   // pixelOffset: -1 shifts the raster SOUTH by 1 pixel height to correct northern offset.
   mapDefines: {

@@ -1033,7 +1033,6 @@ export let App: React.FC = function () {
           onToggleSnapToKeyframes={set_snap_to_keyframes}
           playbackSpeed={playback_speed}
           style={is_mobile ? {
-            bottom: '12px',
             left: '8px',
             right: '8px',
             width: 'calc(100vw - 16px)',

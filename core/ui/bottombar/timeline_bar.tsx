@@ -72,6 +72,7 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
   let keyframes_ref = useRef<number[]>(available_keyframes)
   let last_snap_time_ref = useRef<number>(0)
   let last_tick_ref = useRef<number>(performance.now())
+  let legend_bottom_clearance: number
   let load_duration_estimate_ref = useRef<number>(1.8)
   let load_start_time_ref = useRef<number>(0)
   let loading_pct: number
@@ -84,6 +85,7 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
   let set_is_date_picker_open: React.Dispatch<React.SetStateAction<boolean>>
   let set_is_looping: React.Dispatch<React.SetStateAction<boolean>>
   let set_is_settings_open: React.Dispatch<React.SetStateAction<boolean>>
+  let set_legend_bottom_clearance: React.Dispatch<React.SetStateAction<number>>
   let set_loading_pct: React.Dispatch<React.SetStateAction<number>>
   let set_loading_time_remaining: React.Dispatch<React.SetStateAction<number>>
   let set_loading_visible: React.Dispatch<React.SetStateAction<boolean>>
@@ -101,6 +103,7 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
   ;[is_date_picker_open, set_is_date_picker_open] = useState(false)
   ;[is_looping, set_is_looping] = useState(false)
   ;[is_settings_open, set_is_settings_open] = useState(false)
+  ;[legend_bottom_clearance, set_legend_bottom_clearance] = useState(0)
   ;[loading_pct, set_loading_pct] = useState(0)
   ;[loading_time_remaining, set_loading_time_remaining] = useState(1.8)
   ;[loading_visible, set_loading_visible] = useState(false)
@@ -333,16 +336,56 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
     }
   }, [is_playing, playback_speed])
 
+  //Track bottom clearance above legend card on mobile
+  useEffect(() => {
+    if (!is_mobile) {
+      set_legend_bottom_clearance(0)
+      return
+    }
+
+    let updateLegendClearance = () => {
+      let legend_el = document.getElementById('dataview-legend-card-container')
+      if (legend_el) {
+        let rect = legend_el.getBoundingClientRect()
+        let vp_height = (typeof window !== 'undefined' && window.visualViewport)
+          ? window.visualViewport.height
+          : (typeof window !== 'undefined' ? window.innerHeight : 800)
+        if (rect.height > 0 && rect.top > vp_height / 2) {
+          let next_clearance = Math.max(0, vp_height - rect.top) + 8
+          set_legend_bottom_clearance(next_clearance)
+          return
+        }
+      }
+      set_legend_bottom_clearance(0)
+    }
+
+    updateLegendClearance()
+    window.addEventListener('resize', updateLegendClearance)
+    let ro = new ResizeObserver(updateLegendClearance)
+    let mo = new MutationObserver(updateLegendClearance)
+    let legend_el = document.getElementById('dataview-legend-card-container')
+    if (legend_el)
+      ro.observe(legend_el)
+    if (typeof document !== 'undefined' && document.body)
+      mo.observe(document.body, { attributes: true, attributeFilter: ['style', 'class'], childList: true, subtree: true })
+
+    return () => {
+      mo.disconnect()
+      ro.disconnect()
+      window.removeEventListener('resize', updateLegendClearance)
+    }
+  }, [is_mobile])
+
   //Return statement
   return (
     <div
       id="dataview-timelinebar-container"
       style={is_mobile ? {
-        bottom: '12px',
         left: '8px',
         right: '8px',
         width: 'calc(100vw - 16px)',
         ...style,
+        bottom: `${Math.max(12, legend_bottom_clearance)}px`,
       } : {
         bottom: '12px',
         left: 0,

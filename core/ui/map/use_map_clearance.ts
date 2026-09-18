@@ -14,6 +14,7 @@ export interface MapClearanceOptions {
 }
 
 export interface MapClearanceResult {
+  colourbarClearance: number
   mapmodesBounds: { left: number; right: number; top: number } | null
   mapmodesTakenRight: number
   timelineBounds: { left: number; right: number; top: number } | null
@@ -37,6 +38,7 @@ export function useMapClearance (arg0_options?: MapClearanceOptions): MapClearan
   let ui_visible = options.uiVisible
 
   //Declare local instance variables
+  let [colourbar_clearance, set_colourbar_clearance] = useState<number>(0)
   let [mapmodes_bounds, set_mapmodes_bounds] = useState<{ left: number; right: number; top: number } | null>(null)
   let [mapmodes_taken_right, set_mapmodes_taken_right] = useState<number>(0)
   let [timeline_bounds, set_timeline_bounds] = useState<{ left: number; right: number; top: number } | null>(null)
@@ -87,27 +89,45 @@ export function useMapClearance (arg0_options?: MapClearanceOptions): MapClearan
         set_mapmodes_bounds((arg0_prev) => (arg0_prev === null ? null : null))
       }
 
-      //3. Top-right trays (AnalyticsDrawer, Settings, Toolbar)
+      //3. Colourbar bottom clearance
+      let legend_el = document.getElementById('dataview-legend-card-container')
+      let next_colourbar_clearance = 0
+      if (legend_el) {
+        let rect = legend_el.getBoundingClientRect()
+        let vp_height = (typeof window !== 'undefined' && window.visualViewport)
+          ? window.visualViewport.height
+          : (typeof window !== 'undefined' ? window.innerHeight : 800)
+        if (rect.height > 0 && rect.top > vp_height / 2)
+          next_colourbar_clearance = Math.max(0, vp_height - rect.top) + UI_LAYOUT.gap
+      }
+      set_colourbar_clearance((arg0_prev) => (arg0_prev === next_colourbar_clearance ? arg0_prev : next_colourbar_clearance))
+
+      //4. Top-right toolbar and desktop drawers
       let current_top_right = 0
       let analytics_el = document.getElementById('dataview-analytics-drawer')
+      let is_desktop_mode = (typeof window !== 'undefined') ? (window.innerWidth > 768) : true
       let settings_el = document.getElementById('dataview-settings-drawer')
       let toolbar_el = document.getElementById('dataview-top-right-toolbar')
 
-      if (analytics_el) {
-        let rect = analytics_el.getBoundingClientRect()
-        if (rect.width > 0 && rect.left < window.innerWidth)
-          current_top_right = Math.max(current_top_right, window.innerWidth - rect.left)
-      }
-      if (settings_el) {
-        let rect = settings_el.getBoundingClientRect()
-        if (rect.width > 0 && rect.left < window.innerWidth)
-          current_top_right = Math.max(current_top_right, window.innerWidth - rect.left)
-      }
       if (toolbar_el) {
         let rect = toolbar_el.getBoundingClientRect()
         if (rect.width > 0 && rect.left < window.innerWidth)
           current_top_right = Math.max(current_top_right, window.innerWidth - rect.left)
       }
+      if (is_desktop_mode) {
+        if (analytics_el) {
+          let rect = analytics_el.getBoundingClientRect()
+          if (rect.width > 0 && rect.left < window.innerWidth && rect.top < 150)
+            current_top_right = Math.max(current_top_right, window.innerWidth - rect.left)
+        }
+        if (settings_el) {
+          let rect = settings_el.getBoundingClientRect()
+          if (rect.width > 0 && rect.left < window.innerWidth && rect.top < 150)
+            current_top_right = Math.max(current_top_right, window.innerWidth - rect.left)
+        }
+      }
+      if (ui_visible && current_top_right === 0)
+        current_top_right = 44
       set_top_right_taken((arg0_prev) => (arg0_prev === current_top_right ? arg0_prev : current_top_right))
     }
 
@@ -115,15 +135,54 @@ export function useMapClearance (arg0_options?: MapClearanceOptions): MapClearan
     window.addEventListener('resize', updateClearance)
     if (typeof window !== 'undefined' && window.visualViewport)
       window.visualViewport.addEventListener('resize', updateClearance)
+
     let ro = new ResizeObserver(updateClearance)
-    let timeline_el = document.getElementById('dataview-timelinebar-container')
+    let mo = new MutationObserver(() => {
+      updateClearance()
+      let a_el = document.getElementById('dataview-analytics-drawer')
+      let l_el = document.getElementById('dataview-legend-card-container')
+      let m_el = document.getElementById('dataview-mapmodes-tray')
+      let s_el = document.getElementById('dataview-settings-drawer')
+      let t_el = document.getElementById('dataview-timelinebar-container')
+      let tb_el = document.getElementById('dataview-top-right-toolbar')
+      if (a_el)
+        ro.observe(a_el)
+      if (l_el)
+        ro.observe(l_el)
+      if (m_el)
+        ro.observe(m_el)
+      if (s_el)
+        ro.observe(s_el)
+      if (t_el)
+        ro.observe(t_el)
+      if (tb_el)
+        ro.observe(tb_el)
+    })
+
+    let analytics_el = document.getElementById('dataview-analytics-drawer')
+    let legend_el = document.getElementById('dataview-legend-card-container')
     let mapmodes_el = document.getElementById('dataview-mapmodes-tray')
-    if (timeline_el)
-      ro.observe(timeline_el)
+    let settings_el = document.getElementById('dataview-settings-drawer')
+    let timeline_el = document.getElementById('dataview-timelinebar-container')
+    let toolbar_el = document.getElementById('dataview-top-right-toolbar')
+    if (analytics_el)
+      ro.observe(analytics_el)
+    if (legend_el)
+      ro.observe(legend_el)
     if (mapmodes_el)
       ro.observe(mapmodes_el)
+    if (settings_el)
+      ro.observe(settings_el)
+    if (timeline_el)
+      ro.observe(timeline_el)
+    if (toolbar_el)
+      ro.observe(toolbar_el)
+
+    if (typeof document !== 'undefined' && document.body)
+      mo.observe(document.body, { attributes: true, attributeFilter: ['style', 'class'], childList: true, subtree: true })
 
     return () => {
+      mo.disconnect()
       ro.disconnect()
       window.removeEventListener('resize', updateClearance)
       if (typeof window !== 'undefined' && window.visualViewport)
@@ -133,6 +192,7 @@ export function useMapClearance (arg0_options?: MapClearanceOptions): MapClearan
 
   //Return statement
   return {
+    colourbarClearance: colourbar_clearance,
     mapmodesBounds: mapmodes_bounds,
     mapmodesTakenRight: mapmodes_taken_right,
     timelineBounds: timeline_bounds,

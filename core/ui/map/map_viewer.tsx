@@ -115,6 +115,7 @@ export interface MapViewerProps {
   onTogglePerformantMode?: (enabled: boolean) => void
   onToggleUi?: () => void
   performantMode?: boolean
+  pickRadius?: number
   rasterVersion?: number
   selectedCity?: CityFullRecord | null
   selectedCityKey?: string | null
@@ -181,6 +182,7 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
   let opacity = props.opacity
   let palette = props.palette
   let performant_mode = props.performantMode ?? false
+  let pick_radius = props.pickRadius
   let projection = props.projection
   let raster = props.raster
   let raster_bounds = props.rasterBounds
@@ -207,6 +209,9 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
   let circle_pixel_data: any
   let container_ref = useRef<HTMLDivElement>(null)
   let deck_ref = useRef<any>(null)
+  let default_desktop_pick_radius: number
+  let default_touch_pick_radius: number
+  let effective_pick_radius: number
   let elevation_spikes_data: any
   let equal_earth_land_geo_json: any
   let graticule_paths: { path: [number, number][] }[]
@@ -220,9 +225,14 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
   let pending_hover_info_ref = useRef<any>(null)
   let pending_touch_pos_ref = useRef<{ x: number; y: number } | null>(null)
   let sample_raster_at: (coordX: number, coordY: number) => InspectionData | null
+  let sample_touch_at: (arg0_x: number, arg1_y: number) => void
   let touch_pick_raf_ref = useRef<number | null>(null)
 
   //Function body
+  default_desktop_pick_radius = MAP_CONFIG.desktopPickRadius ?? 2
+  default_touch_pick_radius = MAP_CONFIG.touchPickRadius ?? 18
+  effective_pick_radius = (pick_radius !== undefined) ? pick_radius : (is_mobile ? default_touch_pick_radius : default_desktop_pick_radius)
+
   let [internal_flyout_open, set_internal_flyout_open] = useState(false)
   let flyout_open = (props.settingsDrawerOpen !== undefined) ? props.settingsDrawerOpen : internal_flyout_open
   let set_flyout_open = on_toggle_settings_drawer || set_internal_flyout_open
@@ -294,6 +304,7 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
     uiVisible: ui_visible,
   })
   let {
+    colourbarClearance: colourbar_clearance,
     mapmodesBounds: mapmodes_bounds,
     mapmodesTakenRight: mapmodes_taken_right,
     timelineBounds: timeline_bounds,
@@ -399,6 +410,60 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
       )
     },
     [raster, effective_country_features, projection, countries_mode, is_historical_borders_active]
+  )
+
+  sample_touch_at = useCallback(
+    (arg0_x: number, arg1_y: number) => {
+      //Convert from parameters
+      let x = arg0_x
+      let y = arg1_y
+
+      //Guard clauses
+      if (!deck_ref.current)
+        return
+
+      //Function body
+      let deck_inst = deck_ref.current?.deck || deck_ref.current
+      let unprojected_coord: [number, number] | null = null
+      let viewports = deck_inst?.getViewports ? deck_inst.getViewports() : []
+      let vp = viewports[0]
+
+      if (vp && typeof vp.unproject === 'function') {
+        try {
+          let pt = vp.unproject([x, y], { targetZ: 0 })
+          if (pt && Number.isFinite(pt[0]) && Number.isFinite(pt[1])) {
+            unprojected_coord = [pt[0], pt[1]]
+          }
+        } catch (arg0_err) {
+          // Ignore unproject calculation errors
+        }
+      }
+
+      if (unprojected_coord) {
+        let insp = sample_raster_at(unprojected_coord[0], unprojected_coord[1])
+        set_inspect_data(insp)
+        if (on_inspect)
+          on_inspect(insp)
+      }
+
+      let pick_info = deck_ref.current.pickObject({ x, y })
+      if (pick_info) {
+        if (pick_info.coordinate && !unprojected_coord) {
+          let insp = sample_raster_at(pick_info.coordinate[0], pick_info.coordinate[1])
+          set_inspect_data(insp)
+          if (on_inspect)
+            on_inspect(insp)
+        }
+        if (pick_info.layer?.id?.includes('historical-borders') || (pick_info.object && (pick_info.object.properties?.gwcode !== undefined || pick_info.object.properties?.keyframes !== undefined))) {
+          set_hovered_historical_feature(pick_info.object || null)
+        } else if (hovered_historical_feature) {
+          set_hovered_historical_feature(null)
+        }
+      } else if (hovered_historical_feature) {
+        set_hovered_historical_feature(null)
+      }
+    },
+    [sample_raster_at, hovered_historical_feature, on_inspect]
   )
 
   handle_click = useCallback(
@@ -551,6 +616,7 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
     projection,
     rasterVersion: raster_version,
     basemap,
+    isMobile: is_mobile,
     landGeoJson: land_geo_json,
     equalEarthLandGeoJson: equal_earth_land_geo_json,
     showGraticule: show_graticule,
@@ -710,6 +776,18 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
         set_cursor_pos({ x, y })
         if (hovered_city_pos)
           set_hovered_city_pos({ x, y })
+
+        pending_touch_pos_ref.current = { x, y }
+        if (touch_pick_raf_ref.current !== null) {
+          cancelAnimationFrame(touch_pick_raf_ref.current)
+          touch_pick_raf_ref.current = null
+        }
+        touch_pick_raf_ref.current = requestAnimationFrame(() => {
+          touch_pick_raf_ref.current = null
+          let cur_pos = pending_touch_pos_ref.current
+          if (cur_pos)
+            sample_touch_at(cur_pos.x, cur_pos.y)
+        })
       }}
       onTouchMove={(e) => {
         if (!show_tooltips)
@@ -724,10 +802,6 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
         if (hovered_city_pos)
           set_hovered_city_pos({ x, y })
 
-        // Guard clauses: do not trigger costly GPU readPixels if user is dragging/panning
-        if (is_interacting_ref.current)
-          return
-
         pending_touch_pos_ref.current = { x, y }
         if (touch_pick_raf_ref.current !== null)
           return
@@ -735,19 +809,8 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
         touch_pick_raf_ref.current = requestAnimationFrame(() => {
           touch_pick_raf_ref.current = null
           let cur_pos = pending_touch_pos_ref.current
-          if (!cur_pos || !deck_ref.current || is_interacting_ref.current)
-            return
-
-          let pick_info = deck_ref.current.pickObject({ x: cur_pos.x, y: cur_pos.y })
-          if (pick_info && pick_info.coordinate) {
-            let insp = sample_raster_at(pick_info.coordinate[0], pick_info.coordinate[1])
-            set_inspect_data(insp)
-            if (pick_info.layer?.id?.includes('historical-borders') || (pick_info.object && (pick_info.object.properties?.gwcode !== undefined || pick_info.object.properties?.keyframes !== undefined))) {
-              set_hovered_historical_feature(pick_info.object || null)
-            } else if (hovered_historical_feature) {
-              set_hovered_historical_feature(null)
-            }
-          }
+          if (cur_pos)
+            sample_touch_at(cur_pos.x, cur_pos.y)
         })
       }}
       onTouchEnd={() => {
@@ -774,16 +837,13 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
               cancelAnimationFrame(hover_raf_ref.current)
               hover_raf_ref.current = null
             }
-            if (touch_pick_raf_ref.current !== null) {
-              cancelAnimationFrame(touch_pick_raf_ref.current)
-              touch_pick_raf_ref.current = null
-            }
           }
         }}
         controller={false}
         layers={layers}
         onClick={handle_click}
         onHover={handle_hover}
+        pickingRadius={effective_pick_radius}
         onAfterRender={() => {
           if (typeof window !== 'undefined') {
             ; (window as any).__deckRendered = true
@@ -865,10 +925,10 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
           let legend_country_name = (is_country_relative) ? country_stats!.name : undefined
 
           let current_sidebar_width = sidebar_width ?? UI_LAYOUT.sidebarWidth
-          if (is_timelapse_exporting)
+          if (is_timelapse_exporting || is_mobile)
             current_sidebar_width = 0
           let current_colourbar_width = colourbar_width ?? 336
-          let colourbar_left = is_timelapse_exporting
+          let colourbar_left = (is_timelapse_exporting || is_mobile)
             ? UI_LAYOUT.margin
             : UI_LAYOUT.margin + current_sidebar_width + UI_LAYOUT.gap
 
@@ -900,9 +960,11 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
               legendTitle={legend_title}
               logSigma={log_sigma}
               mapModes={map_modes}
+              mapmodesBounds={mapmodes_bounds}
               mapmodesTakenRight={mapmodes_taken_right}
               onChangeLegendPosition={on_change_legend_position}
               onCloseInfoPanel={on_close_info_panel}
+              onDoubleClick={handle_reset_view}
               onResizeColourbarWidth={on_resize_colourbar_width}
               onToggleAnalytics={on_toggle_analytics}
               onTogglePerformantMode={on_toggle_performant_mode}
@@ -942,7 +1004,7 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
           bottomClearance={
             (window.innerHeight > window.innerWidth || Boolean(timeline_bounds && mapmodes_bounds && timeline_bounds.right > mapmodes_bounds.left)) && timeline_clearance > UI_LAYOUT.margin
               ? timeline_clearance
-              : undefined
+              : (is_mobile && colourbar_clearance > 0 ? colourbar_clearance : undefined)
           }
           circleOverlayConfig={circle_overlay_config}
           countriesMode={Boolean(countries_mode)}

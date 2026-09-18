@@ -51,12 +51,14 @@ export interface MapDefines {
 }
 
 export interface MapConfig {
-  mercatorPixelOffset?: number
+  defaultPercentileBreaks: string
+  desktopPickRadius?: number
+  equalEarthPixelOffset?: number
   equirectangularPixelOffset?: number
   globePixelOffset?: number
-  equalEarthPixelOffset?: number
-  defaultPercentileBreaks: string
   mapDefines: MapDefines
+  mercatorPixelOffset?: number
+  touchPickRadius?: number
   basemapLayers: BasemapDefinition[]
 }
 

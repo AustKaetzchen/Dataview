@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react'
 import type { HistoricalBorderFeature } from '@server/AtlasBordersService'
 import type { CountryFeature, CountryStats } from '@framework/geopng/polygon_binning.ts'
-import { binRasterByCountryMemoized } from '@framework/geopng/polygon_binning.ts'
 import { calculateFeatureArea } from '@framework/geopng/polygon_area.ts'
 import type { DecodedRaster } from '@framework/geopng/types.ts'
 import { Icon } from '@ui/components/icon'
@@ -49,19 +48,12 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
   //Hooks
   let localisation = useLocalisation()
 
-  //Determine effective raster statistics for feature
+  //Determine effective raster statistics for feature (computed asynchronously via Web Worker)
   let effective_stats = useMemo(() => {
     if (country_stats)
       return country_stats
-    if (raster && feature) {
-      try {
-        return binRasterByCountryMemoized(raster, feature as unknown as CountryFeature)
-      } catch (arg0_err) {
-        console.error('Failed to compute regional raster statistics for historical feature:', arg0_err)
-      }
-    }
     return null
-  }, [country_stats, raster, feature])
+  }, [country_stats])
 
   //Calculate geodesic area clientside from geometry
   let calculated_geom_area = useMemo(() => {

@@ -172,8 +172,8 @@ export function useMapViewState (arg0_options: MapViewStateOptions): MapViewStat
           : (projection === 'EqualEarth')
             ? { maxRotationX: 0, maxZoom: 10, minRotationX: -85, minZoom: 0.2, rotationOrbit: 0, rotationX: 0, target: [0, 0, 0], zoom: equal_earth_zoom }
             : (projection === 'Globe')
-              ? { bearing: 0, latitude: 20, longitude: 0, maxPitch: 85, maxZoom: 18, minPitch: 0, minZoom: 0, pitch: 0, zoom: 3 }
-              : { bearing: 0, latitude: 20, longitude: 0, maxPitch: 85, maxZoom: 18, minPitch: 0, minZoom: 0, pitch: 0, zoom: 1.2 },
+              ? (MAP_CONFIG.mapDefines?.initialGlobe || { bearing: 0, latitude: 20, longitude: 0, maxPitch: 85, maxZoom: 18, minPitch: 0, minZoom: 0, pitch: 0, zoom: 3 })
+              : (MAP_CONFIG.mapDefines?.initialMercator || { bearing: 0, latitude: 20, longitude: 0, maxPitch: 85, maxZoom: 18, minPitch: 0, minZoom: 0, pitch: 0, zoom: 1.2 }),
     }))
   }, [projection, set_proj_view_states])
 

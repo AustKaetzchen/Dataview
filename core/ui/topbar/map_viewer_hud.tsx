@@ -58,6 +58,7 @@ export interface MapViewerHUDProps {
   legendTitle: string
   logSigma: number
   mapModes: MapModeItem[]
+  mapmodesBounds?: { left: number; right: number; top: number } | null
   mapmodesTakenRight?: number
   onChangeLegendPosition?: (arg0_pos: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right') => void
   onCloseInfoPanel?: () => void
@@ -129,6 +130,7 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
   let legend_title = props.legendTitle
   let log_sigma = props.logSigma
   let map_modes = props.mapModes
+  let mapmodes_bounds = props.mapmodesBounds
   let mapmodes_taken_right = props.mapmodesTakenRight ?? 352
   let on_change_legend_position = props.onChangeLegendPosition
   let on_close_info_panel = props.onCloseInfoPanel
@@ -162,16 +164,61 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
 
   //Declare local instance variables
   let container_style: React.CSSProperties = {}
+  let effective_timeline_left: number
+  let effective_timeline_right: number
+  let effective_top_right: number
+  let has_timeline: boolean
   let is_bottom = legend_position.startsWith('bottom')
   let is_center_pos = legend_position.includes('center') || legend_position.includes('centre')
-  let window_w = (typeof window !== 'undefined') ? window.innerWidth : 1920
+  let window_h: number
+  let window_w: number
 
   //Function body
-  let effective_timeline_left = timeline_bounds ? timeline_bounds.left : ((window_w - Math.min(1100, window_w - 64)) / 2)
-  let effective_timeline_right = timeline_bounds ? timeline_bounds.right : (effective_timeline_left + Math.min(1100, window_w - 64))
-  let has_timeline = Boolean(timeline_bounds) || ui_visible || is_timelapse_exporting
+  window_h = (typeof window !== 'undefined' && window.visualViewport)
+    ? window.visualViewport.height
+    : (typeof window !== 'undefined' ? window.innerHeight : 800)
+  window_w = (typeof window !== 'undefined' && window.visualViewport)
+    ? window.visualViewport.width
+    : (typeof window !== 'undefined' ? window.innerWidth : 1920)
 
-  if (legend_position === 'bottom-center') {
+  effective_timeline_left = timeline_bounds
+    ? timeline_bounds.left
+    : ((window_w - Math.min(1100, window_w - 64)) / 2)
+  effective_timeline_right = timeline_bounds
+    ? timeline_bounds.right
+    : (effective_timeline_left + Math.min(1100, window_w - 64))
+  effective_top_right = (is_mobile ? Math.max(top_right_taken, 44) : top_right_taken) + UI_LAYOUT.gap
+  has_timeline = Boolean(timeline_bounds) || ui_visible || Boolean(is_timelapse_exporting)
+
+  if (is_mobile) {
+    if (is_bottom) {
+      container_style.bottom = '12px'
+      container_style.left = '8px'
+      container_style.maxWidth = 'calc(100vw - 16px)'
+      container_style.right = '8px'
+      container_style.transform = 'none'
+      container_style.width = 'auto'
+    } else {
+      container_style.top = '54px'
+      container_style.transform = 'none'
+
+      if (legend_position === 'top-right') {
+        container_style.maxWidth = `calc(100vw - ${effective_top_right + 16}px)`
+        container_style.right = `${effective_top_right}px`
+        container_style.width = `min(380px, calc(100vw - ${effective_top_right + 16}px))`
+      } else if (legend_position === 'top-center') {
+        container_style.left = '8px'
+        container_style.maxWidth = `calc(100vw - ${effective_top_right + 16}px)`
+        container_style.right = `${effective_top_right}px`
+        container_style.width = 'auto'
+      } else {
+        // 'top-left'
+        container_style.left = '8px'
+        container_style.maxWidth = `calc(100vw - ${effective_top_right + 16}px)`
+        container_style.width = `min(380px, calc(100vw - ${effective_top_right + 16}px))`
+      }
+    }
+  } else if (legend_position === 'bottom-center') {
     container_style.bottom = `${timeline_clearance}px`
     container_style.left = '50%'
     container_style.transform = 'translateX(-50%)'
@@ -227,6 +274,7 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
                 key={`colorbar-${active_layer_id ?? 'layer'}-${raster_version}-${legend_title}-${legend_subtitle}-${color_palette}`}
                 palette={color_palette}
                 invertPalette={invert_palette}
+                isMobile={is_mobile}
                 minVal={legend_min}
                 maxVal={legend_max}
                 legendTitle={legend_title}
@@ -237,8 +285,8 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
                 breaks={legend_breaks}
                 countryName={legend_country_name}
                 onUpdateBreaks={on_update_breaks}
-                width={is_center_pos ? '100%' : current_colourbar_width}
-                onResizeWidth={is_center_pos ? undefined : on_resize_colourbar_width}
+                width={is_mobile || is_center_pos ? '100%' : current_colourbar_width}
+                onResizeWidth={is_mobile || is_center_pos ? undefined : on_resize_colourbar_width}
               />
             </div>
           )}
@@ -250,7 +298,7 @@ export let MapViewerHUD: React.FC<MapViewerHUDProps> = React.memo(function (
                 config={stadester_config}
                 hoveredCity={hovered_city}
                 settlementCount={stadester_cities?.length ?? 0}
-                width={is_center_pos ? '100%' : current_colourbar_width}
+                width={is_mobile || is_center_pos ? '100%' : current_colourbar_width}
               />
             </div>
           )}

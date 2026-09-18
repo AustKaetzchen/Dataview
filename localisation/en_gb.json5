@@ -69,7 +69,7 @@
       scaleTransformation: "Scale Transformation",
       pseudoLog: "pseudo-log",
       linear: "linear",
-      logSigma: "Log Sigma",
+      logSigma: "Steepness",
       colorPalette: "Colour Palette (D3)",
       invert: "Invert",
       legendTitle: "Legend Title",
