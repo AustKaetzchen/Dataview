@@ -5,7 +5,7 @@
   // =========================================================================
   app: {
     title: "DATAVIEW",
-    subtitle: "Historical statistics from 10000BC to Now.",
+    subtitle: "Historical statistics from 10000BC to Now.\nMade with imprecision by [Confoederatio](https://confoederatio.org).",
     badge: "BETA",
   },
   settings: {

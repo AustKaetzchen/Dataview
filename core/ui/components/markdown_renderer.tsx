@@ -88,7 +88,8 @@ let parseInline = function (arg0_text: string): React.ReactNode[] {
           href={local_match[10]}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-primary hover:underline font-medium"
+          className="text-primary hover:underline font-medium align-[-1px]"
+          style={{ verticalAlign: '-1px' }}
         >
           {local_match[9]}
         </a>

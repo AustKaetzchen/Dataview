@@ -4,7 +4,7 @@
 /* -- Vercengen themes & shadcn adaptation -- */
 :root {
   --navbar-height: 2rem;
-  
+
   --accent-primary-colour: rgba(200, 40, 40);
   --accent-secondary-colour: rgba(240, 60, 60);
   --accent-tertiary-colour: rgba(255, 255, 255, 0.15);
@@ -78,7 +78,9 @@
   --color-toggled: var(--toggled-on-colour);
 }
 
-html, head, body {
+html,
+head,
+body {
   height: 100%;
   height: var(--app-height, 100dvh);
   max-height: var(--app-height, 100dvh);
@@ -87,7 +89,9 @@ html, head, body {
   width: 100%;
 }
 
-*, ::before, ::after {
+*,
+::before,
+::after {
   font-family: var(--body-font-family), sans-serif;
   border-color: var(--border);
   box-sizing: border-box;
@@ -102,29 +106,48 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: var(--header-font-family), sans-serif;
   font-size: var(--header-font-size);
   font-weight: var(--header-font-weight);
   color: var(--header-colour);
 }
 
-b, strong {
+b,
+strong {
   font-weight: 700;
 }
 
-button, input, select, textarea {
-  font-size: inherit;
-} /* -- Rem fix -- */
+a {
+  vertical-align: -0.5px !important;
+}
 
-button, [role="button"] {
+button,
+input,
+select,
+textarea {
+  font-size: inherit;
+}
+
+/* -- Rem fix -- */
+
+button,
+[role="button"] {
   cursor: pointer;
 }
-button:disabled, [role="button"][aria-disabled="true"] {
+
+button:disabled,
+[role="button"][aria-disabled="true"] {
   cursor: not-allowed;
 }
 
-canvas, iframe {
+canvas,
+iframe {
   user-select: none;
 }
 
@@ -142,7 +165,8 @@ input[type="checkbox"] {
   vertical-align: middle;
 }
 
-code, pre {
+code,
+pre {
   font-family: var(--monospace-font-family), monospace !important;
 }
 
@@ -159,7 +183,8 @@ code, pre {
   top: 0;
   height: var(--app-height, 100dvh);
   width: 100dvw;
-  > div {
+
+  >div {
     pointer-events: auto;
   }
 }
@@ -171,7 +196,10 @@ code, pre {
 }
 
 /* -- Vercengen atomics -- */
-.ve-display-none { display: none !important; }
+.ve-display-none {
+  display: none !important;
+}
+
 [ve-searchbar="true"] {
   align-items: center;
   background-color: var(--bg-secondary-colour);
@@ -182,12 +210,19 @@ code, pre {
   margin-bottom: calc(var(--cell-padding) * 1.25);
   padding: 0 var(--padding) 0 0;
   width: 20rem;
-  
-  [component="ve-datalist"] { input { margin-left: 0 } }
+
+  [component="ve-datalist"] {
+    input {
+      margin-left: 0
+    }
+  }
 }
 
 /* Material Icons inline styling */
-icon, .material-icons, .ve-icon, [class*="material-icons"] {
+icon,
+.material-icons,
+.ve-icon,
+[class*="material-icons"] {
   font-family: 'Material Icons', sans-serif !important;
   font-weight: normal;
   font-style: normal;
@@ -272,5 +307,3 @@ code:not(pre code) {
   font-family: var(--monospace-font-family), monospace;
   font-size: 0.8em;
 }
-
-
