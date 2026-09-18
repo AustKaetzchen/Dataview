@@ -18,6 +18,7 @@ export interface MarkdownSectionItem {
   content?: string | string[]
   text?: string | string[]
   defaultOpen?: boolean
+  open?: boolean
 }
 
 export type TabMarkdownContent = string | string[] | MarkdownSectionItem[]

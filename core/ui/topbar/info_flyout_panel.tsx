@@ -10,8 +10,64 @@ import { Icon } from '@ui/components/icon'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@ui/components/tabs'
 import { MarkdownRenderer } from '@ui/components/markdown_renderer'
 import { Window } from '@ui/components/window'
-import { INFO_PANEL_CONFIG, MAPMODES_CONFIG } from '@common'
+import { INFO_PANEL_CONFIG, MAPMODES_CONFIG, MarkdownSectionItem } from '@common'
 import { useLocalisation } from '@localisation'
+
+export interface InfoCollapsibleSectionProps {
+  idx: number
+  sec: MarkdownSectionItem
+}
+
+/**
+ * Collapsible accordion section inside the information flyout panel.
+ *
+ * @param {InfoCollapsibleSectionProps} arg0_props
+ * @returns {React.ReactElement}
+ */
+export let InfoCollapsibleSection: React.FC<InfoCollapsibleSectionProps> = function (arg0_props: InfoCollapsibleSectionProps) {
+  //Convert from parameters
+  let props = (arg0_props) ? arg0_props : ({} as InfoCollapsibleSectionProps)
+
+  //Declare local instance variables
+  let content = props.sec.content || props.sec.text
+  let is_open: boolean
+  let sec = props.sec
+  let set_is_open: React.Dispatch<React.SetStateAction<boolean>>
+  let title = props.sec.title || props.sec.heading || props.sec.summary
+
+  //Function body
+  let [open_state, set_open_state] = useState<boolean>(() => {
+    if (sec.open !== undefined)
+      return Boolean(sec.open)
+    if (sec.defaultOpen !== undefined)
+      return Boolean(sec.defaultOpen)
+    return true
+  })
+  is_open = open_state
+  set_is_open = set_open_state
+
+  //Return statement
+  return (
+    <details
+      open={is_open}
+      onToggle={(e) => set_is_open(e.currentTarget.open)}
+      className="group border border-border bg-background/60 rounded-none transition-colors"
+    >
+      <summary className="cursor-pointer font-bold text-foreground text-[var(--body-font-size)] p-2 flex items-center justify-between hover:bg-muted/40 transition-colors select-none list-none [&::-webkit-details-marker]:hidden">
+        <span className="flex items-center gap-2">
+          <Icon
+            name="chevron_right"
+            className="transition-transform duration-200 group-open:rotate-90 text-primary shrink-0"
+          />
+          <span>{title}</span>
+        </span>
+      </summary>
+      <div className="p-2.5 pt-1 border-t border-border/40 text-[var(--body-font-size)]">
+        <MarkdownRenderer content={content} />
+      </div>
+    </details>
+  )
+}
 
 export interface InfoFlyoutPanelProps {
   cameraTilt?: number
@@ -212,25 +268,8 @@ export let InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = function (arg0_prop
                     if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object') {
                       return (
                         <div className="space-y-2">
-                          {(data as any[]).map((sec, idx) => (
-                            <details
-                              key={idx}
-                              open={sec.defaultOpen !== false}
-                              className="group border border-border bg-background/60 rounded-none transition-colors"
-                            >
-                              <summary className="cursor-pointer font-bold text-foreground text-[var(--body-font-size)] p-2 flex items-center justify-between hover:bg-muted/40 transition-colors select-none list-none [&::-webkit-details-marker]:hidden">
-                                <span className="flex items-center gap-2">
-                                  <Icon
-                                    name="chevron_right"
-                                    className="transition-transform duration-200 group-open:rotate-90 text-primary shrink-0"
-                                  />
-                                  <span>{sec.title || sec.heading || sec.summary}</span>
-                                </span>
-                              </summary>
-                              <div className="p-2.5 pt-1 border-t border-border/40 text-[var(--body-font-size)]">
-                                <MarkdownRenderer content={sec.content || sec.text} />
-                              </div>
-                            </details>
+                          {(data as MarkdownSectionItem[]).map((sec, idx) => (
+                            <InfoCollapsibleSection key={idx} idx={idx} sec={sec} />
                           ))}
                         </div>
                       )

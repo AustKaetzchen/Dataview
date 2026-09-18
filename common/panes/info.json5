@@ -58,11 +58,12 @@
             "",
             "We advise you to not share this URL currently if you have access to it, or to advertise it publicly. Not that we would break your kneecaps, but the website might not always be online in such cases.",
             "",
-            "Part of the **[Confoederatio](https://confoederatio.org/)** ecosystem."
+            "Part of [Confoederatio](https://confoederatio.org/)."
           ],
         },
         {
           title: "Data Caveats",
+          open: false,
           content: [
             "Complex multi-raster calculations are downsampled to `1080x540` for performance reasons.",
             "",
