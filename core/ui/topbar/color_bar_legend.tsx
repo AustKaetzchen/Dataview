@@ -287,7 +287,7 @@ export let ColorBarLegend: React.FC<ColorBarLegendProps> = React.memo(function (
   return (
     <div
       style={{ width: (typeof current_width === 'number') ? `${current_width}px` : current_width }}
-      className={`relative rounded-none border border-border bg-card/95 backdrop-blur-md ${is_mobile ? 'p-1.5 px-2 pb-1.5 shadow-md' : 'p-[var(--padding)] pb-3 shadow-lg'} text-[var(--body-font-size)] text-card-foreground select-none font-sans`}
+      className={`relative w-full rounded-none border border-border bg-card/95 backdrop-blur-md ${is_mobile ? 'p-1.5 px-2 pb-1.5 shadow-md' : 'p-[var(--padding)] pb-3 shadow-lg'} text-[var(--body-font-size)] text-card-foreground select-none font-sans`}
     >
       {/* Draggable Right Border Resize Handle */}
       {(!is_mobile && on_resize_width && typeof current_width === 'number') && (

@@ -26,6 +26,7 @@ export interface AppLayoutStateResult {
   setSidebarWidth: React.Dispatch<React.SetStateAction<number>>
   setUiVisible: React.Dispatch<React.SetStateAction<boolean>>
   sidebarBottomClearance: number | undefined
+  sidebarTopClearance: number | undefined
   sidebarWidth: number
   uiVisible: boolean
 }
@@ -72,6 +73,7 @@ export function useAppLayoutState (): AppLayoutStateResult {
     return 'top-left'
   })
   let [sidebar_bottom_clearance, set_sidebar_bottom_clearance] = useState<number | undefined>(undefined)
+  let [sidebar_top_clearance, set_sidebar_top_clearance] = useState<number | undefined>(undefined)
   let [sidebar_width, set_sidebar_width] = useState<number>(336)
   let [ui_visible, set_ui_visible] = useState<boolean>(true)
 
@@ -95,34 +97,88 @@ export function useAppLayoutState (): AppLayoutStateResult {
 
   useEffect(() => {
     let updateSidebarClearance = () => {
-      let clearance: number
-      let is_vertical = window.innerHeight > window.innerWidth
-      let next_val: number | undefined
-      let overlaps: boolean
+      //Declare local instance variables
+      let from_bottom: number
+      let legend_el = document.getElementById('dataview-legend-card-container')
+      let max_from_bottom = 0
+      let next_bottom_val: number | undefined
+      let next_top_val: number | undefined
+      let overlaps_bottom: boolean
+      let overlaps_top: boolean
+      let rect: DOMRect
       let timeline_el = document.getElementById('dataview-timelinebar-container')
-      if (timeline_el) {
-        let rect = timeline_el.getBoundingClientRect()
-        let from_bottom = window.innerHeight - rect.top
-        clearance = Math.max(from_bottom, 0) + 12
-        overlaps = is_vertical || (rect.left < (sidebar_width + 24))
-        next_val = overlaps ? clearance : undefined
-        set_sidebar_bottom_clearance((arg0_prev) => (arg0_prev === next_val ? arg0_prev : next_val))
+
+      if (is_mobile) {
+        if (timeline_el) {
+          rect = timeline_el.getBoundingClientRect()
+          from_bottom = window.innerHeight - rect.top
+          max_from_bottom = Math.max(max_from_bottom, from_bottom)
+          next_bottom_val = max_from_bottom + 12
+        }
+        if (legend_el) {
+          rect = legend_el.getBoundingClientRect()
+          if (rect.height > 0 && rect.top > window.innerHeight / 2) {
+            from_bottom = window.innerHeight - rect.top
+            next_bottom_val = Math.max(next_bottom_val ?? 0, from_bottom + 12)
+          }
+        }
       } else {
-        set_sidebar_bottom_clearance((arg0_prev) => (arg0_prev === undefined ? undefined : undefined))
+        if (timeline_el) {
+          rect = timeline_el.getBoundingClientRect()
+          from_bottom = window.innerHeight - rect.top
+          overlaps_bottom = (rect.left < (sidebar_width + 24))
+          if (overlaps_bottom) {
+            max_from_bottom = Math.max(max_from_bottom, from_bottom)
+            next_bottom_val = max_from_bottom + 12
+          }
+        }
+        if (legend_el) {
+          rect = legend_el.getBoundingClientRect()
+          if (rect.height > 0) {
+            if (rect.top < window.innerHeight / 2) {
+              overlaps_top = (rect.left < (sidebar_width + 24))
+              if (overlaps_top)
+                next_top_val = Math.round(rect.bottom) + 12
+            } else {
+              overlaps_bottom = (rect.left < (sidebar_width + 24))
+              if (overlaps_bottom) {
+                from_bottom = window.innerHeight - rect.top
+                max_from_bottom = Math.max(max_from_bottom, from_bottom)
+                next_bottom_val = max_from_bottom + 12
+              }
+            }
+          }
+        }
       }
+      set_sidebar_bottom_clearance((arg0_prev) => (arg0_prev === next_bottom_val ? arg0_prev : next_bottom_val))
+      set_sidebar_top_clearance((arg0_prev) => (arg0_prev === next_top_val ? arg0_prev : next_top_val))
     }
 
     updateSidebarClearance()
     window.addEventListener('resize', updateSidebarClearance)
-    let observer = typeof MutationObserver !== 'undefined' ? new MutationObserver(updateSidebarClearance) : null
-    let target = document.getElementById('dataview-timelinebar-container')
-    if (observer && target)
-      observer.observe(target, { attributes: true, childList: true, subtree: true })
+    let ro = new ResizeObserver(updateSidebarClearance)
+    let mo = new MutationObserver(() => {
+      updateSidebarClearance()
+      let l_el = document.getElementById('dataview-legend-card-container')
+      let t_el = document.getElementById('dataview-timelinebar-container')
+      if (l_el)
+        ro.observe(l_el)
+      if (t_el)
+        ro.observe(t_el)
+    })
+    let legend_el = document.getElementById('dataview-legend-card-container')
+    let timeline_el = document.getElementById('dataview-timelinebar-container')
+    if (legend_el)
+      ro.observe(legend_el)
+    if (timeline_el)
+      ro.observe(timeline_el)
+    if (typeof document !== 'undefined' && document.body)
+      mo.observe(document.body, { childList: true, subtree: true })
 
     return () => {
       window.removeEventListener('resize', updateSidebarClearance)
-      if (observer)
-        observer.disconnect()
+      ro.disconnect()
+      mo.disconnect()
     }
   }, [sidebar_width])
 
@@ -143,6 +199,7 @@ export function useAppLayoutState (): AppLayoutStateResult {
     setSidebarWidth: set_sidebar_width,
     setUiVisible: set_ui_visible,
     sidebarBottomClearance: sidebar_bottom_clearance,
+    sidebarTopClearance: sidebar_top_clearance,
     sidebarWidth: sidebar_width,
     uiVisible: ui_visible,
   }

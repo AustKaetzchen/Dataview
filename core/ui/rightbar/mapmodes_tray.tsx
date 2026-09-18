@@ -55,6 +55,7 @@ export interface MapmodesTrayProps {
   isLoadingLayers?: boolean
   isMobile?: boolean
   layers?: Record<string, ParsedDataLayer>
+  legendPosition?: string
   mapModes: MapModeItem[]
   onChangeVariableSelector?: (arg0_key: string, arg1_option: string | string[]) => void
   onClearCountries: () => void
@@ -108,6 +109,7 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
     isLoadingLayers: is_loading_layers = false,
     isMobile: is_mobile = false,
     layers = {},
+    legendPosition: legend_position,
     mapModes: map_modes,
     onChangeVariableSelector: on_change_variable_selector,
     onClearCountries: on_clear_countries,
@@ -396,7 +398,7 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
             right: '12px',
             width: is_mobile ? 'min(340px, calc(100vw - 24px))' : `${tray_width}px`,
           }}
-          className={is_mobile ? 'fixed z-30' : 'absolute z-20'}
+          className={is_mobile ? 'fixed z-30' : 'absolute z-30'}
         >
           <button
             type="button"
@@ -433,7 +435,9 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
           height: is_mobile ? 'auto' : `${tray_height}px`,
           maxHeight: is_mobile
             ? (is_mobile_details_active ? 'calc(var(--app-height, 100dvh) * 0.65)' : 'calc(var(--app-height, 100dvh) * 0.5)')
-            : (bottom_clearance !== undefined ? `calc(100dvh - ${bottom_clearance + 28}px)` : 'calc(100dvh - 40px)'),
+            : (legend_position === 'bottom-right'
+              ? `calc(100dvh - ${(bottom_clearance !== undefined ? bottom_clearance : 12) + 240 + 24}px)`
+              : `calc(100dvh - ${(bottom_clearance !== undefined ? bottom_clearance : 12) + (legend_position?.startsWith('top') ? 72 : 12) + 24}px)`),
           maxWidth: is_mobile ? 'calc(100vw - 24px)' : 'calc(100vw - 40px)',
           right: '12px',
           width: is_mobile
@@ -441,7 +445,7 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
             : `${tray_width}px`,
         }}
         className={`${
-          is_mobile ? 'fixed z-30' : 'absolute z-20'
+          is_mobile ? 'fixed z-30' : 'absolute z-30'
         } flex flex-col bg-card/95 backdrop-blur-md border border-border shadow-2xl p-2.5 space-y-2 text-[var(--body-font-size)] select-none font-sans overflow-hidden transition-all duration-150 ease-out`}
       >
         {/* Resize Handles (Active when tray is not collapsed and not mobile) */}

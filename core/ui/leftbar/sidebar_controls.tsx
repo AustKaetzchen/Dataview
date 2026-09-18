@@ -36,6 +36,7 @@ export interface SidebarControlsProps {
   appMode: AppMode
   binningConfig: BinningConfig
   bottomClearance?: number
+  topClearance?: number
   boundsMode: BoundsMode
   cameraTilt?: number
   circleOverlayConfig?: CircleOverlayConfig
@@ -154,6 +155,7 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
     setPercentileList: set_percentile_list,
     setScaleType: set_scale_type,
     stadesterConfig: stadester_config,
+    topClearance: top_clearance,
     userRole: user_role = 'default',
     width,
   } = props
@@ -348,15 +350,16 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
         } : {
           bottom: is_sidebar_collapsed ? 'auto' : ((bottom_clearance !== undefined) ? `${bottom_clearance}px` : '12px'),
           left: '12px',
+          maxHeight: `calc(100dvh - ${((top_clearance !== undefined) ? top_clearance : 12) + (is_sidebar_collapsed ? 12 : ((bottom_clearance !== undefined) ? bottom_clearance : 12))}px)`,
           maxWidth: 'calc(100vw - 24px)',
-          top: '12px',
+          top: (top_clearance !== undefined) ? `${top_clearance}px` : '12px',
           width: `${current_width}px`,
         }}
         className={is_mobile
           ? `fixed left-0 z-50 flex flex-col bg-card/95 backdrop-blur-md ${is_sidebar_collapsed ? 'border-b' : ''} border-border text-card-foreground overflow-hidden select-none font-sans shadow-2xl transition-transform duration-200 ease-out pb-2 max-h-[calc(var(--app-height,100dvh)-48px)]`
           : is_full_width
           ? `fixed left-0 top-0 z-40 flex flex-col bg-card/95 backdrop-blur-md border-b ${is_sidebar_collapsed ? 'border-b' : ''} border-border text-card-foreground overflow-hidden select-none font-sans shadow-2xl transition-all duration-150 ease-out max-h-[100dvh]`
-          : 'absolute top-3 left-3 z-20 flex flex-col bg-card/95 backdrop-blur-md border border-border text-card-foreground overflow-hidden select-none font-sans shadow-2xl transition-all duration-150 ease-out max-h-[calc(100dvh-24px)]'
+          : 'absolute left-3 z-20 flex flex-col bg-card/95 backdrop-blur-md border border-border text-card-foreground overflow-hidden select-none font-sans shadow-2xl transition-all duration-150 ease-out'
         }
       >
         {/* Draggable Right Border Resize Handle */}

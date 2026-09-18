@@ -336,45 +336,51 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
     }
   }, [is_playing, playback_speed])
 
-  //Track bottom clearance above legend card on mobile
+  //Track bottom clearance above legend card when docked at bottom
   useEffect(() => {
-    if (!is_mobile) {
-      set_legend_bottom_clearance(0)
-      return
-    }
-
     let updateLegendClearance = () => {
-      let legend_el = document.getElementById('dataview-legend-card-container')
-      if (legend_el) {
-        let rect = legend_el.getBoundingClientRect()
-        let vp_height = (typeof window !== 'undefined' && window.visualViewport)
+      //Declare local instance variables
+      let legend_el: HTMLElement | null
+      let next_clearance: number
+      let rect: DOMRect
+      let vp_height: number
+
+      legend_el = document.getElementById('dataview-legend-card-container')
+      if (is_mobile && legend_el) {
+        rect = legend_el.getBoundingClientRect()
+        vp_height = (typeof window !== 'undefined' && window.visualViewport)
           ? window.visualViewport.height
           : (typeof window !== 'undefined' ? window.innerHeight : 800)
         if (rect.height > 0 && rect.top > vp_height / 2) {
-          let next_clearance = Math.max(0, vp_height - rect.top) + 8
-          set_legend_bottom_clearance(next_clearance)
+          next_clearance = Math.max(0, vp_height - rect.top) + 8
+          set_legend_bottom_clearance((arg0_prev) => (Math.abs(arg0_prev - next_clearance) > 1 ? next_clearance : arg0_prev))
           return
         }
       }
-      set_legend_bottom_clearance(0)
+      set_legend_bottom_clearance((arg0_prev) => (arg0_prev === 0 ? 0 : 0))
     }
 
     updateLegendClearance()
     window.addEventListener('resize', updateLegendClearance)
     let ro = new ResizeObserver(updateLegendClearance)
-    let mo = new MutationObserver(updateLegendClearance)
+    let mo = new MutationObserver(() => {
+      updateLegendClearance()
+      let l_el = document.getElementById('dataview-legend-card-container')
+      if (l_el)
+        ro.observe(l_el)
+    })
     let legend_el = document.getElementById('dataview-legend-card-container')
     if (legend_el)
       ro.observe(legend_el)
     if (typeof document !== 'undefined' && document.body)
-      mo.observe(document.body, { attributes: true, attributeFilter: ['style', 'class'], childList: true, subtree: true })
+      mo.observe(document.body, { childList: true, subtree: true })
 
     return () => {
       mo.disconnect()
       ro.disconnect()
       window.removeEventListener('resize', updateLegendClearance)
     }
-  }, [is_mobile])
+  }, [])
 
   //Return statement
   return (
@@ -387,13 +393,13 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
         ...style,
         bottom: `${Math.max(12, legend_bottom_clearance)}px`,
       } : {
-        bottom: '12px',
         left: 0,
         marginLeft: 'auto',
         marginRight: 'auto',
         right: 0,
         width: 'min(1100px, calc(100vw - 64px))',
         ...style,
+        bottom: `${Math.max(12, legend_bottom_clearance)}px`,
       }}
       className={`${is_mobile ? 'fixed' : 'absolute'} z-30 pointer-events-auto select-none font-sans`}
     >

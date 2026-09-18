@@ -305,11 +305,16 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
   })
   let {
     colourbarClearance: colourbar_clearance,
+    effectiveMapmodesBottom: effective_mapmodes_bottom,
     mapmodesBounds: mapmodes_bounds,
+    mapmodesClearance: mapmodes_clearance,
+    mapmodesHeight: mapmodes_height,
     mapmodesTakenRight: mapmodes_taken_right,
+    mapmodesWidth: mapmodes_width,
     timelineBounds: timeline_bounds,
     timelineClearance: timeline_clearance,
     topRightTaken: top_right_taken,
+    topbarClearance: topbar_clearance,
   } = clearance
 
   let view_state_mgmt = useMapViewState({
@@ -958,10 +963,14 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
               legendPosition={legend_position}
               legendSubtitle={legend_subtitle}
               legendTitle={legend_title}
+              effectiveMapmodesBottom={effective_mapmodes_bottom}
               logSigma={log_sigma}
               mapModes={map_modes}
               mapmodesBounds={mapmodes_bounds}
+              mapmodesClearance={mapmodes_clearance}
+              mapmodesHeight={mapmodes_height}
               mapmodesTakenRight={mapmodes_taken_right}
+              mapmodesWidth={mapmodes_width}
               onChangeLegendPosition={on_change_legend_position}
               onCloseInfoPanel={on_close_info_panel}
               onDoubleClick={handle_reset_view}
@@ -987,6 +996,7 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
               timelineBounds={timeline_bounds}
               timelineClearance={timeline_clearance}
               topRightTaken={top_right_taken}
+              topbarClearance={topbar_clearance}
               uiVisible={ui_visible}
               activeLayerId={props.activeLayerId}
               rasterVersion={raster_version}
@@ -1001,11 +1011,8 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
           activeVariableSelectors={props.activeVariableSelectors}
           allCountries={country_features}
           analyticsOpen={props.analyticsOpen}
-          bottomClearance={
-            (window.innerHeight > window.innerWidth || Boolean(timeline_bounds && mapmodes_bounds && timeline_bounds.right > mapmodes_bounds.left)) && timeline_clearance > UI_LAYOUT.margin
-              ? timeline_clearance
-              : (is_mobile && colourbar_clearance > 0 ? colourbar_clearance : undefined)
-          }
+          bottomClearance={effective_mapmodes_bottom}
+          legendPosition={legend_position}
           circleOverlayConfig={circle_overlay_config}
           countriesMode={Boolean(countries_mode)}
           countryStats={country_stats}

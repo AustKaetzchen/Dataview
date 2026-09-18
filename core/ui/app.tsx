@@ -115,6 +115,7 @@ export let App: React.FC = function () {
     setSidebarWidth: set_sidebar_width,
     setUiVisible: set_ui_visible,
     sidebarBottomClearance: sidebar_bottom_clearance,
+    sidebarTopClearance: sidebar_top_clearance,
     sidebarWidth: sidebar_width,
     uiVisible: ui_visible,
   } = layout_state
@@ -1037,7 +1038,6 @@ export let App: React.FC = function () {
             right: '8px',
             width: 'calc(100vw - 16px)',
           } : {
-            bottom: '12px',
             left: 0,
             marginLeft: 'auto',
             marginRight: 'auto',
@@ -1057,6 +1057,7 @@ export let App: React.FC = function () {
           binningConfig={binning_config}
           bottomClearance={sidebar_bottom_clearance}
           boundsMode={bounds_mode}
+          topClearance={sidebar_top_clearance}
           circleOverlayConfig={circle_overlay_config}
           colorPalette={color_palette}
           dataFormat={data_format}
