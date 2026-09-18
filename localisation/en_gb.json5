@@ -5,7 +5,7 @@
   // =========================================================================
   app: {
     title: "DATAVIEW",
-    subtitle: "Internal tooling for historical statistics",
+    subtitle: "Historical statistics from 10000BC to Now.",
     badge: "BETA",
   },
   settings: {
