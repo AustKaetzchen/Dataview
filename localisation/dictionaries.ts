@@ -300,7 +300,9 @@ export interface LocalisationConfig {
       analyticsDrawer: string
       areaKm2: string
       boundaryUpdated: string
+      calculateArea: string
       calculated: string
+      calculatingArea: string
       capital: string
       cells: string
       closeHistoricalDetails: string

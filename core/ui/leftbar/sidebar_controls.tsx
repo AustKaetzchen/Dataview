@@ -135,7 +135,7 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
     onWidthChange: on_width_change,
     opacity,
     percentileList: percentile_list,
-    projection = 'globe',
+    projection = 'Globe',
     scaleType: scale_type,
     selectedCountries: selected_countries,
     setAbsoluteBreaks: set_absolute_breaks,
@@ -510,8 +510,8 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
               embedded={true}
               onClose={on_toggle_info_panel || (() => {})}
               mapModes={map_modes}
-              heightmapConfig={heightmap_config || { enabled: false, extrusionScale: 1, exaggeration: 1, minElevation: 0, maxElevation: 8000 }}
-              circleOverlayConfig={circle_overlay_config || { enabled: false, radiusScale: 1, maxRadius: 100, opacity: 0.8, colorBy: 'value' }}
+              heightmapConfig={heightmap_config || { enabled: false, elevationScale: 1 }}
+              circleOverlayConfig={circle_overlay_config || { enabled: false, percentileCutoff: 99, baseRadius: 10, strokeWidth: 1, haloWidth: 1 }}
               selectedCountries={selected_countries || []}
               projection={projection}
               cameraTilt={camera_tilt}

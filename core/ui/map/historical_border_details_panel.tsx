@@ -46,21 +46,58 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
   let raster = props.raster
   let sidebar_width = props.sidebarWidth
 
+  //Hooks
+  let localisation = useLocalisation()
+
+  //Determine effective raster statistics for feature
+  let effective_stats = useMemo(() => {
+    if (country_stats)
+      return country_stats
+    if (raster && feature) {
+      try {
+        return binRasterByCountryMemoized(raster, feature as unknown as CountryFeature)
+      } catch (arg0_err) {
+        console.error('Failed to compute regional raster statistics for historical feature:', arg0_err)
+      }
+    }
+    return null
+  }, [country_stats, raster, feature])
+
+  //Calculate geodesic area clientside from geometry
+  let calculated_geom_area = useMemo(() => {
+    if (!feature?.geometry)
+      return null
+    if (feature.properties?.calculated_area && typeof feature.properties.calculated_area === 'number')
+      return feature.properties.calculated_area
+
+    let area_km2 = calculateFeatureArea(feature)
+    if (area_km2 > 0) {
+      let rounded = Math.round(area_km2)
+      if (!feature.properties)
+        feature.properties = {} as any
+      feature.properties.calculated_area = rounded
+      feature.properties.area = rounded
+      return rounded
+    }
+    return null
+  }, [feature])
+
+  //Guard clauses
+  if (!feature)
+    return null
+
   //Declare local instance variables
   let active_kf_index = -1
   let alt_names_str: string | undefined
   let area_val_str: string
-  let calculated_geom_area: number | null
   let cap_name: string | undefined
   let country_name: string
   let current_date: { day: number; month: number; year: number }
   let current_ts: number
   let display_year: string
-  let effective_stats: CountryStats | null
   let end_year: number | undefined
-  let format: ReturnType<typeof useLocalisation>['format']
+  let format = localisation.format
   let keyframes_list: any[]
-  let localisation: ReturnType<typeof useLocalisation>
   let max_x: number
   let max_y: number
   let min_x: number
@@ -71,20 +108,12 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
   let raster_metric_tooltip: string
   let source_label: string
   let start_year: number | undefined
-  let t: ReturnType<typeof useLocalisation>['t']
+  let t = localisation.t
   let target_x: number
   let target_y: number
   let validity_str: string
 
-  //Guard clauses
-  if (!feature)
-    return null
-
   //Function body
-  localisation = useLocalisation()
-  format = localisation.format
-  t = localisation.t
-
   cap_name = feature.properties?.capname
   country_name = feature.properties?.name || t.mapPanels.historicalBorders.historicalEntity
   current_date = UfDate.fromFractionalYear(current_year)
@@ -137,40 +166,11 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
     alt_names_str = feature.properties.adm0_a3
   }
 
-  //Determine effective raster statistics for feature
-  effective_stats = useMemo(() => {
-    if (country_stats)
-      return country_stats
-    if (raster && feature) {
-      try {
-        return binRasterByCountryMemoized(raster, feature as unknown as CountryFeature)
-      } catch (arg0_err) {
-        console.error('Failed to compute regional raster statistics for historical feature:', arg0_err)
-      }
-    }
-    return null
-  }, [country_stats, raster, feature])
-
-  //Calculate geodesic area clientside from geometry
-  calculated_geom_area = useMemo(() => {
-    if (!feature?.geometry)
-      return null
-    let area_km2 = calculateFeatureArea(feature)
-    if (area_km2 > 0) {
-      if (feature.properties) {
-        feature.properties.calculated_area = Math.round(area_km2)
-        feature.properties.area = Math.round(area_km2)
-      }
-      return area_km2
-    }
-    return null
-  }, [feature])
-
   //Format area value
   if (calculated_geom_area !== null && calculated_geom_area > 0) {
-    area_val_str = `${Math.round(calculated_geom_area).toLocaleString('de-DE')} km²`
+    area_val_str = `${calculated_geom_area.toLocaleString('de-DE')}`
   } else if (feature.properties?.area && typeof feature.properties.area === 'number') {
-    area_val_str = `${Math.round(feature.properties.area).toLocaleString('de-DE')} km²`
+    area_val_str = `${Math.round(feature.properties.area).toLocaleString('de-DE')}`
   } else if (effective_stats?.validCount) {
     area_val_str = `${effective_stats.validCount.toLocaleString('de-DE')} ${t.mapPanels.historicalBorders.cells}`
   } else {
@@ -318,11 +318,7 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
           <div className="text-sm font-bold text-foreground font-mono mt-0.5 truncate" title={area_val_str}>
             {area_val_str}
           </div>
-          <div className="text-[9px] text-muted-foreground/70 truncate mt-0.5">
-            {(calculated_geom_area !== null && calculated_geom_area > 0)
-              ? t.mapPanels.historicalBorders.calculated
-              : (feature.properties?.area ? t.mapPanels.historicalBorders.territorial : t.mapPanels.historicalBorders.calculated)}
-          </div>
+          <div className="text-[9px] text-muted-foreground/70 truncate mt-0.5">&nbsp;</div>
         </div>
 
         {/* Metric 2: Raster Sum */}

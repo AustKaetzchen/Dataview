@@ -45,7 +45,6 @@ import { useStadesterWorker } from '@framework/stadester/use_stadester_worker'
 import { useHistoricalBorders } from './use_historical_borders'
 import { HistoricalBorderDetailsPanel } from './historical_border_details_panel'
 import type { HistoricalBorderFeature } from '@server/AtlasBordersService'
-import { calculateFeatureArea } from '@framework/geopng/polygon_area.ts'
 
 let EMPTY_ARRAY: any[] = [], NOOP_FN = () => { }
 
@@ -219,7 +218,9 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
   let last_hovered_country_code_ref = useRef<string | null | undefined>(null)
   let layers: any[]
   let pending_hover_info_ref = useRef<any>(null)
+  let pending_touch_pos_ref = useRef<{ x: number; y: number } | null>(null)
   let sample_raster_at: (coordX: number, coordY: number) => InspectionData | null
+  let touch_pick_raf_ref = useRef<number | null>(null)
 
   //Function body
   let [internal_flyout_open, set_internal_flyout_open] = useState(false)
@@ -276,15 +277,6 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
           (current_name && arg0_f.properties?.name === current_name)
       )
       if (updated_feat && updated_feat !== selected_historical_feature) {
-        if (updated_feat.geometry) {
-          let calc_area = calculateFeatureArea(updated_feat)
-          if (calc_area > 0) {
-            if (!updated_feat.properties)
-              updated_feat.properties = {} as any
-            updated_feat.properties.calculated_area = Math.round(calc_area)
-            updated_feat.properties.area = Math.round(calc_area)
-          }
-        }
         set_selected_historical_feature(updated_feat)
         if (on_select_country) {
           on_select_country(updated_feat as unknown as CountryFeature)
@@ -417,15 +409,6 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
 
       if (info.layer?.id?.includes('historical-borders') || (info.object && (info.object.properties?.gwcode !== undefined || info.object.properties?.keyframes !== undefined))) {
         let hist_feat = info.object as HistoricalBorderFeature
-        if (hist_feat?.geometry) {
-          let calc_area = calculateFeatureArea(hist_feat)
-          if (calc_area > 0) {
-            if (!hist_feat.properties)
-              hist_feat.properties = {} as any
-            hist_feat.properties.calculated_area = Math.round(calc_area)
-            hist_feat.properties.area = Math.round(calc_area)
-          }
-        }
         set_selected_historical_feature(hist_feat)
         if (info.coordinate) {
           set_selected_historical_anchor_coord([info.coordinate[0], info.coordinate[1]])
@@ -607,15 +590,6 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
     selectedHistoricalFeature: selected_historical_feature,
     hoveredHistoricalFeature: hovered_historical_feature,
     onSelectHistoricalFeature: (feat, coord, x, y) => {
-      if (feat?.geometry) {
-        let calc_area = calculateFeatureArea(feat)
-        if (calc_area > 0) {
-          if (!feat.properties)
-            feat.properties = {} as any
-          feat.properties.calculated_area = Math.round(calc_area)
-          feat.properties.area = Math.round(calc_area)
-        }
-      }
       set_selected_historical_feature(feat)
       if (coord) {
         set_selected_historical_anchor_coord([coord[0], coord[1]])
@@ -736,17 +710,6 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
         set_cursor_pos({ x, y })
         if (hovered_city_pos)
           set_hovered_city_pos({ x, y })
-
-        if (deck_ref.current) {
-          let pick_info = deck_ref.current.pickObject({ x, y })
-          if (pick_info && pick_info.coordinate) {
-            let insp = sample_raster_at(pick_info.coordinate[0], pick_info.coordinate[1])
-            set_inspect_data(insp)
-            if (pick_info.layer?.id?.includes('historical-borders') || (pick_info.object && (pick_info.object.properties?.gwcode !== undefined || pick_info.object.properties?.keyframes !== undefined))) {
-              set_hovered_historical_feature(pick_info.object || null)
-            }
-          }
-        }
       }}
       onTouchMove={(e) => {
         if (!show_tooltips)
@@ -761,8 +724,21 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
         if (hovered_city_pos)
           set_hovered_city_pos({ x, y })
 
-        if (deck_ref.current) {
-          let pick_info = deck_ref.current.pickObject({ x, y })
+        // Guard clauses: do not trigger costly GPU readPixels if user is dragging/panning
+        if (is_interacting_ref.current)
+          return
+
+        pending_touch_pos_ref.current = { x, y }
+        if (touch_pick_raf_ref.current !== null)
+          return
+
+        touch_pick_raf_ref.current = requestAnimationFrame(() => {
+          touch_pick_raf_ref.current = null
+          let cur_pos = pending_touch_pos_ref.current
+          if (!cur_pos || !deck_ref.current || is_interacting_ref.current)
+            return
+
+          let pick_info = deck_ref.current.pickObject({ x: cur_pos.x, y: cur_pos.y })
           if (pick_info && pick_info.coordinate) {
             let insp = sample_raster_at(pick_info.coordinate[0], pick_info.coordinate[1])
             set_inspect_data(insp)
@@ -772,7 +748,14 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
               set_hovered_historical_feature(null)
             }
           }
+        })
+      }}
+      onTouchEnd={() => {
+        if (touch_pick_raf_ref.current !== null) {
+          cancelAnimationFrame(touch_pick_raf_ref.current)
+          touch_pick_raf_ref.current = null
         }
+        pending_touch_pos_ref.current = null
       }}
     >
       <DeckGL
@@ -790,6 +773,10 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
             if (hover_raf_ref.current !== null) {
               cancelAnimationFrame(hover_raf_ref.current)
               hover_raf_ref.current = null
+            }
+            if (touch_pick_raf_ref.current !== null) {
+              cancelAnimationFrame(touch_pick_raf_ref.current)
+              touch_pick_raf_ref.current = null
             }
           }
         }}
