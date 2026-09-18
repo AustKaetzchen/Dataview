@@ -105,11 +105,10 @@ export let StadesterSettings: React.FC<StadesterSettingsProps> = function (arg0_
                 halo: false,
               }))
             }
-            className={`px-1.5 py-1 text-[11px] rounded-none border text-center transition-colors cursor-pointer ${
-              config.filled !== false && !config.halo
+            className={`px-1.5 py-1 text-[11px] rounded-none border text-center transition-colors cursor-pointer ${config.filled !== false && !config.halo
                 ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
                 : 'bg-background hover:bg-muted text-muted-foreground border-border'
-            }`}
+              }`}
           >
             Fill
           </button>
@@ -122,11 +121,10 @@ export let StadesterSettings: React.FC<StadesterSettingsProps> = function (arg0_
                 halo: true,
               }))
             }
-            className={`px-1.5 py-1 text-[11px] rounded-none border text-center transition-colors cursor-pointer ${
-              config.halo || config.filled === false
+            className={`px-1.5 py-1 text-[11px] rounded-none border text-center transition-colors cursor-pointer ${config.halo || config.filled === false
                 ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
                 : 'bg-background hover:bg-muted text-muted-foreground border-border'
-            }`}
+              }`}
           >
             Outline
           </button>
@@ -168,11 +166,10 @@ export let StadesterSettings: React.FC<StadesterSettingsProps> = function (arg0_
                 colorMode: 'growth',
               }))
             }
-            className={`px-1.5 py-1 text-[11px] rounded-none border text-center transition-colors cursor-pointer ${
-              color_mode === 'growth'
+            className={`px-1.5 py-1 text-[11px] rounded-none border text-center transition-colors cursor-pointer ${color_mode === 'growth'
                 ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
                 : 'bg-background hover:bg-muted text-muted-foreground border-border'
-            }`}
+              }`}
           >
             Growth Rate
           </button>
@@ -184,11 +181,10 @@ export let StadesterSettings: React.FC<StadesterSettingsProps> = function (arg0_
                 colorMode: 'population',
               }))
             }
-            className={`px-1.5 py-1 text-[11px] rounded-none border text-center transition-colors cursor-pointer ${
-              color_mode === 'population'
+            className={`px-1.5 py-1 text-[11px] rounded-none border text-center transition-colors cursor-pointer ${color_mode === 'population'
                 ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
                 : 'bg-background hover:bg-muted text-muted-foreground border-border'
-            }`}
+              }`}
           >
             Population
           </button>
@@ -200,11 +196,10 @@ export let StadesterSettings: React.FC<StadesterSettingsProps> = function (arg0_
                 colorMode: 'region',
               }))
             }
-            className={`px-1.5 py-1 text-[11px] rounded-none border text-center transition-colors cursor-pointer ${
-              color_mode === 'region' || color_mode === 'continent'
+            className={`px-1.5 py-1 text-[11px] rounded-none border text-center transition-colors cursor-pointer ${color_mode === 'region' || color_mode === 'continent'
                 ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
                 : 'bg-background hover:bg-muted text-muted-foreground border-border'
-            }`}
+              }`}
           >
             Region
           </button>
@@ -264,11 +259,10 @@ export let StadesterSettings: React.FC<StadesterSettingsProps> = function (arg0_
                 onClick={() =>
                   on_change_config((arg0_prev) => ({ ...arg0_prev, minPop: arg0_preset.value }))
                 }
-                className={`px-1.5 py-0.5 text-[10px] rounded-none border transition-colors cursor-pointer ${
-                  is_sel
+                className={`px-1.5 py-0.5 text-[10px] rounded-none border transition-colors cursor-pointer ${is_sel
                     ? 'bg-primary text-primary-foreground border-primary font-bold shadow-xs'
                     : 'bg-background hover:bg-muted text-muted-foreground border-border'
-                }`}
+                  }`}
               >
                 {arg0_preset.label}
               </button>
@@ -316,11 +310,10 @@ export let StadesterSettings: React.FC<StadesterSettingsProps> = function (arg0_
                 onClick={() =>
                   on_change_config((arg0_prev) => ({ ...arg0_prev, maxCities: arg0_preset.value }))
                 }
-                className={`px-1.5 py-0.5 text-[10px] rounded-none border transition-colors cursor-pointer ${
-                  is_sel
+                className={`px-1.5 py-0.5 text-[10px] rounded-none border transition-colors cursor-pointer ${is_sel
                     ? 'bg-primary text-primary-foreground border-primary font-bold shadow-xs'
                     : 'bg-background hover:bg-muted text-muted-foreground border-border'
-                }`}
+                  }`}
               >
                 {arg0_preset.label}
               </button>
@@ -367,10 +360,6 @@ export let StadesterSettings: React.FC<StadesterSettingsProps> = function (arg0_
       <div className="flex items-center justify-between pt-1 border-t border-border/40">
         <div className="flex flex-col">
           <span className="text-foreground text-[11px] font-medium">City Labels</span>
-          <span className="text-[9px] text-muted-foreground flex items-center gap-1">
-            <Icon name="check_circle" className="text-[10px] text-emerald-400" />
-            Collision-free (no label occlusion)
-          </span>
         </div>
         <button
           type="button"
@@ -380,11 +369,10 @@ export let StadesterSettings: React.FC<StadesterSettingsProps> = function (arg0_
               showLabels: !arg0_prev.showLabels,
             }))
           }
-          className={`px-2 py-0.5 text-[10px] rounded-none border transition-colors cursor-pointer font-bold ${
-            show_labels
+          className={`px-2 py-0.5 text-[10px] rounded-none border transition-colors cursor-pointer font-bold ${show_labels
               ? 'bg-primary text-primary-foreground border-primary'
               : 'bg-background hover:bg-muted text-muted-foreground border-border'
-          }`}
+            }`}
         >
           {show_labels ? 'ON' : 'OFF'}
         </button>
