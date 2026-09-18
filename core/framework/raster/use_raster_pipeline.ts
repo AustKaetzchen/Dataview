@@ -401,12 +401,12 @@ export function useRasterPipeline (arg0_params: UseRasterPipelineParams): UseRas
         let t = (timeline_year - p_yr)/(n_yr - p_yr)
         let last_interp = last_interp_pair_ref.current
 
+        let t_diff_threshold = is_playing ? 0.015 : 0.0001
         if (
-          is_playing &&
           last_interp &&
           last_interp.a === raster_a &&
           last_interp.b === raster_b &&
-          Math.abs(last_interp.t - t) < 0.015 &&
+          Math.abs(last_interp.t - t) < t_diff_threshold &&
           last_interp_raster_ref.current
         ) {
           display_raster = last_interp_raster_ref.current

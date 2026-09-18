@@ -287,11 +287,18 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
           (current_name && arg0_f.properties?.name === current_name)
       )
       if (updated_feat && updated_feat !== selected_historical_feature) {
+        let is_same_identity =
+          updated_feat.id === selected_historical_feature.id &&
+          updated_feat.properties?.name === selected_historical_feature.properties?.name &&
+          updated_feat.geometry === selected_historical_feature.geometry
+
         set_selected_historical_feature(updated_feat)
-        if (on_select_country) {
-          on_select_country(updated_feat as unknown as CountryFeature)
-        } else if (on_toggle_country) {
-          on_toggle_country(updated_feat as unknown as CountryFeature)
+        if (!is_same_identity) {
+          if (on_select_country) {
+            on_select_country(updated_feat as unknown as CountryFeature)
+          } else if (on_toggle_country) {
+            on_toggle_country(updated_feat as unknown as CountryFeature)
+          }
         }
       }
     }

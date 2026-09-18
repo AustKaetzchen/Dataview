@@ -78,10 +78,14 @@ export let useHistoricalBorders = function (
     //Check client cache
     if (client_borders_cache.has(cache_key)) {
       let cached = client_borders_cache.get(cache_key)!
-      set_borders_data({
-        features: cached.features,
-        type: 'FeatureCollection',
-      })
+      let cached_collection: { features: HistoricalBorderFeature[]; type: 'FeatureCollection' } =
+        (cached as any).collection || {
+          features: cached.features,
+          type: 'FeatureCollection',
+        }
+      ;(cached as any).collection = cached_collection
+
+      set_borders_data((arg0_prev) => (arg0_prev?.features === cached_collection.features ? arg0_prev : cached_collection))
       set_domain(cached.domain)
       set_source(cached.source)
       set_is_loading(false)
@@ -114,11 +118,15 @@ export let useHistoricalBorders = function (
           if (oldest_k)
             client_borders_cache.delete(oldest_k)
         }
-        client_borders_cache.set(cache_key, arg0_json)
-        set_borders_data({
+
+        let new_collection: { features: HistoricalBorderFeature[]; type: 'FeatureCollection' } = {
           features: arg0_json.features,
           type: 'FeatureCollection',
-        })
+        }
+        ;(arg0_json as any).collection = new_collection
+
+        client_borders_cache.set(cache_key, arg0_json)
+        set_borders_data((arg0_prev) => (arg0_prev?.features === new_collection.features ? arg0_prev : new_collection))
         set_domain(arg0_json.domain)
         set_source(arg0_json.source)
         set_is_loading(false)

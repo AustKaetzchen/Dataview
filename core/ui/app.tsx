@@ -728,16 +728,27 @@ export let App: React.FC = function () {
   }, [])
 
   let handle_clear_countries = useCallback(() => {
-    set_selected_countries([])
+    set_selected_countries((arg0_prev) => (arg0_prev.length === 0 ? arg0_prev : []))
   }, [])
 
   let handle_select_country = useCallback(
     (arg0_c: CountryFeature | null) => {
       let c = arg0_c
       if (!c) {
-        set_selected_countries([])
+        set_selected_countries((arg0_prev) => (arg0_prev.length === 0 ? arg0_prev : []))
       } else {
-        set_selected_countries([c])
+        set_selected_countries((arg0_prev) => {
+          if (
+            arg0_prev.length === 1 &&
+            (arg0_prev[0] === c ||
+              ((arg0_prev[0] as any).id !== undefined &&
+                (arg0_prev[0] as any).id === (c as any).id &&
+                arg0_prev[0].properties?.name === c.properties?.name &&
+                arg0_prev[0].geometry === c.geometry))
+          )
+            return arg0_prev
+          return [c]
+        })
       }
     },
     []
