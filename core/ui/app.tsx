@@ -39,6 +39,7 @@ import { useTimelapseExportOrchestrator } from '@ui/export/use_timelapse_export_
 import { applyLayerLegend } from '@framework/raster/legend_utils.ts'
 import { useAppLayoutState } from './use_app_layout_state'
 import { useHeadlessExport } from './export/use_headless_export'
+import { onConfigUpdate, onLayersUpdate } from '@framework/config/config_hot_reload'
 
 /**
  * Resolves the default variable selectors for a given data layer, preserving valid existing options.
@@ -580,6 +581,61 @@ export let App: React.FC = function () {
     fetchLayers()
     return () => {
       cancelled = true
+    }
+  }, [])
+
+  //Hot reload layers definitions and descriptions in real time without full-page reload
+  useEffect(() => {
+    let unsubscribe = onLayersUpdate((arg0_next_layers) => {
+      if (arg0_next_layers && typeof arg0_next_layers === 'object') {
+        set_layers(arg0_next_layers)
+        let stadester_layer = arg0_next_layers.stadester || arg0_next_layers['stadester_1.1'] || arg0_next_layers['stadester_1.0']
+        if (stadester_layer && stadester_layer.display_options) {
+          let opts = stadester_layer.display_options
+          set_stadester_config((arg0_prev) => ({
+            ...arg0_prev,
+            bubbleSize: opts.bubble_size ?? arg0_prev.bubbleSize,
+            colorMode: opts.color_mode ?? arg0_prev.colorMode,
+            dataset: opts.dataset ?? arg0_prev.dataset,
+            display_options: opts,
+            filled: opts.filled ?? arg0_prev.filled,
+            growthPalette: opts.growth_palette ?? arg0_prev.growthPalette,
+            halo: opts.halo ?? arg0_prev.halo,
+            labelCollision: opts.label_collision ?? arg0_prev.labelCollision,
+            maxCities: opts.max_cities ?? arg0_prev.maxCities,
+            minPop: opts.min_pop ?? arg0_prev.minPop,
+            opacity: opts.opacity ?? arg0_prev.opacity,
+            showLabels: opts.show_labels ?? arg0_prev.showLabels,
+          }))
+        }
+      }
+    })
+
+    return () => {
+      unsubscribe()
+    }
+  }, [])
+
+  //Hot reload map modes descriptions and labels in real time
+  useEffect(() => {
+    let unsubscribe = onConfigUpdate('mapmodes', (arg0_next_mapmodes) => {
+      if (arg0_next_mapmodes && Array.isArray(arg0_next_mapmodes.modes)) {
+        set_map_modes((arg0_prev) => {
+          return arg0_next_mapmodes.modes.map((arg0_m: any) => {
+            let existing = arg0_prev.find((arg0_p) => arg0_p.id === arg0_m.id)
+            return {
+              active: existing ? existing.active : (arg0_m.active ?? false),
+              description: arg0_m.description,
+              id: arg0_m.id,
+              label: arg0_m.label,
+            }
+          })
+        })
+      }
+    })
+
+    return () => {
+      unsubscribe()
     }
   }, [])
 

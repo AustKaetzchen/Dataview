@@ -11,6 +11,7 @@ import {
   SmoothGlobeView,
   SmoothMapController,
   SmoothOrbitController,
+  resetSmoothPinchState,
 } from './smooth_controllers'
 
 export interface MapViewStateOptions {
@@ -157,6 +158,8 @@ export function useMapViewState (arg0_options: MapViewStateOptions): MapViewStat
   }, [projection, set_proj_view_states])
 
   handle_double_click = useCallback(() => {
+    resetSmoothPinchState()
+
     let equal_earth_zoom = typeof window !== 'undefined'
       ? Math.max(1.5, parseFloat(Math.log2((window.innerHeight*0.96)/180).toFixed(2)))
       : 2.80

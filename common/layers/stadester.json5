@@ -1,8 +1,5 @@
 {
     name: "Stadestér (Cities)",
-    root_folders: {
-        l_stad: "D:/Project 1436 - Dataview/data/stadester"
-    },
     "stadester": {
         name: "Cities/Settlements",
         type: "vector.points",

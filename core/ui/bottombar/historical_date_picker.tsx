@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { UfDate, type UfDateObject } from '@framework/utils/uf_date.ts'
 import { Icon } from '@ui/components/icon'
-import { LANDMARK_PRESETS, LandmarkPreset } from '@common/timeline/landmarks'
+import { useLandmarkPresets, LandmarkPreset } from '@common/timeline/landmarks'
 import { useLocalisation } from '@localisation'
 
 export interface HistoricalDatePickerProps {
@@ -44,6 +44,7 @@ export let HistoricalDatePicker: React.FC<HistoricalDatePickerProps> = function 
   let handle_year_change: (arg0_val: string) => void
   let handle_year_step: (arg0_delta: number) => void
   let is_bookmarks_expanded: boolean
+  let landmark_presets: LandmarkPreset[]
   let localisation: ReturnType<typeof useLocalisation>
   let month_short_names: string[]
   let parsed_date: UfDateObject
@@ -62,6 +63,7 @@ export let HistoricalDatePicker: React.FC<HistoricalDatePickerProps> = function 
   let year_text: string
 
   //Function body
+  landmark_presets = useLandmarkPresets()
   localisation = useLocalisation()
   format = localisation.format
   t = localisation.t
@@ -398,7 +400,7 @@ export let HistoricalDatePicker: React.FC<HistoricalDatePickerProps> = function 
 
           {is_bookmarks_expanded && (
             <div className="p-2 pt-1 grid grid-cols-2 gap-1 border-t border-border/30">
-              {LANDMARK_PRESETS.map((arg0_preset) => (
+              {landmark_presets.map((arg0_preset) => (
                 <button
                   key={arg0_preset.id}
                   type="button"

@@ -363,3 +363,18 @@ export function isFunctionKeyPressed (arg0_event: any): boolean {
   //Return statement
   return Boolean(src?.ctrlKey || src?.metaKey)
 }
+
+/**
+ * Clears and resets all smooth pinch and two-finger gesture state.
+ */
+export function resetSmoothPinchState (): void {
+  //Function body
+  smooth_pinch_state.gesture_mode = 'undetermined'
+  smooth_pinch_state.last_event = null
+  smooth_pinch_state.start_center = null
+  smooth_pinch_state.start_dist = 0
+  smooth_pinch_state.start_p0 = null
+  smooth_pinch_state.start_p1 = null
+  smooth_pinch_state.start_rotation = null
+}
+

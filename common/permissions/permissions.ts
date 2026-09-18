@@ -1,5 +1,6 @@
 import JSON5 from 'json5'
 import rawPermissionsConfig from './permissions.json5?raw'
+import { onConfigUpdate } from '@framework/config/config_hot_reload'
 
 export interface RoleDefinition {
   id: string
@@ -23,6 +24,12 @@ export interface PermissionsConfig {
 export type UserRole = 'default' | 'privileged' | 'developer'
 
 export let PERMISSIONS_CONFIG: PermissionsConfig = JSON5.parse(rawPermissionsConfig)
+
+//Keep in-place object reference synchronised on hot reload
+onConfigUpdate('permissions', (arg0_next_config) => {
+  if (arg0_next_config && typeof arg0_next_config === 'object')
+    Object.assign(PERMISSIONS_CONFIG, arg0_next_config)
+})
 
 /**
  * Returns whether the application is running in a public build instance.

@@ -5,6 +5,7 @@ import {
   SupportedLocale,
   formatLocalisedString,
 } from './dictionaries'
+import { onConfigUpdate } from '@framework/config/config_hot_reload'
 
 export interface LocalisationContextValue {
   format: (arg0_template: string, arg1_params?: Record<string, string | number> | Array<string | number> | string | number, ...arg2_rest: Array<string | number>) => string
@@ -66,11 +67,27 @@ export function LocalisationProvider (arg0_props: { children: React.ReactNode })
 
   //Declare local instance variables
   let [current_locale, set_current_locale] = useState<SupportedLocale>(getInitialLocale)
+  let [version, set_version] = useState<number>(0)
   let active_dictionary: LocalisationConfig
   let context_value: LocalisationContextValue
   let handle_set_locale: (arg0_next_locale: SupportedLocale) => void
 
   //Function body
+  useEffect(() => {
+    let unsubscribe = onConfigUpdate('localisation', (arg0_payload: any) => {
+      if (arg0_payload && arg0_payload.data && arg0_payload.locale) {
+        let loc = arg0_payload.locale as SupportedLocale
+        LOCALISATION_DICTIONARIES[loc] = arg0_payload.data
+        set_version((arg0_v) => arg0_v + 1)
+      }
+    })
+
+    //Return statement
+    return () => {
+      unsubscribe()
+    }
+  }, [])
+
   handle_set_locale = useCallback(function (arg0_next_locale: SupportedLocale) {
     //Convert from parameters
     let next_locale = arg0_next_locale
@@ -83,7 +100,7 @@ export function LocalisationProvider (arg0_props: { children: React.ReactNode })
 
   active_dictionary = useMemo(() => {
     return LOCALISATION_DICTIONARIES[current_locale] || LOCALISATION_DICTIONARIES['en-GB']
-  }, [current_locale])
+  }, [current_locale, version])
 
   context_value = useMemo(() => {
     return {

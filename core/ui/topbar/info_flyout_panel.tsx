@@ -10,7 +10,7 @@ import { Icon } from '@ui/components/icon'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@ui/components/tabs'
 import { MarkdownRenderer } from '@ui/components/markdown_renderer'
 import { Window } from '@ui/components/window'
-import { INFO_PANEL_CONFIG, MAPMODES_CONFIG, MarkdownSectionItem } from '@common'
+import { useInfoPanelConfig, useMapmodesConfig, MarkdownSectionItem } from '@common'
 import { useLocalisation } from '@localisation'
 
 export interface InfoCollapsibleSectionProps {
@@ -119,11 +119,13 @@ export let InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = function (arg0_prop
   let width = props.width ?? 336
 
   //Function body
+  let info_config = useInfoPanelConfig()
+  let mapmodes_config = useMapmodesConfig()
   localisation = useLocalisation()
   t = localisation.t
 
   let [current_tab, set_current_tab] = useState<string>(
-    INFO_PANEL_CONFIG.defaultTab || INFO_PANEL_CONFIG.tabs[0]?.id || 'controls'
+    info_config.defaultTab || info_config.tabs[0]?.id || 'controls'
   )
   active_tab = current_tab
   set_active_tab = set_current_tab
@@ -141,7 +143,7 @@ export let InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = function (arg0_prop
       className="flex flex-col flex-1 min-h-0 overflow-hidden"
     >
         <TabsList className="w-full flex h-8 bg-muted/60 border border-border rounded-none p-0.5 shrink-0">
-          {INFO_PANEL_CONFIG.tabs.map((tab) => (
+          {info_config.tabs.map((tab) => (
             <TabsTrigger
               key={tab.id}
               value={tab.id}
@@ -155,7 +157,7 @@ export let InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = function (arg0_prop
 
         {/* Tab Contents Scroll Area with Prominent Vertical Scrollbar */}
         <div className="flex-1 min-h-0 overflow-y-auto mt-3 pr-2 space-y-3 custom-scrollbar">
-          {INFO_PANEL_CONFIG.tabs.map((tab) => (
+          {info_config.tabs.map((tab) => (
             <TabsContent
               key={tab.id}
               value={tab.id}
@@ -183,7 +185,7 @@ export let InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = function (arg0_prop
                         </p>
                       ) : (
                         active_modes_array.map((m) => {
-                          let config_item = MAPMODES_CONFIG.modes.find((c) => c.id === m.id)
+                          let config_item = mapmodes_config.modes.find((c) => c.id === m.id)
                           let desc =
                             config_item?.controlDescription ||
                             config_item?.description ||
@@ -325,7 +327,7 @@ export let InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = function (arg0_prop
   return (
     <Window
       id="info-and-controls"
-      title={INFO_PANEL_CONFIG.title || 'Information & Controls'}
+      title={info_config.title || 'Information & Controls'}
       icon="info"
       isOpen={is_open}
       onClose={on_close}

@@ -1,5 +1,6 @@
 import JSON5 from 'json5'
 import rawMapConfig from './map.json5?raw'
+import { onConfigUpdate } from '@framework/config/config_hot_reload'
 
 export interface BasemapDefinition {
   id: 'dark' | 'light' | 'satellite' | 'topo' | 'none'
@@ -63,6 +64,12 @@ export interface MapConfig {
 }
 
 export let MAP_CONFIG: MapConfig = JSON5.parse(rawMapConfig)
+
+//Keep in-place object reference synchronised on hot reload
+onConfigUpdate('map', (arg0_next_config) => {
+  if (arg0_next_config && typeof arg0_next_config === 'object')
+    Object.assign(MAP_CONFIG, arg0_next_config)
+})
 
 /**
  * Returns the configured pixel offset for a given projection mode.

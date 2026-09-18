@@ -36,6 +36,7 @@ import { MapmodesTray } from '@ui/rightbar/mapmodes_tray'
 import { MapViewerHUD } from '@ui/topbar/map_viewer_hud'
 import { useMapClearance } from './use_map_clearance'
 import { useMapViewState } from './use_map_view_state'
+import { resetSmoothPinchState } from './smooth_controllers'
 import { useElevationSpikes } from './use_elevation_spikes'
 import { ParsedDataLayer } from '@server/layer_parser.ts'
 import { UserRole } from '@common'
@@ -217,6 +218,7 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
   let graticule_paths: { path: [number, number][] }[]
   let handle_click: (info: any) => void
   let handle_hover: (info: any) => void
+  let handle_reset_view: () => void
   let hover_raf_ref = useRef<number | null>(null)
   let is_interacting_ref = useRef<boolean>(false)
   let last_country_ref = useRef<CountryFeature | null>(null)
@@ -333,7 +335,7 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
     effectiveViewState: effective_view_state,
     handleDoubleClick: handle_double_click,
     handleResetNorth: handle_reset_north,
-    handleResetView: handle_reset_view,
+    handleResetView: raw_handle_reset_view,
     handleToggleTilt: handle_toggle_tilt,
     handleViewStateChange: handle_view_state_change,
     handleZoomIn: handle_zoom_in,
@@ -361,6 +363,31 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
 
     loadCountriesGeoJson().then((feats) => set_country_features(feats))
   }, [])
+
+  handle_reset_view = useCallback(() => {
+    //1. Clear smooth pinch and two-finger gesture state
+    resetSmoothPinchState()
+
+    //2. Cancel any active touch RAF picking
+    if (touch_pick_raf_ref.current !== null) {
+      cancelAnimationFrame(touch_pick_raf_ref.current)
+      touch_pick_raf_ref.current = null
+    }
+
+    //3. Clear pending touch position & interaction flags
+    pending_touch_pos_ref.current = null
+    is_interacting_ref.current = false
+
+    //4. Dismiss any active inspection tooltips and cursor positions
+    set_inspect_data(null)
+    set_cursor_pos(null)
+    set_hovered_city(null)
+    set_hovered_city_pos(null)
+    set_hovered_historical_feature(null)
+
+    //5. Invoke underlying view state reset
+    raw_handle_reset_view()
+  }, [raw_handle_reset_view])
 
   equal_earth_land_geo_json = useMemo(() => {
     if (!land_geo_json)

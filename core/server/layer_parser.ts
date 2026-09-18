@@ -430,6 +430,7 @@ export let loadAndParseLayers = function (arg0_config_dir: string): LayerRegistr
   //Declare local instance variables
   let all_layer_files: string[] = []
   let file_cache = new Map<string, string>()
+  let filepath_defines_path: string
   let layers_dir = path.join(config_dir, 'layers')
   let parsed_layers: Record<string, ParsedDataLayer> = {}
   let resolved_roots: Record<string, string> = {}
@@ -441,7 +442,24 @@ export let loadAndParseLayers = function (arg0_config_dir: string): LayerRegistr
   }
 
   //Function body
-  all_layer_files = fs.readdirSync(layers_dir).filter((arg0_f) => arg0_f.endsWith('.json5'))
+  filepath_defines_path = path.join(layers_dir, 'filepath_defines.json5')
+
+  //1. Parse single source of truth root folders from filepath_defines.json5 if present
+  if (fs.existsSync(filepath_defines_path)) {
+    try {
+      let raw_text = fs.readFileSync(filepath_defines_path, 'utf-8')
+      let parsed_json = JSON5.parse(raw_text)
+      let raw_roots = parsed_json.root_folders || parsed_json || {}
+      resolved_roots = resolveRootFolders(raw_roots)
+    } catch (arg0_err) {
+      console.error('[LayerParser] Failed to parse filepath_defines.json5:', arg0_err)
+    }
+  }
+
+  //2. Read all layer definition files, excluding filepath_defines.json5
+  all_layer_files = fs.readdirSync(layers_dir).filter(
+    (arg0_f) => arg0_f.endsWith('.json5') && arg0_f !== 'filepath_defines.json5'
+  )
 
   for (let i = 0; i < all_layer_files.length; i++) {
     let file_name = all_layer_files[i]
@@ -450,10 +468,12 @@ export let loadAndParseLayers = function (arg0_config_dir: string): LayerRegistr
     let parsed_json = JSON5.parse(raw_text)
     let dataset_name = (typeof parsed_json.name === 'string') ? parsed_json.name : path.basename(file_name, '.json5')
 
-    //Extract root_folders
-    let raw_roots = parsed_json.root_folders || {}
-    let file_roots = resolveRootFolders(raw_roots)
-    resolved_roots = { ...resolved_roots, ...file_roots }
+    //Extract local root_folders override if present
+    if (parsed_json.root_folders) {
+      let raw_roots = parsed_json.root_folders || {}
+      let file_roots = resolveRootFolders(raw_roots)
+      resolved_roots = { ...resolved_roots, ...file_roots }
+    }
 
     //Iterate over layer definitions
     let layer_keys = Object.keys(parsed_json).filter(

@@ -22,7 +22,7 @@ import { Input } from '@ui/components/input'
 import { NumberInput } from '@ui/components/number_input'
 import { Label } from '@ui/components/label'
 import { Icon } from '@ui/components/icon'
-import { INFO_PANEL_CONFIG, UserRole, isPublicBuild, isRoleAllowed } from '@common'
+import { useInfoPanelConfig, UserRole, isPublicBuild, isRoleAllowed } from '@common'
 import { useLocalisation } from '@localisation'
 import { ParsedDataLayer } from '@server/layer_parser'
 import { D3ColorPaletteSelector } from './d3_color_palette_selector'
@@ -161,6 +161,7 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
   } = props
 
   let { t } = useLocalisation()
+  let info_config = useInfoPanelConfig()
 
   //Declare local instance variables
   let active_descriptions: { id: string; markdown: string; title: string }[]
@@ -386,9 +387,9 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
             </button>
             <span
               className="font-bold text-foreground text-xs uppercase tracking-wider truncate max-w-[200px]"
-              title={INFO_PANEL_CONFIG.title || 'Information & Controls'}
+              title={info_config.title || 'Information & Controls'}
             >
-              {INFO_PANEL_CONFIG.title || 'Information & Controls'}
+              {info_config.title || 'Information & Controls'}
             </span>
             <button
               type="button"
