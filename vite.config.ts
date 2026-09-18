@@ -71,7 +71,8 @@ function dataviewBackendPlugin(): Plugin {
             let raw_content = fs.readFileSync(file, 'utf-8')
             let parsed_dict = JSON5.parse(raw_content)
             let base_name = path.basename(file, '.json5')
-            let locale_key = (base_name === 'en_gb') ? 'en-GB' : base_name
+            let normalized_base = base_name.toLowerCase()
+            let locale_key = (normalized_base === 'en_gb' || normalized_base === 'en-gb') ? 'en-GB' : normalized_base
 
             if (hot_channel) {
               hot_channel.send({
@@ -80,6 +81,7 @@ function dataviewBackendPlugin(): Plugin {
                 data: {
                   category: 'localisation',
                   data: parsed_dict,
+                  dictionary: parsed_dict,
                   file: normalized_file,
                   locale: locale_key,
                 },

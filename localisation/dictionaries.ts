@@ -376,6 +376,30 @@ export let LOCALISATION_DICTIONARIES: Record<SupportedLocale, LocalisationConfig
 export let LOCALISATION_CONFIG: LocalisationConfig = LOCALISATION_DICTIONARIES['en-GB']
 
 /**
+ * Updates a localisation dictionary in-place for live hot reloading.
+ *
+ * @param {SupportedLocale} arg0_locale
+ * @param {LocalisationConfig} arg1_dict
+ */
+export function updateLocalisationDictionary (
+  arg0_locale: SupportedLocale,
+  arg1_dict: LocalisationConfig
+): void {
+  //Convert from parameters
+  let dict = arg1_dict
+  let locale = arg0_locale
+
+  //Guard clauses
+  if (!locale || !dict)
+    return
+
+  //Function body
+  LOCALISATION_DICTIONARIES[locale] = dict
+  if (locale === 'en-GB')
+    LOCALISATION_CONFIG = dict
+}
+
+/**
  * Formats a localized template string by replacing £1£, £2£ or £var_name£ delimiters.
  *
  * @param {string} arg0_template

@@ -437,9 +437,10 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
                 )}
               </div>
             </div>
-          <p className="text-[var(--body-font-size)] text-muted-foreground font-light mt-1">
-            {t.app.subtitle}
-          </p>
+          <MarkdownRenderer
+            content={t.app.subtitle}
+            className="text-[var(--body-font-size)] text-muted-foreground font-light mt-1 [&_p]:my-0 [&_p]:text-inherit [&_p]:font-light [&_p]:leading-snug"
+          />
 
           {/* Toolbar: Information toggle, Role switcher, Video export */}
           <div className="mt-2.5 flex items-center justify-between gap-1.5 flex-wrap">

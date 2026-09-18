@@ -4,6 +4,7 @@ import {
   LOCALISATION_DICTIONARIES,
   SupportedLocale,
   formatLocalisedString,
+  updateLocalisationDictionary,
 } from './dictionaries'
 import { onConfigUpdate } from '@framework/config/config_hot_reload'
 
@@ -75,9 +76,19 @@ export function LocalisationProvider (arg0_props: { children: React.ReactNode })
   //Function body
   useEffect(() => {
     let unsubscribe = onConfigUpdate('localisation', (arg0_payload: any) => {
-      if (arg0_payload && arg0_payload.data && arg0_payload.locale) {
-        let loc = arg0_payload.locale as SupportedLocale
-        LOCALISATION_DICTIONARIES[loc] = arg0_payload.data
+      //Convert from parameters
+      let payload = arg0_payload
+
+      //Guard clauses
+      if (!payload)
+        return
+
+      //Function body
+      let dictionary = payload.dictionary || payload.data || (payload.app ? payload : null)
+      let locale = (payload.locale as SupportedLocale) || 'en-GB'
+
+      if (dictionary) {
+        updateLocalisationDictionary(locale, dictionary)
         set_version((arg0_v) => arg0_v + 1)
       }
     })

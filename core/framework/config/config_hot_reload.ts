@@ -129,7 +129,15 @@ if (import.meta.hot) {
     let payload = arg0_payload
     if (payload && payload.category) {
       console.log(`[ConfigHotReload] Hot reloaded config category '${payload.category}' in real time.`)
-      notifyConfigUpdate(payload.category, payload.data)
+      if (payload.category === 'localisation') {
+        notifyConfigUpdate(payload.category, {
+          data: payload.data,
+          dictionary: payload.dictionary || payload.data,
+          locale: payload.locale,
+        })
+      } else {
+        notifyConfigUpdate(payload.category, payload.data)
+      }
     }
   })
 }
