@@ -273,10 +273,16 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
           (current_id !== undefined && arg0_f.properties?.id === current_id) ||
           (current_name && arg0_f.properties?.name === current_name)
       )
-      if (updated_feat && updated_feat !== selected_historical_feature)
+      if (updated_feat && updated_feat !== selected_historical_feature) {
         set_selected_historical_feature(updated_feat)
+        if (on_select_country) {
+          on_select_country(updated_feat as unknown as CountryFeature)
+        } else if (on_toggle_country) {
+          on_toggle_country(updated_feat as unknown as CountryFeature)
+        }
+      }
     }
-  }, [selected_historical_feature, historical_borders_result.bordersData])
+  }, [selected_historical_feature, historical_borders_result.bordersData, on_select_country, on_toggle_country])
 
   let clearance = useMapClearance({
     analyticsOpen: analytics_open,
@@ -406,10 +412,10 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
         if (info.x !== undefined && info.y !== undefined) {
           set_selected_historical_anchor_screen({ x: info.x, y: info.y })
         }
-        if (on_toggle_country) {
-          on_toggle_country(hist_feat as unknown as CountryFeature)
-        } else if (on_select_country) {
+        if (on_select_country) {
           on_select_country(hist_feat as unknown as CountryFeature)
+        } else if (on_toggle_country) {
+          on_toggle_country(hist_feat as unknown as CountryFeature)
         }
         return
       }
@@ -743,6 +749,7 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
           currentYear={timeline_year || 1950}
           feature={selected_historical_feature}
           isCalculatingStats={is_calculating_stats}
+          raster={raster}
           onClose={() => {
             set_selected_historical_feature(null)
             set_selected_historical_anchor_coord(null)
@@ -871,6 +878,7 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
           layers={props.dataLayers}
           mapModes={map_modes}
           onChangeVariableSelector={props.onChangeVariableSelector}
+          raster={raster}
           onClearCountries={on_clear_countries || NOOP_FN}
           onCloseCity={on_close_city_details || NOOP_FN}
           onCloseHistoricalFeature={() => {

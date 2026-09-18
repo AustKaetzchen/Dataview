@@ -1,6 +1,8 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import type { HistoricalBorderFeature } from '@server/AtlasBordersService'
-import type { CountryStats } from '@framework/geopng/polygon_binning.ts'
+import type { CountryFeature, CountryStats } from '@framework/geopng/polygon_binning.ts'
+import { binRasterByCountryMemoized } from '@framework/geopng/polygon_binning.ts'
+import type { DecodedRaster } from '@framework/geopng/types.ts'
 import { Icon } from '@ui/components/icon'
 import { UfDate } from '@framework/utils/uf_date'
 
@@ -14,6 +16,7 @@ export interface HistoricalBorderDetailsPanelProps {
   onClose: () => void
   onJumpToYear?: (arg0_year: number) => void
   onOpenAnalytics?: () => void
+  raster?: DecodedRaster | null
   sidebarWidth?: number
 }
 
@@ -38,6 +41,7 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
   let on_close = props.onClose
   let on_jump_to_year = props.onJumpToYear
   let on_open_analytics = props.onOpenAnalytics
+  let raster = props.raster
   let sidebar_width = props.sidebarWidth
 
   //Declare local instance variables
@@ -49,6 +53,7 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
   let current_date: { day: number; month: number; year: number }
   let current_ts: number
   let display_year: string
+  let effective_stats: CountryStats | null
   let end_year: number | undefined
   let keyframes_list: any[]
   let max_x: number
@@ -58,6 +63,7 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
   let panel_style: React.CSSProperties
   let panel_w: number
   let raster_metric_str: string
+  let raster_metric_tooltip: string
   let source_label: string
   let start_year: number | undefined
   let target_x: number
@@ -121,22 +127,56 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
     alt_names_str = feature.properties.adm0_a3
   }
 
+  //Determine effective raster statistics for feature
+  effective_stats = useMemo(() => {
+    if (country_stats)
+      return country_stats
+    if (raster && feature) {
+      try {
+        return binRasterByCountryMemoized(raster, feature as unknown as CountryFeature)
+      } catch (arg0_err) {
+        console.error('Failed to compute regional raster statistics for historical feature:', arg0_err)
+      }
+    }
+    return null
+  }, [country_stats, raster, feature])
+
   //Format area value
   if (feature.properties?.area && typeof feature.properties.area === 'number') {
     area_val_str = `${Math.round(feature.properties.area).toLocaleString('de-DE')} km²`
-  } else if (country_stats?.validCount) {
-    area_val_str = `${country_stats.validCount.toLocaleString('de-DE')} cells`
+  } else if (effective_stats?.validCount) {
+    area_val_str = `${effective_stats.validCount.toLocaleString('de-DE')} cells`
   } else {
     area_val_str = 'Estimated'
   }
 
   //Format raster statistic value
-  if (country_stats) {
-    raster_metric_str = country_stats.mean.toLocaleString('de-DE', { maximumFractionDigits: 2 })
+  if (effective_stats) {
+    let abs_val: number
+    let sum_val = (effective_stats.total !== undefined && Number.isFinite(effective_stats.total))
+      ? effective_stats.total
+      : effective_stats.mean * effective_stats.validCount
+
+    abs_val = Math.abs(sum_val)
+    raster_metric_tooltip = `Sum: ${sum_val.toLocaleString('de-DE', { maximumFractionDigits: 2 })}\nMean: ${effective_stats.mean.toLocaleString('de-DE', { maximumFractionDigits: 2 })}\nValid Cells: ${effective_stats.validCount.toLocaleString('de-DE')}`
+
+    if (abs_val >= 1e12) {
+      raster_metric_str = `${(sum_val / 1e12).toLocaleString('de-DE', { maximumFractionDigits: 2 })} T`
+    } else if (abs_val >= 1e9) {
+      raster_metric_str = `${(sum_val / 1e9).toLocaleString('de-DE', { maximumFractionDigits: 2 })} B`
+    } else if (abs_val >= 1e6) {
+      raster_metric_str = `${(sum_val / 1e6).toLocaleString('de-DE', { maximumFractionDigits: 2 })} M`
+    } else if (abs_val >= 1e3) {
+      raster_metric_str = `${(sum_val / 1e3).toLocaleString('de-DE', { maximumFractionDigits: 2 })} k`
+    } else {
+      raster_metric_str = sum_val.toLocaleString('de-DE', { maximumFractionDigits: 2 })
+    }
   } else if (is_calculating_stats) {
     raster_metric_str = 'Computing...'
+    raster_metric_tooltip = 'Computing regional raster statistics...'
   } else {
-    raster_metric_str = 'Overlay Active'
+    raster_metric_str = 'No Data'
+    raster_metric_tooltip = 'No active raster layer data'
   }
 
   //Anchored positioning calculations with strict sidebar collision avoidance
@@ -256,16 +296,16 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
           </div>
         </div>
 
-        {/* Metric 2: Raster Mean or Status */}
+        {/* Metric 2: Raster Sum */}
         <div className="border border-border/60 bg-muted/20 p-2 text-center">
           <div className="text-[9px] text-muted-foreground uppercase font-mono tracking-wider">
-            {country_stats ? 'Raster Mean' : 'Status'}
+            Raster Sum
           </div>
-          <div className="text-sm font-bold text-primary font-mono mt-0.5 truncate" title={raster_metric_str}>
+          <div className="text-sm font-bold text-primary font-mono mt-0.5 truncate" title={raster_metric_tooltip}>
             {raster_metric_str}
           </div>
-          <div className="text-[9px] text-muted-foreground/70 truncate mt-0.5">
-            {display_year}
+          <div className="text-[9px] text-muted-foreground/70 truncate mt-0.5" title={display_year}>
+            {effective_stats ? `${effective_stats.validCount.toLocaleString('de-DE')} cells` : display_year}
           </div>
         </div>
 
@@ -284,7 +324,7 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
       </div>
 
       {/* Raster Statistics & Full Calculator Header */}
-      {country_stats && (
+      {effective_stats ? (
         <div className="mb-2.5 p-2 bg-muted/20 border border-border/50 text-xs space-y-1">
           <div className="flex items-center justify-between text-[11px] font-semibold text-foreground">
             <span className="flex items-center gap-1">
@@ -303,32 +343,49 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
           </div>
           <div className="grid grid-cols-2 gap-1 text-[10px] font-mono pt-1">
             <div>
+              <span className="text-muted-foreground">Sum: </span>
+              <span className="font-bold text-foreground">
+                {(effective_stats.total !== undefined ? effective_stats.total : effective_stats.mean * effective_stats.validCount).toLocaleString('de-DE', { maximumFractionDigits: 1 })}
+              </span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Mean: </span>
+              <span className="font-bold text-foreground">
+                {effective_stats.mean.toLocaleString('de-DE', { maximumFractionDigits: 2 })}
+              </span>
+            </div>
+            <div>
               <span className="text-muted-foreground">Median: </span>
               <span className="font-bold text-foreground">
-                {country_stats.median.toLocaleString('de-DE', { maximumFractionDigits: 2 })}
+                {effective_stats.median.toLocaleString('de-DE', { maximumFractionDigits: 2 })}
               </span>
             </div>
             <div>
               <span className="text-muted-foreground">Std Dev: </span>
               <span className="font-bold text-foreground">
-                {country_stats.stdDev.toLocaleString('de-DE', { maximumFractionDigits: 2 })}
+                {effective_stats.stdDev.toLocaleString('de-DE', { maximumFractionDigits: 2 })}
               </span>
             </div>
             <div>
               <span className="text-muted-foreground">Min / Max: </span>
               <span className="font-bold text-foreground">
-                {country_stats.min.toFixed(1)} / {country_stats.max.toFixed(1)}
+                {effective_stats.min.toFixed(1)} / {effective_stats.max.toFixed(1)}
               </span>
             </div>
             <div>
-              <span className="text-muted-foreground">Total: </span>
+              <span className="text-muted-foreground">Valid Cells: </span>
               <span className="font-bold text-foreground">
-                {country_stats.total.toLocaleString('de-DE', { maximumFractionDigits: 1 })}
+                {effective_stats.validCount.toLocaleString('de-DE')}
               </span>
             </div>
           </div>
         </div>
-      )}
+      ) : is_calculating_stats ? (
+        <div className="mb-2.5 p-2 bg-muted/20 border border-border/50 text-xs flex items-center justify-center gap-2 text-muted-foreground">
+          <Icon name="sync" className="animate-spin text-xs text-primary" />
+          <span className="text-[11px] font-mono">Computing regional raster statistics...</span>
+        </div>
+      ) : null}
 
       {/* Keyframe Timeline Trajectory Header */}
       <div className="flex items-center justify-between text-[11px] font-semibold text-foreground mb-1.5 border-t border-border/50 pt-2">
@@ -336,7 +393,7 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
           <Icon name="timeline" className="text-xs text-white" />
           <span className="uppercase tracking-wider font-mono text-[10px]">Historical Trajectory</span>
         </span>
-        {on_open_analytics && !country_stats && (
+        {on_open_analytics && !effective_stats && (
           <button
             type="button"
             onClick={on_open_analytics}

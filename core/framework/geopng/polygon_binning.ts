@@ -255,6 +255,12 @@ export function binRasterByCountryMemoized (
 
   //Declare local instance variables
   let cached: CountryStats | undefined
+  let feat_any: any
+  let feat_date: string
+  let feat_end: number | string
+  let feat_id: number | string
+  let feat_name: string
+  let feat_start: number | string
   let key: string
   let result: CountryStats
 
@@ -264,7 +270,14 @@ export function binRasterByCountryMemoized (
     last_cached_raster = raster
   }
 
-  key = feature.properties.adm0_a3 || feature.properties.iso_a3 || feature.properties.name
+  feat_any = feature as any
+  feat_date = feat_any.properties?.date || ''
+  feat_end = feat_any.properties?.endYear ?? ''
+  feat_id = feat_any.id || feat_any.properties?.id || ''
+  feat_name = feature.properties.adm0_a3 || feature.properties.iso_a3 || feature.properties.name || ''
+  feat_start = feat_any.properties?.startYear ?? ''
+
+  key = `${feat_id}_${feat_name}_${feat_start}_${feat_end}_${feat_date}`
   cached = stats_cache.get(key)
   if (cached)
     return cached

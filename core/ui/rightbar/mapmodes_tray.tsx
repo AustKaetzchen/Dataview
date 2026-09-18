@@ -3,6 +3,7 @@ import {
   CircleOverlayConfig,
   CityFullRecord,
   CityPoint,
+  DecodedRaster,
   HeightmapConfig,
   HistoricalBordersConfig,
   MapModeId,
@@ -66,6 +67,7 @@ export interface MapmodesTrayProps {
   onToggleCountriesMode?: (enabled: boolean) => void
   onToggleCountry: (country: CountryFeature) => void
   onToggleMapMode: (id: MapModeId) => void
+  raster?: DecodedRaster | null
   selectedCity?: CityFullRecord | CityPoint | null
   selectedCountries: CountryFeature[]
   selectedHistoricalFeature?: HistoricalBorderFeature | null
@@ -118,6 +120,7 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
     onToggleCountriesMode: on_toggle_countries_mode,
     onToggleCountry: on_toggle_country,
     onToggleMapMode: on_toggle_map_mode,
+    raster: raster = null,
     selectedCity: selected_city = null,
     selectedCountries: selected_countries,
     selectedHistoricalFeature: selected_historical_feature = null,
@@ -547,6 +550,7 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
                 isCalculatingStats={is_calculating_stats}
                 onClose={on_close_historical_feature || (() => {})}
                 onJumpToYear={on_jump_to_year}
+                raster={raster}
               />
             )}
           </div>

@@ -736,10 +736,10 @@ export let App: React.FC = function () {
       if (!c) {
         set_selected_countries([])
       } else {
-        handle_toggle_country(c)
+        set_selected_countries([c])
       }
     },
-    [handle_toggle_country]
+    []
   )
 
   let handle_toggle_countries_mode = useCallback((arg0_enabled: boolean) => {
@@ -806,7 +806,7 @@ export let App: React.FC = function () {
 
   let { countryStats: country_stats, isCalculatingStats: is_calculating_stats } = useCountryStatsAsync({
     activeCountries: active_countries,
-    activeRaster: active_raster,
+    activeRaster: display_raster || active_raster,
     isHoverOnly: is_hover_only,
   })
 
@@ -931,6 +931,7 @@ export let App: React.FC = function () {
           selectedCountry={selected_countries[0] || null}
           selectedCountries={selected_countries}
           deferredSelectedCountries={deferred_selected_countries}
+          countryStats={country_stats}
           isCalculatingStats={is_calculating_stats}
           onSelectCountry={handle_select_country}
           onToggleCountry={handle_toggle_country}

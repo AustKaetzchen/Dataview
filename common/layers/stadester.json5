@@ -10,18 +10,7 @@
         icon: "location_city",
         description: [
             "### Stadestér Settlements",
-            "A global historical database of 34,400+ cities and urban settlements from 3300BC to the present.",
-            "Includes estimated urban populations, areas, and densities compiled from Chandler, Bairoch/Buringh, de Vries, and modern census sources.",
-            "",
-            "<details>",
-            "<summary>Methodology & Historical Demographics</summary>",
-            "",
-            "Urban historical population reconstructions are synthesised using standard demographic harmonisation:",
-            "- **Ancient & Classical (3300BC – 500AD)**: Tertius Chandler (*Four Thousand Years of Urban Growth*), Colin McEvedy & Richard Jones (*Atlas of World Population History*), and regional archaeological site surveys.",
-            "- **Medieval & Early Modern (500AD – 1800AD)**: Paul Bairoch, Jean Batou & Pierre Chèvre (*La Population des villes européennes de 800 à 1850*), and Jan de Vries (*European Urbanization 1500–1800*).",
-            "- **Modern & Contemporary (1800AD – Present)**: National statistical agencies, UN World Urbanization Prospects, and GeoNames coordinate disambiguation.",
-            "- **Spatial Modelling**: Fractional spline interpolation between benchmark keyframes prevents discrete step artifacts across continuous timeline playback.",
-            "</details>"
+            "A global historical database of 34,400+ cities and urban settlements from 3300BC to the present."
         ],
         filepath: "${l_stad}/stadester_1.1.json",
         permissions: [
