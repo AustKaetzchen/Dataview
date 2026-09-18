@@ -54,7 +54,7 @@ export let StadesterLegendCard: React.FC<StadesterLegendCardProps> = React.memo(
 
   //Function body
   if (colour_mode === 'growth') {
-    metric_title = 'Annual Population Growth Rate (%/yr)'
+    metric_title = 'Population Growth (%/yr)'
     metric_subtitle = 'Visualising annual compound growth rates across global urban centres.'
     palette_label = `${growth_palette} (Heat / Cool Spectrum)`
     gradient_style = 'linear-gradient(to right, rgb(93, 96, 226), rgb(72, 156, 240), rgb(69, 207, 119), rgb(198, 219, 85), rgb(253, 224, 71), rgb(251, 146, 60), rgb(239, 68, 68), rgb(232, 121, 249))'
@@ -136,11 +136,10 @@ export let StadesterLegendCard: React.FC<StadesterLegendCardProps> = React.memo(
               return (
                 <span
                   key={chip.name}
-                  className={`flex items-center gap-1 text-[9px] px-1 py-0.5 border transition-all ${
-                    is_active
-                      ? 'bg-white/20 border-white font-bold text-white shadow-xs scale-105'
-                      : 'bg-background border-border text-white'
-                  }`}
+                  className={`flex items-center gap-1 text-[9px] px-1 py-0.5 border transition-all ${is_active
+                    ? 'bg-white/20 border-white font-bold text-white shadow-xs scale-105'
+                    : 'bg-background border-border text-white'
+                    }`}
                 >
                   <span className="w-1.5 h-1.5 rounded-none shrink-0" style={{ backgroundColor: chip.colour }} />
                   {chip.name}

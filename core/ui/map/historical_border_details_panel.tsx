@@ -93,10 +93,10 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
     let kf_ts = kf.timestamp !== undefined
       ? kf.timestamp
       : UfDate.getTimestamp({
-          day: kf.day || 1,
-          month: kf.month || 1,
-          year: kf.year,
-        })
+        day: kf.day || 1,
+        month: kf.month || 1,
+        year: kf.year,
+      })
     if (kf_ts <= current_ts) {
       active_kf_index = i
     } else {
@@ -329,7 +329,7 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
           <div className="flex items-center justify-between text-[11px] font-semibold text-foreground">
             <span className="flex items-center gap-1">
               <Icon name="bar_chart" className="text-xs text-primary" />
-              <span>Regional Raster Metrics ({display_year})</span>
+              <span>Statistics ({display_year})</span>
             </span>
             {on_open_analytics && (
               <button
@@ -434,20 +434,18 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
                     }
                   }
                 }}
-                className={`w-full text-left px-2 py-1.5 text-[11px] flex items-center justify-between transition-colors cursor-pointer border ${
-                  is_curr
-                    ? 'bg-red-500/20 border-red-500/60 text-red-400 font-bold shadow-xs'
-                    : is_unrecorded
-                      ? 'bg-muted/30 border-border/40 hover:bg-muted/50 text-muted-foreground'
-                      : 'bg-card hover:bg-muted/50 border-border/40 text-muted-foreground hover:text-foreground'
-                }`}
+                className={`w-full text-left px-2 py-1.5 text-[11px] flex items-center justify-between transition-colors cursor-pointer border ${is_curr
+                  ? 'bg-red-500/20 border-red-500/60 text-red-400 font-bold shadow-xs'
+                  : is_unrecorded
+                    ? 'bg-muted/30 border-border/40 hover:bg-muted/50 text-muted-foreground'
+                    : 'bg-card hover:bg-muted/50 border-border/40 text-muted-foreground hover:text-foreground'
+                  }`}
                 title={`Jump timeline to ${kf_date_str}`}
               >
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
                   <span
-                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                      is_curr ? 'bg-red-500' : (is_unrecorded ? 'bg-muted-foreground/40' : 'bg-muted-foreground/60')
-                    }`}
+                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${is_curr ? 'bg-red-500' : (is_unrecorded ? 'bg-muted-foreground/40' : 'bg-muted-foreground/60')
+                      }`}
                   />
                   <span className="font-mono font-semibold shrink-0 text-foreground">{kf_date_str}</span>
                   <span className="truncate text-[10px] text-muted-foreground ml-1">{kf_label}</span>
