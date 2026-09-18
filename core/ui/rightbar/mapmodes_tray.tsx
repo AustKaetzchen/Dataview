@@ -136,6 +136,7 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
   let active_layers_count: number
   let all_layer_entries: ParsedDataLayer[]
   let dataset_folders: Record<string, ParsedDataLayer[]>
+  let default_layer: ParsedDataLayer | undefined
   let expanded_nodes: Record<string, boolean>
   let filtered_layers: ParsedDataLayer[]
   let filtered_overlays: MapModeItem[]
@@ -328,11 +329,17 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
     })
   }, [all_layer_entries, search_query])
 
-  //Group filtered layers by dataset folder name
+  default_layer = useMemo(() => {
+    return filtered_layers.find((arg0_l) => arg0_l.id === 'default_basemap')
+  }, [filtered_layers])
+
+  //Group filtered layers by dataset folder name (excluding default_basemap)
   dataset_folders = useMemo(() => {
     let folders: Record<string, ParsedDataLayer[]> = {}
     for (let i = 0; i < filtered_layers.length; i++) {
       let layer = filtered_layers[i]
+      if (layer.id === 'default_basemap')
+        continue
       let group_name = layer.category || 'Other Layers'
       if (!folders[group_name])
         folders[group_name] = []
@@ -578,9 +585,42 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
                   {t.mapmodes.loadingRaster}
                 </div>
               )}
-              {Object.keys(dataset_folders).length === 0 && !is_loading_layers && filtered_overlays.length === 0 && (
+              {Object.keys(dataset_folders).length === 0 && !default_layer && !is_loading_layers && filtered_overlays.length === 0 && (
                 <div className="p-2 text-center text-xs text-muted-foreground">
                   {t.mapmodes.noResults}
+                </div>
+              )}
+
+              {/* Standalone Default Mapmode (Top of Pile, un-nested) */}
+              {default_layer && (
+                <div className="border border-border/80 bg-card/40 mb-1.5">
+                  <MapmodeTooltip name={default_layer.name} unit={default_layer.unit}>
+                    <button
+                      type="button"
+                      disabled={!is_layer_accessible(default_layer)}
+                      onClick={() => on_select_layer && on_select_layer(default_layer!.id)}
+                      className={`w-full flex items-center justify-between px-2 py-1.5 text-left cursor-pointer border transition-colors ${active_layer_id === default_layer.id
+                          ? 'bg-primary/20 text-primary border-primary font-bold shadow-xs'
+                          : 'hover:bg-muted/40 text-foreground border-transparent'
+                        } ${!is_layer_accessible(default_layer) ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className={`w-3.5 h-3.5 rounded-none border flex items-center justify-center shrink-0 transition-colors ${active_layer_id === default_layer.id
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-muted-foreground/60'
+                            }`}
+                        >
+                          {active_layer_id === default_layer.id && <Icon name="check" className="text-[10px]" />}
+                        </span>
+                        <Icon name="map" className="text-primary text-xs shrink-0" />
+                        <span className="text-xs font-bold truncate">{default_layer.name}</span>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground uppercase font-mono">
+                        {active_layer_id === default_layer.id ? t.mapmodes.on : t.mapmodes.off}
+                      </span>
+                    </button>
+                  </MapmodeTooltip>
                 </div>
               )}
 

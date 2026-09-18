@@ -4,6 +4,7 @@ import { Icon } from '@ui/components/icon'
 import { HistoricalBordersConfig, StadesterConfig } from '@framework/geopng/types.ts'
 import { HistoricalBordersSettings } from '@ui/rightbar/mapmodes/historical_borders_settings'
 import { StadesterSettings } from '@ui/rightbar/mapmodes/stadester_settings'
+import { useLocalisation } from '@localisation'
 
 import { UserRole, isPublicBuild, isRoleAllowed } from '@common'
 export type { UserRole }
@@ -64,14 +65,18 @@ export let DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props) {
   let handle_role_change: (arg0_role: UserRole) => void
   let is_layer_accessible: (arg0_layer: ParsedDataLayer) => boolean
   let layer_search: string
+  let localisation: ReturnType<typeof useLocalisation>
   let roles_list = all_roles.filter((arg0_r) => isRoleAllowed(arg0_r.id))
   let selected_category: string
   let set_layer_search: React.Dispatch<React.SetStateAction<string>>
   let set_selected_category: React.Dispatch<React.SetStateAction<string>>
+  let t: ReturnType<typeof useLocalisation>['t']
 
-    //Function body
-    ;[layer_search, set_layer_search] = useState('')
-    ;[selected_category, set_selected_category] = useState('all')
+  //Function body
+  localisation = useLocalisation()
+  t = localisation.t
+  ;[layer_search, set_layer_search] = useState('')
+  ;[selected_category, set_selected_category] = useState('all')
 
   handle_role_change = useCallback(
     function (arg0_role: UserRole) {
@@ -206,7 +211,7 @@ export let DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props) {
         <div className="relative">
           <input
             type="text"
-            placeholder="Search data layers..."
+            placeholder={t.sidebar.layers.searchPlaceholder}
             value={layer_search}
             onChange={(arg0_e) => set_layer_search(arg0_e.target.value)}
             className="w-full h-8 pl-8 pr-2.5 text-[var(--body-font-size)] bg-background border border-border text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary"
@@ -224,7 +229,7 @@ export let DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props) {
                 : 'bg-muted/30 border-border text-muted-foreground hover:text-foreground'
               }`}
           >
-            All Categories
+            {t.sidebar.layers.allCategories}
           </button>
           {Object.keys(grouped_categories).map((arg0_cat) => (
             <button
@@ -246,13 +251,13 @@ export let DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props) {
       <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
         {is_loading_layers && (
           <div className="p-4 text-center text-muted-foreground text-xs font-mono animate-pulse">
-            Streaming data layers from backend registry...
+            {t.sidebar.layers.loadingLayers}
           </div>
         )}
 
         {!is_loading_layers && filtered_layers.length === 0 && (
           <div className="p-4 text-center text-muted-foreground text-xs border border-dashed border-border">
-            No matching data layers found.
+            {t.sidebar.layers.noLayersFound}
           </div>
         )}
 
@@ -353,7 +358,7 @@ export let DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props) {
                   {!accessible && (
                     <span className="text-[10px] px-1.5 py-0.5 bg-destructive/20 text-destructive border border-destructive/40 font-mono flex items-center gap-1">
                       <Icon name="lock" className="text-xs" />
-                      <span>RESTRICTED</span>
+                      <span>{t.sidebar.layers.restricted}</span>
                     </span>
                   )}
                   {is_vector_overlay ? (
@@ -382,12 +387,12 @@ export let DataLayersTab: React.FC<DataLayersTabProps> = function (arg0_props) {
                         }}
                         className="accent-primary cursor-pointer h-3.5 w-3.5"
                       />
-                      <span>{is_overlay_active ? 'OVERLAY ON' : 'OVERLAY OFF'}</span>
+                      <span>{is_overlay_active ? t.sidebar.layers.overlayOn : t.sidebar.layers.overlayOff}</span>
                     </label>
                   ) : (
                     is_exact_active && (
                       <span className="text-[10px] px-1.5 py-0.5 bg-primary text-primary-foreground font-bold shadow-xs">
-                        ACTIVE
+                        {t.sidebar.layers.active}
                       </span>
                     )
                   )}

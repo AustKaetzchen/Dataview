@@ -5,6 +5,7 @@ import {
   getEraDisplayFloor,
   isGlobePointVisible,
   projectGlobeCoordinates,
+  projectMercatorCoordinates,
 } from './stadester_heuristics.ts'
 
 export interface WorkerCityInput {
@@ -354,19 +355,12 @@ function processViewportLayout (arg0_msg: WorkerInMessage & { type: 'LAYOUT_VIEW
             sx = window_w / 2 + (cand.position[0] - target[0]) * scale
             sy = window_h / 2 - (cand.position[1] - target[1]) * scale
           } else {
-            let center_lat = view_state?.latitude ?? 20
-            let center_lng = view_state?.longitude ?? 0
-            let rad_factor = Math.PI / 180
+            let proj = projectMercatorCoordinates(cand.position[0], cand.position[1], view_state, window_w, window_h)
+            if (!proj.is_visible)
+              continue
 
-            let x_norm = (cand.position[0] + 180) / 360
-            let c_norm = (center_lng + 180) / 360
-            sx = window_w / 2 + (x_norm - c_norm) * 512 * scale
-
-            let lat_rad = Math.max(-85, Math.min(85, cand.position[1])) * rad_factor
-            let c_lat_rad = Math.max(-85, Math.min(85, center_lat)) * rad_factor
-            let y_proj = (1 - Math.log(Math.tan(Math.PI / 4 + lat_rad / 2)) / Math.PI) / 2
-            let c_y_proj = (1 - Math.log(Math.tan(Math.PI / 4 + c_lat_rad / 2)) / Math.PI) / 2
-            sy = window_h / 2 + (y_proj - c_y_proj) * 512 * scale
+            sx = proj.sx
+            sy = proj.sy
           }
 
           if (sx < -80 || sx > window_w + 80 || sy < -40 || sy > window_h + 40)

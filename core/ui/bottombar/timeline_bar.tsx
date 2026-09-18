@@ -500,7 +500,7 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
                   type="button"
                   onClick={() => set_is_collapsed((arg0_prev) => !arg0_prev)}
                   className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
-                  title={is_collapsed ? 'Expand scrubber track' : 'Collapse scrubber track'}
+                  title={is_collapsed ? t.timeline.expandScrubber : t.timeline.collapseScrubber}
                 >
                   <Icon name={is_collapsed ? 'expand_less' : 'expand_more'} />
                 </button>
@@ -509,8 +509,8 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
                     type="button"
                     onClick={on_close}
                     className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer touch-manipulation"
-                    title="Close timeline"
-                    aria-label="Close timeline"
+                    title={t.timeline.closeTimeline}
+                    aria-label={t.timeline.closeTimeline}
                   >
                     <Icon name="close" size="1.1rem" />
                   </button>
@@ -526,7 +526,7 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
                 className={`w-full flex items-center justify-center gap-2 bg-background/90 hover:bg-background border px-4 py-1 shadow-inner pointer-events-auto cursor-pointer transition-colors group ${
                   is_date_picker_open ? 'border-primary ring-1 ring-primary/40' : 'border-border hover:border-primary/50'
                 }`}
-                title="Click to select exact historical date"
+                title={t.timeline.selectExactDate}
               >
                 <Icon name="event" className="text-primary text-sm group-hover:scale-105 transition-transform" />
                 <span className="text-sm font-bold tracking-tight text-foreground font-mono">
@@ -639,7 +639,7 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="text-xs font-medium text-foreground">{t.timeline.snap}</div>
-                          <div className="text-[10px] text-muted-foreground">Scrub only genuine raster dates</div>
+                          <div className="text-[10px] text-muted-foreground">{t.timeline.snapDescription}</div>
                         </div>
                         <button
                           type="button"
@@ -658,7 +658,7 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="text-xs font-medium text-foreground">{t.timeline.loop}</div>
-                          <div className="text-[10px] text-muted-foreground">Restart from beginning at end</div>
+                          <div className="text-[10px] text-muted-foreground">{t.timeline.loopDescription}</div>
                         </div>
                         <button
                           type="button"
@@ -700,7 +700,7 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
                 className={`flex items-center gap-2 bg-background/90 hover:bg-background border px-4 py-1 shadow-inner pointer-events-auto cursor-pointer transition-colors group ${
                   is_date_picker_open ? 'border-primary ring-1 ring-primary/40' : 'border-border hover:border-primary/50'
                 }`}
-                title="Click to select exact historical date"
+                title={t.timeline.selectExactDate}
               >
                 <Icon name="event" className="text-primary text-sm group-hover:scale-105 transition-transform" />
                 <span className="text-sm font-bold tracking-tight text-foreground font-mono">
@@ -728,7 +728,7 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
                 type="button"
                 onClick={() => set_is_collapsed((arg0_prev) => !arg0_prev)}
                 className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
-                title={is_collapsed ? 'Expand scrubber track' : 'Collapse scrubber track'}
+                title={is_collapsed ? t.timeline.expandScrubber : t.timeline.collapseScrubber}
               >
                 <Icon name={is_collapsed ? 'expand_less' : 'expand_more'} />
               </button>
@@ -737,8 +737,8 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
                   type="button"
                   onClick={on_close}
                   className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer touch-manipulation"
-                  title="Close timeline"
-                  aria-label="Close timeline"
+                  title={t.timeline.closeTimeline}
+                  aria-label={t.timeline.closeTimeline}
                 >
                   <Icon name="close" size="1.1rem" />
                 </button>
@@ -794,7 +794,7 @@ export let TimelineBar: React.FC<TimelineBarProps> = function (arg0_props) {
                       arg0_idx > 0 && arg0_idx < TIMELINE_MILESTONES.length - 1 ? 'hidden sm:inline-block' : ''
                     }`}
                     onClick={() => handle_jump_year(arg0_m.year)}
-                    title={`Jump to ${arg0_m.label}`}
+                    title={format_string(t.timeline.jumpToMilestone, arg0_m.label)}
                   >
                     {arg0_m.label}
                   </span>

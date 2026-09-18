@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { ColorPalette, ScaleType } from '@framework/geopng/types.ts'
 import { getPaletteCssGradient } from '@framework/geopng/palettes.ts'
 import { transformValue } from '@framework/geopng/scales'
+import { useLocalisation } from '@localisation'
 
 export interface ColorBarLegendProps {
   palette: ColorPalette
@@ -149,6 +150,7 @@ export let ColorBarLegend: React.FC<ColorBarLegendProps> = React.memo(function (
   let invert_palette = props.invertPalette ?? false
   let legend_subtitle = props.legendSubtitle
   let legend_title = props.legendTitle
+  let localisation: ReturnType<typeof useLocalisation>
   let log_sigma = props.logSigma
   let max_val = props.maxVal
   let min_val = props.minVal
@@ -161,10 +163,14 @@ export let ColorBarLegend: React.FC<ColorBarLegendProps> = React.memo(function (
   let scale_type = props.scaleType
   let set_editing_index: React.Dispatch<React.SetStateAction<number | null>>
   let set_editing_value: React.Dispatch<React.SetStateAction<string>>
+  let t: ReturnType<typeof useLocalisation>['t']
   let t_max: number
   let t_min: number
 
   //Function body
+  localisation = useLocalisation()
+  t = localisation.t
+
   let [edit_idx, set_edit_idx] = useState<number | null>(null)
   editing_index = edit_idx
   set_editing_index = set_edit_idx
@@ -286,7 +292,7 @@ export let ColorBarLegend: React.FC<ColorBarLegendProps> = React.memo(function (
         <div
           onMouseDown={handle_resize_mouse_down}
           className="absolute top-0 right-0 bottom-0 w-2 cursor-col-resize hover:bg-primary/50 active:bg-primary transition-colors z-30 group"
-          title="Drag right border to resize Value colourbar"
+          title={t.hud.resizeColourbar}
         >
           <div className="w-[2px] h-6 bg-border group-hover:bg-primary absolute top-1/2 -translate-y-1/2 right-0.5" />
         </div>
@@ -411,7 +417,7 @@ export let ColorBarLegend: React.FC<ColorBarLegendProps> = React.memo(function (
                     set_editing_index(null)
                   }}
                   className="w-16 h-6 px-1 text-[var(--body-font-size)] font-bold bg-background border border-primary text-foreground text-center rounded-none z-30 shadow-lg focus:outline-none"
-                  title="Enter absolute break number"
+                  title={t.hud.enterAbsoluteBreak}
                 />
               ) : (
                 <button
@@ -421,7 +427,7 @@ export let ColorBarLegend: React.FC<ColorBarLegendProps> = React.memo(function (
                     set_editing_value(bp.val.toString())
                   }}
                   className="whitespace-nowrap px-1 py-0.2 cursor-pointer text-muted-foreground hover:text-foreground hover:bg-muted rounded-none transition-colors underline decoration-dotted decoration-muted-foreground/60 underline-offset-2"
-                  title="Click to set break value by typing number"
+                  title={t.hud.clickToSetBreak}
                 >
                   {bp.label}
                 </button>

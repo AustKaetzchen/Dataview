@@ -219,6 +219,7 @@ export function computeViewportBoundingBox (
       }
     }
   } else {
+    let bearing = view_state.bearing ?? 0
     let center_lat = view_state.latitude ?? 20
     let center_lng = view_state.longitude ?? 0
     let delta_y_mercator: number
@@ -228,6 +229,7 @@ export function computeViewportBoundingBox (
     let lat_rad: number
     let margin = 1.35
     let north_rad: number
+    let pitch = view_state.pitch ?? 0
     let south_rad: number
     let span_lng: number
     let world_size: number
@@ -235,6 +237,14 @@ export function computeViewportBoundingBox (
     let y_north: number
     let y_south: number
     let zoom = view_state.zoom ?? 1.2
+
+    //Scale margin for perspective viewing frustum under 3D camera pitch and bearing
+    if (pitch > 0) {
+      let pitch_rad = (Math.min(80, pitch)*Math.PI)/180
+      margin = margin/Math.cos(pitch_rad)
+    }
+    if (Math.abs(bearing) > 0.5)
+      margin *= 1.25
 
     //World scale in pixels at zoom: world_size = 512 * 2^zoom
     world_size = 512*Math.pow(2, zoom)
@@ -440,5 +450,114 @@ export function projectGlobeCoordinates (
 
   //Return statement
   return { dot: visibility_dot, is_visible, sx, sy }
+}
+
+/**
+ * Projects a geographic point to 2D screen coordinates under Web Mercator projection with 3D camera pitch and bearing.
+ * Implements Deck.gl's perspective camera model to properly detect screen position and frustum visibility.
+ *
+ * @param {number} arg0_lng
+ * @param {number} arg1_lat
+ * @param {any} arg2_view_state
+ * @param {number} arg3_window_w
+ * @param {number} arg4_window_h
+ *
+ * @returns {{ is_visible: boolean; sx: number; sy: number }}
+ */
+export function projectMercatorCoordinates (
+  arg0_lng: number,
+  arg1_lat: number,
+  arg2_view_state: any,
+  arg3_window_w: number,
+  arg4_window_h: number
+): { is_visible: boolean; sx: number; sy: number } {
+  //Convert from parameters
+  let lat = arg1_lat
+  let lng = arg0_lng
+  let view_state = arg2_view_state
+  let window_h = arg4_window_h
+  let window_w = arg3_window_w
+
+  //Declare local instance variables
+  let altitude: number
+  let bearing = view_state?.bearing ?? 0
+  let bearing_rad = (bearing*Math.PI)/180
+  let c_lat = view_state?.latitude ?? 20
+  let c_lat_clamped: number
+  let c_lat_rad: number
+  let c_lng = view_state?.longitude ?? 0
+  let c_x: number
+  let c_y: number
+  let cos_b: number
+  let cos_p: number
+  let d: number
+  let dx: number
+  let dy: number
+  let is_visible: boolean
+  let lat_clamped: number
+  let lat_rad: number
+  let p_x: number
+  let p_y: number
+  let pitch = Math.max(0, Math.min(85, view_state?.pitch ?? 0))
+  let pitch_rad = (pitch*Math.PI)/180
+  let sin_b: number
+  let sin_p: number
+  let sx: number
+  let sy: number
+  let world_size: number
+  let x_rot: number
+  let y_rot: number
+  let z_cam: number
+  let zoom = view_state?.zoom ?? 1.2
+
+  //Guard clauses
+  if (!view_state)
+    return { is_visible: false, sx: 0, sy: 0 }
+
+  //Function body
+  world_size = 512*Math.pow(2, zoom)
+
+  //1. Projected world coordinates (Web Mercator)
+  p_x = ((lng + 180)/360)*world_size
+  lat_clamped = Math.max(-85.051129, Math.min(85.051129, lat))
+  lat_rad = (lat_clamped*Math.PI)/180
+  p_y = ((1 - Math.log(Math.tan(Math.PI/4 + lat_rad/2))/Math.PI)/2)*world_size
+
+  c_x = ((c_lng + 180)/360)*world_size
+  c_lat_clamped = Math.max(-85.051129, Math.min(85.051129, c_lat))
+  c_lat_rad = (c_lat_clamped*Math.PI)/180
+  c_y = ((1 - Math.log(Math.tan(Math.PI/4 + c_lat_rad/2))/Math.PI)/2)*world_size
+
+  dx = p_x - c_x
+  if (dx > world_size/2)
+    dx -= world_size
+  if (dx < -world_size/2)
+    dx += world_size
+  dy = p_y - c_y
+
+  //2. Camera rotation (bearing)
+  cos_b = Math.cos(bearing_rad)
+  sin_b = Math.sin(bearing_rad)
+  x_rot = dx*cos_b - dy*sin_b
+  y_rot = dx*sin_b + dy*cos_b
+
+  //3. Perspective projection with pitch
+  altitude = 1.5
+  d = altitude*window_h
+  cos_p = Math.cos(pitch_rad)
+  sin_p = Math.sin(pitch_rad)
+
+  z_cam = d - y_rot*sin_p
+
+  //Behind camera or beyond vanishing horizon
+  if (z_cam <= 1.0)
+    return { is_visible: false, sx: -9999, sy: -9999 }
+
+  sx = window_w/2 + (x_rot*d)/z_cam
+  sy = window_h/2 + (y_rot*cos_p*d)/z_cam
+  is_visible = true
+
+  //Return statement
+  return { is_visible, sx, sy }
 }
 

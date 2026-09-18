@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { DecodedRaster, ScaleType } from '@framework/geopng/types.ts'
+import { useLocalisation } from '@localisation'
 
 export interface HistogramChartProps {
   raster: DecodedRaster | null
@@ -37,14 +38,20 @@ export let HistogramChart: React.FC<HistogramChartProps> = function (arg0_props)
   //Declare local instance variables
   let container_ref = useRef<HTMLDivElement>(null)
   let echart_ref = useRef<any>(null)
+  let format: ReturnType<typeof useLocalisation>['format']
+  let localisation: ReturnType<typeof useLocalisation>
   let option: any
   let scale_mode: 'log' | 'linear'
   let set_scale_mode: React.Dispatch<React.SetStateAction<'log' | 'linear'>>
   let set_steepness_input: React.Dispatch<React.SetStateAction<string>>
   let steepness: number
   let steepness_input: string
+  let t: ReturnType<typeof useLocalisation>['t']
 
   //Function body
+  localisation = useLocalisation()
+  format = localisation.format
+  t = localisation.t
   ;[scale_mode, set_scale_mode] = useState<'log' | 'linear'>('log')
   ;[steepness_input, set_steepness_input] = useState<string>('1.0')
 
@@ -293,7 +300,7 @@ export let HistogramChart: React.FC<HistogramChartProps> = function (arg0_props)
           let b1 = bins[idx]?.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })
           let b2 = bins[idx + 1]?.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })
           let range = `[${b1} to ${b2}]`
-          return `<strong>Range:</strong> ${range}<br/><strong>Count:</strong> ${actual_count.toLocaleString()}`
+          return `<strong>${t.analytics.valueRange}:</strong> ${range}<br/><strong>${t.analytics.totalCells}:</strong> ${actual_count.toLocaleString()}`
         },
         textStyle: { color: '#f4f4f5', fontFamily: 'Karla, sans-serif', fontSize: 12 },
         trigger: 'axis',
@@ -337,13 +344,13 @@ export let HistogramChart: React.FC<HistogramChartProps> = function (arg0_props)
         axisLine: { lineStyle: { color: '#3f3f46' } },
         logBase: 10,
         min: scale_mode === 'log' ? 1 : 0,
-        name: scale_mode === 'log' ? 'Cells (log)' : 'Cells',
+        name: scale_mode === 'log' ? `${t.analytics.frequencyCells} (log)` : t.analytics.frequencyCells,
         nameTextStyle: { color: '#71717a', fontFamily: 'Karla, sans-serif', fontSize: 11 },
         splitLine: { lineStyle: { color: '#27272a', type: 'dashed' } },
         type: scale_mode === 'log' ? 'log' : 'value',
       },
     }
-  }, [raster, country_stats, scale_type, min_override, max_override, scale_mode, steepness])
+  }, [raster, country_stats, scale_type, min_override, max_override, scale_mode, steepness, t])
 
   //Return statement
   return (
@@ -351,14 +358,14 @@ export let HistogramChart: React.FC<HistogramChartProps> = function (arg0_props)
       {/* Top Controls: Scope Title, Log Steepness Adjuster & Scale Mode Switch */}
       <div className="flex items-center justify-between px-[var(--cell-padding)] pt-0.5 pb-[var(--cell-padding)] select-none gap-[var(--padding)]">
         <span className="text-[var(--body-font-size)] font-light text-muted-foreground truncate">
-          {country_stats ? `Distribution: ${country_stats.name}` : 'Global Distribution'}
+          {country_stats ? format(t.analytics.distributionCountry, country_stats.name) : t.analytics.globalDistribution}
         </span>
 
         <div className="flex items-center gap-[var(--cell-padding)] shrink-0">
           {/* Steepness Option for Logarithmic Scale with Custom Textbox */}
           {scale_mode === 'log' && (
             <div className="flex items-center gap-1.5 bg-muted px-[var(--padding)] py-0.5 rounded-none text-[var(--body-font-size)] border border-border">
-              <span className="text-muted-foreground font-normal">Steepness:</span>
+              <span className="text-muted-foreground font-normal">{t.analytics.steepnessLabel}</span>
               <button
                 type="button"
                 onClick={() => {
@@ -368,7 +375,7 @@ export let HistogramChart: React.FC<HistogramChartProps> = function (arg0_props)
                   set_steepness_input(next.toString())
                 }}
                 className="w-5 h-5 rounded-none bg-background hover:bg-muted text-foreground flex items-center justify-center font-bold cursor-pointer border border-border/60"
-                title="Decrease steepness"
+                title={t.analytics.decreaseSteepness}
               >
                 −
               </button>
@@ -379,7 +386,7 @@ export let HistogramChart: React.FC<HistogramChartProps> = function (arg0_props)
                 onChange={(arg0_e) => set_steepness_input(arg0_e.target.value)}
                 className="w-14 h-5 px-1 font-bold text-center bg-background border border-border rounded-none text-foreground focus:outline-none focus:border-primary text-[var(--body-font-size)]"
                 placeholder="1.0"
-                title="Custom steepness factor (unbounded)"
+                title={t.analytics.customSteepnessTooltip}
               />
               <button
                 type="button"
@@ -390,7 +397,7 @@ export let HistogramChart: React.FC<HistogramChartProps> = function (arg0_props)
                   set_steepness_input(next.toString())
                 }}
                 className="w-5 h-5 rounded-none bg-background hover:bg-muted text-foreground flex items-center justify-center font-bold cursor-pointer border border-border/60"
-                title="Increase steepness"
+                title={t.analytics.increaseSteepness}
               >
                 +
               </button>
@@ -425,7 +432,7 @@ export let HistogramChart: React.FC<HistogramChartProps> = function (arg0_props)
                   : 'text-muted-foreground hover:text-foreground font-light'
               }`}
             >
-              Logarithmic
+              {t.analytics.logarithmic}
             </button>
             <button
               type="button"
@@ -436,7 +443,7 @@ export let HistogramChart: React.FC<HistogramChartProps> = function (arg0_props)
                   : 'text-muted-foreground hover:text-foreground font-light'
               }`}
             >
-              Linear
+              {t.analytics.linear}
             </button>
           </div>
         </div>

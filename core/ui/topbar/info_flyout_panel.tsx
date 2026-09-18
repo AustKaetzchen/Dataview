@@ -11,6 +11,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@ui/components/tabs'
 import { MarkdownRenderer } from '@ui/components/markdown_renderer'
 import { Window } from '@ui/components/window'
 import { INFO_PANEL_CONFIG, MAPMODES_CONFIG } from '@common'
+import { useLocalisation } from '@localisation'
 
 export interface InfoFlyoutPanelProps {
   isOpen: boolean
@@ -48,15 +49,20 @@ export let InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = function (arg0_prop
   let heightmap_config = props.heightmapConfig
   let is_open = props.isOpen
   let is_pinned = props.isPinned
+  let localisation: ReturnType<typeof useLocalisation>
   let map_modes = props.mapModes
   let on_close = props.onClose
   let on_toggle_pin = props.onTogglePin
   let projection = props.projection
   let selected_countries = props.selectedCountries
   let set_active_tab: React.Dispatch<React.SetStateAction<string>>
+  let t: ReturnType<typeof useLocalisation>['t']
   let width = props.width ?? 336
 
   //Function body
+  localisation = useLocalisation()
+  t = localisation.t
+
   let [current_tab, set_current_tab] = useState<string>(
     INFO_PANEL_CONFIG.defaultTab || INFO_PANEL_CONFIG.tabs[0]?.id || 'controls'
   )
@@ -118,17 +124,17 @@ export let InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = function (arg0_prop
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-foreground text-[var(--body-font-size)] uppercase tracking-wider flex items-center gap-1.5">
                         <Icon name="layers" size={14} className="text-white" />
-                        <span>Active Rendering Modes</span>
+                        <span>{t.infoPanel.activeRenderingModes}</span>
                       </span>
                       <span className="text-[var(--body-font-size)] px-2 py-0.5 bg-primary/20 text-primary border border-primary/40 font-semibold leading-none flex items-center">
-                        {active_modes_array.length} Active
+                        {localisation.format(t.infoPanel.activeCount, active_modes_array.length)}
                       </span>
                     </div>
 
                     <div className="space-y-1.5 bg-background/60 p-2 border border-border">
                       {(active_modes_array.length === 0) ? (
                         <p className="text-muted-foreground text-[var(--body-font-size)] italic">
-                          No active mapmodes. Base 2D raster only.
+                          {t.infoPanel.noActiveMapmodes}
                         </p>
                       ) : (
                         active_modes_array.map((m) => {
@@ -182,14 +188,14 @@ export let InfoFlyoutPanel: React.FC<InfoFlyoutPanelProps> = function (arg0_prop
 
                   {/* Camera & Projection State */}
                   <div className="flex items-center justify-between p-2 bg-background/40 border border-border text-[var(--body-font-size)]">
-                    <span className="text-muted-foreground">Projection: <strong className="text-foreground">{projection}</strong></span>
-                    <span className="text-muted-foreground">3D Tilt: <strong className="text-foreground">{Math.round(camera_tilt)}°</strong></span>
+                    <span className="text-muted-foreground">{t.infoPanel.projection}: <strong className="text-foreground">{projection}</strong></span>
+                    <span className="text-muted-foreground">{t.infoPanel.tilt}: <strong className="text-foreground">{Math.round(camera_tilt)}°</strong></span>
                   </div>
 
                   {/* Navigation Shortcuts Section */}
                   <div className="space-y-1.5">
                     <span className="font-bold text-foreground text-[var(--body-font-size)] uppercase tracking-wider block">
-                      {tab.shortcutsHeader || 'Navigation Shortcuts'}
+                      {tab.shortcutsHeader || t.infoPanel.navigationShortcuts}
                     </span>
 
                     <div className="space-y-1 bg-background/60 p-2 border border-border">

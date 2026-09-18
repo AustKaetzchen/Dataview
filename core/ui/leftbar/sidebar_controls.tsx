@@ -217,21 +217,80 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
   }, [active_layer_id, layers])
 
   active_description = useMemo(() => {
-    if (active_layer?.description)
-      return active_layer.description
-    if (stadester_config?.enabled && layers?.['stadester']?.description)
-      return layers['stadester'].description
+    let active_entries: { id: string; markdown: string; title: string }[] = []
+    let added_ids = new Set<string>()
+
+    //1. Active primary raster/vector layer
+    if (active_layer && active_layer.id !== 'default_basemap' && active_layer.type !== 'vector.basemap' && active_layer.description) {
+      let raw_md = (Array.isArray(active_layer.description)) ? active_layer.description.join('\n') : String(active_layer.description)
+      active_entries.push({
+        id: active_layer.id,
+        markdown: raw_md,
+        title: active_layer.name || active_layer.id,
+      })
+      added_ids.add(active_layer.id)
+    }
+
+    //2. Stadestér settlements overlay
+    if (stadester_config?.enabled && layers?.['stadester']?.description) {
+      let raw_md = (Array.isArray(layers['stadester'].description)) ? layers['stadester'].description.join('\n') : String(layers['stadester'].description)
+      active_entries.push({
+        id: 'stadester',
+        markdown: raw_md,
+        title: layers['stadester'].name || 'Stadestér (Cities)',
+      })
+      added_ids.add('stadester')
+    }
+
+    //3. Historical Borders overlay
     if (historical_borders_config?.enabled) {
       let border_dataset = historical_borders_config.dataset || 'statistical_borders'
-      if (layers?.[border_dataset]?.description)
-        return layers[border_dataset].description
+      if (layers?.[border_dataset]?.description) {
+        let raw_md = (Array.isArray(layers[border_dataset].description)) ? layers[border_dataset].description.join('\n') : String(layers[border_dataset].description)
+        active_entries.push({
+          id: border_dataset,
+          markdown: raw_md,
+          title: layers[border_dataset].name || 'Historical Borders',
+        })
+        added_ids.add(border_dataset)
+      }
     }
+
+    //4. Other active map modes
     if (map_modes && map_modes.length > 0) {
-      let active_mode = map_modes.find((arg0_m) => arg0_m.active && arg0_m.id !== 'default' && (arg0_m as any).description)
-      if (active_mode && (active_mode as any).description)
-        return (active_mode as any).description
+      for (let i = 0; i < map_modes.length; i++) {
+        let mode = map_modes[i]
+        if (mode.active && mode.id !== 'default' && !added_ids.has(mode.id)) {
+          let desc = (mode as any).description || layers?.[mode.id]?.description
+          if (desc) {
+            let raw_md = (Array.isArray(desc)) ? desc.join('\n') : String(desc)
+            active_entries.push({
+              id: mode.id,
+              markdown: raw_md,
+              title: mode.label || layers?.[mode.id]?.name || mode.id,
+            })
+            added_ids.add(mode.id)
+          }
+        }
+      }
     }
-    return null
+
+    //5. Fallback to default basemap if no other overlays or modes have descriptions
+    if (active_entries.length === 0 && active_layer?.description) {
+      let raw_md = (Array.isArray(active_layer.description)) ? active_layer.description.join('\n') : String(active_layer.description)
+      return raw_md
+    }
+
+    if (active_entries.length === 0)
+      return null
+
+    if (active_entries.length === 1)
+      return active_entries[0].markdown
+
+    //Concatenate multiple mapmodes into summary collapsible folders using HTML <details><summary>
+    return active_entries.map((arg0_entry) => {
+      return `<details open>\n<summary>${arg0_entry.title}</summary>\n\n${arg0_entry.markdown}\n\n</details>`
+    }).join('\n\n')
   }, [active_layer, historical_borders_config?.dataset, historical_borders_config?.enabled, layers, map_modes, stadester_config?.enabled])
 
   toggle_folder = function (arg0_folder_key: string) {
@@ -500,24 +559,33 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
                   <Slider
                     value={[log_sigma]}
                     min={0.01}
-                    max={Math.max(1000, Math.ceil(log_sigma * 1.5))}
-                    step={log_sigma >= 100 ? 5 : log_sigma >= 10 ? 1 : log_sigma >= 1 ? 0.1 : 0.01}
+                    max={Math.max(1000000, Math.ceil(log_sigma * 1.5))}
+                    step={log_sigma >= 10000 ? 500 : log_sigma >= 100 ? 5 : log_sigma >= 10 ? 1 : log_sigma >= 1 ? 0.1 : 0.01}
                     onValueChange={(arg0_vals: number[]) => set_log_sigma(arg0_vals[0])}
                   />
 
                   {/* Preset buttons */}
-                  <div className="flex items-center justify-between gap-1 pt-0.5">
-                    {[0.1, 1, 10, 100, 1000].map((arg0_preset) => (
+                  <div className="flex items-center justify-between gap-1 pt-0.5 flex-wrap">
+                    {[
+                      { label: '0.1', value: 0.1 },
+                      { label: '1', value: 1 },
+                      { label: '10', value: 10 },
+                      { label: '100', value: 100 },
+                      { label: '1k', value: 1000 },
+                      { label: '10k', value: 10000 },
+                      { label: '100k', value: 100000 },
+                      { label: '1M', value: 1000000 },
+                    ].map((arg0_preset) => (
                       <button
-                        key={arg0_preset}
+                        key={arg0_preset.label}
                         type="button"
-                        onClick={() => set_log_sigma(arg0_preset)}
-                        className={`px-1.5 py-0.5 text-[var(--body-font-size)] rounded-none border transition-colors ${Math.abs(log_sigma - arg0_preset) < 0.001
-                          ? 'bg-primary text-primary-foreground border-primary font-bold'
+                        onClick={() => set_log_sigma(arg0_preset.value)}
+                        className={`px-1 py-0.5 text-[10px] font-mono rounded-none border transition-colors cursor-pointer ${Math.abs(log_sigma - arg0_preset.value) < 0.001
+                          ? 'bg-primary text-primary-foreground border-primary font-bold shadow-xs'
                           : 'bg-background hover:bg-muted text-muted-foreground border-border'
                           }`}
                       >
-                        {arg0_preset}
+                        {arg0_preset.label}
                       </button>
                     ))}
                   </div>

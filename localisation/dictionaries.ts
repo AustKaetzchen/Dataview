@@ -13,6 +13,7 @@ export interface LocalisationConfig {
   }
   settings: {
     basemapLayer: string
+    close: string
     colourbarPosition: string
     disabled: string
     enabled: string
@@ -56,6 +57,16 @@ export interface LocalisationConfig {
       description: string
       manualUpload: string
       visualisation: string
+    }
+    layers: {
+      active: string
+      allCategories: string
+      loadingLayers: string
+      noLayersFound: string
+      overlayOff: string
+      overlayOn: string
+      restricted: string
+      searchPlaceholder: string
     }
     toolbar: {
       collapseSidebar: string
@@ -102,15 +113,44 @@ export interface LocalisationConfig {
       subtitlePlaceholder: string
     }
   }
+  datePicker: {
+    add10Years: string
+    add100Years: string
+    bookmarks: string
+    close: string
+    day: string
+    daysInMonth: string
+    jump: string
+    jumpTo: string
+    landmarks: string
+    month: string
+    monthsShort: string[]
+    subtract10Years: string
+    subtract100Years: string
+    title: string
+    yearAndEra: string
+    yearPlaceholder: string
+  }
   hud: {
+    clickToSetBreak: string
     coordinate: string
+    enterAbsoluteBreak: string
     graticule: string
     hideUi: string
     inspect: string
     resetView: string
+    resizeColourbar: string
     settings: string
     showUi: string
     value: string
+  }
+  infoPanel: {
+    activeCount: string
+    activeRenderingModes: string
+    navigationShortcuts: string
+    noActiveMapmodes: string
+    projection: string
+    tilt: string
   }
   mapmodes: {
     analyticalTools: string
@@ -131,41 +171,92 @@ export interface LocalisationConfig {
   timeline: {
     ad: string
     bc: string
+    closeTimeline: string
+    collapseScrubber: string
     currentYear?: string
+    expandScrubber: string
+    jumpToMilestone: string
     loadingRaster: string
     loop: string
+    loopDescription: string
     pause: string
     play: string
     rasterReady: string
+    selectExactDate: string
     settings: string
     snap: string
+    snapDescription: string
     speed: string
     stepBackward: string
     stepForward: string
     year: string
   }
   analytics: {
+    activeLabel: string
+    agglomerationIncludes: string
+    area: string
     breakdown: string
+    categorySplitSelected: string
     clearFilter: string
+    clickToInspectCity: string
+    customSteepnessTooltip: string
+    decreaseSteepness: string
+    density: string
+    dependencyRatio: string
+    distributionCountry: string
+    exact: string
+    femaleCohorts: string
     filter: string
+    frequencyCells: string
+    global: string
+    globalCategorySplit: string
+    globalDistribution: string
     histogram: string
+    increaseSteepness: string
+    inhabitants: string
+    jumpToKeyframe: string
     keyframes: string
+    keyframesCount: string
     largestCities: string
+    largestCitiesTitle: string
+    leadingRegion: string
+    linear: string
+    logarithmic: string
+    maleCohorts: string
     maxValue: string
     mean: string
     median: string
     minValue: string
+    mostRepresented: string
     noRasterDesc: string
     noRasterLoaded: string
+    noSettlementsRecorded: string
+    polygonCells: string
+    population: string
     pyramid: string
+    pyramidTitle: string
+    rankingUrbanSettlements: string
+    refiningCalculations: string
     refresh: string
     resolution: string
+    scope: string
+    sexRatio: string
     stdDev: string
     steepness: string
+    steepnessLabel: string
     summary: string
+    syntheticProxy: string
     title: string
+    top1City: string
+    topN: string
+    topNTotal: string
     totalCells: string
+    totalLabel: string
+    totalSum: string
+    usePlaceholder: string
     validCells: string
+    valueRange: string
+    viewPyramid: string
   }
   mobile: {
     analytics: string

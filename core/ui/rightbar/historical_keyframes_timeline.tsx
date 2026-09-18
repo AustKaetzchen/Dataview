@@ -2,6 +2,7 @@ import React from 'react'
 import type { HistoricalBorderKeyframe } from '@server/AtlasBordersService'
 import { Icon } from '@ui/components/icon'
 import { UfDate } from '@framework/utils/uf_date'
+import { useLocalisation } from '@localisation'
 
 export interface HistoricalKeyframesTimelineProps {
   currentYear: number
@@ -24,13 +25,20 @@ export let HistoricalKeyframesTimeline: React.FC<HistoricalKeyframesTimelineProp
   let on_jump = props.onJumpToYear
 
   //Declare local instance variables
+  let format: ReturnType<typeof useLocalisation>['format']
   let keyframes_count: number
+  let localisation: ReturnType<typeof useLocalisation>
+  let t: ReturnType<typeof useLocalisation>['t']
+
+  //Function body
+  localisation = useLocalisation()
+  format = localisation.format
+  t = localisation.t
 
   //Guard clauses
   if (!keyframes || keyframes.length === 0)
     return null
 
-  //Function body
   keyframes_count = keyframes.length
 
   //Return statement
@@ -38,7 +46,7 @@ export let HistoricalKeyframesTimeline: React.FC<HistoricalKeyframesTimelineProp
     <div className="flex items-center gap-2 px-[var(--padding)] py-1 bg-card/90 border-b border-border text-xs shrink-0 select-none overflow-x-auto custom-scrollbar">
       <div className="flex items-center gap-1 text-[11px] font-semibold text-foreground shrink-0">
         <Icon name="history" className="text-white text-xs" />
-        <span>Keyframes ({keyframes_count}):</span>
+        <span>{format(t.analytics.keyframesCount, keyframes_count)}</span>
       </div>
 
       <div className="flex items-center gap-1 min-w-0">
@@ -60,7 +68,7 @@ export let HistoricalKeyframesTimeline: React.FC<HistoricalKeyframesTimelineProp
                   ? 'bg-red-600 text-white font-bold border-red-500 shadow-sm'
                   : 'bg-card/70 hover:bg-card text-muted-foreground hover:text-foreground border-border/50 hover:border-red-500/40'
               }`}
-              title={kf.date || `Jump to ${label}`}
+              title={kf.date || format(t.analytics.jumpToKeyframe, label)}
             >
               {label}
             </button>

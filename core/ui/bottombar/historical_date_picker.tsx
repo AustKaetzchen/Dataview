@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { UfDate, type UfDateObject } from '@framework/utils/uf_date.ts'
 import { Icon } from '@ui/components/icon'
+import { LANDMARK_PRESETS, LandmarkPreset } from '@common/timeline/landmarks'
+import { useLocalisation } from '@localisation'
 
 export interface HistoricalDatePickerProps {
   currentYear: number
@@ -10,20 +12,6 @@ export interface HistoricalDatePickerProps {
   onClose: () => void
   onSelectDate: (arg0_date: UfDateObject) => void
 }
-
-interface HistoricalPreset {
-  date: UfDateObject
-  label: string
-}
-
-let HISTORICAL_PRESETS: HistoricalPreset[] = [
-  { date: { day: 1, month: 1, year: 2025 }, label: '2025AD Modern' },
-  { date: { day: 26, month: 5, year: 1945 }, label: '26 May 1945AD WWII End' },
-  { date: { day: 28, month: 6, year: 1914 }, label: '28 Jun 1914AD WWI Start' },
-  { date: { day: 14, month: 7, year: 1789 }, label: '14 Jul 1789AD Bastille' },
-  { date: { day: 24, month: 10, year: 1648 }, label: '24 Oct 1648AD Westphalia' },
-  { date: { day: 15, month: 3, year: -44 }, label: '15 Mar 44BC Caesar' },
-]
 
 /**
  * Historical date picker popover anchored above the TimelineBar date badge.
@@ -47,36 +35,50 @@ export let HistoricalDatePicker: React.FC<HistoricalDatePickerProps> = function 
   let days_array: number[]
   let days_in_current_month: number
   let effective_year: number
+  let format: ReturnType<typeof useLocalisation>['format']
   let handle_apply: () => void
   let handle_day_select: (arg0_d: number) => void
   let handle_era_toggle: (arg0_era: 'AD' | 'BC') => void
   let handle_month_select: (arg0_m: number) => void
-  let handle_preset_select: (arg0_preset: HistoricalPreset) => void
+  let handle_preset_select: (arg0_preset: LandmarkPreset) => void
   let handle_year_change: (arg0_val: string) => void
   let handle_year_step: (arg0_delta: number) => void
-  let month_short_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  let is_bookmarks_expanded: boolean
+  let localisation: ReturnType<typeof useLocalisation>
+  let month_short_names: string[]
   let parsed_date: UfDateObject
   let popover_ref = useRef<HTMLDivElement | null>(null)
   let preview_date_str: string
   let selected_day: number
   let selected_era: 'AD' | 'BC'
   let selected_month: number
+  let set_is_bookmarks_expanded: React.Dispatch<React.SetStateAction<boolean>>
   let set_selected_day: React.Dispatch<React.SetStateAction<number>>
   let set_selected_era: React.Dispatch<React.SetStateAction<'AD' | 'BC'>>
   let set_selected_month: React.Dispatch<React.SetStateAction<number>>
   let set_year_text: React.Dispatch<React.SetStateAction<string>>
+  let t: ReturnType<typeof useLocalisation>['t']
   let year_num: number
   let year_text: string
 
   //Function body
+  localisation = useLocalisation()
+  format = localisation.format
+  t = localisation.t
+  month_short_names = t.datePicker.monthsShort || [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ]
+
   parsed_date = useMemo(() => {
     return UfDate.fromFractionalYear(current_year)
   }, [current_year])
 
-    ;[selected_day, set_selected_day] = useState<number>(parsed_date.day)
-    ;[selected_month, set_selected_month] = useState<number>(parsed_date.month)
-    ;[selected_era, set_selected_era] = useState<'AD' | 'BC'>(parsed_date.year < 0 ? 'BC' : 'AD')
-    ;[year_text, set_year_text] = useState<string>(String(Math.abs(parsed_date.year || 1)))
+  ;[is_bookmarks_expanded, set_is_bookmarks_expanded] = useState<boolean>(false)
+  ;[selected_day, set_selected_day] = useState<number>(parsed_date.day)
+  ;[selected_month, set_selected_month] = useState<number>(parsed_date.month)
+  ;[selected_era, set_selected_era] = useState<'AD' | 'BC'>(parsed_date.year < 0 ? 'BC' : 'AD')
+  ;[year_text, set_year_text] = useState<string>(String(Math.abs(parsed_date.year || 1)))
 
   //Synchronise local state when popover opens or current_year changes externally
   useEffect(() => {
@@ -96,9 +98,8 @@ export let HistoricalDatePicker: React.FC<HistoricalDatePickerProps> = function 
       return
 
     let handle_click_outside = function (arg0_e: MouseEvent) {
-      if (popover_ref.current && !popover_ref.current.contains(arg0_e.target as Node)) {
+      if (popover_ref.current && !popover_ref.current.contains(arg0_e.target as Node))
         on_close()
-      }
     }
 
     let handle_key_down = function (arg0_e: KeyboardEvent) {
@@ -182,7 +183,7 @@ export let HistoricalDatePicker: React.FC<HistoricalDatePickerProps> = function 
     set_selected_day(arg0_d)
   }
 
-  handle_preset_select = function (arg0_preset: HistoricalPreset) {
+  handle_preset_select = function (arg0_preset: LandmarkPreset) {
     let p = arg0_preset.date
     set_selected_day(p.day)
     set_selected_month(p.month)
@@ -226,14 +227,14 @@ export let HistoricalDatePicker: React.FC<HistoricalDatePickerProps> = function 
         <div className="flex items-center gap-2">
           <Icon name="event" className="text-primary text-sm" />
           <span className="font-mono text-xs font-bold uppercase tracking-wider text-foreground">
-            Date Picker
+            {t.datePicker.title}
           </span>
         </div>
         <button
           type="button"
           onClick={on_close}
           className="text-muted-foreground hover:text-foreground p-0.5 cursor-pointer transition-colors"
-          title="Close date picker"
+          title={t.datePicker.close}
         >
           <Icon name="close" className="text-sm" />
         </button>
@@ -244,7 +245,9 @@ export let HistoricalDatePicker: React.FC<HistoricalDatePickerProps> = function 
         {/* Year & Era Input Section */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Year & Era</span>
+            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+              {t.datePicker.yearAndEra}
+            </span>
             <div className="flex items-center gap-1">
               <button
                 type="button"
@@ -254,7 +257,7 @@ export let HistoricalDatePicker: React.FC<HistoricalDatePickerProps> = function 
                     : 'bg-muted/40 text-muted-foreground hover:text-foreground border-border/60'
                   }`}
               >
-                BC
+                {t.timeline.bc}
               </button>
               <button
                 type="button"
@@ -264,25 +267,25 @@ export let HistoricalDatePicker: React.FC<HistoricalDatePickerProps> = function 
                     : 'bg-muted/40 text-muted-foreground hover:text-foreground border-border/60'
                   }`}
               >
-                AD
+                {t.timeline.ad}
               </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 w-full min-w-0">
             <button
               type="button"
               onClick={() => handle_year_step(-100)}
-              className="px-1.5 py-1 text-[10px] font-mono bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60 cursor-pointer"
-              title="Subtract 100 years"
+              className="px-1.5 py-1 text-[10px] font-mono bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60 cursor-pointer shrink-0"
+              title={t.datePicker.subtract100Years}
             >
               -100
             </button>
             <button
               type="button"
               onClick={() => handle_year_step(-10)}
-              className="px-1.5 py-1 text-[10px] font-mono bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60 cursor-pointer"
-              title="Subtract 10 years"
+              className="px-1.5 py-1 text-[10px] font-mono bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60 cursor-pointer shrink-0"
+              title={t.datePicker.subtract10Years}
             >
               -10
             </button>
@@ -295,23 +298,23 @@ export let HistoricalDatePicker: React.FC<HistoricalDatePickerProps> = function 
                 if (arg0_e.key === 'Enter')
                   handle_apply()
               }}
-              className="flex-1 text-center font-mono font-bold text-sm bg-background border border-border px-2 py-1 text-foreground focus:outline-hidden focus:border-primary"
-              placeholder="Year"
+              className="flex-1 min-w-[6ch] max-w-full text-center font-mono font-bold text-sm bg-background border border-border px-2 py-1 text-foreground focus:outline-hidden focus:border-primary"
+              placeholder={t.datePicker.yearPlaceholder}
             />
 
             <button
               type="button"
               onClick={() => handle_year_step(10)}
-              className="px-1.5 py-1 text-[10px] font-mono bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60 cursor-pointer"
-              title="Add 10 years"
+              className="px-1.5 py-1 text-[10px] font-mono bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60 cursor-pointer shrink-0"
+              title={t.datePicker.add10Years}
             >
               +10
             </button>
             <button
               type="button"
               onClick={() => handle_year_step(100)}
-              className="px-1.5 py-1 text-[10px] font-mono bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60 cursor-pointer"
-              title="Add 100 years"
+              className="px-1.5 py-1 text-[10px] font-mono bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60 cursor-pointer shrink-0"
+              title={t.datePicker.add100Years}
             >
               +100
             </button>
@@ -320,7 +323,9 @@ export let HistoricalDatePicker: React.FC<HistoricalDatePickerProps> = function 
 
         {/* Month Selection Grid */}
         <div className="space-y-1">
-          <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Month</div>
+          <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+            {t.datePicker.month}
+          </div>
           <div className="grid grid-cols-6 gap-1">
             {month_short_names.map((arg0_name, arg1_idx) => {
               let m_num = arg1_idx + 1
@@ -345,8 +350,12 @@ export let HistoricalDatePicker: React.FC<HistoricalDatePickerProps> = function 
         {/* Day Selection Grid */}
         <div className="space-y-1">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Day</span>
-            <span className="text-[10px] text-muted-foreground font-mono">{days_in_current_month} days in month</span>
+            <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+              {t.datePicker.day}
+            </span>
+            <span className="text-[10px] text-muted-foreground font-mono">
+              {format(t.datePicker.daysInMonth, days_in_current_month)}
+            </span>
           </div>
           <div className="grid grid-cols-7 gap-1 pr-0.5">
             {days_array.map((arg0_d) => {
@@ -368,22 +377,40 @@ export let HistoricalDatePicker: React.FC<HistoricalDatePickerProps> = function 
           </div>
         </div>
 
-        {/* Historical Presets */}
-        <div className="space-y-1">
-          <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Landmarks</div>
-          <div className="grid grid-cols-2 gap-1">
-            {HISTORICAL_PRESETS.map((arg0_preset) => (
-              <button
-                key={arg0_preset.label}
-                type="button"
-                onClick={() => handle_preset_select(arg0_preset)}
-                className="text-left px-2 py-1 text-[10px] font-mono bg-muted/20 hover:bg-primary/20 hover:border-primary/50 text-muted-foreground hover:text-foreground border border-border/40 truncate cursor-pointer transition-colors"
-                title={`Jump to ${arg0_preset.label}`}
-              >
-                {arg0_preset.label}
-              </button>
-            ))}
-          </div>
+        {/* Bookmarks Section (Collapsible) */}
+        <div className="border border-border/50 bg-muted/10">
+          <button
+            type="button"
+            onClick={() => set_is_bookmarks_expanded(!is_bookmarks_expanded)}
+            className="w-full flex items-center justify-between px-2 py-1.5 cursor-pointer hover:bg-muted/30 transition-colors text-left select-none"
+          >
+            <div className="flex items-center gap-1.5">
+              <Icon name="bookmark" className="text-xs text-primary" />
+              <span className="text-[11px] font-medium text-foreground uppercase tracking-wide">
+                {t.datePicker.bookmarks}
+              </span>
+            </div>
+            <Icon
+              name="expand_more"
+              className={`text-xs text-muted-foreground transition-transform duration-150 ${is_bookmarks_expanded ? 'rotate-180' : ''}`}
+            />
+          </button>
+
+          {is_bookmarks_expanded && (
+            <div className="p-2 pt-1 grid grid-cols-2 gap-1 border-t border-border/30">
+              {LANDMARK_PRESETS.map((arg0_preset) => (
+                <button
+                  key={arg0_preset.id}
+                  type="button"
+                  onClick={() => handle_preset_select(arg0_preset)}
+                  className="text-left px-2 py-1 text-[10px] font-mono bg-muted/20 hover:bg-primary/20 hover:border-primary/50 text-muted-foreground hover:text-foreground border border-border/40 truncate cursor-pointer transition-colors"
+                  title={format(t.datePicker.jumpTo, arg0_preset.label)}
+                >
+                  {arg0_preset.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -401,7 +428,7 @@ export let HistoricalDatePicker: React.FC<HistoricalDatePickerProps> = function 
           onClick={handle_apply}
           className="px-3 py-1 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-mono font-bold tracking-wider uppercase border border-primary shadow-xs cursor-pointer transition-colors shrink-0"
         >
-          Jump →
+          {t.datePicker.jump}
         </button>
       </div>
     </div>

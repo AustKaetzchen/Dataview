@@ -4,6 +4,7 @@ import { DecodedRaster } from '@framework/geopng/types.ts'
 import { CountryFeature, CountryStats, getFeatureEntityName } from '@framework/geopng/polygon_binning.ts'
 import { Icon } from '@ui/components/icon'
 import { computeSyntheticSectorBreakdown } from '@framework/raster/synthetic_demographics'
+import { useLocalisation } from '@localisation'
 
 export interface CategoryBreakdownChartProps {
   activeVariableSelectors?: Record<string, string | string[]>
@@ -70,6 +71,7 @@ export let CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = funct
   let echart_ref = useRef<any>(null)
   let effective_countries: CountryFeature[]
   let effective_use_placeholder: boolean
+  let format: ReturnType<typeof useLocalisation>['format']
   let global_sector_data: Record<string, number>
   let handle_toggle_placeholder: (arg0_val: boolean) => void
   let has_countries: boolean
@@ -77,6 +79,7 @@ export let CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = funct
   let is_percentage_mode = !layer_id.includes('total')
   let is_refining: boolean
   let is_use_placeholder: boolean
+  let localisation: ReturnType<typeof useLocalisation>
   let option: any
   let refine_duration_estimate_ref = useRef<number>(3.0)
   let refine_start_time_ref = useRef<number>(0)
@@ -89,8 +92,12 @@ export let CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = funct
   let set_is_refining: React.Dispatch<React.SetStateAction<boolean>>
   let set_refining_pct: React.Dispatch<React.SetStateAction<number>>
   let set_refining_time_remaining: React.Dispatch<React.SetStateAction<number>>
+  let t: ReturnType<typeof useLocalisation>['t']
 
   //Function body
+  localisation = useLocalisation()
+  format = localisation.format
+  t = localisation.t
   effective_countries = useMemo(() => {
     if (selected_countries && selected_countries.length > 0)
       return selected_countries
@@ -427,8 +434,8 @@ export let CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = funct
             <Icon name="briefcase" className="text-primary text-xs" />
             <span>
               {has_countries
-                ? `Category Split Bar Share (${effective_countries.length} Selected)`
-                : 'Global Category Split Bar Share'}
+                ? format(t.analytics.categorySplitSelected, effective_countries.length)
+                : t.analytics.globalCategorySplit}
             </span>
           </span>
           <span className="text-muted-foreground font-mono">
@@ -437,7 +444,7 @@ export let CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = funct
         </div>
 
         <div className="flex items-center gap-2 text-[10px] font-mono text-muted-foreground shrink-0">
-          <span>Active:</span>
+          <span>{t.analytics.activeLabel}</span>
           <span className="text-primary font-bold capitalize">
             {Array.isArray(active_variable_selectors.profession)
               ? active_variable_selectors.profession.map((arg0_p) => arg0_p.replace(/_/g, ' ')).join(', ') || 'Agriculture'
@@ -456,18 +463,18 @@ export let CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = funct
               onChange={(arg0_e) => handle_toggle_placeholder(arg0_e.target.checked)}
               className="h-3 w-3 rounded border-border text-primary accent-primary cursor-pointer"
             />
-            <span>Use Placeholder</span>
+            <span>{t.analytics.usePlaceholder}</span>
           </label>
           {effective_use_placeholder ? (
             <span
               className="px-1.5 py-0.2 text-[9px] text-muted-foreground bg-muted/50 border border-border/50 rounded cursor-help"
               title="Showing instantaneous synthetic sector proxy. Uncheck 'Use Placeholder' to compute from authentic rasters."
             >
-              Synthetic Proxy
+              {t.analytics.syntheticProxy}
             </span>
           ) : (
             <span className="px-1.5 py-0.2 text-[9px] font-semibold bg-primary/20 text-primary border border-primary/30 rounded">
-              Exact
+              {t.analytics.exact}
             </span>
           )}
         </div>
@@ -489,7 +496,7 @@ export let CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = funct
               <div className="flex items-center gap-2">
                 <Icon name="sync" className="text-amber-400 text-xs animate-spin" />
                 <span className="font-semibold text-amber-400/90">
-                  Refining Calculations: {refining_pct}% (~{refining_time_remaining.toFixed(1)}s)
+                  {format(t.analytics.refiningCalculations, refining_pct, refining_time_remaining.toFixed(1))}
                 </span>
               </div>
               <div className="w-32 h-1 bg-muted/60 border border-border/60 overflow-hidden">

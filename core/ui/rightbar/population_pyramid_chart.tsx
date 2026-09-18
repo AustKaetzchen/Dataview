@@ -5,6 +5,7 @@ import { CountryFeature, CountryStats, getFeatureEntityName } from '@framework/g
 import { Icon } from '@ui/components/icon'
 import { formatLegendValue } from '@ui/topbar/color_bar_legend'
 import { computeSyntheticDemographicPyramid } from '@framework/raster/synthetic_demographics'
+import { useLocalisation } from '@localisation'
 
 export interface PopulationPyramidChartProps {
   activeVariableSelectors?: Record<string, string | string[]>
@@ -85,10 +86,12 @@ export let PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = funct
   let effective_countries: CountryFeature[]
   let effective_use_placeholder: boolean
   let female_values: number[]
+  let format: ReturnType<typeof useLocalisation>['format']
   let handle_toggle_placeholder: (arg0_val: boolean) => void
   let is_loading: boolean
   let is_refining: boolean
   let is_use_placeholder: boolean
+  let localisation: ReturnType<typeof useLocalisation>
   let male_values: number[]
   let option: any
   let pyramid_data: { female: Record<string, number>; male: Record<string, number> } | null
@@ -108,6 +111,12 @@ export let PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = funct
   let set_total_female: React.Dispatch<React.SetStateAction<number>>
   let set_total_male: React.Dispatch<React.SetStateAction<number>>
   let sex_ratio: number
+  let t: ReturnType<typeof useLocalisation>['t']
+
+  //Function body
+  localisation = useLocalisation()
+  format = localisation.format
+  t = localisation.t
   let total_female: number
   let total_male: number
 
@@ -350,7 +359,7 @@ export let PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = funct
         },
       ],
       legend: {
-        data: ['Male Cohorts', 'Female Cohorts'],
+        data: [t.analytics.maleCohorts, t.analytics.femaleCohorts],
         itemGap: 14,
         itemHeight: 10,
         itemWidth: 12,
@@ -375,7 +384,7 @@ export let PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = funct
             borderWidth: active_gender === 'm' ? 1.5 : 0,
             color: '#3b82f6',
           },
-          name: 'Male Cohorts',
+          name: t.analytics.maleCohorts,
           type: 'bar',
           xAxisIndex: 0,
           yAxisIndex: 0,
@@ -396,7 +405,7 @@ export let PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = funct
             borderWidth: active_gender === 'f' ? 1.5 : 0,
             color: '#ec4899',
           },
-          name: 'Female Cohorts',
+          name: t.analytics.femaleCohorts,
           type: 'bar',
           xAxisIndex: 1,
           yAxisIndex: 1,
@@ -525,6 +534,7 @@ export let PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = funct
     effective_countries.length,
     female_values,
     male_values,
+    t,
   ])
 
   //Return statement
@@ -535,7 +545,7 @@ export let PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = funct
         <div className="flex items-center gap-2 truncate">
           <span className="font-bold text-foreground flex items-center gap-1">
             <Icon name="people" className="text-primary text-xs" />
-            <span>Population Pyramid: {active_country_name || 'Global'}</span>
+            <span>{format(t.analytics.pyramidTitle, active_country_name || t.analytics.global)}</span>
           </span>
           <span className="text-muted-foreground font-mono">
             ({current_year < 0 ? `${Math.abs(current_year)}BC` : `${current_year}AD`})
@@ -544,13 +554,13 @@ export let PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = funct
 
         <div className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground shrink-0">
           <span>
-            Total: <b className="text-foreground">{formatLegendValue((total_male + total_female)*1000)}</b>
+            {t.analytics.totalLabel} <b className="text-foreground">{formatLegendValue((total_male + total_female)*1000)}</b>
           </span>
           <span>
-            Sex Ratio: <b className="text-foreground">{sex_ratio.toFixed(2)}</b> M/F
+            {t.analytics.sexRatio} <b className="text-foreground">{sex_ratio.toFixed(2)}</b> M/F
           </span>
           <span>
-            Dependency: <b className="text-foreground">{dependency_ratio.toFixed(1)}%</b>
+            {t.analytics.dependencyRatio} <b className="text-foreground">{dependency_ratio.toFixed(1)}%</b>
           </span>
         </div>
       </div>
@@ -565,18 +575,18 @@ export let PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = funct
               onChange={(arg0_e) => handle_toggle_placeholder(arg0_e.target.checked)}
               className="h-3 w-3 rounded border-border text-primary accent-primary cursor-pointer"
             />
-            <span>Use Placeholder</span>
+            <span>{t.analytics.usePlaceholder}</span>
           </label>
           {effective_use_placeholder ? (
             <span
               className="px-1.5 py-0.2 text-[9px] text-muted-foreground bg-muted/50 border border-border/50 rounded cursor-help"
               title="Showing instantaneous synthetic demographic proxy. Uncheck 'Use Placeholder' to compute from authentic rasters."
             >
-              Synthetic Proxy
+              {t.analytics.syntheticProxy}
             </span>
           ) : (
             <span className="px-1.5 py-0.2 text-[9px] font-semibold bg-primary/20 text-primary border border-primary/30 rounded">
-              Exact
+              {t.analytics.exact}
             </span>
           )}
         </div>
@@ -586,7 +596,7 @@ export let PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = funct
       {effective_countries.length > 0 && (
         <div className="flex items-center gap-1 px-2 py-1 bg-muted/40 border-b border-border/40 overflow-x-auto select-none shrink-0 scrollbar-thin">
           <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mr-1 shrink-0">
-            View Pyramid:
+            {t.analytics.viewPyramid}
           </span>
           <button
             type="button"
@@ -596,7 +606,7 @@ export let PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = funct
               : 'bg-background/60 text-muted-foreground hover:text-foreground border border-border/40'
               }`}
           >
-            Global
+            {t.analytics.global}
           </button>
           {effective_countries.map((arg0_c) => {
             let name = getFeatureEntityName(arg0_c)
@@ -610,7 +620,7 @@ export let PopulationPyramidChart: React.FC<PopulationPyramidChartProps> = funct
                   ? 'bg-primary text-primary-foreground font-bold shadow-sm'
                   : 'bg-background/60 text-muted-foreground hover:text-foreground border border-border/40'
                   }`}
-                title={`View ${name} individual population pyramid`}
+                title={format(t.analytics.pyramidTitle, name)}
               >
                 <Icon name="flag" className="text-[10px]" />
                 <span className="truncate">{name}</span>

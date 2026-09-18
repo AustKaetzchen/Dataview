@@ -1,11 +1,12 @@
 import React from 'react'
 import { DecodedRaster } from '@framework/geopng/types.ts'
 import { CountryStats } from '@framework/geopng/polygon_binning.ts'
-import { formatLocalizedNumber, formatNumber } from '@framework/utils/utils.ts'
+import { formatLocalizedNumber } from '@framework/utils/utils.ts'
+import { useLocalisation } from '@localisation'
 
 export interface StatsSummaryProps {
-  raster: DecodedRaster | null
   countryStats?: CountryStats | null
+  raster: DecodedRaster | null
 }
 
 /**
@@ -23,6 +24,14 @@ export let StatsSummary: React.FC<StatsSummaryProps> = function (arg0_props) {
     raster,
   } = props
 
+  //Declare local instance variables
+  let localisation: ReturnType<typeof useLocalisation>
+  let t: ReturnType<typeof useLocalisation>['t']
+
+  //Function body
+  localisation = useLocalisation()
+  t = localisation.t
+
   //Guard clauses
   if (!raster && !country_stats)
     return null
@@ -33,30 +42,30 @@ export let StatsSummary: React.FC<StatsSummaryProps> = function (arg0_props) {
     let total =
       country_stats.total !== undefined && Number.isFinite(country_stats.total)
         ? country_stats.total
-        : country_stats.mean*country_stats.validCount
+        : country_stats.mean * country_stats.validCount
     let valid_pct_num =
-      country_stats.totalCells > 0 ? (country_stats.validCount/country_stats.totalCells)*100 : 0
+      country_stats.totalCells > 0 ? (country_stats.validCount / country_stats.totalCells) * 100 : 0
     let valid_pct = valid_pct_num.toLocaleString(undefined, {
       maximumFractionDigits: 1,
       minimumFractionDigits: 1,
     })
 
     let stat_items = [
-      { label: 'Scope', value: `${country_stats.name} (${country_stats.isoA3 || 'N/A'})` },
+      { label: t.analytics.scope, value: `${country_stats.name} (${country_stats.isoA3 || 'N/A'})` },
       {
-        label: 'Total (Sum)',
+        label: t.analytics.totalSum,
         value: total.toLocaleString(undefined, {
           maximumFractionDigits: 2,
           minimumFractionDigits: 2,
         }),
       },
-      { label: 'Valid Cells', value: `${country_stats.validCount.toLocaleString()} (${valid_pct}%)` },
-      { label: 'Polygon Cells', value: country_stats.totalCells.toLocaleString() },
-      { label: 'Min Value', value: formatLocalizedNumber(country_stats.min, 4) },
-      { label: 'Max Value', value: formatLocalizedNumber(country_stats.max, 4) },
-      { label: 'Mean', value: formatLocalizedNumber(country_stats.mean, 4) },
-      { label: 'Std Dev', value: formatLocalizedNumber(country_stats.stdDev, 4) },
-      { label: 'Median (P50)', value: median },
+      { label: t.analytics.validCells, value: `${country_stats.validCount.toLocaleString()} (${valid_pct}%)` },
+      { label: t.analytics.polygonCells, value: country_stats.totalCells.toLocaleString() },
+      { label: t.analytics.minValue, value: formatLocalizedNumber(country_stats.min, 4) },
+      { label: t.analytics.maxValue, value: formatLocalizedNumber(country_stats.max, 4) },
+      { label: t.analytics.mean, value: formatLocalizedNumber(country_stats.mean, 4) },
+      { label: t.analytics.stdDev, value: formatLocalizedNumber(country_stats.stdDev, 4) },
+      { label: t.analytics.median, value: median },
     ]
 
     //Return statement
@@ -83,8 +92,8 @@ export let StatsSummary: React.FC<StatsSummaryProps> = function (arg0_props) {
   let total =
     raster.total !== undefined && Number.isFinite(raster.total)
       ? raster.total
-      : raster.mean*raster.validCount
-  let valid_pct_num = raster.totalCells > 0 ? (raster.validCount/raster.totalCells)*100 : 0
+      : raster.mean * raster.validCount
+  let valid_pct_num = raster.totalCells > 0 ? (raster.validCount / raster.totalCells) * 100 : 0
   let valid_pct = valid_pct_num.toLocaleString(undefined, {
     maximumFractionDigits: 1,
     minimumFractionDigits: 1,
@@ -92,20 +101,20 @@ export let StatsSummary: React.FC<StatsSummaryProps> = function (arg0_props) {
 
   let stat_items = [
     {
-      label: 'Total (Sum)',
+      label: t.analytics.totalSum,
       value: total.toLocaleString(undefined, {
         maximumFractionDigits: 2,
         minimumFractionDigits: 2,
       }),
     },
-    { label: 'Valid Cells', value: `${raster.validCount.toLocaleString()} (${valid_pct}%)` },
-    { label: 'Resolution', value: `${raster.width.toLocaleString()} × ${raster.height.toLocaleString()}` },
-    { label: 'Total Cells', value: raster.totalCells.toLocaleString() },
-    { label: 'Min Value', value: formatLocalizedNumber(raster.min, 4) },
-    { label: 'Max Value', value: formatLocalizedNumber(raster.max, 4) },
-    { label: 'Mean', value: formatLocalizedNumber(raster.mean, 4) },
-    { label: 'Std Dev', value: formatLocalizedNumber(raster.stdDev, 4) },
-    { label: 'Median (P50)', value: median },
+    { label: t.analytics.validCells, value: `${raster.validCount.toLocaleString()} (${valid_pct}%)` },
+    { label: t.analytics.resolution, value: `${raster.width.toLocaleString()} × ${raster.height.toLocaleString()}` },
+    { label: t.analytics.totalCells, value: raster.totalCells.toLocaleString() },
+    { label: t.analytics.minValue, value: formatLocalizedNumber(raster.min, 4) },
+    { label: t.analytics.maxValue, value: formatLocalizedNumber(raster.max, 4) },
+    { label: t.analytics.mean, value: formatLocalizedNumber(raster.mean, 4) },
+    { label: t.analytics.stdDev, value: formatLocalizedNumber(raster.stdDev, 4) },
+    { label: t.analytics.median, value: median },
   ]
 
   //Return statement

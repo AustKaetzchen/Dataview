@@ -103,7 +103,7 @@ let parseInline = function (arg0_text: string): React.ReactNode[] {
       parts_array.push(
         <code
           key={`code-${local_match_index}`}
-          className="px-1 py-0.5 bg-muted text-foreground border border-border text-[var(--body-font-size)] font-mono"
+          className="px-1 py-0.5 bg-muted text-foreground border border-border text-[0.8em] font-mono leading-none inline-block align-baseline"
         >
           {local_match[13]}
         </code>
@@ -187,7 +187,7 @@ export let MarkdownRenderer: React.FC<MarkdownRendererProps> = function (arg0_pr
       elements_array.push(
         <pre
           key={`pre-${block_key++}`}
-          className="bg-background/80 border border-border p-2.5 my-2 overflow-x-auto text-[var(--body-font-size)] font-mono text-foreground leading-relaxed rounded-none"
+          className="bg-background/80 border border-border p-2 my-2 overflow-x-auto text-[0.75rem] font-mono text-foreground leading-snug rounded-none"
         >
           <code>{code_block_lines_array.join('\n')}</code>
         </pre>
@@ -223,7 +223,126 @@ export let MarkdownRenderer: React.FC<MarkdownRendererProps> = function (arg0_pr
       continue
     }
 
-    //3. Alert callout: > [!NOTE], > [!WARNING], etc.
+    //3. Details/Summary collapsible block: <details>...</details>
+    if (local_trimmed.toLowerCase().startsWith('<details')) {
+      flush_list()
+      let local_details_match = local_trimmed.match(/^<details(?:\s+([^>]*))?>/i)
+      let is_open_by_default = false
+      if (local_details_match && local_details_match[1])
+        is_open_by_default = /open\b/i.test(local_details_match[1])
+
+      let summary_text = ''
+      let details_body_lines: string[] = []
+      let depth = 1
+
+      //Check if <summary> is on the same line
+      let same_line_summary_match = local_trimmed.match(/<summary>(.*?)<\/summary>/i)
+      if (same_line_summary_match) {
+        summary_text = same_line_summary_match[1].trim()
+      } else {
+        let open_summary_match = local_trimmed.match(/<summary>(.*)/i)
+        if (open_summary_match)
+          summary_text = open_summary_match[1].replace(/<\/summary>/i, '').trim()
+      }
+
+      //Check if details closes on the same line
+      let same_line_closes = (local_trimmed.match(/<\/details>/gi) || []).length
+      if (same_line_closes > 0) {
+        let after_summary = local_trimmed.replace(/^<details(?:\s+[^>]*)?>/i, '')
+        if (same_line_summary_match)
+          after_summary = after_summary.replace(/<summary>.*?<\/summary>/i, '')
+        after_summary = after_summary.replace(/<\/details>.*$/i, '').trim()
+        if (after_summary)
+          details_body_lines.push(after_summary)
+      } else {
+        let in_multiline_summary = (!summary_text && /<summary>/i.test(local_trimmed) && !/<\/summary>/i.test(local_trimmed))
+
+        for (let x = i + 1; x < lines_array.length; x++) {
+          let local_next_line = lines_array[x]
+          let local_next_trimmed = local_next_line.trim()
+
+          //Check for multi-line summary continuation
+          if (in_multiline_summary) {
+            if (/<\/summary>/i.test(local_next_trimmed)) {
+              let end_summary_idx = local_next_trimmed.toLowerCase().indexOf('</summary>')
+              summary_text += ' ' + local_next_trimmed.slice(0, end_summary_idx).trim()
+              in_multiline_summary = false
+              continue
+            } else {
+              summary_text += ' ' + local_next_trimmed
+              continue
+            }
+          }
+
+          //If summary has not been found yet, check if this line is <summary>
+          if (!summary_text && /<summary>/i.test(local_next_trimmed)) {
+            let line_summary_match = local_next_trimmed.match(/<summary>(.*?)<\/summary>/i)
+            if (line_summary_match) {
+              summary_text = line_summary_match[1].trim()
+              continue
+            } else {
+              let open_summary_line = local_next_trimmed.match(/<summary>(.*)/i)
+              if (open_summary_line) {
+                summary_text = open_summary_line[1].trim()
+                in_multiline_summary = true
+                continue
+              }
+            }
+          }
+
+          let opens = (local_next_trimmed.match(/<details\b/gi) || []).length
+          let closes = (local_next_trimmed.match(/<\/details>/gi) || []).length
+
+          depth += opens
+          depth -= closes
+
+          if (depth <= 0) {
+            let close_idx = local_next_line.toLowerCase().indexOf('</details>')
+            if (close_idx > 0) {
+              let before_close = local_next_line.slice(0, close_idx).trim()
+              if (before_close)
+                details_body_lines.push(before_close)
+            }
+            i = x
+            break
+          } else {
+            details_body_lines.push(local_next_line)
+          }
+        }
+      }
+
+      if (!summary_text)
+        summary_text = 'Details'
+
+      let clean_summary_text = summary_text.replace(/<\/?(b|strong|span|em|i|u)[^>]*>/gi, '').trim()
+
+      elements_array.push(
+        <details
+          key={`details-${block_key++}`}
+          open={is_open_by_default}
+          className="group border border-border/70 bg-background/60 rounded-none transition-colors my-2 select-text"
+        >
+          <summary className="cursor-pointer font-bold text-foreground text-[var(--body-font-size)] p-2 flex items-center justify-between hover:bg-muted/40 transition-colors select-none list-none [&::-webkit-details-marker]:hidden">
+            <span className="flex items-center gap-2">
+              <Icon
+                name="chevron_right"
+                className="transition-transform duration-200 group-open:rotate-90 text-primary shrink-0"
+              />
+              <span>{parseInline(clean_summary_text)}</span>
+            </span>
+          </summary>
+          <div className="p-2.5 pt-1.5 border-t border-border/40 text-[var(--body-font-size)] space-y-1">
+            <MarkdownRenderer content={details_body_lines.join('\n')} isNested />
+          </div>
+        </details>
+      )
+      continue
+    }
+
+    if (local_trimmed.toLowerCase() === '</details>')
+      continue
+
+    //4. Alert callout: > [!NOTE], > [!WARNING], etc.
     let local_alert_match = local_trimmed.match(
       /^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|INFO|HINT|DANGER|ERROR|SUCCESS|QUESTION|FAQ|EXAMPLE|QUOTE)\](?:\s+(.*))?$/i
     )

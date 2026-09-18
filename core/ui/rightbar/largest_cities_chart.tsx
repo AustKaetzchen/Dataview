@@ -4,6 +4,7 @@ import { CityPoint } from '@framework/geopng/types.ts'
 import { Icon } from '@ui/components/icon'
 import { UfDate } from '@framework/utils/uf_date'
 import { getPrimaryCityName } from '@framework/stadester/city_name_framework'
+import { useLocalisation } from '@localisation'
 
 export interface LargestCitiesChartProps {
   currentYear: number
@@ -47,15 +48,22 @@ export let LargestCitiesChart: React.FC<LargestCitiesChartProps> = function (arg
   let cities_list: CityPoint[]
   let dominant_region: string
   let echart_option: any
+  let format: ReturnType<typeof useLocalisation>['format']
   let is_loading: boolean
   let largest_city: CityPoint | null
   let limit: number
+  let localisation: ReturnType<typeof useLocalisation>
   let set_cities_list: React.Dispatch<React.SetStateAction<CityPoint[]>>
   let set_is_loading: React.Dispatch<React.SetStateAction<boolean>>
   let set_limit: React.Dispatch<React.SetStateAction<number>>
+  let t: ReturnType<typeof useLocalisation>['t']
   let total_top_population: number
 
   //Function body
+  localisation = useLocalisation()
+  format = localisation.format
+  t = localisation.t
+
   ;[cities_list, set_cities_list] = useState<CityPoint[]>([])
   ;[is_loading, set_is_loading] = useState<boolean>(false)
   ;[limit, set_limit] = useState<number>(15)
@@ -90,76 +98,90 @@ export let LargestCitiesChart: React.FC<LargestCitiesChartProps> = function (arg
     return () => {
       controller.abort()
     }
-  }, [dataset, Math.round(current_year), limit])
+  }, [current_year, dataset, limit])
 
-  //Compute summary metrics
+  //Compute summary metrics: #1 city, aggregate top population, and leading region
+  largest_city = cities_list.length > 0 ? cities_list[0] : null
   total_top_population = useMemo(() => {
     let sum = 0
     for (let i = 0; i < cities_list.length; i++)
-      sum += cities_list[i].population || 0
-    return sum
+      sum += (cities_list[i].population || 0)
+    return Math.round(sum)
   }, [cities_list])
-
-  largest_city = cities_list.length > 0 ? cities_list[0] : null
 
   dominant_region = useMemo(() => {
+    if (cities_list.length === 0)
+      return '–'
     let counts: Record<string, number> = {}
     for (let i = 0; i < cities_list.length; i++) {
-      let r = cities_list[i].region || 'other'
-      counts[r] = (counts[r] || 0) + 1
+      let reg = (cities_list[i].region || 'Other').toLowerCase()
+      counts[reg] = (counts[reg] || 0) + 1
     }
-    let top_r = 'Unknown'
-    let max_c = 0
+    let max_reg = '–'
+    let max_val = -1
     let keys = Object.keys(counts)
     for (let i = 0; i < keys.length; i++) {
-      if (counts[keys[i]] > max_c) {
-        max_c = counts[keys[i]]
-        top_r = keys[i]
+      if (counts[keys[i]] > max_val) {
+        max_val = counts[keys[i]]
+        max_reg = keys[i]
       }
     }
-    return top_r.replace(/_/g, ' ')
+    return max_reg.replace(/_/g, ' ')
   }, [cities_list])
 
-  //Construct ECharts horizontal bar options (reversed so rank 1 is at top)
+  //Build horizontal bar chart option for ECharts
   echart_option = useMemo(() => {
-    let sorted_for_chart = [...cities_list].reverse()
-    let y_names = sorted_for_chart.map((arg0_c) => getPrimaryCityName(arg0_c.name))
-    let pop_values = sorted_for_chart.map((arg0_c) => arg0_c.population)
+    let sorted_cities = [...cities_list].reverse()
+    let series_data: any[] = []
+    let y_names: string[] = []
+
+    for (let i = 0; i < sorted_cities.length; i++) {
+      let c = sorted_cities[i]
+      let clean_name = getPrimaryCityName(c.name)
+      let region_key = (c.region || '').toLowerCase().trim().replace(/[\s-]+/g, '_')
+      let item_color = REGION_COLOR_MAP[region_key] || '#3b82f6'
+
+      y_names.push(clean_name)
+      series_data.push({
+        cityData: c,
+        itemStyle: {
+          borderRadius: [0, 2, 2, 0],
+          color: item_color,
+        },
+        value: c.population,
+      })
+    }
 
     return {
-      animationDuration: 250,
+      animationDuration: 300,
       grid: {
         bottom: 20,
         containLabel: true,
-        left: 10,
-        right: 35,
-        top: 10,
+        left: 8,
+        right: 24,
+        top: 6,
       },
       series: [
         {
-          data: sorted_for_chart.map((arg0_c, arg0_idx) => {
-            let r_key = (arg0_c.region || '').toLowerCase()
-            let bar_color = REGION_COLOR_MAP[r_key] || '#38bdf8'
-            return {
-              cityData: arg0_c,
-              itemStyle: {
-                borderRadius: [0, 2, 2, 0],
-                color: bar_color,
-              },
-              value: arg0_c.population,
-            }
-          }),
-          label: {
-            color: '#f8fafc',
-            formatter: (arg0_p: any) => {
-              let v = arg0_p.value
-              if (v >= 1000000)
-                return `${(v / 1000000).toFixed(1)}M`
-              if (v >= 1000)
-                return `${Math.round(v / 1000)}k`
-              return String(v)
+          data: series_data,
+          emphasis: {
+            itemStyle: {
+              shadowBlur: 6,
+              shadowColor: 'rgba(255, 255, 255, 0.4)',
             },
-            fontSize: 10,
+          },
+          label: {
+            color: '#cbd5e1',
+            fontFamily: 'monospace',
+            fontSize: 9,
+            formatter: (arg0_p: any) => {
+              let val = arg0_p.value
+              if (val >= 1000000)
+                return `${(val / 1000000).toFixed(1)}M`
+              if (val >= 1000)
+                return `${Math.round(val / 1000)}k`
+              return String(val)
+            },
             position: 'right',
             show: true,
           },
@@ -182,11 +204,11 @@ export let LargestCitiesChart: React.FC<LargestCitiesChartProps> = function (arg
             <div style="color: #94a3b8; font-size: 10px; margin-bottom: 3px;">
               ${[c.country, c.region].filter(Boolean).join(' • ')}
             </div>
-            <div>Population: <b style="color: #38bdf8;">${pop_formatted}</b></div>
-            ${c.area ? `<div style="color: #cbd5e1;">Area: ${Math.round(c.area).toLocaleString('de-DE')} km²</div>` : ''}
-            ${c.density ? `<div style="color: #cbd5e1;">Density: ${Math.round(c.density).toLocaleString('de-DE')} /km²</div>` : ''}
-            ${other_parts ? `<div style="color: #64748b; font-size: 9px; margin-top: 3px; line-height: 1.2;">Agglomeration includes: ${other_parts}...</div>` : ''}
-            <div style="font-size: 9px; color: #475569; margin-top: 4px;">Click to inspect city on map</div>
+            <div>${t.analytics.population}: <b style="color: #38bdf8;">${pop_formatted}</b></div>
+            ${c.area ? `<div style="color: #cbd5e1;">${t.analytics.area}: ${Math.round(c.area).toLocaleString('de-DE')} km²</div>` : ''}
+            ${c.density ? `<div style="color: #cbd5e1;">${t.analytics.density}: ${Math.round(c.density).toLocaleString('de-DE')} /km²</div>` : ''}
+            ${other_parts ? `<div style="color: #64748b; font-size: 9px; margin-top: 3px; line-height: 1.2;">${t.analytics.agglomerationIncludes}: ${other_parts}...</div>` : ''}
+            <div style="font-size: 9px; color: #475569; margin-top: 4px;">${t.analytics.clickToInspectCity}</div>
           </div>`
         },
         trigger: 'item',
@@ -221,7 +243,7 @@ export let LargestCitiesChart: React.FC<LargestCitiesChartProps> = function (arg
         type: 'category',
       },
     }
-  }, [cities_list])
+  }, [cities_list, t])
 
   //Return statement
   return (
@@ -231,7 +253,7 @@ export let LargestCitiesChart: React.FC<LargestCitiesChartProps> = function (arg
         <div className="flex items-center gap-1.5">
           <Icon name="leaderboard" className="text-white text-xs" />
           <span className="font-bold text-foreground text-xs uppercase tracking-wider">
-            Largest Urban Centers
+            {t.analytics.largestCitiesTitle}
           </span>
           <span className="text-[10px] px-1.5 py-0.5 bg-muted text-muted-foreground font-mono ml-1 border border-border/50">
             {UfDate.formatYear(current_year)}
@@ -251,7 +273,7 @@ export let LargestCitiesChart: React.FC<LargestCitiesChartProps> = function (arg
                   : 'bg-background hover:bg-muted text-muted-foreground border-border'
               }`}
             >
-              Top {arg0_n}
+              {format(t.analytics.topN, arg0_n)}
             </button>
           ))}
         </div>
@@ -260,7 +282,7 @@ export let LargestCitiesChart: React.FC<LargestCitiesChartProps> = function (arg
       {/* Snapshot metric summary cards */}
       <div className="grid grid-cols-3 gap-1.5 shrink-0">
         <div className="bg-muted/30 border border-border/50 p-1.5">
-          <div className="text-[9px] text-muted-foreground uppercase tracking-wider">#1 City</div>
+          <div className="text-[9px] text-muted-foreground uppercase tracking-wider">{t.analytics.top1City}</div>
           <div
             className="text-xs font-bold text-foreground truncate mt-0.5"
             title={largest_city ? getPrimaryCityName(largest_city.name) : '–'}
@@ -273,19 +295,19 @@ export let LargestCitiesChart: React.FC<LargestCitiesChartProps> = function (arg
         </div>
 
         <div className="bg-muted/30 border border-border/50 p-1.5">
-          <div className="text-[9px] text-muted-foreground uppercase tracking-wider">Top {limit} Total</div>
+          <div className="text-[9px] text-muted-foreground uppercase tracking-wider">{format(t.analytics.topNTotal, limit)}</div>
           <div className="text-xs font-bold font-mono text-foreground truncate mt-0.5">
             {total_top_population.toLocaleString('de-DE')}
           </div>
-          <div className="text-[9px] text-muted-foreground truncate">Inhabitants</div>
+          <div className="text-[9px] text-muted-foreground truncate">{t.analytics.inhabitants}</div>
         </div>
 
         <div className="bg-muted/30 border border-border/50 p-1.5">
-          <div className="text-[9px] text-muted-foreground uppercase tracking-wider">Leading Region</div>
+          <div className="text-[9px] text-muted-foreground uppercase tracking-wider">{t.analytics.leadingRegion}</div>
           <div className="text-xs font-bold text-foreground capitalize truncate mt-0.5">
             {dominant_region}
           </div>
-          <div className="text-[9px] text-muted-foreground truncate">Most represented</div>
+          <div className="text-[9px] text-muted-foreground truncate">{t.analytics.mostRepresented}</div>
         </div>
       </div>
 
@@ -296,7 +318,7 @@ export let LargestCitiesChart: React.FC<LargestCitiesChartProps> = function (arg
       >
         {is_loading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 backdrop-blur-xs text-xs text-muted-foreground animate-pulse">
-            Ranking urban settlements for {UfDate.formatYear(current_year)}...
+            {format(t.analytics.rankingUrbanSettlements, UfDate.formatYear(current_year))}
           </div>
         )}
 
@@ -315,10 +337,12 @@ export let LargestCitiesChart: React.FC<LargestCitiesChartProps> = function (arg
           />
         ) : (
           <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-            No settlements recorded above threshold in {UfDate.formatYear(current_year)}.
+            {format(t.analytics.noSettlementsRecorded, UfDate.formatYear(current_year))}
           </div>
         )}
       </div>
     </div>
   )
 }
+
+export default LargestCitiesChart
