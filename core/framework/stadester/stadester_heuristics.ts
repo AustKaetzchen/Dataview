@@ -1,4 +1,5 @@
 import { projectEqualEarth, invertEqualEarth } from '../geopng/equal_earth'
+import { SmoothGlobeViewport } from './SmoothGlobeViewport'
 
 let FLOOR_KNOTS: Array<[number, number]> = [
   [600, 5000],
@@ -171,6 +172,7 @@ export function computeViewportBoundingBox (
       north = Math.min(90, max_y)
     }
   } else if (is_globe) {
+    let bearing = view_state.bearing ?? 0
     let center_lat = view_state.latitude ?? 20
     let center_lng = view_state.longitude ?? 0
     let cos_max_lat: number
@@ -179,6 +181,8 @@ export function computeViewportBoundingBox (
     let lat_adjust: number
     let lat_clamp = Math.max(-89.9, Math.min(89.9, center_lat))
     let max_lat_rad: number
+    let pitch = view_state.pitch ?? 0
+    let pitch_rad: number
     let scale_adjust: number
     let screen_r: number
     let span_lng: number
@@ -191,7 +195,16 @@ export function computeViewportBoundingBox (
 
     screen_r = Math.sqrt((window_w/2)*(window_w/2) + (window_h/2)*(window_h/2))*1.35
     theta_max_deg = (globe_radius > 0) ? (screen_r/globe_radius)*(180/Math.PI) : 90
-    theta_max_deg = Math.min(90, theta_max_deg)
+
+    //Expand for perspective viewing frustum under 3D camera pitch and bearing
+    if (pitch > 0) {
+      pitch_rad = (Math.min(80, pitch)*Math.PI)/180
+      theta_max_deg = theta_max_deg/Math.cos(pitch_rad)
+    }
+    if (Math.abs(bearing) > 0.5)
+      theta_max_deg *= 1.25
+
+    theta_max_deg = Math.min(85, theta_max_deg)
 
     if (center_lat + theta_max_deg >= 90 || center_lat - theta_max_deg <= -90 || theta_max_deg >= 85) {
       east = 180
@@ -300,12 +313,15 @@ export function computeViewportBoundingBox (
 
 /**
  * Checks whether a geographic point is on the visible front hemisphere of the 3D globe.
- * Accounts for camera latitude, longitude, bearing, and pitch to eliminate antipodal points.
+ * Accounts for camera latitude, longitude, bearing/**
+ * Tests whether a geographic coordinate is visible on the current Globe viewport, taking into account
+ * camera center, bearing rotation, and pitch tilt angles.
  *
  * @param {number} arg0_lng
  * @param {number} arg1_lat
  * @param {any} arg2_view_state
- * @param {number} [arg3_min_cosine=0.0]
+ * @param {number} [arg3_min_cosine=-0.005]
+ * @param {any} [arg4_viewport]
  *
  * @returns {boolean}
  */
@@ -313,62 +329,77 @@ export function isGlobePointVisible (
   arg0_lng: number,
   arg1_lat: number,
   arg2_view_state: any,
-  arg3_min_cosine?: number
+  arg3_min_cosine?: number,
+  arg4_viewport?: any
 ): boolean {
   //Convert from parameters
   let lat = arg1_lat
   let lng = arg0_lng
-  let min_cosine = (arg3_min_cosine !== undefined) ? arg3_min_cosine : -0.20
-  let view_state = arg2_view_state
+  let min_cosine = (arg3_min_cosine !== undefined) ? arg3_min_cosine : -0.005
+  let view_state = (arg2_view_state) ? arg2_view_state : {}
+  let viewport = arg4_viewport
 
   //Guard clauses
   if (!view_state)
     return true
 
   //Declare local instance variables
-  let bearing = view_state.bearing ?? 0
-  let bearing_rad = (bearing*Math.PI)/180
-  let c_lat = view_state.latitude ?? 20
-  let c_lat_rad = (c_lat*Math.PI)/180
-  let c_lng = view_state.longitude ?? 0
-  let c_lng_rad = (c_lng*Math.PI)/180
-  let cos_b = Math.cos(bearing_rad)
-  let cos_c: number
-  let cos_pitch: number
-  let d_lng = ((lng - c_lng)*Math.PI)/180
-  let p_lat_rad = (lat*Math.PI)/180
-  let pitch = view_state.pitch ?? 0
-  let pitch_rad = (pitch*Math.PI)/180
-  let sin_b = Math.sin(bearing_rad)
-  let sin_pitch: number
-  let visibility_dot: number
-  let x_ortho: number
-  let x_rot: number
-  let y_ortho: number
-  let y_rot: number
+  let cam_len: number
+  let cam_norm: [number, number, number]
+  let cam_pos: [number, number, number]
+  let cos_phi: number
+  let dot_prod: number
+  let horizon_dot: number
+  let lambda: number
+  let phi: number
+  let px: number
+  let py: number
+  let pz: number
+  let v_globe_dot: number
+  let vp = viewport
 
   //Function body
-  //1. Compute spherical orthographic coordinates relative to camera center
-  cos_c = Math.sin(c_lat_rad)*Math.sin(p_lat_rad) + Math.cos(c_lat_rad)*Math.cos(p_lat_rad)*Math.cos(d_lng)
+  if (!vp) {
+    let bearing = view_state.bearing ?? 0
+    let c_lat = view_state.latitude ?? 20
+    let c_lng = view_state.longitude ?? 0
+    let pitch = view_state.pitch ?? 0
+    let zoom = view_state.zoom ?? 3
 
-  //2. If pitch and bearing are zero, check direct hemisphere dot product
-  if (Math.abs(pitch) < 0.5 && Math.abs(bearing) < 0.5)
-    return (cos_c >= min_cosine)
+    vp = new SmoothGlobeViewport({
+      bearing,
+      height: 1080,
+      latitude: c_lat,
+      longitude: c_lng,
+      pitch,
+      width: 1920,
+      zoom,
+    })
+  }
 
-  //3. Factor in camera bearing rotation
-  x_ortho = Math.cos(p_lat_rad)*Math.sin(d_lng)
-  y_ortho = Math.cos(c_lat_rad)*Math.sin(p_lat_rad) - Math.sin(c_lat_rad)*Math.cos(p_lat_rad)*Math.cos(d_lng)
+  cam_pos = vp.cameraPosition
+  cam_len = Math.hypot(cam_pos[0], cam_pos[1], cam_pos[2])
 
-  x_rot = x_ortho*cos_b - y_ortho*sin_b
-  y_rot = x_ortho*sin_b + y_ortho*cos_b
+  if (cam_len > 0.001) {
+    cam_norm = [cam_pos[0]/cam_len, cam_pos[1]/cam_len, cam_pos[2]/cam_len]
+    horizon_dot = 256/cam_len
 
-  //4. Factor in camera pitch tilt
-  cos_pitch = Math.cos(pitch_rad)
-  sin_pitch = Math.sin(pitch_rad)
-  visibility_dot = cos_c*cos_pitch + y_rot*sin_pitch
+    lambda = (lng*Math.PI)/180
+    phi = (lat*Math.PI)/180
+    cos_phi = Math.cos(phi)
+
+    px = Math.sin(lambda)*cos_phi
+    py = -Math.cos(lambda)*cos_phi
+    pz = Math.sin(phi)
+
+    dot_prod = px*cam_norm[0] + py*cam_norm[1] + pz*cam_norm[2]
+    v_globe_dot = dot_prod - horizon_dot
+  } else {
+    v_globe_dot = 1.0
+  }
 
   //Return statement
-  return (visibility_dot >= min_cosine)
+  return (v_globe_dot >= min_cosine)
 }
 
 /**
@@ -379,6 +410,7 @@ export function isGlobePointVisible (
  * @param {any} arg2_view_state
  * @param {number} arg3_window_w
  * @param {number} arg4_window_h
+ * @param {any} [arg5_viewport]
  *
  * @returns {{ dot: number; is_visible: boolean; sx: number; sy: number }}
  */
@@ -387,69 +419,87 @@ export function projectGlobeCoordinates (
   arg1_lat: number,
   arg2_view_state: any,
   arg3_window_w: number,
-  arg4_window_h: number
+  arg4_window_h: number,
+  arg5_viewport?: any
 ): { dot: number; is_visible: boolean; sx: number; sy: number } {
   //Convert from parameters
   let lat = arg1_lat
   let lng = arg0_lng
   let view_state = arg2_view_state
+  let viewport = arg5_viewport
   let window_h = arg4_window_h
   let window_w = arg3_window_w
 
   //Declare local instance variables
-  let bearing = view_state?.bearing ?? 0
-  let bearing_rad = (bearing*Math.PI)/180
-  let c_lat = view_state?.latitude ?? 20
-  let c_lat_rad = (c_lat*Math.PI)/180
-  let c_lng = view_state?.longitude ?? 0
-  let c_lng_rad = (c_lng*Math.PI)/180
-  let cos_b = Math.cos(bearing_rad)
-  let cos_c: number
-  let cos_pitch: number
-  let d_lng = ((lng - c_lng)*Math.PI)/180
-  let effective_zoom: number
-  let globe_radius: number
+  let cam_len: number
+  let cam_norm: [number, number, number]
+  let cam_pos: [number, number, number]
+  let coords: [number, number]
+  let cos_phi: number
+  let dot_prod: number
+  let horizon_dot: number
   let is_visible: boolean
-  let lat_adjust: number
-  let lat_clamp = Math.max(-89.9, Math.min(89.9, c_lat))
-  let p_lat_rad = (lat*Math.PI)/180
-  let pitch = view_state?.pitch ?? 0
-  let pitch_rad = (pitch*Math.PI)/180
-  let scale_adjust: number
-  let sin_b = Math.sin(bearing_rad)
-  let sin_pitch: number
+  let lambda: number
+  let phi: number
+  let px: number
+  let py: number
+  let pz: number
   let sx: number
   let sy: number
-  let visibility_dot: number
-  let x_ortho: number
-  let x_rot: number
-  let y_ortho: number
-  let y_rot: number
-  let zoom = view_state?.zoom ?? 3
+  let v_globe_dot: number
+  let vp = viewport
 
   //Function body
-  cos_c = Math.sin(c_lat_rad)*Math.sin(p_lat_rad) + Math.cos(c_lat_rad)*Math.cos(p_lat_rad)*Math.cos(d_lng)
-  x_ortho = Math.cos(p_lat_rad)*Math.sin(d_lng)
-  y_ortho = Math.cos(c_lat_rad)*Math.sin(p_lat_rad) - Math.sin(c_lat_rad)*Math.cos(p_lat_rad)*Math.cos(d_lng)
+  if (!vp) {
+    let bearing = view_state?.bearing ?? 0
+    let c_lat = view_state?.latitude ?? 20
+    let c_lng = view_state?.longitude ?? 0
+    let pitch = view_state?.pitch ?? 0
+    let zoom = view_state?.zoom ?? 3
 
-  x_rot = x_ortho*cos_b - y_ortho*sin_b
-  y_rot = x_ortho*sin_b + y_ortho*cos_b
+    vp = new SmoothGlobeViewport({
+      bearing,
+      height: window_h,
+      latitude: c_lat,
+      longitude: c_lng,
+      pitch,
+      width: window_w,
+      zoom,
+    })
+  }
 
-  cos_pitch = Math.cos(pitch_rad)
-  sin_pitch = Math.sin(pitch_rad)
-  visibility_dot = cos_c*cos_pitch + y_rot*sin_pitch
-  is_visible = (visibility_dot >= 0.0)
+  cam_pos = vp.cameraPosition
+  cam_len = Math.hypot(cam_pos[0], cam_pos[1], cam_pos[2])
 
-  scale_adjust = Math.PI*Math.cos((lat_clamp*Math.PI)/180)
-  lat_adjust = Math.log2(Math.max(0.0001, scale_adjust)) - Math.log2(Math.PI)
-  effective_zoom = zoom + lat_adjust
-  globe_radius = (512/(2*Math.PI))*Math.pow(2, effective_zoom)
+  if (cam_len > 0.001) {
+    cam_norm = [cam_pos[0]/cam_len, cam_pos[1]/cam_len, cam_pos[2]/cam_len]
+    horizon_dot = 256/cam_len
 
-  sx = window_w/2 + x_rot*globe_radius
-  sy = window_h/2 - (y_rot*cos_pitch - cos_c*sin_pitch)*globe_radius
+    lambda = (lng*Math.PI)/180
+    phi = (lat*Math.PI)/180
+    cos_phi = Math.cos(phi)
+
+    px = Math.sin(lambda)*cos_phi
+    py = -Math.cos(lambda)*cos_phi
+    pz = Math.sin(phi)
+
+    dot_prod = px*cam_norm[0] + py*cam_norm[1] + pz*cam_norm[2]
+    v_globe_dot = dot_prod - horizon_dot
+  } else {
+    v_globe_dot = 1.0
+  }
+
+  is_visible = (v_globe_dot >= -0.005)
+
+  if (!is_visible)
+    return { dot: v_globe_dot, is_visible: false, sx: -9999, sy: -9999 }
+
+  coords = vp.project([lng, lat])
+  sx = coords[0]
+  sy = coords[1]
 
   //Return statement
-  return { dot: visibility_dot, is_visible, sx, sy }
+  return { dot: v_globe_dot, is_visible, sx, sy }
 }
 
 /**

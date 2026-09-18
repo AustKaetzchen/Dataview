@@ -271,6 +271,95 @@ export interface LocalisationConfig {
     format: string
     title: string
   }
+  mapPanels: {
+    cityDetails: {
+      alsoRecordedAs: string
+      area: string
+      areaKm2: string
+      closeCityDetails: string
+      currentYear: string
+      density: string
+      densityPeopleKm2: string
+      estimated: string
+      historicalPeak: string
+      historicalPeakIn: string
+      historicalTrajectory: string
+      noHistoricalRecords: string
+      peoplePerKm2: string
+      population: string
+      settlement: string
+      urbanSettlement: string
+      year: string
+    }
+    historicalBorders: {
+      activeAt: string
+      alsoRecordedAs: string
+      analyticsDrawer: string
+      areaKm2: string
+      boundaryUpdated: string
+      calculated: string
+      capital: string
+      cells: string
+      closeHistoricalDetails: string
+      computing: string
+      computingStats: string
+      estimated: string
+      fullCalculator: string
+      historicalEntity: string
+      historicalRecords: string
+      historicalTrajectory: string
+      jump: string
+      jumpTimelineTo: string
+      keyframes: string
+      mean: string
+      median: string
+      minMax: string
+      noData: string
+      noKeyframeEvents: string
+      noRasterData: string
+      rasterSum: string
+      statisticsAt: string
+      stdDev: string
+      sum: string
+      territorial: string
+      unrecorded: string
+      validCells: string
+    }
+    clickInfo: {
+      agriculture: string
+      cohort: string
+      country: string
+      historicalEntity: string
+      latLng: string
+      perYear: string
+      pop: string
+      sector: string
+      value: string
+    }
+    stadesterLegend: {
+      annualCompoundGrowth: string
+      citiesCount: string
+      displaying: string
+      fill: string
+      labelsActive: string
+      logarithmicScale: string
+      loss: string
+      megacity: string
+      metricGrowth: string
+      metricPopulation: string
+      metricRegion: string
+      noLabels: string
+      outline: string
+      radiusPropPop: string
+      regionalCategoricalPalette: string
+      regionalDistribution: string
+      settlements: string
+      small: string
+      stable: string
+      surge: string
+      urbanPopulationTotals: string
+    }
+  }
 }
 
 export let LOCALISATION_DICTIONARIES: Record<SupportedLocale, LocalisationConfig> = {

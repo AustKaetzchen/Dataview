@@ -5,6 +5,7 @@ import { binRasterByCountryMemoized } from '@framework/geopng/polygon_binning.ts
 import type { DecodedRaster } from '@framework/geopng/types.ts'
 import { Icon } from '@ui/components/icon'
 import { UfDate } from '@framework/utils/uf_date'
+import { useLocalisation } from '@localisation'
 
 export interface HistoricalBorderDetailsPanelProps {
   anchorPos?: { x: number; y: number } | null
@@ -55,7 +56,9 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
   let display_year: string
   let effective_stats: CountryStats | null
   let end_year: number | undefined
+  let format: ReturnType<typeof useLocalisation>['format']
   let keyframes_list: any[]
+  let localisation: ReturnType<typeof useLocalisation>
   let max_x: number
   let max_y: number
   let min_x: number
@@ -66,6 +69,7 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
   let raster_metric_tooltip: string
   let source_label: string
   let start_year: number | undefined
+  let t: ReturnType<typeof useLocalisation>['t']
   let target_x: number
   let target_y: number
   let validity_str: string
@@ -75,8 +79,12 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
     return null
 
   //Function body
+  localisation = useLocalisation()
+  format = localisation.format
+  t = localisation.t
+
   cap_name = feature.properties?.capname
-  country_name = feature.properties?.name || 'Historical Entity'
+  country_name = feature.properties?.name || t.mapPanels.historicalBorders.historicalEntity
   current_date = UfDate.fromFractionalYear(current_year)
   current_ts = UfDate.getTimestamp(current_date)
   display_year = (current_year !== Math.floor(current_year))
@@ -117,7 +125,7 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
   } else if (feature.properties?.date) {
     validity_str = feature.properties.date
   } else {
-    validity_str = `Active at ${display_year}`
+    validity_str = format(t.mapPanels.historicalBorders.activeAt, display_year)
   }
 
   //Assemble recorded names if distinct
@@ -145,9 +153,9 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
   if (feature.properties?.area && typeof feature.properties.area === 'number') {
     area_val_str = `${Math.round(feature.properties.area).toLocaleString('de-DE')} km²`
   } else if (effective_stats?.validCount) {
-    area_val_str = `${effective_stats.validCount.toLocaleString('de-DE')} cells`
+    area_val_str = `${effective_stats.validCount.toLocaleString('de-DE')} ${t.mapPanels.historicalBorders.cells}`
   } else {
-    area_val_str = 'Estimated'
+    area_val_str = t.mapPanels.historicalBorders.estimated
   }
 
   //Format raster statistic value
@@ -158,7 +166,7 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
       : effective_stats.mean * effective_stats.validCount
 
     abs_val = Math.abs(sum_val)
-    raster_metric_tooltip = `Sum: ${sum_val.toLocaleString('de-DE', { maximumFractionDigits: 2 })}\nMean: ${effective_stats.mean.toLocaleString('de-DE', { maximumFractionDigits: 2 })}\nValid Cells: ${effective_stats.validCount.toLocaleString('de-DE')}`
+    raster_metric_tooltip = `${t.mapPanels.historicalBorders.sum} ${sum_val.toLocaleString('de-DE', { maximumFractionDigits: 2 })}\n${t.mapPanels.historicalBorders.mean} ${effective_stats.mean.toLocaleString('de-DE', { maximumFractionDigits: 2 })}\n${t.mapPanels.historicalBorders.validCells} ${effective_stats.validCount.toLocaleString('de-DE')}`
 
     if (abs_val >= 1e12) {
       raster_metric_str = `${(sum_val / 1e12).toLocaleString('de-DE', { maximumFractionDigits: 2 })} T`
@@ -172,11 +180,11 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
       raster_metric_str = sum_val.toLocaleString('de-DE', { maximumFractionDigits: 2 })
     }
   } else if (is_calculating_stats) {
-    raster_metric_str = 'Computing...'
-    raster_metric_tooltip = 'Computing regional raster statistics...'
+    raster_metric_str = t.mapPanels.historicalBorders.computing
+    raster_metric_tooltip = t.mapPanels.historicalBorders.computingStats
   } else {
-    raster_metric_str = 'No Data'
-    raster_metric_tooltip = 'No active raster layer data'
+    raster_metric_str = t.mapPanels.historicalBorders.noData
+    raster_metric_tooltip = t.mapPanels.historicalBorders.noRasterData
   }
 
   //Anchored positioning calculations with strict sidebar collision avoidance
@@ -247,7 +255,7 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
             type="button"
             onClick={on_close}
             className="p-1 text-muted-foreground hover:text-foreground cursor-pointer shrink-0 transition-colors"
-            title="Close historical details panel"
+            title={t.mapPanels.historicalBorders.closeHistoricalDetails}
           >
             <Icon name="close" className="text-sm" />
           </button>
@@ -267,14 +275,14 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
         <div className="text-[11px] text-muted-foreground mb-2.5 space-y-0.5">
           {alt_names_str && (
             <div>
-              <span className="text-muted-foreground/80">Also recorded as: </span>
+              <span className="text-muted-foreground/80">{t.mapPanels.historicalBorders.alsoRecordedAs} </span>
               <span className="text-foreground font-medium">{alt_names_str}</span>
             </div>
           )}
           {cap_name && (
             <div className="flex items-center gap-1">
               <Icon name="location_city" className="text-xs text-white" />
-              <span>Capital: </span>
+              <span>{t.mapPanels.historicalBorders.capital} </span>
               <span className="text-foreground font-semibold">{cap_name}</span>
             </div>
           )}
@@ -286,39 +294,39 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
         {/* Metric 1: Area */}
         <div className="border border-border/60 bg-muted/20 p-2 text-center">
           <div className="text-[9px] text-muted-foreground uppercase font-mono tracking-wider">
-            Area (km²)
+            {t.mapPanels.historicalBorders.areaKm2}
           </div>
           <div className="text-sm font-bold text-foreground font-mono mt-0.5 truncate" title={area_val_str}>
             {area_val_str}
           </div>
           <div className="text-[9px] text-muted-foreground/70 truncate mt-0.5">
-            {feature.properties?.area ? 'Territorial' : 'Calculated'}
+            {feature.properties?.area ? t.mapPanels.historicalBorders.territorial : t.mapPanels.historicalBorders.calculated}
           </div>
         </div>
 
         {/* Metric 2: Raster Sum */}
         <div className="border border-border/60 bg-muted/20 p-2 text-center">
           <div className="text-[9px] text-muted-foreground uppercase font-mono tracking-wider">
-            Raster Sum
+            {t.mapPanels.historicalBorders.rasterSum}
           </div>
           <div className="text-sm font-bold text-primary font-mono mt-0.5 truncate" title={raster_metric_tooltip}>
             {raster_metric_str}
           </div>
           <div className="text-[9px] text-muted-foreground/70 truncate mt-0.5" title={display_year}>
-            {effective_stats ? `${effective_stats.validCount.toLocaleString('de-DE')} cells` : display_year}
+            {effective_stats ? `${effective_stats.validCount.toLocaleString('de-DE')} ${t.mapPanels.historicalBorders.cells}` : display_year}
           </div>
         </div>
 
         {/* Metric 3: Keyframes or Span */}
         <div className="border border-border/60 bg-muted/20 p-2 text-center">
           <div className="text-[9px] text-muted-foreground uppercase font-mono tracking-wider">
-            Keyframes
+            {t.mapPanels.historicalBorders.keyframes}
           </div>
           <div className="text-sm font-bold text-foreground font-mono mt-0.5">
             {keyframes_list.length > 0 ? keyframes_list.length : 1}
           </div>
           <div className="text-[9px] text-muted-foreground/70 truncate mt-0.5">
-            Historical Records
+            {t.mapPanels.historicalBorders.historicalRecords}
           </div>
         </div>
       </div>
@@ -329,7 +337,7 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
           <div className="flex items-center justify-between text-[11px] font-semibold text-foreground">
             <span className="flex items-center gap-1">
               <Icon name="bar_chart" className="text-xs text-primary" />
-              <span>Statistics ({display_year})</span>
+              <span>{format(t.mapPanels.historicalBorders.statisticsAt, display_year)}</span>
             </span>
             {on_open_analytics && (
               <button
@@ -337,43 +345,43 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
                 onClick={on_open_analytics}
                 className="text-[10px] text-red-500 hover:text-red-400 hover:underline cursor-pointer"
               >
-                Full Calculator
+                {t.mapPanels.historicalBorders.fullCalculator}
               </button>
             )}
           </div>
           <div className="grid grid-cols-2 gap-1 text-[10px] font-mono pt-1">
             <div>
-              <span className="text-muted-foreground">Sum: </span>
+              <span className="text-muted-foreground">{t.mapPanels.historicalBorders.sum} </span>
               <span className="font-bold text-foreground">
                 {(effective_stats.total !== undefined ? effective_stats.total : effective_stats.mean * effective_stats.validCount).toLocaleString('de-DE', { maximumFractionDigits: 1 })}
               </span>
             </div>
             <div>
-              <span className="text-muted-foreground">Mean: </span>
+              <span className="text-muted-foreground">{t.mapPanels.historicalBorders.mean} </span>
               <span className="font-bold text-foreground">
                 {effective_stats.mean.toLocaleString('de-DE', { maximumFractionDigits: 2 })}
               </span>
             </div>
             <div>
-              <span className="text-muted-foreground">Median: </span>
+              <span className="text-muted-foreground">{t.mapPanels.historicalBorders.median} </span>
               <span className="font-bold text-foreground">
                 {effective_stats.median.toLocaleString('de-DE', { maximumFractionDigits: 2 })}
               </span>
             </div>
             <div>
-              <span className="text-muted-foreground">Std Dev: </span>
+              <span className="text-muted-foreground">{t.mapPanels.historicalBorders.stdDev} </span>
               <span className="font-bold text-foreground">
                 {effective_stats.stdDev.toLocaleString('de-DE', { maximumFractionDigits: 2 })}
               </span>
             </div>
             <div>
-              <span className="text-muted-foreground">Min / Max: </span>
+              <span className="text-muted-foreground">{t.mapPanels.historicalBorders.minMax} </span>
               <span className="font-bold text-foreground">
                 {effective_stats.min.toFixed(1)} / {effective_stats.max.toFixed(1)}
               </span>
             </div>
             <div>
-              <span className="text-muted-foreground">Valid Cells: </span>
+              <span className="text-muted-foreground">{t.mapPanels.historicalBorders.validCells} </span>
               <span className="font-bold text-foreground">
                 {effective_stats.validCount.toLocaleString('de-DE')}
               </span>
@@ -383,7 +391,7 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
       ) : is_calculating_stats ? (
         <div className="mb-2.5 p-2 bg-muted/20 border border-border/50 text-xs flex items-center justify-center gap-2 text-muted-foreground">
           <Icon name="sync" className="animate-spin text-xs text-primary" />
-          <span className="text-[11px] font-mono">Computing regional raster statistics...</span>
+          <span className="text-[11px] font-mono">{t.mapPanels.historicalBorders.computingStats}</span>
         </div>
       ) : null}
 
@@ -391,7 +399,7 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
       <div className="flex items-center justify-between text-[11px] font-semibold text-foreground mb-1.5 border-t border-border/50 pt-2">
         <span className="flex items-center gap-1.5">
           <Icon name="timeline" className="text-xs text-white" />
-          <span className="uppercase tracking-wider font-mono text-[10px]">Historical Trajectory</span>
+          <span className="uppercase tracking-wider font-mono text-[10px]">{t.mapPanels.historicalBorders.historicalTrajectory}</span>
         </span>
         {on_open_analytics && !effective_stats && (
           <button
@@ -399,7 +407,7 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
             onClick={on_open_analytics}
             className="text-[10px] text-red-500 hover:text-red-400 hover:underline cursor-pointer"
           >
-            Analytics Drawer
+            {t.mapPanels.historicalBorders.analyticsDrawer}
           </button>
         )}
       </div>
@@ -412,7 +420,7 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
             let is_unrecorded = Boolean(arg0_kf.label?.toLowerCase().includes('unrecorded') || arg0_kf.label?.toLowerCase().includes('hidden') || arg0_kf.label?.toLowerCase().includes('dissolved') || arg0_kf.label?.toLowerCase().includes('deleted'))
             let kf = arg0_kf
             let kf_date_str = kf.date || UfDate.formatYear(kf.year)
-            let kf_label = kf.label || 'Boundary updated'
+            let kf_label = kf.label || t.mapPanels.historicalBorders.boundaryUpdated
 
             return (
               <button
@@ -440,7 +448,7 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
                     ? 'bg-muted/30 border-border/40 hover:bg-muted/50 text-muted-foreground'
                     : 'bg-card hover:bg-muted/50 border-border/40 text-muted-foreground hover:text-foreground'
                   }`}
-                title={`Jump timeline to ${kf_date_str}`}
+                title={format(t.mapPanels.historicalBorders.jumpTimelineTo, kf_date_str)}
               >
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
                   <span
@@ -454,11 +462,11 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
                 <div className="flex items-center gap-1 shrink-0 ml-2">
                   {is_unrecorded && (
                     <span className="text-[9px] px-1 py-0.2 bg-muted text-muted-foreground border border-border/60 font-mono">
-                      Unrecorded
+                      {t.mapPanels.historicalBorders.unrecorded}
                     </span>
                   )}
                   <span className="text-[10px] text-red-500 hover:text-red-400 hover:underline font-mono">
-                    Jump →
+                    {t.mapPanels.historicalBorders.jump}
                   </span>
                 </div>
               </button>
@@ -467,7 +475,7 @@ export let HistoricalBorderDetailsPanel: React.FC<HistoricalBorderDetailsPanelPr
         </div>
       ) : (
         <div className="text-[11px] text-muted-foreground italic py-1 text-center bg-muted/20 border border-border/40">
-          No keyframe events recorded for this boundary slice.
+          {t.mapPanels.historicalBorders.noKeyframeEvents}
         </div>
       )}
     </div>

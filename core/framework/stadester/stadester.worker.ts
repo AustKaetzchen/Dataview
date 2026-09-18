@@ -1,4 +1,5 @@
 import { projectEqualEarth } from '../geopng/equal_earth'
+import { SmoothGlobeViewport } from './SmoothGlobeViewport'
 import {
   computeViewportBoundingBox,
   getZoomPopulationThreshold,
@@ -240,6 +241,17 @@ function processViewportLayout (arg0_msg: WorkerInMessage & { type: 'LAYOUT_VIEW
       let is_cartesian = (projection === 'EqualEarth' || projection === 'Equirectangular')
       let is_globe = (projection === 'Globe')
       let zoom = view_state?.zoom ?? ((is_globe) ? 3 : 1.2)
+      let globe_viewport = (is_globe)
+        ? new SmoothGlobeViewport({
+            bearing: view_state?.bearing ?? 0,
+            height: window_h,
+            latitude: view_state?.latitude ?? 20,
+            longitude: view_state?.longitude ?? 0,
+            pitch: view_state?.pitch ?? 0,
+            width: window_w,
+            zoom,
+          })
+        : null
       let thresholds = getZoomPopulationThreshold(zoom, projection)
       let era_floor = getEraDisplayFloor(current_year)
       let norm_zoom = (is_cartesian) ? (zoom - 1.2) : ((is_globe) ? (zoom - 1.65) : zoom)
@@ -257,20 +269,22 @@ function processViewportLayout (arg0_msg: WorkerInMessage & { type: 'LAYOUT_VIEW
         let c_lat = c.coords[0]
         let c_lon = c.coords[1]
 
-        //1. Globe orthographic culling (eliminates antipodal cities completely)
+        //1. Globe horizon culling (eliminates antipodal cities completely)
         if (is_globe) {
-          if (!isGlobePointVisible(c_lon, c_lat, view_state, -0.20))
+          if (!isGlobePointVisible(c_lon, c_lat, view_state, -0.005, globe_viewport))
             continue
         }
 
-        //2. Viewport bounding box culling
-        if (w <= east_bound) {
-          if (c_lon < w || c_lon > east_bound || c_lat < s || c_lat > n)
-            continue
-        } else {
-          //Wraparound dateline
-          if ((c_lon < w && c_lon > east_bound) || c_lat < s || c_lat > n)
-            continue
+        //2. Viewport bounding box culling (Mercator and Cartesian 2D planes)
+        if (!is_globe) {
+          if (w <= east_bound) {
+            if (c_lon < w || c_lon > east_bound || c_lat < s || c_lat > n)
+              continue
+          } else {
+            //Wraparound dateline
+            if ((c_lon < w && c_lon > east_bound) || c_lat < s || c_lat > n)
+              continue
+          }
         }
 
         if (c.population < effective_min_pop)
@@ -344,8 +358,8 @@ function processViewportLayout (arg0_msg: WorkerInMessage & { type: 'LAYOUT_VIEW
           let sy: number
 
           if (projection === 'Globe') {
-            let proj = projectGlobeCoordinates(cand.position[0], cand.position[1], view_state, window_w, window_h)
-            if (!proj.is_visible || proj.dot < -0.15)
+            let proj = projectGlobeCoordinates(cand.position[0], cand.position[1], view_state, window_w, window_h, globe_viewport)
+            if (!proj.is_visible)
               continue
 
             sx = proj.sx

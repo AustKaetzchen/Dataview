@@ -633,7 +633,7 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
         px = proj[0]
         py = proj[1]
       } else if (projection === 'Globe') {
-        if (!isGlobePointVisible(c_lon, c_lat, proj_view_states.Globe, -0.20))
+        if (!isGlobePointVisible(c_lon, c_lat, vp, -0.005))
           return null
       }
       let projected = vp.project([px, py])
@@ -662,7 +662,7 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
         px = proj[0]
         py = proj[1]
       } else if (projection === 'Globe') {
-        if (!isGlobePointVisible(c_lon, c_lat, proj_view_states.Globe, -0.20))
+        if (!isGlobePointVisible(c_lon, c_lat, vp, -0.005))
           return null
       }
       let projected = vp.project([px, py])
@@ -684,6 +684,14 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
         set_hovered_city(null)
         set_hovered_city_pos(null)
       }}
+      onPointerMove={(e) => {
+        let rect = e.currentTarget.getBoundingClientRect()
+        let x = e.clientX - rect.left
+        let y = e.clientY - rect.top
+        set_cursor_pos({ x, y })
+        if (hovered_city_pos)
+          set_hovered_city_pos({ x, y })
+      }}
     >
       <DeckGL
         ref={deck_ref}
@@ -701,8 +709,6 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
               cancelAnimationFrame(hover_raf_ref.current)
               hover_raf_ref.current = null
             }
-            set_inspect_data(null)
-            set_cursor_pos(null)
           }
         }}
         controller={false}

@@ -3,6 +3,7 @@ import ReactECharts from 'echarts-for-react'
 import { CityFullRecord, CityPoint } from '@framework/geopng/types.ts'
 import { Icon } from '@ui/components/icon'
 import { UfDate } from '@framework/utils/uf_date'
+import { useLocalisation } from '@localisation'
 
 export interface CityDetailsPanelProps {
   anchorPos?: { x: number; y: number } | null
@@ -68,17 +69,24 @@ export let CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_pr
   let chart_option: any
   let density_at_year: number | undefined
   let display_city_name: string
+  let format: ReturnType<typeof useLocalisation>['format']
   let formatted_current_year: string
   let full_record: CityFullRecord | null
+  let localisation: ReturnType<typeof useLocalisation>
   let other_names_list: string[]
   let panel_style: React.CSSProperties
   let peak_pop: number
   let peak_year: number | null
   let pop_at_year: number
   let set_active_metric_tab: React.Dispatch<React.SetStateAction<'population' | 'area' | 'density'>>
+  let t: ReturnType<typeof useLocalisation>['t']
   let timeseries_data: Array<[number, number]>
 
   //Function body
+  localisation = useLocalisation()
+  format = localisation.format
+  t = localisation.t
+
   ;[active_metric_tab, set_active_metric_tab] = useState<'population' | 'area' | 'density'>('population')
 
   full_record = city ? (city as CityFullRecord) : null
@@ -232,10 +240,10 @@ export let CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_pr
 
     let line_color = '#ef4444'
     let metric_label = active_metric_tab === 'population'
-      ? 'Urban Population'
+      ? t.mapPanels.cityDetails.population
       : active_metric_tab === 'area'
-        ? 'Estimated Area (km²)'
-        : 'Density (people/km²)'
+        ? t.mapPanels.cityDetails.areaKm2
+        : t.mapPanels.cityDetails.densityPeopleKm2
 
     let x_min = timeseries_data.length > 0 ? timeseries_data[0][0] : undefined
     let x_max = timeseries_data.length > 0 ? timeseries_data[timeseries_data.length - 1][0] : undefined
@@ -314,7 +322,7 @@ export let CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_pr
                   type: 'dashed',
                   width: 1.5,
                 },
-                name: 'Current Year',
+                name: t.mapPanels.cityDetails.currentYear,
                 xAxis: current_year,
               },
             ],
@@ -338,7 +346,7 @@ export let CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_pr
           let yr_str = UfDate.formatYear(yr)
           let v_str = Math.round(v).toLocaleString('de-DE')
           return `<div style="font-size: 11px;">
-            <div style="color: #94a3b8; margin-bottom: 2px;">Year: <b style="color: #ffffff;">${yr_str}</b></div>
+            <div style="color: #94a3b8; margin-bottom: 2px;">${t.mapPanels.cityDetails.year} <b style="color: #ffffff;">${yr_str}</b></div>
             <div>${metric_label}: <b style="color: #ffffff;">${v_str}</b></div>
           </div>`
         },
@@ -377,7 +385,7 @@ export let CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_pr
         type: 'value',
       },
     }
-  }, [timeseries_data, active_metric_tab, current_year, city])
+  }, [timeseries_data, active_metric_tab, current_year, city, t])
 
   //Guard clauses
   if (!city)
@@ -439,7 +447,7 @@ export let CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_pr
               </span>
             </div>
             <div className="text-[11px] text-muted-foreground truncate mt-0.5">
-              {[city.country, city.region].filter(Boolean).join(' • ') || 'Urban Settlement'}
+              {[city.country, city.region].filter(Boolean).join(' • ') || t.mapPanels.cityDetails.urbanSettlement}
               {city.coords && ` [${city.coords[0].toFixed(2)}°, ${city.coords[1].toFixed(2)}°]`}
             </div>
           </div>
@@ -447,7 +455,7 @@ export let CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_pr
             type="button"
             onClick={on_close}
             className="p-1 text-muted-foreground hover:text-primary transition-colors cursor-pointer shrink-0"
-            title="Close city details"
+            title={t.mapPanels.cityDetails.closeCityDetails}
           >
             <Icon name="close" className="text-sm" />
           </button>
@@ -456,7 +464,7 @@ export let CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_pr
 
       {embedded && (
         <div className="pb-1 text-[11px] text-muted-foreground border-b border-border/60">
-          {[city.country, city.region].filter(Boolean).join(' • ') || 'Urban Settlement'}
+          {[city.country, city.region].filter(Boolean).join(' • ') || t.mapPanels.cityDetails.urbanSettlement}
           {city.coords && ` [${city.coords[0].toFixed(2)}°, ${city.coords[1].toFixed(2)}°]`}
         </div>
       )}
@@ -464,7 +472,7 @@ export let CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_pr
       {/* Other Recorded / Native Names */}
       {other_names_list.length > 0 && (
         <div className="py-1 text-[10px] text-muted-foreground/90 truncate border-b border-border/30">
-          <span className="text-muted-foreground font-semibold">Also recorded as: </span>
+          <span className="text-muted-foreground font-semibold">{t.mapPanels.cityDetails.alsoRecordedAs} </span>
           <span>{other_names_list.slice(0, 4).join(', ')}</span>
           {other_names_list.length > 4 && <span> (+{other_names_list.length - 4} more)</span>}
         </div>
@@ -473,7 +481,7 @@ export let CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_pr
       {/* Current Timeline Year Statistics Cards - Pure White Values (Strict Theme) */}
       <div className="grid grid-cols-3 gap-1.5 my-2">
         <div className="bg-muted/30 border border-border/50 p-1.5 text-center">
-          <div className="text-[9px] text-muted-foreground uppercase tracking-wider">Population</div>
+          <div className="text-[9px] text-muted-foreground uppercase tracking-wider">{t.mapPanels.cityDetails.population}</div>
           <div className="text-xs font-bold font-mono text-white truncate mt-0.5">
             {pop_at_year > 0 ? Math.round(pop_at_year).toLocaleString('de-DE') : '–'}
           </div>
@@ -481,39 +489,39 @@ export let CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_pr
         </div>
 
         <div className="bg-muted/30 border border-border/50 p-1.5 text-center">
-          <div className="text-[9px] text-muted-foreground uppercase tracking-wider">Area (km²)</div>
+          <div className="text-[9px] text-muted-foreground uppercase tracking-wider">{t.mapPanels.cityDetails.areaKm2}</div>
           <div className="text-xs font-bold font-mono text-white truncate mt-0.5">
             {area_at_year !== undefined && !Number.isNaN(area_at_year) && area_at_year > 0
               ? `${Math.round(area_at_year).toLocaleString('de-DE')} km²`
               : '–'}
           </div>
-          <div className="text-[9px] text-muted-foreground/70 mt-0.2">Estimated</div>
+          <div className="text-[9px] text-muted-foreground/70 mt-0.2">{t.mapPanels.cityDetails.estimated}</div>
         </div>
 
         <div className="bg-muted/30 border border-border/50 p-1.5 text-center">
-          <div className="text-[9px] text-muted-foreground uppercase tracking-wider">Density</div>
+          <div className="text-[9px] text-muted-foreground uppercase tracking-wider">{t.mapPanels.cityDetails.density}</div>
           <div className="text-xs font-bold font-mono text-white truncate mt-0.5">
             {density_at_year !== undefined && !Number.isNaN(density_at_year) && density_at_year > 0
               ? `${Math.round(density_at_year).toLocaleString('de-DE')}/km²`
               : '–'}
           </div>
-          <div className="text-[9px] text-muted-foreground/70 mt-0.2">People/km²</div>
+          <div className="text-[9px] text-muted-foreground/70 mt-0.2">{t.mapPanels.cityDetails.peoplePerKm2}</div>
         </div>
       </div>
 
       {/* Historical Peak & Records */}
       {peak_pop > 0 && peak_year !== null && (
         <div className="flex items-center justify-between text-[10px] text-muted-foreground px-1 pb-1">
-          <span>Historical Peak:</span>
+          <span>{t.mapPanels.cityDetails.historicalPeak}</span>
           <span className="font-mono text-white">
-            <b>{Math.round(peak_pop).toLocaleString('de-DE')}</b> in {UfDate.formatYear(peak_year)}
+            <b>{Math.round(peak_pop).toLocaleString('de-DE')}</b> {t.mapPanels.cityDetails.historicalPeakIn} {UfDate.formatYear(peak_year)}
           </span>
         </div>
       )}
 
       {/* Metric Selector Tabs for ECharts Curve - Red Interactive Theme */}
       <div className="flex items-center justify-between border-b border-border/60 pb-1 mt-1">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Historical Trajectory</span>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t.mapPanels.cityDetails.historicalTrajectory}</span>
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -524,7 +532,7 @@ export let CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_pr
                 : 'bg-background hover:bg-muted text-muted-foreground hover:text-white border-border'
             }`}
           >
-            Population
+            {t.mapPanels.cityDetails.population}
           </button>
           {full_record?.area && (
             <button
@@ -536,7 +544,7 @@ export let CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_pr
                   : 'bg-background hover:bg-muted text-muted-foreground hover:text-white border-border'
               }`}
             >
-              Area
+              {t.mapPanels.cityDetails.area}
             </button>
           )}
           {full_record?.density && (
@@ -549,7 +557,7 @@ export let CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_pr
                   : 'bg-background hover:bg-muted text-muted-foreground hover:text-white border-border'
               }`}
             >
-              Density
+              {t.mapPanels.cityDetails.density}
             </button>
           )}
         </div>
@@ -561,7 +569,7 @@ export let CityDetailsPanel: React.FC<CityDetailsPanelProps> = function (arg0_pr
           <ReactECharts option={chart_option} style={{ height: '100%', width: '100%' }} notMerge={true} />
         ) : (
           <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-            No historical {active_metric_tab} records for this settlement.
+            {format(t.mapPanels.cityDetails.noHistoricalRecords, active_metric_tab === 'population' ? t.mapPanels.cityDetails.population : active_metric_tab === 'area' ? t.mapPanels.cityDetails.area : t.mapPanels.cityDetails.density)}
           </div>
         )}
       </div>

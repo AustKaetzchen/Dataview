@@ -3,6 +3,7 @@ import { CityPoint, InspectionData, StadesterConfig } from '@framework/geopng/ty
 import { ParsedDataLayer } from '@server/layer_parser.ts'
 import { pickBestCityDisplayName } from '@framework/stadester/stadester_utils'
 import type { HistoricalBorderFeature } from '@server/AtlasBordersService'
+import { useLocalisation } from '@localisation'
 
 export interface ClickInfoPanelProps {
   activeLayer?: ParsedDataLayer | null
@@ -181,11 +182,13 @@ export let ClickInfoPanel: React.FC<ClickInfoPanelProps> = React.memo(function (
     active_layer?.type === 'raster.category_profession' ||
     active_layer?.id?.includes('profession')
   )
+  let localisation = useLocalisation()
   let offset_y = has_raster ? -70 : (has_stadester ? -24 : -16)
   let panel_ref = useRef<HTMLDivElement>(null)
   let pos = props.pos
   let profession_label = ''
   let stadester_config = props.stadesterConfig
+  let t = localisation.t
 
   //Function body
   useEffect(() => {
@@ -219,7 +222,7 @@ export let ClickInfoPanel: React.FC<ClickInfoPanelProps> = React.memo(function (
     } else if (raw_prof) {
       profession_label = active_layer?.variable_selectors?.profession?.options?.[raw_prof]?.name || raw_prof.replace(/_/g, ' ')
     } else {
-      profession_label = 'Agriculture'
+      profession_label = t.mapPanels.clickInfo.agriculture
     }
   }
 
@@ -252,28 +255,28 @@ export let ClickInfoPanel: React.FC<ClickInfoPanelProps> = React.memo(function (
           </div>
           <div className="space-y-0.1 text-[var(--body-font-size)] font-light">
             <div className="flex items-baseline gap-1.5 whitespace-nowrap leading-snug">
-              <span className="text-muted-foreground font-bold shrink-0">Value:</span>
+              <span className="text-muted-foreground font-bold shrink-0">{t.mapPanels.clickInfo.value}</span>
               <span className="font-bold text-foreground">{formatted_val}</span>
               {active_layer?.unit && !is_percentage_unit && (
                 <span className="text-[10px] text-muted-foreground font-mono ml-0.5">({active_layer.unit})</span>
               )}
             </div>
             <div className="flex items-baseline gap-1.5 whitespace-nowrap leading-snug">
-              <span className="text-muted-foreground font-bold shrink-0">Latlng:</span>
+              <span className="text-muted-foreground font-bold shrink-0">{t.mapPanels.clickInfo.latLng}</span>
               <span className="text-muted-foreground">
                 {formatted_lat}, {formatted_lng}
               </span>
             </div>
             {info.countryName && (
               <div className="flex items-baseline gap-1.5 whitespace-nowrap leading-snug">
-                <span className="text-muted-foreground font-bold shrink-0">Country:</span>
+                <span className="text-muted-foreground font-bold shrink-0">{t.mapPanels.clickInfo.country}</span>
                 <span className="font-bold text-primary">{info.countryName}</span>
               </div>
             )}
 
             {is_age_sex && (
               <div className="flex items-baseline gap-1.5 whitespace-nowrap leading-snug pt-1 border-t border-border/40">
-                <span className="text-muted-foreground font-bold shrink-0">Cohort:</span>
+                <span className="text-muted-foreground font-bold shrink-0">{t.mapPanels.clickInfo.cohort}</span>
                 <span className={`font-bold ${cohort_label.startsWith('M')
                     ? 'text-blue-400'
                     : cohort_label.startsWith('F')
@@ -287,7 +290,7 @@ export let ClickInfoPanel: React.FC<ClickInfoPanelProps> = React.memo(function (
 
             {is_profession && (
               <div className="flex items-baseline gap-1.5 whitespace-nowrap leading-snug pt-1 border-t border-border/40">
-                <span className="text-muted-foreground font-bold shrink-0">Sector:</span>
+                <span className="text-muted-foreground font-bold shrink-0">{t.mapPanels.clickInfo.sector}</span>
                 <span className="font-bold text-primary">
                   {profession_label}
                 </span>
@@ -308,10 +311,10 @@ export let ClickInfoPanel: React.FC<ClickInfoPanelProps> = React.memo(function (
             )}
           </div>
           <div className="flex items-center gap-3 text-[11px] text-muted-foreground font-mono mt-0.5">
-            <span>Pop: <strong className="text-white">{Math.round(hovered_city.population).toLocaleString('de-DE')}</strong></span>
+            <span>{t.mapPanels.clickInfo.pop} <strong className="text-white">{Math.round(hovered_city.population).toLocaleString('de-DE')}</strong></span>
             {hovered_city.growthRate !== undefined && (
               <span className="text-white">
-                {(hovered_city.growthRate >= 0) ? '+' : ''}{(hovered_city.growthRate * 100).toFixed(2)}%/yr
+                {(hovered_city.growthRate >= 0) ? '+' : ''}{(hovered_city.growthRate * 100).toFixed(2)}{t.mapPanels.clickInfo.perYear}
               </span>
             )}
           </div>
@@ -323,7 +326,7 @@ export let ClickInfoPanel: React.FC<ClickInfoPanelProps> = React.memo(function (
         <div className={(has_raster || (has_stadester && hovered_city)) ? 'pt-1.5 mt-1.5 border-t border-border/60' : ''}>
           <div className="font-semibold text-foreground flex items-center gap-1.5">
             <span className="w-2 h-2 bg-red-500 shrink-0" />
-            <span className="truncate">{hovered_historical.properties?.name || 'Historical Entity'}</span>
+            <span className="truncate">{hovered_historical.properties?.name || t.mapPanels.clickInfo.historicalEntity}</span>
           </div>
           <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono mt-0.5">
             <span>

@@ -152,7 +152,7 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
   let { t } = useLocalisation()
 
   //Declare local instance variables
-  let active_description: string | null
+  let active_descriptions: { id: string; markdown: string; title: string }[]
   let active_layer: ParsedDataLayer | null
   let binning_presets = [
     { h: 2160, label: 'Native (4320×2160)', w: 4320 },
@@ -200,13 +200,13 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
   is_full_width = is_mobile || (current_width >= viewport_width * 0.8)
 
   active_layer = useMemo(() => {
-    if (!active_layer_id || !layers)
+    if (!active_layer_id)
       return null
-    if (layers[active_layer_id])
+    if (layers && layers[active_layer_id])
       return layers[active_layer_id]
     if (active_layer_id.includes('.')) {
       let parent_id = active_layer_id.split('.')[0]
-      let parent = layers[parent_id]
+      let parent = layers ? layers[parent_id] : null
       if (parent && parent.sub_layers) {
         let sub = parent.sub_layers.find((arg0_sub: any) => arg0_sub.id === active_layer_id)
         if (sub)
@@ -216,7 +216,7 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
     return null
   }, [active_layer_id, layers])
 
-  active_description = useMemo(() => {
+  active_descriptions = useMemo(() => {
     let active_entries: { id: string; markdown: string; title: string }[] = []
     let added_ids = new Set<string>()
 
@@ -278,19 +278,14 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
     //5. Fallback to default basemap if no other overlays or modes have descriptions
     if (active_entries.length === 0 && active_layer?.description) {
       let raw_md = (Array.isArray(active_layer.description)) ? active_layer.description.join('\n') : String(active_layer.description)
-      return raw_md
+      active_entries.push({
+        id: active_layer.id || 'default_basemap',
+        markdown: raw_md,
+        title: active_layer.name || 'Description',
+      })
     }
 
-    if (active_entries.length === 0)
-      return null
-
-    if (active_entries.length === 1)
-      return active_entries[0].markdown
-
-    //Concatenate multiple mapmodes into summary collapsible folders using HTML <details><summary>
-    return active_entries.map((arg0_entry) => {
-      return `<details open>\n<summary>${arg0_entry.title}</summary>\n\n${arg0_entry.markdown}\n\n</details>`
-    }).join('\n\n')
+    return active_entries
   }, [active_layer, historical_borders_config?.dataset, historical_borders_config?.enabled, layers, map_modes, stadester_config?.enabled])
 
   toggle_folder = function (arg0_folder_key: string) {
@@ -474,31 +469,41 @@ export let SidebarControls: React.FC<SidebarControlsProps> = function (arg0_prop
       {!is_sidebar_collapsed && (
         <div className="flex-1 p-[var(--padding)] space-y-[var(--padding)] overflow-y-auto">
         {/* ========================================================================= */}
-        {/* SECTION 0: MAPMODE DESCRIPTION */}
+        {/* SECTION 0: MAPMODE DESCRIPTION(S) */}
         {/* ========================================================================= */}
-        {active_description && (
-          <div className="border border-border bg-card/50">
-            <button
-              type="button"
-              onClick={() => toggle_folder('description')}
-              className="w-full h-8 px-[var(--padding)] flex items-center justify-between text-[var(--body-font-size)] font-bold text-foreground bg-muted/40 hover:bg-muted/70 transition-colors cursor-pointer overflow-y-auto"
-            >
-              <div className="flex items-center gap-2">
-                <Icon name="description" />
-                <span>{t.sidebar.folders.description}</span>
-              </div>
-              <Icon
-                name={open_folders.description ? 'expand_less' : 'expand_more'}
-              />
-            </button>
+        {active_descriptions && active_descriptions.map((arg0_entry) => {
+          let entry = arg0_entry
+          let folder_key = (active_descriptions.length === 1) ? 'description' : `description_${entry.id}`
+          let is_open = (open_folders[folder_key] !== undefined) ? open_folders[folder_key] : true
+          let card_title = (active_descriptions.length === 1)
+            ? t.sidebar.folders.description
+            : `${t.sidebar.folders.description} (${entry.title})`
 
-            {open_folders.description && (
-              <div className="p-[var(--padding)] text-[var(--body-font-size)] border-t border-border overflow-x-hidden">
-                <MarkdownRenderer content={active_description} />
-              </div>
-            )}
-          </div>
-        )}
+          return (
+            <div key={entry.id} className="border border-border bg-card/50">
+              <button
+                type="button"
+                onClick={() => toggle_folder(folder_key)}
+                className="w-full h-8 px-[var(--padding)] flex items-center justify-between text-[var(--body-font-size)] font-bold text-foreground bg-muted/40 hover:bg-muted/70 transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-2 truncate">
+                  <Icon name="description" className="shrink-0" />
+                  <span className="truncate">{card_title}</span>
+                </div>
+                <Icon
+                  name={is_open ? 'expand_less' : 'expand_more'}
+                  className="shrink-0"
+                />
+              </button>
+
+              {is_open && (
+                <div className="p-[var(--padding)] text-[var(--body-font-size)] border-t border-border overflow-x-hidden">
+                  <MarkdownRenderer content={entry.markdown} />
+                </div>
+              )}
+            </div>
+          )
+        })}
 
         {/* ========================================================================= */}
         {/* SECTION 1: VISUALISATION SETTINGS */}

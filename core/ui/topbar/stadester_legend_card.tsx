@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react'
 import { StadesterConfig } from '@framework/geopng/types.ts'
 import { Icon } from '@ui/components/icon'
+import { useLocalisation } from '@localisation'
 
 export interface StadesterLegendCardProps {
   config: StadesterConfig
@@ -44,29 +45,36 @@ export let StadesterLegendCard: React.FC<StadesterLegendCardProps> = React.memo(
   let bubble_size = (config.bubbleSize !== undefined) ? config.bubbleSize : 1
   let colour_mode = config.colorMode || 'growth'
   let dataset_version = (config.dataset === 'stadester_1.0') ? 'Stadestér 1.0' : 'Stadestér 1.1'
+  let format: ReturnType<typeof useLocalisation>['format']
   let gradient_style: string
   let growth_palette = config.growthPalette || 'Rainbow'
   let indicator_pct: number | null = null
   let is_halo = config.halo !== false && !config.filled
+  let localisation: ReturnType<typeof useLocalisation>
   let metric_subtitle: string
   let metric_title: string
   let palette_label: string
+  let t: ReturnType<typeof useLocalisation>['t']
 
   //Function body
+  localisation = useLocalisation()
+  format = localisation.format
+  t = localisation.t
+
   if (colour_mode === 'growth') {
-    metric_title = 'Population Growth (%/yr)'
-    metric_subtitle = 'Visualising annual compound growth rates across global urban centres.'
+    metric_title = t.mapPanels.stadesterLegend.metricGrowth
+    metric_subtitle = t.mapPanels.stadesterLegend.annualCompoundGrowth
     palette_label = `${growth_palette} (Heat / Cool Spectrum)`
     gradient_style = 'linear-gradient(to right, rgb(93, 96, 226), rgb(72, 156, 240), rgb(69, 207, 119), rgb(198, 219, 85), rgb(253, 224, 71), rgb(251, 146, 60), rgb(239, 68, 68), rgb(232, 121, 249))'
   } else if (colour_mode === 'population') {
-    metric_title = 'Settlement Population'
-    metric_subtitle = 'Visualising urban settlement population totals.'
-    palette_label = 'Logarithmic Scale (Blue to Warm Gold)'
+    metric_title = t.mapPanels.stadesterLegend.metricPopulation
+    metric_subtitle = t.mapPanels.stadesterLegend.urbanPopulationTotals
+    palette_label = t.mapPanels.stadesterLegend.logarithmicScale
     gradient_style = 'linear-gradient(to right, rgb(13, 8, 135), rgb(80, 18, 170), rgb(140, 41, 129), rgb(200, 72, 73), rgb(245, 125, 21), rgb(240, 249, 33))'
   } else {
-    metric_title = 'World Geographic Region'
-    metric_subtitle = 'Visualising settlement distribution by continent or region.'
-    palette_label = 'Regional Categorical Palette'
+    metric_title = t.mapPanels.stadesterLegend.metricRegion
+    metric_subtitle = t.mapPanels.stadesterLegend.regionalDistribution
+    palette_label = t.mapPanels.stadesterLegend.regionalCategoricalPalette
     gradient_style = ''
   }
 
@@ -98,7 +106,7 @@ export let StadesterLegendCard: React.FC<StadesterLegendCardProps> = React.memo(
       <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-border/50 gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
           <Icon name="location_city" className="text-primary text-xs shrink-0" />
-          <span className="font-bold text-white text-xs truncate">Settlements</span>
+          <span className="font-bold text-white text-xs truncate">{t.mapPanels.stadesterLegend.settlements}</span>
           <span className="text-[10px] px-1 py-0.2 bg-muted text-muted-foreground border border-border shrink-0 font-mono">
             {dataset_version}
           </span>
@@ -106,7 +114,7 @@ export let StadesterLegendCard: React.FC<StadesterLegendCardProps> = React.memo(
 
         {settlement_count !== undefined && (
           <span className="text-white text-[11px] font-mono shrink-0">
-            {settlement_count.toLocaleString('de-DE')} cities
+            {format(t.mapPanels.stadesterLegend.citiesCount, settlement_count.toLocaleString('de-DE'))}
           </span>
         )}
       </div>
@@ -114,7 +122,7 @@ export let StadesterLegendCard: React.FC<StadesterLegendCardProps> = React.memo(
       {/* Metric Display Information */}
       <div className="flex flex-col gap-0.5 mb-2">
         <div className="flex items-center justify-between gap-1 text-[11px]">
-          <span className="text-muted-foreground">Displaying:</span>
+          <span className="text-muted-foreground">{t.mapPanels.stadesterLegend.displaying}</span>
           <span className="font-semibold text-white truncate text-right">{metric_title}</span>
         </div>
         <p className="text-[10px] text-muted-foreground/80 font-light leading-tight">
@@ -167,15 +175,15 @@ export let StadesterLegendCard: React.FC<StadesterLegendCardProps> = React.memo(
             </div>
             {colour_mode === 'growth' ? (
               <div className="flex justify-between items-center text-[9px] text-muted-foreground font-mono">
-                <span>&le; -5%/yr (Loss)</span>
-                <span className="text-white font-bold">0%/yr (Stable)</span>
-                <span>&ge; +8%/yr (Surge)</span>
+                <span>&le; -5%/yr ({t.mapPanels.stadesterLegend.loss})</span>
+                <span className="text-white font-bold">0%/yr ({t.mapPanels.stadesterLegend.stable})</span>
+                <span>&ge; +8%/yr ({t.mapPanels.stadesterLegend.surge})</span>
               </div>
             ) : (
               <div className="flex justify-between items-center text-[9px] text-muted-foreground font-mono">
-                <span>5.000 (Small)</span>
+                <span>5.000 ({t.mapPanels.stadesterLegend.small})</span>
                 <span className="text-white font-bold">500.000</span>
-                <span>10.000.000+ (Megacity)</span>
+                <span>10.000.000+ ({t.mapPanels.stadesterLegend.megacity})</span>
               </div>
             )}
           </div>
@@ -184,9 +192,9 @@ export let StadesterLegendCard: React.FC<StadesterLegendCardProps> = React.memo(
 
       {/* Bubble Geometry & Collision Status Footer */}
       <div className="pt-1.5 border-t border-border/40 flex items-center justify-between text-[10px] text-muted-foreground font-mono">
-        <span>Radius &prop; &radic;pop (min 4,5px &bull; {bubble_size.toFixed(2)}x)</span>
+        <span>{format(t.mapPanels.stadesterLegend.radiusPropPop, bubble_size.toFixed(2))}</span>
         <span className="text-white">
-          {is_halo ? 'Outline' : 'Fill'} &bull; {config.showLabels ? 'Labels Active' : 'No Labels'}
+          {is_halo ? t.mapPanels.stadesterLegend.outline : t.mapPanels.stadesterLegend.fill} &bull; {config.showLabels ? t.mapPanels.stadesterLegend.labelsActive : t.mapPanels.stadesterLegend.noLabels}
         </span>
       </div>
     </div>
