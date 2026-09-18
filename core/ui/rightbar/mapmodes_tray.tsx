@@ -606,12 +606,14 @@ export let MapmodesTray: React.FC<MapmodesTrayProps> = React.memo(function (arg0
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <span
-                          className={`w-3.5 h-3.5 rounded-none border flex items-center justify-center shrink-0 transition-colors ${active_layer_id === default_layer.id
-                              ? 'border-primary bg-primary text-primary-foreground'
+                          className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 transition-colors ${active_layer_id === default_layer.id
+                              ? 'border-primary bg-primary'
                               : 'border-muted-foreground/60'
                             }`}
                         >
-                          {active_layer_id === default_layer.id && <Icon name="check" className="text-[10px]" />}
+                          {active_layer_id === default_layer.id && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />
+                          )}
                         </span>
                         <Icon name="map" className="text-primary text-xs shrink-0" />
                         <span className="text-xs font-bold truncate">{default_layer.name}</span>

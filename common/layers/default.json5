@@ -7,15 +7,7 @@
         icon: "map",
         description: [
             "### Default View",
-            "Currently, rasters can be deselected by clicking on Default.",
-            "",
-            "<details>",
-            "<summary>Cartographic Reference & Rendering Pipeline</summary>",
-            "",
-            "- **Base Projection**: Spherical Web Mercator (EPSG:3857) and Equal Earth (EPSG:8857) vector basemaps.",
-            "- **Vector Engine**: Deck.gl GeoJsonLayer and MapLibre GL raster/vector compositor.",
-            "- **Colour Pipeline**: GPU-accelerated texture shaders with perceptual uniform colormaps.",
-            "</details>"
+            "Displays the basemap without underlying raster data."
         ],
         permissions: [
             "default"
