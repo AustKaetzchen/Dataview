@@ -132,6 +132,119 @@ let parseInline = function (arg0_text: string): React.ReactNode[] {
   return parts_array
 }
 
+interface ListItemNode {
+  children: ListItemNode[]
+  depth: number
+  isOrdered: boolean
+  text: string
+}
+
+/**
+ * Builds a hierarchical tree of list item nodes based on their nesting depths.
+ *
+ * @param {Array<{ depth: number; isOrdered: boolean; text: string }>} arg0_items
+ *
+ * @returns {ListItemNode[]}
+ */
+let buildListTree = function (
+  arg0_items: { depth: number; isOrdered: boolean; text: string }[]
+): ListItemNode[] {
+  //Convert from parameters
+  let items = arg0_items
+
+  //Declare local instance variables
+  let node_stack: ListItemNode[] = []
+  let root_items: ListItemNode[] = []
+
+  //Function body
+  for (let i = 0; i < items.length; i++) {
+    let item = items[i]
+    let new_node: ListItemNode = {
+      children: [],
+      depth: item.depth,
+      isOrdered: item.isOrdered,
+      text: item.text,
+    }
+
+    while (node_stack.length > 0 && node_stack[node_stack.length - 1].depth >= item.depth)
+      node_stack.pop()
+
+    if (node_stack.length === 0) {
+      root_items.push(new_node)
+    } else {
+      let parent_node = node_stack[node_stack.length - 1]
+      parent_node.children.push(new_node)
+    }
+
+    node_stack.push(new_node)
+  }
+
+  //Return statement
+  return root_items
+}
+
+/**
+ * Recursively renders a hierarchical tree of list items with appropriate nesting styles.
+ *
+ * @param {ListItemNode[]} arg0_items
+ * @param {number} arg1_depth
+ * @param {string} arg2_key_prefix
+ *
+ * @returns {React.ReactNode}
+ */
+let renderListTree = function (
+  arg0_items: ListItemNode[],
+  arg1_depth: number,
+  arg2_key_prefix: string
+): React.ReactNode {
+  //Convert from parameters
+  let depth = arg1_depth
+  let items = arg0_items
+  let key_prefix = arg2_key_prefix
+
+  //Guard clauses
+  if (!items || items.length === 0)
+    return null
+
+  //Declare local instance variables
+  let is_ordered = items[0].isOrdered
+  let list_style: React.CSSProperties
+  let list_type_class: string
+  let Tag: 'ol' | 'ul' = is_ordered ? 'ol' : 'ul'
+
+  //Function body
+  list_style = is_ordered
+    ? {}
+    : { listStyleType: depth === 0 ? 'disc' : (depth === 1 ? 'circle' : 'square') }
+
+  list_type_class = is_ordered ? 'list-decimal' : 'list-disc'
+
+  //Return statement
+  return (
+    <Tag
+      key={key_prefix}
+      style={list_style}
+      className={
+        depth === 0
+          ? `space-y-1 my-2 list-outside pl-5 text-muted-foreground text-[var(--body-font-size)] font-light leading-relaxed ${list_type_class}`
+          : `space-y-1 mt-1 list-outside pl-5 ${list_type_class}`
+      }
+    >
+      {items.map((arg0_item, arg1_idx) => {
+        let item = arg0_item
+        let idx = arg1_idx
+        let item_key = `${key_prefix}-${idx}`
+        return (
+          <li key={item_key} className="leading-snug select-text">
+            <span>{parseInline(item.text)}</span>
+            {item.children.length > 0 && renderListTree(item.children, depth + 1, `${item_key}-sub`)}
+          </li>
+        )
+      })}
+    </Tag>
+  )
+}
+
 /**
  * High-performance lightweight Markdown and Callout renderer.
  *
@@ -146,6 +259,7 @@ export let MarkdownRenderer: React.FC<MarkdownRendererProps> = function (arg0_pr
   let block_key: number = 0
   let class_name = props.className || ''
   let code_block_lines_array: string[] = []
+  let collected_list_items: { is_ordered: boolean; raw_indent: number; text: string }[] = []
   let content = props.content
   let elements_array: React.ReactNode[] = []
   let flush_code_block: () => void
@@ -153,7 +267,6 @@ export let MarkdownRenderer: React.FC<MarkdownRendererProps> = function (arg0_pr
   let in_code_block: boolean = false
   let is_nested = props.isNested ?? false
   let lines_array: string[]
-  let list_items_array: string[] = []
   let raw_text: string
 
   //Guard clauses
@@ -165,21 +278,39 @@ export let MarkdownRenderer: React.FC<MarkdownRendererProps> = function (arg0_pr
   lines_array = raw_text.split('\n')
 
   flush_list = function () {
-    if (list_items_array.length > 0) {
-      elements_array.push(
-        <ul
-          key={`ul-${block_key++}`}
-          className="space-y-1 my-2 list-disc list-inside text-muted-foreground text-[var(--body-font-size)] font-light leading-relaxed"
-        >
-          {list_items_array.map((item, idx) => (
-            <li key={idx} className="leading-snug">
-              {parseInline(item)}
-            </li>
-          ))}
-        </ul>
-      )
-      list_items_array = []
+    if (collected_list_items.length === 0)
+      return
+
+    let base_indent = collected_list_items[0].raw_indent
+    let depth_items: { depth: number; isOrdered: boolean; text: string }[] = []
+    let indent_stack: number[] = [base_indent]
+
+    for (let i = 0; i < collected_list_items.length; i++) {
+      let item = collected_list_items[i]
+      let raw_indent = item.raw_indent
+
+      if (raw_indent > indent_stack[indent_stack.length - 1]) {
+        indent_stack.push(raw_indent)
+      } else {
+        while (indent_stack.length > 1 && raw_indent < indent_stack[indent_stack.length - 1])
+          indent_stack.pop()
+        if (raw_indent < indent_stack[0])
+          indent_stack[0] = raw_indent
+      }
+
+      depth_items.push({
+        depth: indent_stack.length - 1,
+        isOrdered: item.is_ordered,
+        text: item.text,
+      })
     }
+
+    let tree = buildListTree(depth_items)
+    let rendered_list = renderListTree(tree, 0, `list-${block_key++}`)
+    if (rendered_list)
+      elements_array.push(rendered_list)
+
+    collected_list_items = []
   }
 
   flush_code_block = function () {
@@ -550,9 +681,31 @@ export let MarkdownRenderer: React.FC<MarkdownRendererProps> = function (arg0_pr
       }
     }
 
-    //7. Bullet list item (- or *)
-    if (local_trimmed.startsWith('- ') || local_trimmed.startsWith('* ')) {
-      list_items_array.push(local_trimmed.slice(2).trim())
+    //7. List item (unordered -/*/+ or ordered 1./1))
+    let is_hr_rule = /^(\s*[-*_]\s*){3,}$/.test(local_line)
+    let list_match = (!is_hr_rule) ? local_line.match(/^(\s*)([-*+]|\d+[\.\)])\s+(.*)$/) : null
+
+    if (list_match) {
+      let indent_spaces = list_match[1].replace(/\t/g, '  ').length
+      let marker = list_match[2]
+      let is_ordered = /^\d+[\.\)]$/.test(marker)
+      let item_text = list_match[3].trim()
+
+      collected_list_items.push({
+        is_ordered,
+        raw_indent: indent_spaces,
+        text: item_text,
+      })
+      continue
+    } else if (
+      collected_list_items.length > 0 &&
+      /^\s{2,}\S/.test(local_line) &&
+      !local_trimmed.startsWith('#') &&
+      !local_trimmed.startsWith('>') &&
+      !local_trimmed.startsWith('|') &&
+      !local_trimmed.startsWith('```')
+    ) {
+      collected_list_items[collected_list_items.length - 1].text += ' ' + local_trimmed
       continue
     } else {
       flush_list()
