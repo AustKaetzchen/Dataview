@@ -178,7 +178,6 @@
         name: "Population (Urban)",
         encoding: "int32",
         filepath: "${stad}/stadester_urban_rasters/stadester_urban_{year}.png",
-        pixel_offset: 2,
         unit: "Urban population, total",
         legend: {
             colourscheme: "blues"

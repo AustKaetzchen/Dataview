@@ -24,8 +24,8 @@
       topCenter: "Top Centre",
       topRight: "Top Right",
       bottomLeft: "Bottom Left",
-      bottomCenter: "Bottom Centre",
-      bottomRight: "Bottom Right",
+      bottomCenter: "Bottom C.",
+      bottomRight: "Bottom R.",
     },
     projections: {
       mercator: "Mercator",

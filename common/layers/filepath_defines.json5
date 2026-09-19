@@ -19,7 +19,7 @@
     nwm: "D:/Project 1509 - SVEA/histmap/",
     prof_per: "${h3}/professions/3.percentages/",
     prof_tot: "${h3}/professions/4.aggregates/",
-    stad: "${h1}/population_Stadester_Legacy/",
+    stad: "${h2}/population_Stadester/",
     vitals: "${h2}/births_deaths_OLS/",
   },
 }

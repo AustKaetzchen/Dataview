@@ -224,8 +224,9 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
   let last_country_ref = useRef<CountryFeature | null>(null)
   let last_hovered_country_code_ref = useRef<string | null | undefined>(null)
   let layers: any[]
-  let pending_hover_info_ref = useRef<any>(null)
+  let pending_pointer_pos_ref = useRef<{ x: number; y: number } | null>(null)
   let pending_touch_pos_ref = useRef<{ x: number; y: number } | null>(null)
+  let sample_pointer_at: (arg0_x: number, arg1_y: number) => void
   let sample_raster_at: (coordX: number, coordY: number) => InspectionData | null
   let sample_touch_at: (arg0_x: number, arg1_y: number) => void
   let touch_pick_raf_ref = useRef<number | null>(null)
@@ -368,13 +369,18 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
     //1. Clear smooth pinch and two-finger gesture state
     resetSmoothPinchState()
 
-    //2. Cancel any active touch RAF picking
+    //2. Cancel any active touch or hover RAF picking
+    if (hover_raf_ref.current !== null) {
+      cancelAnimationFrame(hover_raf_ref.current)
+      hover_raf_ref.current = null
+    }
     if (touch_pick_raf_ref.current !== null) {
       cancelAnimationFrame(touch_pick_raf_ref.current)
       touch_pick_raf_ref.current = null
     }
 
-    //3. Clear pending touch position & interaction flags
+    //3. Clear pending touch & pointer position & interaction flags
+    pending_pointer_pos_ref.current = null
     pending_touch_pos_ref.current = null
     is_interacting_ref.current = false
 
@@ -451,7 +457,7 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
     [raster, effective_country_features, projection, countries_mode, is_historical_borders_active]
   )
 
-  sample_touch_at = useCallback(
+  sample_pointer_at = useCallback(
     (arg0_x: number, arg1_y: number) => {
       //Convert from parameters
       let x = arg0_x
@@ -461,49 +467,72 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
       if (!deck_ref.current)
         return
 
-      //Function body
-      let deck_inst = deck_ref.current?.deck || deck_ref.current
+      //Declare local instance variables
+      let deck_inst: any
+      let insp: InspectionData | null = null
+      let pick_info: any
       let unprojected_coord: [number, number] | null = null
-      let viewports = deck_inst?.getViewports ? deck_inst.getViewports() : []
-      let vp = viewports[0]
+      let viewports: any[]
+      let vp: any
+
+      //Function body
+      deck_inst = deck_ref.current?.deck || deck_ref.current
+      viewports = deck_inst?.getViewports ? deck_inst.getViewports() : []
+      vp = viewports[0]
 
       if (vp && typeof vp.unproject === 'function') {
         try {
           let pt = vp.unproject([x, y], { targetZ: 0 })
-          if (pt && Number.isFinite(pt[0]) && Number.isFinite(pt[1])) {
+          if (pt && Number.isFinite(pt[0]) && Number.isFinite(pt[1]))
             unprojected_coord = [pt[0], pt[1]]
-          }
-        } catch (arg0_err) {
+        } catch {
           // Ignore unproject calculation errors
         }
       }
 
       if (unprojected_coord) {
-        let insp = sample_raster_at(unprojected_coord[0], unprojected_coord[1])
+        insp = sample_raster_at(unprojected_coord[0], unprojected_coord[1])
         set_inspect_data(insp)
         if (on_inspect)
           on_inspect(insp)
+      } else {
+        set_inspect_data(null)
+        if (on_inspect)
+          on_inspect(null)
       }
 
-      let pick_info = deck_ref.current.pickObject({ x, y })
+      pick_info = deck_ref.current.pickObject({ x, y })
       if (pick_info) {
         if (pick_info.coordinate && !unprojected_coord) {
-          let insp = sample_raster_at(pick_info.coordinate[0], pick_info.coordinate[1])
+          insp = sample_raster_at(pick_info.coordinate[0], pick_info.coordinate[1])
           set_inspect_data(insp)
           if (on_inspect)
             on_inspect(insp)
         }
         if (pick_info.layer?.id?.includes('historical-borders') || (pick_info.object && (pick_info.object.properties?.gwcode !== undefined || pick_info.object.properties?.keyframes !== undefined))) {
           set_hovered_historical_feature(pick_info.object || null)
-        } else if (hovered_historical_feature) {
-          set_hovered_historical_feature(null)
+        } else {
+          set_hovered_historical_feature((arg0_prev) => (arg0_prev ? null : null))
         }
-      } else if (hovered_historical_feature) {
-        set_hovered_historical_feature(null)
+      } else {
+        set_hovered_historical_feature((arg0_prev) => (arg0_prev ? null : null))
+      }
+
+      if ((countries_mode || is_historical_borders_active) && on_hover_country) {
+        let next_code = insp?.countryName || null
+        if (last_hovered_country_code_ref.current !== next_code) {
+          last_hovered_country_code_ref.current = next_code
+          let local_country = (insp && effective_country_features.length > 0)
+            ? findCountryAtLngLat(insp.lng, insp.lat, effective_country_features)
+            : null
+          on_hover_country(local_country)
+        }
       }
     },
-    [sample_raster_at, hovered_historical_feature, on_inspect]
+    [sample_raster_at, on_inspect, countries_mode, is_historical_borders_active, effective_country_features, on_hover_country]
   )
+
+  sample_touch_at = sample_pointer_at
 
   handle_click = useCallback(
     (info: any) => {
@@ -528,15 +557,35 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
         return
       }
 
+      let deck_inst: any
       let insp: InspectionData | null
-      let x_coord: number
-      let y_coord: number
+      let viewports: any[]
+      let vp: any
+      let x_coord: number | null = null
+      let y_coord: number | null = null
 
-      if (!info.coordinate)
+      if (info.coordinate) {
+        x_coord = info.coordinate[0]
+        y_coord = info.coordinate[1]
+      } else if (info.x !== undefined && info.y !== undefined && deck_ref.current) {
+        deck_inst = deck_ref.current?.deck || deck_ref.current
+        viewports = deck_inst?.getViewports ? deck_inst.getViewports() : []
+        vp = viewports[0]
+        if (vp && typeof vp.unproject === 'function') {
+          try {
+            let pt = vp.unproject([info.x, info.y], { targetZ: 0 })
+            if (pt && Number.isFinite(pt[0]) && Number.isFinite(pt[1])) {
+              x_coord = pt[0]
+              y_coord = pt[1]
+            }
+          } catch {
+            // Ignore unproject calculation errors
+          }
+        }
+      }
+
+      if (x_coord === null || y_coord === null)
         return
-
-      x_coord = info.coordinate[0]
-      y_coord = info.coordinate[1]
 
       insp = sample_raster_at(x_coord, y_coord)
       set_inspect_data(insp)
@@ -559,55 +608,24 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
   )
 
   handle_hover = useCallback(
-    (info: any) => {
-      // Guard clauses: immediately ignore hover events when user is dragging or interacting
+    (arg0_info: any) => {
+      //Convert from parameters
+      let info = arg0_info
+
+      //Guard clauses
       if (is_interacting_ref.current)
         return
-
-      pending_hover_info_ref.current = info
-      if (hover_raf_ref.current !== null)
+      if (!info)
         return
 
-      hover_raf_ref.current = requestAnimationFrame(() => {
-        hover_raf_ref.current = null
-        let cur_info = pending_hover_info_ref.current
-        if (!cur_info || !cur_info.coordinate) {
-          set_inspect_data(null)
-          set_cursor_pos(null)
-          last_hovered_country_code_ref.current = null
-          if (countries_mode && on_hover_country)
-            on_hover_country(null)
-          return
-        }
-
-        let x_coord = cur_info.coordinate[0]
-        let y_coord = cur_info.coordinate[1]
-        let insp = sample_raster_at(x_coord, y_coord)
-        set_inspect_data(insp)
-
-        if (cur_info.x !== undefined && cur_info.y !== undefined)
-          set_cursor_pos({ x: cur_info.x, y: cur_info.y })
-
-        if (cur_info.layer?.id?.includes('historical-borders') || (cur_info.object && (cur_info.object.properties?.gwcode !== undefined || cur_info.object.properties?.keyframes !== undefined))) {
-          set_hovered_historical_feature(cur_info.object || null)
-        } else {
-          set_hovered_historical_feature(null)
-        }
-
-        if (on_inspect)
-          on_inspect(insp)
-
-        if ((countries_mode || is_historical_borders_active) && insp && effective_country_features.length > 0 && on_hover_country) {
-          let next_code = insp.countryName
-          if (last_hovered_country_code_ref.current !== next_code) {
-            last_hovered_country_code_ref.current = next_code
-            let local_country = findCountryAtLngLat(insp.lng, insp.lat, effective_country_features)
-            on_hover_country(local_country)
-          }
-        }
-      })
+      //Function body
+      if (info.layer?.id?.includes('historical-borders') || (info.object && (info.object.properties?.gwcode !== undefined || info.object.properties?.keyframes !== undefined))) {
+        set_hovered_historical_feature(info.object || null)
+      } else {
+        set_hovered_historical_feature((arg0_prev) => (arg0_prev ? null : null))
+      }
     },
-    [sample_raster_at, on_inspect, countries_mode, is_historical_borders_active, effective_country_features, on_hover_country, set_inspect_data, set_cursor_pos]
+    []
   )
 
 
@@ -792,16 +810,70 @@ export let MapViewer: React.FC<MapViewerProps> = function (arg0_props: MapViewer
       style={{ imageRendering: 'pixelated', touchAction: 'none' }}
       onContextMenu={(e) => e.preventDefault()}
       onPointerLeave={() => {
+        if (hover_raf_ref.current !== null) {
+          cancelAnimationFrame(hover_raf_ref.current)
+          hover_raf_ref.current = null
+        }
+        pending_pointer_pos_ref.current = null
+        set_cursor_pos(null)
         set_hovered_city(null)
         set_hovered_city_pos(null)
+        set_hovered_historical_feature(null)
+        set_inspect_data(null)
+        last_hovered_country_code_ref.current = null
+        if (countries_mode && on_hover_country)
+          on_hover_country(null)
+        if (on_inspect)
+          on_inspect(null)
       }}
       onPointerMove={(e) => {
         let rect = e.currentTarget.getBoundingClientRect()
         let x = e.clientX - rect.left
         let y = e.clientY - rect.top
+
+        //Check if cursor is directly over map vs HUD/controls
+        let target_el = e.target as HTMLElement | null
+        let is_over_map = target_el ? Boolean(target_el.closest('#deckgl-overlay') || target_el.id === 'dataview-map-container') : true
+
+        if (!is_over_map) {
+          if (hover_raf_ref.current !== null) {
+            cancelAnimationFrame(hover_raf_ref.current)
+            hover_raf_ref.current = null
+          }
+          pending_pointer_pos_ref.current = null
+          set_cursor_pos(null)
+          set_hovered_city(null)
+          set_hovered_city_pos(null)
+          set_hovered_historical_feature(null)
+          set_inspect_data(null)
+          if (on_inspect)
+            on_inspect(null)
+          return
+        }
+
         set_cursor_pos({ x, y })
         if (hovered_city_pos)
           set_hovered_city_pos({ x, y })
+
+        //Guard clauses: do not sample during dragging/panning
+        if (e.buttons !== 0 || is_interacting_ref.current || !show_tooltips)
+          return
+
+        pending_pointer_pos_ref.current = { x, y }
+        if (hover_raf_ref.current !== null)
+          return
+
+        hover_raf_ref.current = requestAnimationFrame(() => {
+          hover_raf_ref.current = null
+          if (is_interacting_ref.current)
+            return
+          let cur_pos = pending_pointer_pos_ref.current
+          if (cur_pos)
+            sample_pointer_at(cur_pos.x, cur_pos.y)
+        })
+      }}
+      onPointerUp={() => {
+        is_interacting_ref.current = false
       }}
       onTouchStart={(e) => {
         if (!show_tooltips)
