@@ -1,38 +1,62 @@
 [
   {
-    date: { day: 1, month: 1, year: 2025 },
-    description: "Modern Era",
+    date: {
+      day: 22,
+      month: 2,
+      year: 2014
+    },
+    description: "Arab Winter, CRINK, start of modern OSINT | Contemporary Climate Change",
     id: "modern",
-    label: "2025AD Modern",
+    label: "Second Cold War",
   },
   {
-    date: { day: 26, month: 5, year: 1945 },
-    description: "End of World War II",
-    id: "wwii_end",
-    label: "26 May 1945AD WWII End",
+    date: {
+      day: 26,
+      month: 12,
+      year: 1991
+    },
+    description: "Post-Cold War | End of Widespread Nuclear Testing",
+    id: "v_start",
+    label: "5.Era"
   },
   {
-    date: { day: 28, month: 6, year: 1914 },
-    description: "Assassination of Archduke Franz Ferdinand",
-    id: "wwi_start",
-    label: "28 Jun 1914AD WWI Start",
+    date: {
+      day: 9,
+      month: 6,
+      year: 1815
+    },
+    description: "Congress of Europe | Industrial Revolution",
+    id: "iv_start",
+    label: "4.Era"
   },
   {
-    date: { day: 14, month: 7, year: 1789 },
-    description: "Storming of the Bastille",
-    id: "bastille",
-    label: "14 Jul 1789AD Bastille",
+    date: {
+      day: 10,
+      month: 1,
+      year: 1356
+    },
+    description: "Golden Bull of 1356 | End of Mediaeval Warm Period",
+    id: "iii_start",
+    label: "3.Era"
   },
   {
-    date: { day: 24, month: 10, year: 1648 },
-    description: "Peace of Westphalia",
-    id: "westphalia",
-    label: "24 Oct 1648AD Westphalia",
+    date: {
+      day: 9,
+      month: 9,
+      year: 476
+    },
+    description: "Assumption of Odoacer | End of Roman Warm Period to LALIA",
+    id: "ii_start",
+    label: "2.Era"
   },
   {
-    date: { day: 15, month: 3, year: -44 },
-    description: "Ides of March",
-    id: "caesar",
-    label: "15 Mar 44BC Caesar",
-  },
+    date: {
+      day: 1,
+      month: 1,
+      year: -10000
+    },
+    description: "Beginning of the Holocene | End of Last Glacial Maximum",
+    id: "i_start",
+    label: "1.Era"
+  }
 ]

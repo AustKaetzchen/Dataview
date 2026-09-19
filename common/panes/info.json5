@@ -77,6 +77,21 @@
             "",
             "If you encounter any issues not documented here, please contact us at [Confoederatio Element](https://element.confoederatio.org)."
           ]
+        },
+        {
+          title: "Era Classification",
+          open: false,
+          content: [
+            "Traditionally, Confoederatio classifies historical time periods into 5 distinct periods for data coverage and statistical purposes. These eras can be viewed in `Date Picker > Bookmarks`, and typically represent common bookends that that were associated with global/macroregional climatic transitions.",
+            "1. Era: (10000BC-476AD): Holocene | End of Last Glacial Maximum",
+            "2. Era (476AD-1356AD): Traditional end of W. Rome, Gupta contraction | Roman Warm Period-LALIA Transition (Midpoint)",
+            "3. Era (1356AD-1815AD): Golden Bull of 1356, Black Death, Red Turbans, Renaissance | End of Mediaeval Warm Period",
+            "4. Era (1815AD-1991AD): Concert of Europe, New Imperialism | Industrial Revolution",
+            "5. Era (1991AD-): End of the Cold War, Globalisation | End of Widespread Nuclear Testing",
+            "In later periods (4. Era and after), climatic transitions tend to be caused by human activity, rather than climate influencing human behaviour. Still, influence cannot be taken as determinism: only with the weight of surrounding human events did they make sense as historical periodisations.",
+            "",
+            "AD/BC is used for fixed width purposes."
+          ]
         }
       ],
     },

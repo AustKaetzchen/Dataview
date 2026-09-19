@@ -3,6 +3,7 @@ import { UfDate, type UfDateObject } from '@framework/utils/uf_date.ts'
 import { Icon } from '@ui/components/icon'
 import { useLandmarkPresets, LandmarkPreset } from '@common/timeline/landmarks'
 import { useLocalisation } from '@localisation'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@ui/components/tooltip'
 
 export interface HistoricalDatePickerProps {
   currentYear: number
@@ -400,17 +401,42 @@ export let HistoricalDatePicker: React.FC<HistoricalDatePickerProps> = function 
 
           {is_bookmarks_expanded && (
             <div className="p-2 pt-1 grid grid-cols-2 gap-1 border-t border-border/30">
-              {landmark_presets.map((arg0_preset) => (
-                <button
-                  key={arg0_preset.id}
-                  type="button"
-                  onClick={() => handle_preset_select(arg0_preset)}
-                  className="text-left px-2 py-1 text-[10px] font-mono bg-muted/20 hover:bg-primary/20 hover:border-primary/50 text-muted-foreground hover:text-foreground border border-border/40 truncate cursor-pointer transition-colors"
-                  title={format(t.datePicker.jumpTo, arg0_preset.label)}
-                >
-                  {arg0_preset.label}
-                </button>
-              ))}
+              <TooltipProvider delayDuration={150}>
+                {landmark_presets.map((arg0_preset) => {
+                  let formatted_date = UfDate.formatDate(arg0_preset.date)
+                  let tooltip_description = arg0_preset.description || format(t.datePicker.jumpTo, arg0_preset.label)
+
+                  return (
+                    <Tooltip key={arg0_preset.id}>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => handle_preset_select(arg0_preset)}
+                          className="text-left px-2 py-1 text-[10px] font-mono bg-muted/20 hover:bg-primary/20 hover:border-primary/50 text-muted-foreground hover:text-foreground border border-border/40 truncate cursor-pointer transition-colors"
+                          title={tooltip_description}
+                        >
+                          {arg0_preset.label}
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-[260px] z-[60]">
+                        <div className="flex items-center justify-between gap-2 border-b border-border/40 pb-1 mb-1">
+                          <span className="font-semibold text-foreground text-xs font-mono">{arg0_preset.label}</span>
+                          <span className="text-[10px] text-primary font-mono shrink-0">{formatted_date}</span>
+                        </div>
+                        {arg0_preset.description ? (
+                          <div className="text-muted-foreground text-[11px] font-sans leading-snug whitespace-normal">
+                            {arg0_preset.description}
+                          </div>
+                        ) : (
+                          <div className="text-muted-foreground text-[11px] font-sans italic">
+                            {format(t.datePicker.jumpTo, arg0_preset.label)}
+                          </div>
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  )
+                })}
+              </TooltipProvider>
             </div>
           )}
         </div>
