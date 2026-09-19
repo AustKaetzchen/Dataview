@@ -6,7 +6,7 @@
   app: {
     title: "DATAVIEW",
     subtitle: "Interne Werkzeuge für historische Statistiken",
-    badge: "NWM2.0",
+    badge: "NWM2",
   },
   settings: {
     title: "Kartenanzeige-Einstellungen",

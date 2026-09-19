@@ -65,7 +65,7 @@
           content: [
             "Complex multi-raster calculations are downsampled to `1080x540` for performance reasons.",
             "",
-            "There are some known issues with NWM2.0 data we are currently working on.",
+            "There are some known issues with NWM2 data we are currently working on.",
             "- Urban rasters and GHS-POP (which provides backcalculation for certain low-pop areas from 1800AD-1975AD) are offset 2px too far south.",
             "- Areas with a pop. density <0,5ihb/5-arcmin^2 are not currently shown.",
             "- Certain issues with multinomial logit distributions:",

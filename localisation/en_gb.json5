@@ -6,7 +6,7 @@
   app: {
     title: "DATAVIEW",
     subtitle: "Historical statistics from 10000BC to Now.\nProduced by [Confoederatio](https://confoederatio.org).",
-    badge: "NWM2.0",
+    badge: "NWM2",
   },
   settings: {
     title: "Map Display Settings",

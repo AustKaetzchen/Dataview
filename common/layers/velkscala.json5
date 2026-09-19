@@ -154,7 +154,7 @@
     },
     population_total: {
         name: "Population (Total)",
-        encoding: "int32",
+        encoding: "float32",
         filepath: "${stad}/stadester_population_rasters/stadester_population_${year}.png",
         /*pixel_offset: {
             covariate: "population_urban",
@@ -167,7 +167,7 @@
     },
     population_rural: {
         name: "Population (Rural)",
-        encoding: "int32",
+        encoding: "float32",
         filepath: "${stad}/stadester_rural_rasters/stadester_rural_{year}.png",
         unit: "Rural and periurban population, total",
         legend: {
@@ -176,7 +176,7 @@
     },
     population_urban: {
         name: "Population (Urban)",
-        encoding: "int32",
+        encoding: "float32",
         filepath: "${stad}/stadester_urban_rasters/stadester_urban_{year}.png",
         unit: "Urban population, total",
         legend: {
